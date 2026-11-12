@@ -290,7 +290,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 
 | # | Batch | Deliverable | Est. |
 |---|---|---|---|
-| **0** | **Foundation** | Cargo workspace and crates; tests, CI, benchmark harness; **parallel-scaling benchmark** (100k+ factory items and many ships across several star-system regions, measured at 1/4/8/16 threads); debug overlays and in-game inspector; logging; save-format versioning; `AGENTS.md` (AI assistant rules); key-leak check; Windows cross-compile | 3–5 wk |
+| **0** | **Foundation** | Cargo workspace and crates; tests, CI, benchmark harness; **parallel-scaling benchmark** (100k+ factory items and many ships across several star-system regions, measured at 1/4/8/16 threads); debug overlay; logging; `AGENTS.md` (AI assistant rules); key-leak check; Windows cross-compile. *(The in-game inspector and save-format versioning moved to the batches that first need them; see 7.1.)* | 3–5 wk |
 | **1** | **Space-scale core** | Frame tree, floating origin, orbits on rails, one star system with raymarched distant planets, star field and nebula skybox, fly a simple ship | 1–2 mo |
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
@@ -311,6 +311,25 @@ of it in early access. Checkpoint A should come within roughly the first year.
 
 Until Batch 7, earlier systems use a simple placeholder interface for generated text
 (names, codex entries), so they plug into the AI gateway later without changes.
+
+### 7.1 When the object system is built
+
+The object model, persistence and streaming design (technical overview §14) is settled up
+front because it shapes everything else, but **each part is implemented in the batch that first
+needs it, together with the systems that use it**, so its shape comes from real use rather than
+guesses.
+
+| Batch | Object-system parts implemented | Why then |
+|---|---|---|
+| **1** Space-scale core | `ObjectId` separate from ECS entity IDs; locations that reference frames in the frame tree; moving the player and ship between frames; background region building; in-game inspector for frames and objects | The frame tree defines what an object's location is; the ship and player are the first persistent objects |
+| **2** Seamless planet | Procedural keys and terrain deltas; streaming rules (gradual spawning, prefetch from travel); **hitch-budget stress test** (orbit → surface, no frame over 50 ms) | Terrain is the first procedural content and the first big streaming load |
+| **3** Vehicle builder | Built structures as one persistent object holding a part graph; **first versioned save file** with a format version and migration hook | The first thing worth saving is a vehicle the player built |
+| **4** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
+| ⭐ **Checkpoint A** | **Save format frozen:** golden save files and strict migrations start with the first public build | Before this, no player has a save, so the format may be reset freely |
+| **5+** | Quest references by `ObjectId`, NPC ownership, unique items with generated histories | Combat, factions, quests and LLM content need them |
+
+A first implementation attempt from Batch 0 is parked on the `batch0/object-model` branch for
+reference. It isn't merged; each batch rebuilds what it needs from it.
 
 ---
 
@@ -344,3 +363,6 @@ is realistic for one person and scales well.
 6. **Keep the docs and `AGENTS.md` (AI assistant rules) updated,** so each session starts with
    full context.
 7. **Cut scope ruthlessly.** If a batch runs past twice its estimate, simplify it and move on.
+8. **Design ahead, implement when needed.** Settle cross-cutting designs early in `design/`,
+   but implement each system in the batch that first uses it, together with the modules that
+   depend on it. Don't build infrastructure for systems that don't exist yet.

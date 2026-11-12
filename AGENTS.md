@@ -21,6 +21,13 @@ decision, architecture, development batches) before starting non-trivial work.
   double-buffered state, no locks in hot paths, no lockstep determinism
   (development plan §2).
 
+## Scope
+
+- **Design ahead, implement when needed.** Cross-cutting designs live in `design/`; implement
+  each system in the batch that first uses it, together with the modules that depend on it
+  (development plan §7 and §7.1). Don't build infrastructure ahead of its first real use, and
+  ask before expanding a task's scope.
+
 ## Bevy version
 
 - Bevy is pinned to `=0.20.1`, newer than most AI training data, and its APIs differ from
