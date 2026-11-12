@@ -440,7 +440,188 @@ streaming ship interiors.
 
 ---
 
-## 13. Scope and roadmap
+## 13. AI / LLM systems
+
+**Core principle:** use the LLM to create, interpret and describe things, but never let it
+decide what is true in the game. The simulation stays authoritative. The LLM produces
+cultures, creatures, dialogue and events as **structured data the game validates**. In short:
+the LLM proposes, the simulation decides.
+
+### 13.1 AI gateway architecture
+
+```
+Game simulation (authoritative)
+   │  facts, state, allowed actions
+   ▼
+AI Gateway
+   ├─ Context builder    (relevant facts: character card, faction state, memories)
+   ├─ Prompt templates   (stored as data files; moddable)
+   ├─ Schema validator   (rejects or clamps rule-breaking output)
+   ├─ Cache + save store (generated content becomes part of the save)
+   ├─ Budget / rate limiter
+   └─ Fallback           (templates / procedural content when no model is available)
+   │
+   ▼
+Model backends: local small model | cloud model | build-time batch generation
+```
+
+Rules:
+
+- **Never block a frame.** All calls are asynchronous. Content is generated ahead of time;
+  for example, a system's planet cultures start generating when the player enters the system.
+- **What's generated becomes canon.** LLM output is not reproducible from a seed, so it is
+  saved like terrain deltas (Section 2). Once written, a culture's history is fixed.
+- **Output is structured, not free text:** schema-checked JSON, validated against tech tier,
+  available assets and balance limits.
+- **Fallbacks:** on validation failure, retry once, then use procedural or template content.
+  The game must be fully playable offline with no model.
+- **Prompts are data**, so modders can change culture styles and NPC personalities.
+
+### 13.2 Cultures
+
+- The LLM fills in the **civilization profile** (Section 6): values, taboos, religion,
+  government, history summary, naming style, aesthetic choices.
+- It **chooses among existing asset kits and parameters** (architecture kit, palette,
+  clothing set). It does not invent meshes.
+- It generates **naming rules** for each culture's language; names are then produced
+  procedurally from those rules.
+- **Validation:** content must match the tech tier (e.g. no gunpowder in a medieval culture
+  unless the profile allows early firearms).
+
+### 13.3 Creatures
+
+- The LLM writes a **creature spec**: body plan from a procedural part library (legs, size,
+  armor, diet), ecological role (grazer, pack hunter, ambush predator), utility-AI behavior
+  profile, description text.
+- The **ecosystem simulation validates it** (predator/prey balance, size vs. gravity) and
+  requests changes if needed.
+- Animation and movement come from procedural rigs and IK; the LLM only sets parameters.
+
+### 13.4 Dialogue
+
+- **Only notable characters** (Section 9.3) use the LLM. Generic NPCs use templated lines.
+- **Context pack for each line:** character card (traits, goals, speech style), relevant
+  memories, current faction state from the simulation, relationship with the player, and
+  world facts retrieved from a lore database.
+- **Actions through tool calls:** the LLM can say anything but can only *do* allowed
+  actions, e.g. `offer_quest`, `trade`, `change_opinion(±small)`, `refuse`, `call_guards`,
+  `share_rumor`. The game validates every action.
+- **Memory:** after each conversation, a short summary is written to that NPC's memory.
+- **Negotiation (translation pattern):** player free text → LLM converts it to a structured
+  offer → faction utility AI decides → LLM writes the reply in character. The LLM never makes
+  the decision.
+- **Voice (optional):** speech recognition for player input and streamed text-to-speech per
+  character voice.
+
+### 13.5 Vehicles
+
+- **Design assistant:** a request such as "a two-seat rover that climbs 30° slopes" → the LLM
+  writes a part graph (Section 5) → a **physics validator** checks thrust-to-weight, center
+  of mass and power budget → errors go back to the LLM → repeat until it passes. The player
+  then edits the result in the normal builder.
+- **AI factions use the same pipeline** to design ships in their culture's style, generated
+  once and cached.
+- Also generates names, manufacturer descriptions and ship-class histories.
+
+### 13.6 Game events: an LLM "director"
+
+- The **simulation detects possible events**: famine, contested succession, a derelict ship,
+  a rebellion forming.
+- An **LLM director** picks which to promote, based on pacing and player history, and
+  **dramatizes** them: quest text, characters involved, rumors.
+- **Quests are graphs of objectives** built only from supported verbs (go to, retrieve,
+  escort, defend, persuade, sabotage). The LLM fills in details; the quest system runs them.
+- Major events get **chronicle entries**, so each save builds its own history.
+
+### 13.7 Generating the universe: top-down and lazy
+
+```
+Galaxy history ──► Regions ──► Star systems ──► Planets ──► Sites/settlements ──► Characters/items
+  (once per save)   (on approach)  (on entry)     (on landing)   (on discovery)       (on interaction)
+```
+
+- **Each level is conditioned on the one above:** a planet's lore knows its system's
+  history, which knows the galaxy's history.
+- **Lazy generation:** nothing is generated until a player is about to see it, so cost
+  scales with what players actually visit.
+- **Saved once generated:** output becomes canon in the save.
+
+### 13.8 What can be generated at each level
+
+| Level | LLM generates | Rules/procedural generate |
+|---|---|---|
+| **Galaxy** | Deep history timeline: precursor civilizations, ancient wars, collapses, migrations. Region themes. | Star positions, spiral arms, star density |
+| **Star system** | System concept and story hook, names, anomalies, who claims it and why | Star type, orbits, planet count, asteroid belts (astrophysics rules) |
+| **Planet** | Planet concept → chosen parameters (biome mix, climate), landmarks, habitability rationale, codex text | Terrain noise, erosion, atmosphere physics, gravity, day length |
+| **Points of interest** | Ruins and their story, derelict ships and their logs, crash sites, shrines, hidden caches with clues | Placement on terrain, layout from building kits |
+| **Settlements** | Local politics, trade specialty, problems, festivals, laws and crimes, rumors | Layout (grammars / wave function collapse), population from simulation |
+| **Factions & corporations** | Ideology, leadership, rivalries, founding myth, propaganda, slogans, ship naming styles | Strength, territory, economy |
+| **Religions & myths** | Gods, creation stories, rituals, taboos, holy sites, sects and splits | Spread via the culture simulation |
+| **Languages** | Sound and spelling rules and style per culture | Name and word generation from those rules |
+| **Technologies** | Tech descriptions, each culture's own names and explanations for technologies | Mechanics from templates; balance numbers clamped by tier |
+| **Items & artifacts** | Unique artifacts with history and maker; books, letters, scrolls, data pads | Stats from loot tables |
+| **Characters** | Personalities, backstories, companions, crew quirks, rivals who remember the player | Skills, stats, schedules |
+| **Media & world chatter** | News broadcasts, faction radio, propaganda posters, tavern songs, bards singing about the player's deeds, graffiti | Timing and placement, triggered by simulation events |
+| **Save history** | Chronicles of wars, the player's legend, faction annals, an end-of-game history book | The actual events (from simulation) |
+
+### 13.9 What the LLM should not generate
+
+- **Orbits, terrain heightmaps, physics values:** use real rules.
+- **Balance numbers** (damage, prices, production rates): use tables, or clamp proposals to
+  tier-based limits.
+- **Economy and simulation state:** the LLM only describes it, never sets the numbers.
+- **Anything needed every frame:** the LLM is for slow, high-value content.
+
+### 13.10 Other generative AI besides LLMs
+
+| Model type | Use | Maturity |
+|---|---|---|
+| **Image models** | Flags, heraldry, posters, book covers, paintings, alien plant textures, codex illustrations | Usable; best offline or cached, with art direction rules |
+| **Text-to-speech** | Character voices per culture, reading LLM-written dialogue | Usable at runtime |
+| **Music models** | Culture-specific themes, tavern music, ambient tracks | Usable offline; runtime still costly |
+| **Text-to-3D** | Props, artifacts, decorative items | Improving; offline, with human cleanup for important assets |
+
+### 13.11 Example generation chain
+
+> Galaxy history: a precursor empire collapsed 10,000 years ago → a system is generated as one
+> of its abandoned colonies → planet concept "jungle reclaiming megastructures" (biome
+> parameters for the terrain generator) → a ruin site with a derelict archive and readable
+> logs → the local tribal culture worships the ruins as gods' tombs (religion) → a priest NPC
+> warns the player not to enter (dialogue) → the player takes an artifact → the tribe's
+> opinion of the player drops (simulation) → a bard in a nearby town later sings about
+> "the sky-thief" (media).
+
+Each step uses the output of the step before, so the galaxy reads as if one author wrote it.
+
+### 13.12 Model backends
+
+| Workload | Backend | Why |
+|---|---|---|
+| Content shipped with the game (base cultures, lore, item text) | Large cloud model, **batch processing** at build time | Highest quality; batch is cheaper; no runtime cost |
+| Per-planet cultures, creatures, faction ship designs | Cloud model in the background on discovery, cached forever | One-time cost per planet; latency hidden |
+| Live NPC dialogue | Small, fast cloud model or local model | Low latency and low cost per line |
+| Offline / no account | Small local model (quantized, e.g. via llama.cpp) or templates | Works anywhere; competes with rendering for GPU memory |
+
+- **Prompt caching:** keep the world bible, culture profile and character card as a stable
+  prompt prefix so repeat calls cost much less.
+- **Running cost is a business decision.** Cloud calls cost money per player. Options: a
+  subscription tier, "bring your own API key," or limiting cloud calls to rare, high-value
+  moments.
+
+### 13.13 Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Players trick NPCs into breaking the game | Allowed-action list validated by the game; worst case is an odd line, never a broken state |
+| Contradicting the lore | Lore database as source of truth, fact retrieval, consistency checks on generated history |
+| Latency | Generate ahead, stream text, show filler (NPC "thinking" animation, idle lines) |
+| Bland or repetitive output | Strong character cards, per-culture variety settings, recent outputs kept in context |
+| Inappropriate content | Moderation on player input and model output; a rating setting |
+| Regressions | Test sets of scenarios with checks that responses stay in character and valid |
+
+---
+
+## 14. Scope and roadmap
 
 The full scope is studio-sized. To keep it achievable, build it as **vertical slices**,
 where each milestone is a playable toy on its own:
@@ -464,5 +645,9 @@ where each milestone is a playable toy on its own:
 9. **Capital ship battle:** walk from a battleship's bridge out onto the hull during a
    20-ship battle, EVA to a nearby ship, and breach it. Proves the frame tree with
    reparenting, hull walking, attention-based battle LOD and boarding.
-10. **Broaden:** more tech tiers, mechs, airships, more star systems, sieges, faction
+10. **LLM-driven world:** one lord the player can talk to and negotiate with (character
+    profile, memory, allowed actions), a planet with an LLM-generated culture and religion,
+    and a director-generated event (e.g. a succession crisis) from simulation state. Proves the
+    AI gateway, validation, caching and fallbacks.
+11. **Broaden:** more tech tiers, mechs, airships, more star systems, sieges, faction
    diplomacy and the character layer.
