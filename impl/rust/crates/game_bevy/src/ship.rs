@@ -2,10 +2,11 @@
 //!
 //! Controls (design: objects-vehicles-physics.md §10): W/S forward/back, A/D strafe,
 //! Space/Ctrl up/down, mouse pitch/yaw (cursor locked), Q/E roll, T cycles flight assist,
-//! X brakes (assist), J engages or drops out of the cruise drive, Tab switches between flying and the free debug camera, V toggles the
-//! cockpit view, right mouse orbits the chase camera. Esc releases the mouse (click to capture it
-//! again); the mouse is also released when the window loses focus. 1–8 teleport the ship into a
-//! parking orbit around a body (debug, until the cruise drive exists).
+//! X brakes (assist), Z stops instantly (debug), J engages or drops out of the cruise drive,
+//! Tab switches between flying and the free debug camera, V toggles the cockpit view, right
+//! mouse orbits the chase camera. Esc releases the mouse (click to capture it again); the mouse
+//! is also released when the window loses focus. 1–8 teleport the ship into a parking orbit
+//! around a body (debug, until the cruise drive exists).
 
 use bevy::camera::Exposure;
 use bevy::input::mouse::AccumulatedMouseMotion;
@@ -14,8 +15,8 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
-    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartKind,
-    Shape, Vehicle, VehicleBody,
+    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, OnRails,
+    PartKind, Shape, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -45,7 +46,7 @@ impl Plugin for ShipPlugin {
                 Update,
                 (
                     (pilot_mode_keys, release_mouse_on_focus_loss).chain(),
-                    (teleport_keys, cruise_keys, pilot_input)
+                    (teleport_keys, cruise_keys, full_stop_key, pilot_input)
                         .chain()
                         .after(pilot_mode_keys)
                         .before(SimSet),
@@ -377,6 +378,57 @@ fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f6
 
 /// How long a refused cruise engage stays on screen (s).
 const CRUISE_NOTICE_TIME: f32 = 3.0;
+
+/// Z (debug): full stop. Instantly sets the ship's velocity to "standing still" for flight
+/// assist: zero relative to the ground below the surface reference altitude (hover), zero in
+/// the body's inertial frame above it (drop straight down out of orbit). Also ends cruise and
+/// on-rails coasting, and makes assist hold zero speed.
+fn full_stop_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    universe: Res<Universe>,
+    ship: Option<Res<PlayerShip>>,
+    pilot: Res<PilotState>,
+    mut sim: ResMut<Sim>,
+) {
+    if !pilot.flying || !keys.just_pressed(KeyCode::KeyZ) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let system = &universe.0;
+    let sim = &mut sim.0;
+    let t = sim.universe_time().as_secs_f64();
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
+        return;
+    };
+    let frame = system.bodies[loc.region].inertial_frame;
+    let Some(state) = e
+        .get::<ObjectState>()
+        .map(|s| s.in_frame(&system.frames, frame, t))
+    else {
+        return;
+    };
+    let env = sim_vehicle::flight::body_env(system, loc.region, t);
+    let (reference, velocity) = env.standing_still(state.state.position);
+    let mut stopped = state;
+    stopped.state.velocity = velocity;
+    stopped.state.angular_velocity = DVec3::ZERO;
+    e.insert(stopped);
+    e.remove::<OnRails>();
+    if let Some(mut control) = e.get_mut::<FlightControl>() {
+        control.desired_velocity = Some((reference, DVec3::ZERO));
+        control.desired_body = Some(loc.region);
+    }
+    if let Some(mut cruise) = e.get_mut::<Cruise>() {
+        *cruise = Cruise::default();
+    }
+    info!("full stop ({reference:?} reference)");
+}
 
 /// J engages or drops out of the cruise drive; a refusal notice clears after a few seconds.
 fn cruise_keys(

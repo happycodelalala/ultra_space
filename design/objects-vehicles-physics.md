@@ -298,6 +298,7 @@ from catalog parts:
 | Q / E | Roll |
 | T | Cycle flight-assist modes |
 | J | Engage / drop out of cruise drive |
+| Z | Debug full stop: instantly "standing still" for assist (hover low, drop from orbit) |
 | Tab | Switch between flying the ship and the free debug camera |
 | Esc | Release the mouse (click to capture again); losing window focus also releases it |
 | 1–8 | Debug: teleport the ship into a parking orbit around a body (until the cruise drive) |

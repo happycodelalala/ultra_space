@@ -161,6 +161,14 @@ fn gravity(mu: f64, r: DVec3) -> DVec3 {
 }
 
 impl BodyEnv {
+    /// Flight assist's reference at `position` (the body's inertial frame) and the velocity
+    /// that counts as standing still there: co-rotating with the ground below the surface
+    /// reference altitude, zero (in the body's inertial frame) above it.
+    pub fn standing_still(&self, position: DVec3) -> (Reference, DVec3) {
+        let reference = self.reference_at(position.length() - self.radius);
+        (reference, self.frame_velocity(reference, position))
+    }
+
     fn reference_at(&self, altitude: f64) -> Reference {
         if self.solid && altitude < self.surface_reference_altitude {
             Reference::Surface
@@ -800,6 +808,17 @@ mod tests {
             (s.velocity - ground).length() < 1.0,
             "resting on the rotating ground"
         );
+    }
+
+    #[test]
+    fn standing_still_matches_the_ground_low_and_space_high() {
+        let env = meridian();
+        let low = DVec3::new(env.radius + 2_000.0, 0.0, 0.0);
+        let (reference, v) = env.standing_still(low);
+        assert_eq!(reference, Reference::Surface);
+        assert!((v - env.spin.cross(low)).length() < 1e-9);
+        let high = DVec3::new(env.radius + 200_000.0, 0.0, 0.0);
+        assert_eq!(env.standing_still(high), (Reference::Inertial, DVec3::ZERO));
     }
 
     #[test]

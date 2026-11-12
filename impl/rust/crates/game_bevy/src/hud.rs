@@ -320,7 +320,7 @@ fn update_hud(
              SPEED {}   V/S {}   ALT {}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | J cruise | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | J cruise | V view | O orbits | H HUD | F3 debug",
             body.name.to_uppercase(),
             speed(relative.length()),
             speed(relative.dot(up)),

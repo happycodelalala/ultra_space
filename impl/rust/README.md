@@ -65,7 +65,9 @@ Windows export copies `content/data` next to the `.exe`.
 ## In-game debug tools
 
 - **Flying the Kestrel** (default): W/S forward/back, A/D strafe, Space/Ctrl up/down, mouse to
-  pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
+    pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
+  **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the
+  planet when in orbit (drop straight down),
   **J** engages the cruise drive (3 s charge; steer with the mouse; J again or approaching a body
   drops out into orbit),
   V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
