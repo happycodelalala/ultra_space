@@ -2,11 +2,11 @@
 //!
 //! Controls (design: objects-vehicles-physics.md §10): W/S forward/back, A/D strafe,
 //! Space/Ctrl up/down, mouse pitch/yaw (cursor locked), Q/E roll, T cycles flight assist,
-//! X brakes (assist), Z stops instantly (debug), J engages or drops out of the cruise drive,
-//! Tab switches between flying and the free debug camera, V toggles the cockpit view, right
-//! mouse orbits the chase camera. Esc releases the mouse (click to capture it again); the mouse
-//! is also released when the window loses focus. 1–8 teleport the ship into a parking orbit
-//! around a body (debug, until the cruise drive exists).
+//! X brakes (assist), Z stops instantly (debug), N toggles arcade flight (debug), J engages or
+//! drops out of the cruise drive, Tab switches between flying and the free debug camera, V
+//! toggles the cockpit view, right mouse orbits the chase camera. Esc releases the mouse (click
+//! to capture it again); the mouse is also released when the window loses focus. 1–8 teleport
+//! the ship into a parking orbit around a body (debug).
 
 use bevy::camera::Exposure;
 use bevy::input::mouse::AccumulatedMouseMotion;
@@ -15,8 +15,8 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
-    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, OnRails,
-    PartKind, Shape, Vehicle, VehicleBody,
+    ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
+    OnRails, PartKind, Shape, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -46,7 +46,13 @@ impl Plugin for ShipPlugin {
                 Update,
                 (
                     (pilot_mode_keys, release_mouse_on_focus_loss).chain(),
-                    (teleport_keys, cruise_keys, full_stop_key, pilot_input)
+                    (
+                        teleport_keys,
+                        cruise_keys,
+                        full_stop_key,
+                        arcade_key,
+                        pilot_input,
+                    )
                         .chain()
                         .after(pilot_mode_keys)
                         .before(SimSet),
@@ -430,6 +436,51 @@ fn full_stop_key(
     info!("full stop ({reference:?} reference)");
 }
 
+/// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
+/// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
+/// turning it off hands the current velocity back to Newtonian flight.
+fn arcade_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    ship: Option<Res<PlayerShip>>,
+    pilot: Res<PilotState>,
+    mut sim: ResMut<Sim>,
+) {
+    if !pilot.flying || !keys.just_pressed(KeyCode::KeyN) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
+        return;
+    };
+    if e.contains::<ArcadeFlight>() {
+        e.remove::<ArcadeFlight>();
+        if let Some(mut control) = e.get_mut::<FlightControl>() {
+            // Assist starts from the current velocity.
+            control.desired_velocity = None;
+        }
+        info!("arcade flight off: Newtonian flight");
+    } else {
+        let forward_speed = match (e.get::<ObjectState>(), e.get::<FlightTelemetry>()) {
+            (Some(s), Some(tel)) => tel
+                .relative_velocity
+                .dot(s.state.rotation * DVec3::NEG_Z)
+                .max(0.0),
+            _ => 0.0,
+        };
+        e.insert(ArcadeFlight {
+            speed: forward_speed.min(sim_vehicle::arcade::MAX_SPEED),
+        });
+        info!("arcade flight on: no gravity, flies where the nose points");
+    }
+}
+
 /// J engages or drops out of the cruise drive; a refusal notice clears after a few seconds.
 fn cruise_keys(
     time: Res<Time<Real>>,
@@ -540,6 +591,13 @@ fn cursor_lock(
 // ---------------------------------------------------------------------------------------------
 
 /// Current state and flight data of the player ship, if it exists.
+/// Whether the player ship is in arcade flight, and its held speed.
+pub fn player_arcade_speed(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
+    let loc = sim.objects.location(ship.id)?;
+    let world = &sim.regions.get(loc.region)?.world;
+    world.get::<ArcadeFlight>(loc.entity).map(|a| a.speed)
+}
+
 /// The player ship's cruise drive status as overlay text ("" when off).
 pub fn player_cruise_status(sim: &Simulation, ship: &PlayerShip, system: &StarSystem) -> String {
     let Some(cruise) = sim

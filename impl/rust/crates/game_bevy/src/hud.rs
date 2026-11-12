@@ -18,7 +18,8 @@ use sim_vehicle::Reference;
 
 use crate::camera::{CameraSet, SpaceCamera};
 use crate::ship::{
-    PilotState, PlayerShip, ShipRenderState, player_cruise_status, player_ship_state,
+    PilotState, PlayerShip, ShipRenderState, player_arcade_speed, player_cruise_status,
+    player_ship_state,
 };
 use crate::sim::{RenderTime, Sim};
 use crate::space_render::body_poses;
@@ -309,10 +310,13 @@ fn update_hud(
             Reference::Inertial => "ORBIT",
         };
         let cruise = player_cruise_status(sim, ship, system);
+        let arcade = player_arcade_speed(sim, ship)
+            .map_or(String::new(), |s| format!("  ARCADE {}", speed(s)));
         let state_flags = format!(
-            "{}{}{}",
+            "{}{}{}{}",
             if telemetry.on_rails { "  ON RAILS" } else { "" },
             if telemetry.in_contact { "  LANDED" } else { "" },
+            arcade,
             cruise
         );
         text.0 = format!(
@@ -320,7 +324,7 @@ fn update_hud(
              SPEED {}   V/S {}   ALT {}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | Z stop | J cruise | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | N arcade | J cruise | V view | O orbits | H HUD | F3 debug",
             body.name.to_uppercase(),
             speed(relative.length()),
             speed(relative.dot(up)),

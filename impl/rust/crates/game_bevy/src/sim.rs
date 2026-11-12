@@ -38,6 +38,8 @@ pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
     sim.objects
         .register_transferable::<sim_vehicle::FlightTelemetry>();
     sim.objects.register_transferable::<sim_vehicle::Cruise>();
+    sim.objects
+        .register_transferable::<sim_vehicle::ArcadeFlight>();
     sim
 }
 

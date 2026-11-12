@@ -17,6 +17,7 @@ use sim_core::objects::{RegionBody, RegionStage, SimClock, SystemRef};
 use sim_core::{KeplerOrbit, ObjectState};
 
 use crate::allocation::Wrench;
+use crate::arcade::{ArcadeFlight, arcade_system};
 use crate::cruise::{Cruise, cruise_system};
 use crate::vehicle::{AXIS_DIRECTIONS, Vehicle, VehicleBody};
 
@@ -439,7 +440,7 @@ pub fn flight_system(
             Option<&OnRails>,
             Option<&Cruise>,
         ),
-        With<Vehicle>,
+        (With<Vehicle>, Without<ArcadeFlight>),
     >,
 ) {
     let system = &system.0;
@@ -515,7 +516,7 @@ fn rebase_desired_velocity(
 /// Adds flight to a region schedule (used with `Simulation::for_star_system`).
 pub fn add_flight_systems(schedule: &mut Schedule) {
     schedule.add_systems(
-        (flight_system, cruise_system)
+        (flight_system, arcade_system, cruise_system)
             .chain()
             .in_set(RegionStage::Simulate),
     );
