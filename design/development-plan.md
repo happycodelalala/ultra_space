@@ -414,6 +414,14 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 legs and wheels, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
+**Status (2026-11-12):** 3.1–3.9 done on branch `batch3/builder` (not merged): rapier physics
+per region, terrain collision patches, the new part and design format with landing legs,
+design compilation, wheels and a rover, the walker colliding with vehicles, the builder (keys
+and mouse picking, symmetry, sections, stats and balance warnings) and new vehicles from
+scratch, each checked on Windows through the test queue. Next: 3.10 save and load, 3.11
+per-ship cruise, 3.12 review. Known gaps: stats size measures part centres, the lander parts
+are overpowered (~10 g), wheels don't spin or move with their suspension.
+
 ### 7.1 When the object system is built
 
 The object model, persistence and streaming design (technical overview §14) is settled up
