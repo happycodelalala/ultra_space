@@ -91,6 +91,14 @@ honestly with their output.
 - **Start time of day:** `ULTRA_SPACE_START_SUN_ANGLE=<deg>` starts that far along the orbit
   from the point under the star (0 noon, ~89 sunset ahead, 120 night side, 180 midnight); the
   sun is ahead along the flight direction, so the default chase view looks towards it.
+- **Test runs on the real GPU (preferred for visual and performance checks):**
+  `tools/run-windows.sh [--export] <script.txt> [NAME=value ...]` launches the native Windows
+  build from WSL with a test script (timed key presses, mouse moves, screenshots; format in
+  `game_bevy/src/script.rs`, examples in `tools/test-scripts/`). A window opens on the
+  developer's desktop (tell them before launching); it doesn't grab the mouse. The script logs a
+  frame-time summary; screenshots land in `C:\Users\yangc\Apps\ultra_space\runs\<script>\`.
+  WSL itself can only render in software (OpenGL on Mesa's D3D12 driver can't present to a
+  window or run the atmosphere shader), so in-WSL captures are a fallback.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.

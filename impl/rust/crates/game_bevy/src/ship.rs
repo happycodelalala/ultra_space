@@ -20,6 +20,7 @@ use sim_vehicle::{
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
+use crate::script::ScriptRunning;
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{GameState, InGame, StartingVehicle, Universe};
@@ -334,8 +335,13 @@ fn pilot_mode_keys(
 /// Releases the mouse when the window loses focus (Alt+Tab, clicking another window).
 fn release_mouse_on_focus_loss(
     windows: Query<&Window, With<PrimaryWindow>>,
+    script: Option<Res<ScriptRunning>>,
     mut pilot: ResMut<PilotState>,
 ) {
+    // Scripted input keeps steering even when the window isn't focused.
+    if script.is_some() {
+        return;
+    }
     if !pilot.mouse_free && windows.iter().any(|w| !w.focused) {
         pilot.mouse_free = true;
     }
@@ -583,9 +589,11 @@ fn pilot_input(
 
 fn cursor_lock(
     pilot: Res<PilotState>,
+    script: Option<Res<ScriptRunning>>,
     mut windows: Query<&mut CursorOptions, With<PrimaryWindow>>,
 ) {
-    if !pilot.is_changed() {
+    // A scripted run is watched, not played: leave the desktop cursor alone.
+    if !pilot.is_changed() || script.is_some() {
         return;
     }
     for mut cursor in &mut windows {

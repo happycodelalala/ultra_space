@@ -9,6 +9,7 @@ mod debug_overlay;
 mod hud;
 mod inspector;
 mod planet_maps;
+mod script;
 mod ship;
 mod sim;
 mod sky;
@@ -59,6 +60,7 @@ fn main() {
             hud::HudPlugin,
             inspector::InspectorPlugin,
             capture::CapturePlugin,
+            script::ScriptPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();
