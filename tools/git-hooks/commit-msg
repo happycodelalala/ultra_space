@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Rejects commit messages with AI attribution lines (project rule: no AI attribution anywhere).
+set -euo pipefail
+msg_file="$1"
+pattern='(co-authored-by:.*(claude|anthropic|copilot|openai|chatgpt|gpt-|gemini))|(generated (with|by) .*(claude|ai|copilot|chatgpt))|(^[a-z-]+-session: https://claude\.ai)|(noreply@anthropic\.com)'
+if grep -qiE "$pattern" "$msg_file"; then
+    echo "commit-msg: AI attribution line found, commit blocked:" >&2
+    grep -niE "$pattern" "$msg_file" >&2
+    exit 1
+fi

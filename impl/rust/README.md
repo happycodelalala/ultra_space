@@ -41,6 +41,7 @@ crates may use standalone `bevy_ecs` for parallel scheduling, which works with a
 
 | Task | Command |
 |---|---|
+| **All checks (run before merging)** | `../../tools/ci.sh` (add `--windows` for a Windows type-check) |
 | Build everything | `cargo build` |
 | Test sim crates (no GPU needed) | `cargo test --workspace --exclude game_bevy` |
 | Test everything | `cargo test --workspace` |
