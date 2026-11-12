@@ -10,6 +10,7 @@ which engine API does it. Engine-specific notes belong in `impl/<implementation>
 | [objects-vehicles-physics.md](objects-vehicles-physics.md) | Objects (identity, frame-relative state, regions, transfers), vehicles made of parts, mass properties, thrust allocation, flight and cruise; how the Batch 3 builder plugs in |
 | [ships-stations-interiors.md](ships-stations-interiors.md) | Ship and station design: fine parts, section kits, capital hulls with slots, station modules, style families; buying, capturing and building ships; interiors from a few rooms to station cities; design compilation; art and performance |
 | [planet-surface.md](planet-surface.md) | Batch 2 planet surfaces: CPU terrain and climate function, cube-sphere quadtree, orbit view from baked maps, looks, landing, walking, deltas and streaming |
+| [vehicle-builder.md](vehicle-builder.md) | Batch 3: rigid-body physics with rapier (per-region worlds, terrain collision, wheels, walker), data format additions, design compilation, the builder, saving |
 | [development-plan.md](development-plan.md) | Engine decision and rationale, parallel simulation architecture, environment, LLM integration, development batches |
 
 Suggested additions as the design grows:

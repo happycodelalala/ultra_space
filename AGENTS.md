@@ -47,6 +47,9 @@ decision, architecture, development batches) before starting non-trivial work.
 - **Don't write Bevy code from memory.** Check the pinned version's source and examples in
   `~/.cargo/registry/src/*/bevy-0.20.1/` (and the matching `bevy_*` crates) first.
 - Upgrade Bevy only between development batches, never mid-batch.
+- **rapier3d-f64 is pinned to `=0.36.1`** (simulation physics, Batch 3; it uses our glam 0.33).
+  It's also newer than most training data: check `~/.cargo/registry/src/*/rapier3d-f64-0.36.1/`
+  and `parry3d-f64-0.31.*` before writing rapier code.
 
 ## Commands (in `impl/rust/`)
 

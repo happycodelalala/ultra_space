@@ -391,6 +391,29 @@ Debug aids added along the way: full stop (Z), arcade flight (N), flattened pad 
 position, time of day and camera angle by environment variables, scripted test rounds on Windows
 (`AGENTS.md`).
 
+### 7.4 Batch 3 tasks
+
+Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
+
+| # | Task | Done when |
+|---|---|---|
+| 3.1 | **Rapier core:** rapier3d-f64 in the simulation crates, one world per region, per-body gravity, the Kestrel as one rigid body with a compound collider flown by the existing assist and allocator | Orbit-stability and region-transfer tests pass; flight feels unchanged |
+| 3.2 | **Terrain collision:** collision patches from the terrain function on a body turning with the planet; landing legs; rapier contacts replace the Batch 2 ground contact | Landing test (stays put on a slope) passes; landing, pad and descent tests pass on Windows |
+| 3.3 | **Data format additions:** attach nodes, attachment graph, connectors, sections, slots, form, interior placeholder, collider, new part kinds; design hash; schemas; Kestrel converted | Schema checks; graph and hash tests |
+| 3.4 | **Design compilation:** compiled form (mass, allocation, compound collider, wheel set, merged meshes per material) on workers, cached by hash | No hitch when a design changes; 300-part benchmark ≈ the Kestrel per tick |
+| 3.5 | **Wheels and a rover:** wheel parts, raycast vehicle controller, a rover design, drive controls, boarding any vehicle | Drive over hills and back without tipping or sinking |
+| 3.6 | **Walker on the character controller:** collides with and stands on vehicles; slope limit and steps | Walk around and onto the rover; tests |
+| 3.7 | **Builder mode:** enter and leave (B), orbit camera, parts palette, snap to attach nodes, place, rotate, select, remove, undo | Build a small lander from parts and fly it |
+| 3.8 | **Builder tools:** symmetry, sections, stats (mass, centre of mass, thrust-to-weight, hover/strafe/turn, rover stability, Δv estimate), validation | Stats match flight; invalid designs explained |
+| 3.9 | **New vehicles:** start from a root part on open ground | Build a rover and a ship from scratch, drive and fly them |
+| 3.10 | **Save and load:** versioned JSON, object records, `ObjectId` allocator, terrain deltas, quick save and load | Round-trip tests; reload puts everything back as it was |
+| 3.11 | **Per-ship cruise characteristics** from the drive part and the ship (objects-vehicles-physics §8) | Heavier ships charge and turn slower in cruise |
+| 3.12 | **Batch review** | Exit criteria met |
+
+**Exit criteria:** build a rover and a ship from parts in the world, drive and fly them, land on
+legs and wheels, save and load everything; no frame over 50 ms when entering or leaving the
+builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
+
 ### 7.1 When the object system is built
 
 The object model, persistence and streaming design (technical overview §14) is settled up
