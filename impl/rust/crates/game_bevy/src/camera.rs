@@ -5,7 +5,8 @@
 //! influence containing the camera. Rendering is camera-relative: the camera sits at the render
 //! origin and everything else is placed relative to it (see `space_render`).
 //!
-//! This is a debug free-flight camera until the ship exists (task 1.11):
+//! When flying, the ship module drives the camera (chase or cockpit view). Tab switches to this
+//! free debug camera:
 //! - hold right mouse button and move the mouse to look; Q/E roll
 //! - W/S forward/back, A/D left/right, R/F up/down; Shift ×10
 //! - mouse wheel changes speed; number keys 1–8 jump to a body
@@ -15,6 +16,7 @@ use bevy::prelude::*;
 use glam::{DMat3, DQuat, DVec3};
 use sim_core::StarSystem;
 
+use crate::ship::PilotState;
 use crate::sim::Sim;
 use crate::universe::Universe;
 
@@ -38,6 +40,15 @@ const MAX_SPEED: f64 = 1.0e10;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CameraSet;
 
+/// Order within [`CameraSet`]: free-camera controls (only when not flying), following the
+/// ship (when flying), then the anchor update.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CameraStage {
+    Controls,
+    Follow,
+    Anchor,
+}
+
 pub struct SpaceCameraPlugin;
 
 impl Plugin for SpaceCameraPlugin {
@@ -51,13 +62,26 @@ impl Plugin for SpaceCameraPlugin {
             .position(|b| b.id == start)
             .unwrap_or(0);
         let camera = view_of_body(&universe.0, index, 0.0);
-        app.insert_resource(camera).add_systems(
-            Update,
-            (camera_controls, jump_to_body, update_anchor)
-                .chain()
-                .in_set(CameraSet)
-                .after(crate::sim::SimSet),
-        );
+        app.insert_resource(camera)
+            .configure_sets(
+                Update,
+                (
+                    CameraStage::Controls,
+                    CameraStage::Follow,
+                    CameraStage::Anchor,
+                )
+                    .chain()
+                    .in_set(CameraSet),
+            )
+            .configure_sets(Update, CameraSet.after(crate::sim::SimSet))
+            .add_systems(
+                Update,
+                (camera_controls, jump_to_body)
+                    .chain()
+                    .in_set(CameraStage::Controls)
+                    .run_if(|pilot: Res<PilotState>| !pilot.flying),
+            )
+            .add_systems(Update, update_anchor.in_set(CameraStage::Anchor));
     }
 }
 

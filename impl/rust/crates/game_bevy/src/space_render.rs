@@ -25,7 +25,7 @@ const PLANET_SHADER: &str = "embedded://ultra_space/shaders/planet.wesl";
 const ATMOSPHERE_SHADER: &str = "embedded://ultra_space/shaders/atmosphere.wesl";
 
 /// Brightness of starlight in shader units (lit surfaces ≈ albedo × this).
-const STAR_LIGHT: f32 = 1.2;
+pub const STAR_LIGHT: f32 = 1.2;
 /// Brightness of the star's own surface (HDR, drives bloom).
 const STAR_SURFACE: f32 = 40.0;
 
@@ -150,10 +150,12 @@ fn spawn_bodies(
     mut planets: ResMut<Assets<PlanetMaterial>>,
     mut atmospheres: ResMut<Assets<AtmosphereMaterial>>,
 ) {
+    // Fine enough that the horizon looks round from low orbit; close-range terrain with level of
+    // detail replaces this in Batch 2.
     let sphere = meshes.add(
         Sphere::new(1.0)
             .mesh()
-            .ico(6)
+            .ico(7)
             .expect("valid ico subdivisions"),
     );
     for (i, body) in universe.0.bodies.iter().enumerate() {

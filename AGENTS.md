@@ -68,6 +68,8 @@ honestly with their output.
 
 - **Debug overlay** (F3 toggles): FPS and frame time, simulation tick time and budget, region
   and entity counts. Logging uses Bevy's `LogPlugin`; override the filter with `RUST_LOG`.
+- **Ship controls** (flying is the default): see `impl/rust/README.md`. Tab switches to the
+  debug camera.
 - **Debug camera:** hold right mouse to look, WASD/R/F to move, Q/E roll, Shift ×10, wheel for
   speed, 1–8 to jump to a body. `ULTRA_SPACE_VIEW=<body id>` sets the starting view (useful
   with capture).

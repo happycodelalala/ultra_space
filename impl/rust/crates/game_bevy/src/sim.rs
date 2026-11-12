@@ -25,8 +25,18 @@ pub struct SimPlugin;
 impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
         let system = app.world().resource::<Universe>().0.clone();
-        // One region per body; physics systems are added per region in later tasks.
-        let sim = Simulation::for_star_system(system, |_, _| {});
+        // One region per body, each running vehicle flight.
+        let mut sim = Simulation::for_star_system(system, |_, schedule| {
+            sim_vehicle::flight::add_flight_systems(schedule);
+        });
+        // Components that travel with objects between regions.
+        sim.objects.register_transferable::<sim_vehicle::Vehicle>();
+        sim.objects
+            .register_transferable::<sim_vehicle::VehicleBody>();
+        sim.objects
+            .register_transferable::<sim_vehicle::FlightControl>();
+        sim.objects
+            .register_transferable::<sim_vehicle::FlightTelemetry>();
         info!(
             "simulation: {} regions (one per body) at {:.0} Hz",
             sim.regions.len(),

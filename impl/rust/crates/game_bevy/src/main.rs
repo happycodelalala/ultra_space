@@ -6,6 +6,7 @@
 mod camera;
 mod capture;
 mod debug_overlay;
+mod ship;
 mod sim;
 mod sky;
 mod space_render;
@@ -40,6 +41,7 @@ fn main() {
             camera::SpaceCameraPlugin,
             space_render::SpaceRenderPlugin,
             sky::SkyPlugin,
+            ship::ShipPlugin,
             debug_overlay::DebugOverlayPlugin,
             capture::CapturePlugin,
         ))

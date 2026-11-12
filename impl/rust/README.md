@@ -64,7 +64,11 @@ Windows export copies `content/data` next to the `.exe`.
 
 ## In-game debug tools
 
-- **Debug camera:** hold right mouse to look; WASD move, R/F up/down, Q/E roll, Shift ×10,
+- **Flying the Kestrel** (default): W/S forward/back, A/D strafe, Space/Ctrl up/down, mouse to
+  pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
+  V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
+  camera. Thrust is disabled above ×4 time warp, where coasting ships go on rails.
+- **Debug camera** (after Tab): hold right mouse to look; WASD move, R/F up/down, Q/E roll, Shift ×10,
   mouse wheel changes speed, **1–8** jump to Halcyon, Cinder, Meridian, Lantern, Hoarfell,
   Leviathan, Forge, Rime. `ULTRA_SPACE_VIEW=<body id>` picks the starting view.
 - **, / .** change time warp.
