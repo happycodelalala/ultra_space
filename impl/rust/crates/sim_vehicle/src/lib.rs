@@ -10,6 +10,7 @@ pub mod cruise;
 pub mod design;
 pub mod flight;
 pub mod mass;
+pub mod physics;
 pub mod vehicle;
 pub mod walker;
 
@@ -20,5 +21,6 @@ pub use cruise::{Cruise, CruiseBlocked, CruisePhase};
 pub use design::{VehicleDesign, VehiclePart};
 pub use flight::{AssistMode, FlightControl, FlightTelemetry, OnRails, Reference};
 pub use mass::MassProperties;
-pub use vehicle::{Performance, Vehicle, VehicleBody};
+pub use physics::{PhysicsScene, RegionPhysics};
+pub use vehicle::{PartCollider, Performance, Vehicle, VehicleBody};
 pub use walker::{Walker, WalkerControl};

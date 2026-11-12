@@ -2,10 +2,10 @@
 //! (design §2–3, §9.1).
 
 use bevy_ecs::prelude::*;
-use glam::DVec3;
+use glam::{DQuat, DVec3};
 
 use crate::allocation::{Allocator, Thruster, Wrench};
-use crate::catalog::CruiseDriveDef;
+use crate::catalog::{CruiseDriveDef, Shape};
 use crate::design::{VehicleDesign, VehiclePart};
 use crate::mass::MassProperties;
 
@@ -52,6 +52,16 @@ pub struct VehicleBody {
     pub mass: MassProperties,
     pub allocator: Allocator,
     pub performance: Performance,
+    /// One collision shape per part, in vehicle axes (the compound collider).
+    pub colliders: Vec<PartCollider>,
+}
+
+/// A part's collision shape, placed in the vehicle frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PartCollider {
+    pub shape: Shape,
+    pub position: DVec3,
+    pub rotation: DQuat,
 }
 
 /// Directions matching [`Performance::max_acceleration`].
@@ -95,10 +105,20 @@ impl VehicleBody {
         let allocator = Allocator::new(thrusters, wheel, size);
         let cruise = vehicle.parts.iter().find_map(|p| p.def.cruise_drive);
         let performance = performance(&allocator, &mass, cruise);
+        let colliders = vehicle
+            .parts
+            .iter()
+            .map(|p| PartCollider {
+                shape: p.def.shape,
+                position: p.position,
+                rotation: p.rotation,
+            })
+            .collect();
         Some(Self {
             mass,
             allocator,
             performance,
+            colliders,
         })
     }
 }

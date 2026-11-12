@@ -1,14 +1,16 @@
 //! Vehicle flight (design: objects-vehicles-physics.md §4; task 1.11).
 //!
-//! - Rigid-body dynamics at the center of mass with semi-implicit (symplectic) Euler and
-//!   substeps, so orbits stay stable.
+//! - Rigid-body dynamics in each region's rapier scene ([`crate::physics`]): symplectic
+//!   substeps with gravity re-evaluated every substep, so orbits stay stable; vehicles collide
+//!   with each other through their compound colliders.
 //! - Gravity from the region's body only (patched conics).
 //! - Flight assist: holds a desired velocity relative to a reference frame (the body's rotating
 //!   surface near it, its inertial frame higher up) and damps rotation, using the thrust
 //!   allocator, so a vehicle with weak thrusters really is sluggish.
 //! - Under time warp a coasting vehicle goes **on rails** ([`OnRails`]): its orbit is evaluated
 //!   in closed form, like planets.
-//! - Ground contact: the vehicle can't go below the body's surface (until terrain, Batch 2).
+//! - Ground contact: the Batch 2 contact model against the terrain height (until terrain
+//!   colliders, task 3.2).
 
 use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
@@ -16,12 +18,14 @@ use sim_core::frames::FrameState;
 use sim_core::objects::{RegionBody, RegionStage, SimClock, SystemRef};
 use std::sync::Arc;
 
-use sim_core::{KeplerOrbit, ObjectState};
+use sim_core::objects::Object;
+use sim_core::{KeplerOrbit, ObjectId, ObjectState};
 use sim_planet::Terrain;
 
 use crate::allocation::Wrench;
 use crate::arcade::{ArcadeFlight, arcade_system};
 use crate::cruise::{Cruise, cruise_system};
+use crate::physics::{PhysicsScene, RegionPhysics};
 use crate::vehicle::{AXIS_DIRECTIONS, Vehicle, VehicleBody};
 
 /// Longest physics substep (s).
@@ -143,8 +147,6 @@ const GROUND_FRICTION_COEFFICIENT: f64 = 0.8;
 /// `MAX_STICK_SLOPE`, holds still (static friction).
 const STICK_SPEED: f64 = 0.5;
 const MAX_STICK_SLOPE: f64 = 0.7;
-/// Drag coefficient times reference area, as a fraction of the vehicle's bounding disc.
-const DRAG_AREA_FRACTION: f64 = 0.5;
 
 /// Center-of-mass state in the body's inertial frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -380,7 +382,9 @@ pub fn assist_request(
     (Wrench { force, torque }, reference, relative)
 }
 
-/// Advances `state` by `dt` under gravity and a constant body-axes wrench, with substeps.
+/// Advances one vehicle by `dt` under gravity, drag and a constant body-axes wrench, alone in
+/// its own physics scene (tests and tools; regions step all their vehicles together in their
+/// [`RegionPhysics`] scene). Returns whether it touched the ground.
 pub fn integrate(
     state: &mut RigidState,
     body: &VehicleBody,
@@ -388,58 +392,26 @@ pub fn integrate(
     env: &BodyEnv,
     dt: f64,
 ) -> bool {
-    let substeps = (dt / MAX_SUBSTEP)
-        .ceil()
-        .clamp(1.0, f64::from(MAX_SUBSTEPS)) as u32;
-    let h = dt / f64::from(substeps);
-    let m = body.mass.mass;
-    let inertia = body.mass.inertia;
-    let inv_inertia = inertia.inverse();
-    let mut contact = false;
-    let drag_area = DRAG_AREA_FRACTION * std::f64::consts::PI * vehicle_radius(body).powi(2);
-    for _ in 0..substeps {
-        // Linear: kick then drift (symplectic Euler).
-        let thrust = state.rotation * wrench.force / m;
-        // Drag against the air, which turns with the ground.
-        let rho = env.air_density_at(state.position);
-        let drag = if rho > 0.0 {
-            let air = state.velocity - env.spin.cross(state.position);
-            -air * (0.5 * rho * drag_area * air.length() / m)
-        } else {
-            DVec3::ZERO
-        };
-        state.velocity += (gravity(env.mu, state.position) + thrust + drag) * h;
-        state.position += state.velocity * h;
-
-        // Angular: Euler's equations in body axes.
-        let to_body = state.rotation.inverse();
-        let w = to_body * state.angular_velocity;
-        let alpha = inv_inertia * (wrench.torque - w.cross(inertia * w));
-        state.angular_velocity = state.rotation * (w + alpha * h);
-        state.rotation =
-            (DQuat::from_scaled_axis(state.angular_velocity * h) * state.rotation).normalize();
-
-        contact |= ground_contact(state, env, body, h);
-    }
+    let mut scene = PhysicsScene::default();
+    let id = ObjectId(0);
+    scene.place_dynamic(id, body, state, wrench);
+    scene.step(env, dt);
+    let (next, contact) = scene.state(id).expect("placed above");
+    *state = next;
     contact
-}
-
-/// Radius of a sphere around the center of mass that contains the vehicle (rough).
-fn vehicle_radius(body: &VehicleBody) -> f64 {
-    body.allocator
-        .thrusters()
-        .iter()
-        .map(|t| t.position.length())
-        .fold(2.0, f64::max)
 }
 
 /// Keeps the vehicle above the surface: removes inward motion and applies friction relative to
 /// the rotating ground. Returns whether it touched.
-fn ground_contact(state: &mut RigidState, env: &BodyEnv, body: &VehicleBody, h: f64) -> bool {
+pub(crate) fn ground_contact(
+    state: &mut RigidState,
+    env: &BodyEnv,
+    clearance: f64,
+    h: f64,
+) -> bool {
     if !env.solid {
         return false;
     }
-    let clearance = vehicle_radius(body);
     let d = state.position.length();
     // Far above the highest possible ground: no need to sample the terrain.
     if d >= env.radius + env.max_ground_height() + clearance {
@@ -479,9 +451,17 @@ fn ground_contact(state: &mut RigidState, env: &BodyEnv, body: &VehicleBody, h: 
     true
 }
 
-/// One tick of flight for one vehicle. Returns the new origin state.
+/// What a vehicle does this tick: already moved (on rails), or to be integrated by physics from
+/// this centre-of-mass state with this control wrench.
+pub enum FlightPlan {
+    Moved(FrameState),
+    Integrate { state: RigidState, wrench: Wrench },
+}
+
+/// Flight assist and thrust allocation for one vehicle this tick (everything but the
+/// integration, which physics does for all vehicles of a region together).
 #[allow(clippy::too_many_arguments)]
-pub fn fly(
+pub fn plan_flight(
     origin: &FrameState,
     body: &VehicleBody,
     control: &mut FlightControl,
@@ -490,7 +470,7 @@ pub fn fly(
     env: &BodyEnv,
     t_start: f64,
     dt: f64,
-) -> FrameState {
+) -> FlightPlan {
     let com = body.mass.center_of_mass;
     let mut state = RigidState::from_origin(origin, com);
     let warping = dt > MAX_THRUST_DT;
@@ -513,13 +493,15 @@ pub fn fly(
             telemetry.on_rails = true;
             telemetry.throttles.iter_mut().for_each(|u| *u = 0.0);
             telemetry.in_contact = false;
-            return state.to_origin(com);
+            return FlightPlan::Moved(state.to_origin(com));
         }
         // Not a safe orbit (escaping, or would hit the ground): integrate without thrust.
         telemetry.on_rails = false;
         telemetry.throttles.iter_mut().for_each(|u| *u = 0.0);
-        telemetry.in_contact = integrate(&mut state, body, Wrench::default(), env, dt);
-        return state.to_origin(com);
+        return FlightPlan::Integrate {
+            state,
+            wrench: Wrench::default(),
+        };
     }
 
     *rails = None;
@@ -530,9 +512,33 @@ pub fn fly(
     let allocation = body.allocator.solve(request, warm);
     telemetry.reference = reference;
     telemetry.relative_velocity = relative;
-    telemetry.in_contact = integrate(&mut state, body, allocation.achieved, env, dt);
     telemetry.throttles = allocation.throttles;
-    state.to_origin(com)
+    FlightPlan::Integrate {
+        state,
+        wrench: allocation.achieved,
+    }
+}
+
+/// One tick of flight for one vehicle on its own (tests and tools). Returns the new origin
+/// state.
+#[allow(clippy::too_many_arguments)]
+pub fn fly(
+    origin: &FrameState,
+    body: &VehicleBody,
+    control: &mut FlightControl,
+    telemetry: &mut FlightTelemetry,
+    rails: &mut Option<KeplerOrbit>,
+    env: &BodyEnv,
+    t_start: f64,
+    dt: f64,
+) -> FrameState {
+    match plan_flight(origin, body, control, telemetry, rails, env, t_start, dt) {
+        FlightPlan::Moved(next) => next,
+        FlightPlan::Integrate { mut state, wrench } => {
+            telemetry.in_contact = integrate(&mut state, body, wrench, env, dt);
+            state.to_origin(body.mass.center_of_mass)
+        }
+    }
 }
 
 /// Height above the ground under `position` (m); sea-level altitude when far above the highest
@@ -603,44 +609,59 @@ pub fn region_env(
     env
 }
 
-/// Flies every vehicle in a region for one tick. Add to each region's schedule in
-/// [`RegionStage::Simulate`].
-#[allow(clippy::type_complexity)]
+/// Flies every vehicle in a region for one tick: assist and allocation per vehicle, then one
+/// physics step for all of them. Add to each region's schedule in [`RegionStage::Simulate`].
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn flight_system(
     mut commands: Commands,
     region: Res<RegionBody>,
     system: Res<SystemRef>,
     clock: Res<SimClock>,
     terrain: Option<Res<RegionTerrain>>,
+    physics: Option<ResMut<RegionPhysics>>,
     mut vehicles: Query<
         (
             Entity,
+            &Object,
             &mut ObjectState,
             &VehicleBody,
             &mut FlightControl,
             &mut FlightTelemetry,
             Option<&OnRails>,
             Option<&Cruise>,
+            Has<ArcadeFlight>,
         ),
-        (With<Vehicle>, Without<ArcadeFlight>),
+        With<Vehicle>,
     >,
 ) {
     let system = &system.0;
     let t = clock.time.as_secs_f64();
     let env = region_env(system, region.0, t, terrain.as_deref());
     let inertial = system.bodies[region.0].inertial_frame;
-    for (entity, mut state, body, mut control, mut telemetry, on_rails, cruise) in &mut vehicles {
-        if cruise.is_some_and(Cruise::is_cruising) {
-            continue; // moved by the cruise drive
+    let mut created = None;
+    let scene = match physics {
+        Some(p) => &mut p.into_inner().0,
+        None => created.insert(PhysicsScene::default()),
+    };
+
+    let mut integrating = Vec::new();
+    for (entity, object, mut state, body, mut control, mut telemetry, on_rails, cruise, arcade) in
+        &mut vehicles
+    {
+        // Flight works in the body's inertial frame.
+        let local = state.in_frame(&system.frames, inertial, t);
+        if arcade || cruise.is_some_and(Cruise::is_cruising) {
+            // Moved by arcade flight or the cruise drive; still there for others to hit.
+            let com = body.mass.center_of_mass;
+            scene.place_kinematic(object.id, body, &RigidState::from_origin(&local.state, com));
+            continue;
         }
         if control.desired_body != Some(region.0) {
             rebase_desired_velocity(system, &mut control, region.0, t);
         }
-        // Flight works in the body's inertial frame.
-        let local = state.in_frame(&system.frames, inertial, t);
         let mut rails = on_rails.map(|r| r.0);
         let had_rails = rails.is_some();
-        let next = fly(
+        let plan = plan_flight(
             &local.state,
             body,
             &mut control,
@@ -650,10 +671,21 @@ pub fn flight_system(
             t,
             clock.dt,
         );
-        *state = ObjectState {
-            frame: inertial,
-            state: next,
-        };
+        match plan {
+            FlightPlan::Moved(next) => {
+                *state = ObjectState {
+                    frame: inertial,
+                    state: next,
+                };
+            }
+            FlightPlan::Integrate {
+                state: start,
+                wrench,
+            } => {
+                scene.place_dynamic(object.id, body, &start, wrench);
+                integrating.push(entity);
+            }
+        }
         match (had_rails, rails) {
             (false, Some(orbit)) => {
                 commands.entity(entity).insert(OnRails(orbit));
@@ -663,6 +695,25 @@ pub fn flight_system(
             }
             _ => {}
         }
+    }
+
+    scene.step(&env, clock.dt);
+
+    for entity in integrating {
+        let Ok((_, object, mut state, body, _, mut telemetry, ..)) = vehicles.get_mut(entity)
+        else {
+            continue;
+        };
+        if let Some((next, contact)) = scene.state(object.id) {
+            telemetry.in_contact = contact;
+            *state = ObjectState {
+                frame: inertial,
+                state: next.to_origin(body.mass.center_of_mass),
+            };
+        }
+    }
+    if let Some(scene) = created {
+        commands.insert_resource(RegionPhysics(scene));
     }
 }
 
@@ -1060,7 +1111,7 @@ mod tests {
         // The landing spot has turned with the planet meanwhile.
         let up = DQuat::from_scaled_axis(env.spin * (f64::from(ticks) / 30.0)) * up;
         let height = s.position.length() - (env.radius + env.ground_height(s.position));
-        let clearance = vehicle_radius(&body);
+        let clearance = crate::physics::vehicle_radius(&body);
         assert!(
             (height - clearance).abs() < 0.5,
             "rests at its clearance: {height:.2} vs {clearance:.2}"
