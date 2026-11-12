@@ -68,6 +68,13 @@ honestly with their output.
 
 - **Debug overlay** (F3 toggles): FPS and frame time, simulation tick time and budget, region
   and entity counts. Logging uses Bevy's `LogPlugin`; override the filter with `RUST_LOG`.
+- **Debug camera:** hold right mouse to look, WASD/R/F to move, Q/E roll, Shift ×10, wheel for
+  speed, 1–8 to jump to a body. `ULTRA_SPACE_VIEW=<body id>` sets the starting view (useful
+  with capture).
+- **Shaders** are WESL files in `crates/game_bevy/src/shaders/`, embedded in the binary.
+  Material bindings use `@group(constants::MATERIAL_BIND_GROUP)`; imports use
+  `bevy_pbr::render::...`. `AlphaMode::Add` uses premultiplied blending: output alpha 0 for
+  pure additive light.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.

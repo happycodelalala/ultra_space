@@ -9,7 +9,14 @@
       "kind": "star",
       "radius_km": 300000,
       "surface_gravity_ms2": 16.7,
-      "rotation": { "period_hours": 600, "axial_tilt_deg": 7 },
+      "rotation": {
+        "period_hours": 600,
+        "axial_tilt_deg": 7
+      },
+      "appearance": {
+        "colors": [[1.0, 0.95, 0.85], [1.0, 0.9, 0.75]],
+        "glow_color": [1.0, 0.92, 0.8]
+      },
       "description": "Yellow-white main-sequence star. Light enough (KSP-like) that every planet keeps a realistic sphere of influence."
     },
     {
@@ -27,7 +34,13 @@
         "arg_periapsis_deg": 15,
         "mean_anomaly_deg": 0
       },
-      "rotation": { "period_hours": 40, "axial_tilt_deg": 0.5 },
+      "rotation": {
+        "period_hours": 40,
+        "axial_tilt_deg": 0.5
+      },
+      "appearance": {
+        "colors": [[0.3, 0.26, 0.24], [0.62, 0.52, 0.44]]
+      },
       "description": "Hot, airless rock close to the star, with long, scorching days and freezing nights."
     },
     {
@@ -45,8 +58,21 @@
         "arg_periapsis_deg": 0,
         "mean_anomaly_deg": 40
       },
-      "rotation": { "period_hours": 1.5, "axial_tilt_deg": 23 },
-      "atmosphere": { "height_km": 70, "surface_pressure_atm": 1.0, "color_rgb": [0.45, 0.65, 1.0] },
+      "rotation": {
+        "period_hours": 1.5,
+        "axial_tilt_deg": 23
+      },
+      "atmosphere": {
+        "height_km": 70,
+        "surface_pressure_atm": 1.0,
+        "color_rgb": [0.45, 0.65, 1.0]
+      },
+      "appearance": {
+        "colors": [[0.22, 0.38, 0.16], [0.55, 0.5, 0.36]],
+        "ocean_coverage": 0.62,
+        "ocean_color": [0.03, 0.12, 0.3],
+        "polar_ice": 0.12
+      },
       "description": "Temperate home world with oceans and seasons: the baseline planet and future home of many cultures."
     },
     {
@@ -64,7 +90,12 @@
         "arg_periapsis_deg": 0,
         "mean_anomaly_deg": 120
       },
-      "rotation": { "tidally_locked": true },
+      "rotation": {
+        "tidally_locked": true
+      },
+      "appearance": {
+        "colors": [[0.42, 0.42, 0.44], [0.76, 0.75, 0.73]]
+      },
       "description": "Airless moon that always shows Meridian the same pale face."
     },
     {
@@ -82,8 +113,19 @@
         "arg_periapsis_deg": 90,
         "mean_anomaly_deg": 200
       },
-      "rotation": { "period_hours": 2, "axial_tilt_deg": 35 },
-      "atmosphere": { "height_km": 40, "surface_pressure_atm": 0.1, "color_rgb": [0.85, 0.6, 0.45] },
+      "rotation": {
+        "period_hours": 2,
+        "axial_tilt_deg": 35
+      },
+      "atmosphere": {
+        "height_km": 40,
+        "surface_pressure_atm": 0.1,
+        "color_rgb": [0.85, 0.6, 0.45]
+      },
+      "appearance": {
+        "colors": [[0.52, 0.3, 0.18], [0.85, 0.7, 0.55]],
+        "polar_ice": 0.25
+      },
       "description": "Cold desert world with a thin atmosphere, a strong axial tilt and ice caps."
     },
     {
@@ -101,8 +143,18 @@
         "arg_periapsis_deg": 60,
         "mean_anomaly_deg": 300
       },
-      "rotation": { "period_hours": 4, "axial_tilt_deg": 3 },
-      "atmosphere": { "height_km": 600, "surface_pressure_atm": 1.0, "color_rgb": [0.8, 0.7, 0.55] },
+      "rotation": {
+        "period_hours": 4,
+        "axial_tilt_deg": 3
+      },
+      "atmosphere": {
+        "height_km": 600,
+        "surface_pressure_atm": 1.0,
+        "color_rgb": [0.8, 0.7, 0.55]
+      },
+      "appearance": {
+        "colors": [[0.6, 0.47, 0.33], [0.92, 0.86, 0.72]]
+      },
       "description": "Banded gas giant with no surface. Radius and gravity are measured at the cloud tops."
     },
     {
@@ -120,7 +172,13 @@
         "arg_periapsis_deg": 0,
         "mean_anomaly_deg": 0
       },
-      "rotation": { "tidally_locked": true },
+      "rotation": {
+        "tidally_locked": true
+      },
+      "appearance": {
+        "colors": [[0.22, 0.17, 0.06], [0.82, 0.72, 0.25]],
+        "glow_color": [1.0, 0.35, 0.05]
+      },
       "description": "Volcanic inner moon, kneaded by Leviathan's tides."
     },
     {
@@ -138,7 +196,12 @@
         "arg_periapsis_deg": 0,
         "mean_anomaly_deg": 90
       },
-      "rotation": { "tidally_locked": true },
+      "rotation": {
+        "tidally_locked": true
+      },
+      "appearance": {
+        "colors": [[0.58, 0.68, 0.76], [0.92, 0.95, 0.97]]
+      },
       "description": "Icy outer moon with a cracked shell over a dark ocean."
     }
   ]

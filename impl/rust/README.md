@@ -56,8 +56,18 @@ Windows builds are exported to `C:\Users\yangc\Apps\ultra_space\`
 (`/mnt/c/Users/yangc/Apps/ultra_space/` from WSL). Judge visuals and performance there, not
 in WSL.
 
+## Content
+
+The game loads `content/data/` at runtime. It looks for `ULTRA_SPACE_CONTENT`, then a
+`content/` folder next to the executable or in any parent folder (the repo checkout). The
+Windows export copies `content/data` next to the `.exe`.
+
 ## In-game debug tools
 
+- **Debug camera:** hold right mouse to look; WASD move, R/F up/down, Q/E roll, Shift ×10,
+  mouse wheel changes speed, **1–8** jump to Halcyon, Cinder, Meridian, Lantern, Hoarfell,
+  Leviathan, Forge, Rime. `ULTRA_SPACE_VIEW=<body id>` picks the starting view.
+- **, / .** change time warp.
 - **F3** toggles the debug overlay: FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
 - The simulation (`sim_core::Simulation`) runs at a fixed 30 Hz, decoupled from the frame
