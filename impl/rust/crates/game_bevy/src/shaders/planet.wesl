@@ -20,10 +20,24 @@ fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
     return v + q.w * t + cross(q.xyz, t);
 }
 
+// Integer hash (PCG3D). The earlier product-of-fractions hash went to ~0 along whole planes of
+// cells, which showed up as long straight seams across planets.
+fn pcg3d(v_in: vec3<u32>) -> vec3<u32> {
+    var v = v_in * 1664525u + 1013904223u;
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v ^= v >> vec3<u32>(16u);
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    return v;
+}
+
+// Random value in [0, 1] for an integer lattice point (given as whole-number floats).
 fn hash3(p: vec3<f32>) -> f32 {
-    var q = fract(p * 0.3183099 + vec3<f32>(0.71, 0.113, 0.419));
-    q = q * 17.0;
-    return fract(q.x * q.y * q.z * (q.x + q.y + q.z));
+    let h = pcg3d(bitcast<vec3<u32>>(vec3<i32>(p)));
+    return f32(h.x >> 8u) / 16777215.0;
 }
 
 fn value_noise(p: vec3<f32>) -> f32 {
@@ -49,9 +63,15 @@ fn fbm(p: vec3<f32>) -> f32 {
     var sum = 0.0;
     var amp = 0.5;
     var x = p;
+    // Each octave is rotated so lattice edges never line up across octaves into visible lines.
+    let rot = mat3x3<f32>(
+        vec3<f32>(0.00, 0.80, 0.60),
+        vec3<f32>(-0.80, 0.36, -0.48),
+        vec3<f32>(-0.60, -0.48, 0.64),
+    );
     for (var i = 0; i < 6; i++) {
         sum += amp * value_noise(x);
-        x = x * 2.03 + vec3<f32>(1.7, -2.3, 0.9);
+        x = rot * x * 2.03 + vec3<f32>(1.7, -2.3, 0.9);
         amp *= 0.5;
     }
     return sum;
