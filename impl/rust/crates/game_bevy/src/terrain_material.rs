@@ -33,7 +33,7 @@ pub struct TerrainUniform {
     /// Body rotation (quaternion xyzw).
     pub rotation: Vec4,
     /// x = baked map present, y/z = distance range (m) blending vertex fields into the map,
-    /// w = distance (m) over which fine detail fades out.
+    /// w = unused (detail now fades by pixel footprint in the shader).
     pub params: Vec4,
     /// x = has ocean, y = has atmosphere (biome rules).
     pub surface: Vec4,

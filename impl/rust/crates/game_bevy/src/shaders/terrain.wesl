@@ -113,11 +113,15 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let slope = acos(clamp(dot(n, up), -1.0, 1.0));
     var albedo = terrain.palette[biome_index(fields, slope, terrain.surface)].rgb;
 
-    // Fine detail near the camera: two scales of brightness variation, fading with distance.
-    let fade = 1.0 - smoothstep(0.0, terrain.params.w, dist);
-    if fade > 0.0 {
-        let d = value_noise(local * 0.15) * 0.6 + value_noise(local * 0.9) * 0.4;
-        albedo *= mix(1.0, 0.8 + 0.4 * d, fade);
+        // Fine detail near the camera: two scales of brightness variation. Each fades out once a
+    // pixel covers more than a quarter of its wavelength, or it would alias into sparkle.
+    let footprint = length(fwidth(local));
+    let coarse = 1.0 - smoothstep(0.25 * 6.7, 0.5 * 6.7, footprint);
+    let fine = 1.0 - smoothstep(0.25 * 1.1, 0.5 * 1.1, footprint);
+    if coarse > 0.0 {
+        let d = (value_noise(local * 0.15) - 0.5) * 0.6 * coarse
+            + (value_noise(local * 0.9) - 0.5) * 0.4 * fine;
+        albedo *= 1.0 + 0.4 * d;
     }
 
     // Lighting: identical to the distant planet shader.

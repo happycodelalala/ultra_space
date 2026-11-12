@@ -79,6 +79,9 @@ struct BodyTiles {
     in_flight: usize,
     /// Tiles drawn this frame.
     shown: HashSet<TileKey>,
+    /// Tiles have covered the whole body since it became active. Sticky while active: the
+    /// distant sphere must never reappear under drawn tiles (both sit at sea level and would
+    /// z-fight), and coarse parents always remain to fall back on.
     covered: bool,
     ground: Handle<TerrainMaterial>,
     water: Handle<WaterMaterial>,
@@ -101,8 +104,6 @@ struct TerrainTile {
 /// vertex spacing (≈ distance × 12 px / 935 px per radian) passes a map texel (≈ 3.7 km on
 /// Meridian), so the finer source is always used.
 const MAP_BLEND: (f32, f32) = (150_000.0, 400_000.0);
-/// Fine ground detail fades out by this distance (m).
-const DETAIL_FADE: f32 = 3_000.0;
 
 fn linear(c: [f32; 3]) -> Vec4 {
     Vec4::new(c[0].powf(2.2), c[1].powf(2.2), c[2].powf(2.2), 1.0)
@@ -129,7 +130,7 @@ fn setup_terrains(
             };
             let ground = ground_materials.add(TerrainMaterial {
                 data: TerrainUniform {
-                    params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, DETAIL_FADE),
+                    params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, 0.0),
                     surface: surface_flags(body),
                     palette: biome_palette(),
                     ..default()
@@ -438,7 +439,7 @@ fn update_terrain(
                 let root = TileKey::root(face);
                 covered &= cover(root, &leaves, &needed, &bt.tiles, &mut shown);
             }
-            bt.covered = covered;
+            bt.covered |= covered;
         } else {
             bt.covered = false;
             bt.finished.clear();
