@@ -17,3 +17,5 @@ inside their parent's sphere of influence, ...) are checked by the game's loader
 | Data | Schema | Loader |
 |---|---|---|
 | `data/star_systems/*.json` | `schemas/star_system.schema.json` | `sim_core::system` |
+| `data/parts/*.json` | `schemas/part.schema.json` | `sim_vehicle::catalog` |
+| `data/vehicles/*.json` | `schemas/vehicle.schema.json` | `sim_vehicle::design` |

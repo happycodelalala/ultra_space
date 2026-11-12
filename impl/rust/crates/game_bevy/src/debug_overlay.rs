@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use sim_core::RollingStats;
 
 use crate::camera::SpaceCamera;
+use crate::ship::{PilotState, PlayerShip, player_ship_state};
 use crate::sim::Sim;
 use crate::universe::Universe;
 
@@ -103,6 +104,8 @@ fn update_overlay(
     mut sim: ResMut<Sim>,
     camera: Res<SpaceCamera>,
     universe: Res<Universe>,
+    pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
     mut overlay: Query<(&mut Text, &Visibility), With<OverlayText>>,
 ) {
     if stats.since_refresh < REFRESH_INTERVAL {
@@ -131,13 +134,39 @@ fn update_overlay(
     let hz = sim.clock().tick_hz();
     let dropped = sim.clock().dropped().as_secs_f64();
     let total = sim.ticks_total();
+    let flight_line = match ship
+        .as_deref()
+        .and_then(|ship| player_ship_state(sim, ship))
+    {
+        Some((region, _, telemetry, assist)) if pilot.flying => format!(
+            "Flying near {}  assist {:?}  ref {:?}  speed {}/s  alt {}{}{}  (T assist, X brake, V view, Tab free cam, 1-8 teleport, Esc {})",
+            universe.0.bodies[region].name,
+            assist,
+            telemetry.reference,
+            distance(telemetry.relative_velocity.length()),
+            distance(telemetry.altitude),
+            if telemetry.on_rails { "  ON RAILS" } else { "" },
+            if telemetry.in_contact { "  LANDED" } else { "" },
+            if pilot.mouse_free {
+                "MOUSE FREE: click to capture"
+            } else {
+                "frees mouse"
+            },
+        ),
+        _ => "Free camera  (Tab: fly the ship)".to_string(),
+    };
     let near = &universe.0.bodies[camera.anchor];
     let altitude = camera.offset.length() - near.radius;
     let camera_line = format!(
-        "Camera near {}  altitude {}  speed {}/s  (1-8: jump to body)",
+        "Camera near {}  altitude {}  speed {}/s{}",
         near.name,
         distance(altitude),
-        distance(camera.speed)
+        distance(camera.speed),
+        if pilot.flying {
+            ""
+        } else {
+            "  (1-8: jump to body)"
+        }
     );
     let galactic = sim.universe_time().galactic_standard();
     let warp = sim.time_warp();
@@ -149,6 +178,7 @@ fn update_overlay(
          Sim {hz:.0} Hz  tick {:.3} ms (max {:.3})  budget {budget:.1}%\n\
          regions {regions}  entities {entities}  ticks {total}  dropped {dropped:.2} s\n\
          GST {galactic}  warp x{warp}  (, / . to change)\n\
+         {flight_line}\n\
          {camera_line}\n\
          F3: toggle overlay",
         ms(frame_avg),

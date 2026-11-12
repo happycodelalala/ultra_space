@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "part.schema.json",
+  "title": "Part catalog",
+  "description": "A file of vehicle part types. Thrusters push the vehicle along their local +Y axis. Loaded by sim_vehicle::catalog; ids must be unique across all catalog files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "parts"
+  ],
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/part"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$"
+    },
+    "shape": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "size_m"
+          ],
+          "properties": {
+            "type": {
+              "const": "box"
+            },
+            "size_m": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "radius_m",
+            "length_m"
+          ],
+          "description": "Cylinder along the part's local Y axis.",
+          "properties": {
+            "type": {
+              "const": "cylinder"
+            },
+            "radius_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "length_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "radius_m"
+          ],
+          "properties": {
+            "type": {
+              "const": "sphere"
+            },
+            "radius_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "mass_kg",
+        "shape"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "cockpit",
+            "hull",
+            "tank",
+            "thruster",
+            "reaction_wheel",
+            "cruise_drive"
+          ]
+        },
+        "mass_kg": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "shape": {
+          "$ref": "#/$defs/shape"
+        },
+        "thruster": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_thrust_n"
+          ],
+          "properties": {
+            "max_thrust_n": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "reaction_wheel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_torque_nm"
+          ],
+          "properties": {
+            "max_torque_nm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "cruise_drive": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_speed_ms"
+          ],
+          "properties": {
+            "max_speed_ms": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "thruster"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "thruster"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "reaction_wheel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reaction_wheel"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "cruise_drive"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "cruise_drive"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

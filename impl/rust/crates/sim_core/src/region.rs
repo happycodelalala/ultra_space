@@ -71,6 +71,14 @@ impl RegionSet {
         self.regions.is_empty()
     }
 
+    pub fn get(&self, index: usize) -> Option<&Region> {
+        self.regions.get(index)
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Region> {
+        self.regions.get_mut(index)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Region> {
         self.regions.iter()
     }

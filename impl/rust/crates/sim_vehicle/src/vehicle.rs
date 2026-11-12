@@ -1,0 +1,243 @@
+//! Vehicle instances: an object's own part list plus everything derived from it
+//! (design §2–3, §9.1).
+
+use bevy_ecs::prelude::*;
+use glam::DVec3;
+
+use crate::allocation::{Allocator, Thruster, Wrench};
+use crate::catalog::CruiseDriveDef;
+use crate::design::{VehicleDesign, VehiclePart};
+use crate::mass::MassProperties;
+
+/// A vehicle's own parts. Spawned from a design; later edited by the builder (Batch 3).
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct Vehicle {
+    pub design_id: String,
+    pub name: String,
+    pub parts: Vec<VehiclePart>,
+}
+
+impl Vehicle {
+    pub fn from_design(design: &VehicleDesign) -> Self {
+        Self {
+            design_id: design.id.clone(),
+            name: design.name.clone(),
+            parts: design.parts.clone(),
+        }
+    }
+}
+
+/// What a vehicle can do, from its parts (used by AI and lower simulation tiers).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Performance {
+    /// Maximum linear acceleration (m/s²) along vehicle +X, −X, +Y, −Y, +Z, −Z.
+    pub max_acceleration: [f64; 6],
+    /// Maximum angular acceleration (rad/s²) about vehicle X, Y, Z (smaller of the two signs).
+    pub max_angular_acceleration: DVec3,
+    /// Cruise drive, if fitted.
+    pub cruise: Option<CruiseDriveDef>,
+}
+
+impl Performance {
+    /// Forward (−Z) acceleration.
+    pub fn forward_acceleration(&self) -> f64 {
+        self.max_acceleration[5]
+    }
+}
+
+/// Physical properties derived from a [`Vehicle`]'s parts. Recompute with [`VehicleBody::of`]
+/// whenever the parts change.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct VehicleBody {
+    pub mass: MassProperties,
+    pub allocator: Allocator,
+    pub performance: Performance,
+}
+
+/// Directions matching [`Performance::max_acceleration`].
+pub const AXIS_DIRECTIONS: [DVec3; 6] = [
+    DVec3::X,
+    DVec3::NEG_X,
+    DVec3::Y,
+    DVec3::NEG_Y,
+    DVec3::Z,
+    DVec3::NEG_Z,
+];
+
+impl VehicleBody {
+    /// `None` if the vehicle has no parts.
+    pub fn of(vehicle: &Vehicle) -> Option<Self> {
+        let mass = MassProperties::of_parts(&vehicle.parts)?;
+        let com = mass.center_of_mass;
+        let thrusters = vehicle
+            .parts
+            .iter()
+            .filter_map(|p| {
+                p.def.thruster.map(|t| Thruster {
+                    direction: (p.rotation * DVec3::Y).normalize(),
+                    position: p.position - com,
+                    max_thrust: t.max_thrust_n,
+                })
+            })
+            .collect();
+        let wheel: f64 = vehicle
+            .parts
+            .iter()
+            .filter_map(|p| p.def.reaction_wheel)
+            .map(|w| w.max_torque_nm)
+            .sum();
+        let size = vehicle
+            .parts
+            .iter()
+            .map(|p| (p.position - com).length())
+            .fold(1.0, f64::max)
+            * 2.0;
+        let allocator = Allocator::new(thrusters, wheel, size);
+        let cruise = vehicle.parts.iter().find_map(|p| p.def.cruise_drive);
+        let performance = performance(&allocator, &mass, cruise);
+        Some(Self {
+            mass,
+            allocator,
+            performance,
+        })
+    }
+}
+
+fn performance(
+    allocator: &Allocator,
+    mass: &MassProperties,
+    cruise: Option<CruiseDriveDef>,
+) -> Performance {
+    const HUGE: f64 = 1.0e15;
+    let mut max_acceleration = [0.0; 6];
+    for (i, d) in AXIS_DIRECTIONS.iter().enumerate() {
+        let a = allocator.solve(
+            Wrench {
+                force: *d * HUGE,
+                torque: DVec3::ZERO,
+            },
+            None,
+        );
+        max_acceleration[i] = (a.achieved.force.dot(*d) / mass.mass).max(0.0);
+    }
+    let mut angular = DVec3::ZERO;
+    for axis in 0..3 {
+        let dir = DVec3::AXES[axis];
+        let moment = dir.dot(mass.inertia * dir);
+        let reach = |sign: f64| {
+            let a = allocator.solve(
+                Wrench {
+                    force: DVec3::ZERO,
+                    torque: dir * sign * HUGE,
+                },
+                None,
+            );
+            (a.achieved.torque.dot(dir * sign) / moment).max(0.0)
+        };
+        angular[axis] = reach(1.0).min(reach(-1.0));
+    }
+    Performance {
+        max_acceleration,
+        max_angular_acceleration: angular,
+        cruise,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::catalog::PartCatalog;
+
+    fn content() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data")
+    }
+
+    fn kestrel() -> Vehicle {
+        let catalog =
+            PartCatalog::load_dir(content().join("parts")).unwrap_or_else(|e| panic!("{e}"));
+        let design = VehicleDesign::from_path(content().join("vehicles/kestrel.json"), &catalog)
+            .unwrap_or_else(|e| panic!("{e}"));
+        Vehicle::from_design(&design)
+    }
+
+    #[test]
+    fn kestrel_matches_the_design_doc() {
+        // objects-vehicles-physics.md §10: about 20 tonnes, lifts off Meridian at ~3× its weight.
+        let v = kestrel();
+        assert_eq!(v.parts.len(), 7 + 16);
+        let body = VehicleBody::of(&v).unwrap();
+        assert!(
+            (body.mass.mass - 19_640.0).abs() < 1e-6,
+            "{}",
+            body.mass.mass
+        );
+        // Symmetric left/right and up/down: center of mass on the Z axis.
+        assert!(body.mass.center_of_mass.x.abs() < 1e-9 && body.mass.center_of_mass.y.abs() < 1e-9);
+        let twr = body.performance.forward_acceleration() / 9.81;
+        assert!((3.0..3.3).contains(&twr), "thrust-to-weight {twr}");
+        assert!(body.performance.cruise.is_some());
+    }
+
+    #[test]
+    fn kestrel_strafes_weakly_and_turns() {
+        let body = VehicleBody::of(&kestrel()).unwrap();
+        let p = body.performance;
+        // Two 4 kN thrusters push each lateral direction: ~0.41 m/s².
+        for i in 0..2 {
+            assert!(
+                (p.max_acceleration[i] - 8_000.0 / 19_640.0).abs() < 1e-3,
+                "{:?}",
+                p.max_acceleration
+            );
+        }
+        // Four up thrusters: ~0.81 m/s² (hovering needs the main engine).
+        assert!((p.max_acceleration[2] - 16_000.0 / 19_640.0).abs() < 1e-3);
+        // Forward = main engine plus two rear maneuvering thrusters.
+        assert!((p.forward_acceleration() - 608_000.0 / 19_640.0).abs() < 1e-3);
+        assert!(
+            p.max_angular_acceleration.min_element() > 0.0,
+            "can turn about every axis"
+        );
+    }
+
+    #[test]
+    fn allocation_holds_attitude_while_strafing() {
+        let body = VehicleBody::of(&kestrel()).unwrap();
+        let r = body.allocator.solve(
+            Wrench {
+                force: DVec3::new(5_000.0, 0.0, 0.0),
+                torque: DVec3::ZERO,
+            },
+            None,
+        );
+        assert!(r.shortfall.force.length() < 1.0, "{:?}", r.shortfall);
+        assert!(
+            r.achieved.torque.length() < 1.0,
+            "no unwanted rotation: {:?}",
+            r.achieved.torque
+        );
+    }
+
+    #[test]
+    fn instance_edits_dont_change_the_design() {
+        let catalog = PartCatalog::load_dir(content().join("parts")).unwrap();
+        let design =
+            VehicleDesign::from_path(content().join("vehicles/kestrel.json"), &catalog).unwrap();
+        let mut v = Vehicle::from_design(&design);
+        v.parts.pop();
+        assert_eq!(design.parts.len(), 23);
+        assert_eq!(v.parts.len(), 22);
+    }
+
+    #[test]
+    fn rejects_unknown_parts_and_bad_catalogs() {
+        let catalog = PartCatalog::load_dir(content().join("parts")).unwrap();
+        let bad = r#"{"id": "x", "name": "X", "parts": [{"part": "no.such.part", "position_m": [0, 0, 0]}]}"#;
+        assert!(VehicleDesign::from_json_str(bad, &catalog).is_err());
+        let thruster_without_block = r#"{"parts": [{"id": "t.x", "name": "T", "kind": "thruster", "mass_kg": 1,
+            "shape": {"type": "sphere", "radius_m": 1}}]}"#;
+        assert!(PartCatalog::from_sources([("x.json", thruster_without_block)]).is_err());
+    }
+}

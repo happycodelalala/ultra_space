@@ -1,13 +1,14 @@
 //! Loads the star system from `content/` into a resource.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use bevy::prelude::*;
 use sim_core::StarSystem;
 
-/// The star system loaded at startup (Halcyon for now).
+/// The star system loaded at startup (Halcyon for now), shared with the simulation's regions.
 #[derive(Resource)]
-pub struct Universe(pub StarSystem);
+pub struct Universe(pub Arc<StarSystem>);
 
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 
@@ -29,7 +30,7 @@ impl Plugin for UniversePlugin {
             system.bodies.len(),
             path.display()
         );
-        app.insert_resource(Universe(system));
+        app.insert_resource(Universe(Arc::new(system)));
     }
 }
 

@@ -2809,6 +2809,7 @@ dependencies = [
  "bevy",
  "glam",
  "sim_core",
+ "sim_vehicle",
 ]
 
 [[package]]
@@ -4946,6 +4947,10 @@ dependencies = [
 name = "sim_vehicle"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
+ "glam",
+ "serde",
+ "serde_json",
  "sim_core",
 ]
 

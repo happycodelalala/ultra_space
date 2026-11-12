@@ -1,0 +1,30 @@
+{
+  "id": "kestrel",
+  "name": "Kestrel",
+  "description": "Small shuttle, about 20 tonnes: one main engine, sixteen maneuvering thrusters in four clusters, a reaction wheel and a cruise drive. Forward is -Z.",
+  "parts": [
+    { "part": "cockpit.small", "position_m": [0, 0, -4.5] },
+    { "part": "hull.section.medium", "position_m": [0, 0, -1.5] },
+    { "part": "hull.section.medium", "position_m": [0, 0, 1.5] },
+    { "part": "tank.medium", "position_m": [0, 0, 1.5], "rotation_deg": [90, 0, 0] },
+    { "part": "reaction_wheel.medium", "position_m": [0, 0, -1.5] },
+    { "part": "cruise_drive.small", "position_m": [0, 0, 3.8] },
+    { "part": "thruster.main.medium", "position_m": [0, 0, 5.6], "rotation_deg": [-90, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, -3.5], "rotation_deg": [0, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, -3.5], "rotation_deg": [180, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, -3.5], "rotation_deg": [0, 0, -90] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, -3.5], "rotation_deg": [90, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, 3.5], "rotation_deg": [0, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, 3.5], "rotation_deg": [180, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, 3.5], "rotation_deg": [0, 0, -90] },
+    { "part": "thruster.rcs.small", "position_m": [-1.7, 0, 3.5], "rotation_deg": [-90, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, -3.5], "rotation_deg": [0, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, -3.5], "rotation_deg": [180, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, -3.5], "rotation_deg": [0, 0, 90] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, -3.5], "rotation_deg": [90, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, 3.5], "rotation_deg": [0, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, 3.5], "rotation_deg": [180, 0, 0] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, 3.5], "rotation_deg": [0, 0, 90] },
+    { "part": "thruster.rcs.small", "position_m": [1.7, 0, 3.5], "rotation_deg": [-90, 0, 0] }
+  ]
+}
