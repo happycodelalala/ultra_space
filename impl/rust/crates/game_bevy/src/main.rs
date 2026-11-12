@@ -8,6 +8,7 @@ mod capture;
 mod debug_overlay;
 mod hud;
 mod inspector;
+mod planet_maps;
 mod ship;
 mod sim;
 mod sky;
@@ -44,6 +45,7 @@ fn main() {
             camera::SpaceCameraPlugin,
             space_render::SpaceRenderPlugin,
             terrain::TerrainPlugin,
+            planet_maps::PlanetMapsPlugin,
             sky::SkyPlugin,
             ship::ShipPlugin,
             debug_overlay::DebugOverlayPlugin,

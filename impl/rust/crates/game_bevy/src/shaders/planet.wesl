@@ -10,10 +10,16 @@ struct PlanetUniform {
     glow: vec4<f32>,      // rgb color, w strength
     star: vec4<f32>,      // xyz star position (render space), w starlight brightness
     rotation: vec4<f32>,  // body rotation quaternion (xyzw)
-    params: vec4<f32>,    // x kind (0 rocky, 1 gas giant, 2 star), y seed, z polar ice
+        params: vec4<f32>,    // x kind (0 rocky, 1 gas giant, 2 star), y seed, z polar ice, w baked maps
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> planet: PlanetUniform;
+// Baked from the terrain function (task 2.4): biome colour (alpha = water) and surface normals,
+// both in the body's own frame.
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var color_map: texture_cube<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var color_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(3) var normal_map: texture_cube<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(4) var normal_sampler: sampler;
 
 fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
     let t = 2.0 * cross(q.xyz, v);
@@ -96,11 +102,20 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(planet.glow.rgb * planet.glow.w * limb * granules, 1.0);
     }
 
-    var albedo: vec3<f32>;
+        var albedo: vec3<f32>;
     var emission = vec3<f32>(0.0);
     var shininess = 0.0;
+    // Normal used for diffuse light; baked maps replace it with the terrain's.
+    var n_light = n_world;
 
-    if kind < 0.5 {
+    if kind < 0.5 && planet.params.w > 0.5 {
+        // Rocky body with baked maps: the same terrain the close-up tiles show.
+        let c = textureSample(color_map, color_sampler, n_local);
+        albedo = c.rgb;
+        shininess = c.a;
+        let n_map = textureSample(normal_map, normal_sampler, n_local).xyz * 2.0 - 1.0;
+        n_light = normalize(quat_rotate(q, n_map));
+    } else if kind < 0.5 {
         // Rocky: terrain colors, optional oceans, ice caps and lava glow.
         let h = fbm(p);
         let detail = fbm(p * 5.0);
@@ -132,8 +147,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // Lighting from the star's actual position.
     let to_star = planet.star.xyz - in.world_position.xyz;
     let l = normalize(to_star);
-    let ndl = dot(n_world, l);
-    let diffuse = clamp((ndl + 0.04) / 1.04, 0.0, 1.0);
+        let ndl = dot(n_world, l);
+    // Terrain slopes shade by their own normal, but never light up the night side.
+    let terrain_ndl = min(dot(n_light, l), ndl + 0.15);
+    let diffuse = clamp((terrain_ndl + 0.04) / 1.04, 0.0, 1.0);
     let v = normalize(view.world_position - in.world_position.xyz);
     let h = normalize(l + v);
     let spec = shininess * pow(max(dot(n_world, h), 0.0), 80.0) * 0.6 * step(0.0, ndl);

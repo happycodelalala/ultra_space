@@ -59,7 +59,8 @@ pub struct PlanetUniform {
     pub star: Vec4,
     /// The body's rotation (quaternion xyzw), to keep surface patterns fixed to the ground.
     pub rotation: Vec4,
-    /// x = kind (0 rocky, 1 gas giant, 2 star), y = seed, z = polar ice.
+    /// x = kind (0 rocky, 1 gas giant, 2 star), y = seed, z = polar ice, w = 1 when baked maps
+    /// are present.
     pub params: Vec4,
 }
 
@@ -67,6 +68,14 @@ pub struct PlanetUniform {
 pub struct PlanetMaterial {
     #[uniform(0)]
     pub data: PlanetUniform,
+    /// Baked biome colours (alpha = water), in the body's frame; set `params.w` = 1 when present.
+    #[texture(1, dimension = "cube")]
+    #[sampler(2)]
+    pub color_map: Option<Handle<Image>>,
+    /// Baked surface normals (body frame, encoded 0–1).
+    #[texture(3, dimension = "cube")]
+    #[sampler(4)]
+    pub normal_map: Option<Handle<Image>>,
 }
 
 impl Material for PlanetMaterial {
@@ -183,6 +192,8 @@ fn spawn_bodies(
                 rotation: Vec4::new(0.0, 0.0, 0.0, 1.0),
                 params: Vec4::new(kind, (i as f32) * 17.31 + 3.7, a.polar_ice as f32, 0.0),
             },
+            color_map: None,
+            normal_map: None,
         });
         commands.spawn((
             Name::new(body.name.clone()),

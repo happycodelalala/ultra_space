@@ -147,9 +147,10 @@ fn setup_terrains(
     });
 }
 
-/// Linear RGB colour of a biome (placeholder palette until task 2.5).
-fn biome_color(b: Biome) -> [f32; 4] {
-    let srgb = match b {
+/// sRGB colour of a biome (placeholder palette until task 2.5). Shared by tiles and the baked
+/// orbit-view maps so both show the same planet.
+pub fn biome_srgb(b: Biome) -> [f32; 3] {
+    match b {
         Biome::Ocean => [0.05, 0.2, 0.45],
         Biome::SeaIce => [0.82, 0.88, 0.93],
         Biome::Beach => [0.82, 0.76, 0.58],
@@ -162,7 +163,12 @@ fn biome_color(b: Biome) -> [f32; 4] {
         Biome::Ice => [0.93, 0.95, 0.98],
         Biome::Rock => [0.42, 0.4, 0.38],
         Biome::Regolith => [0.55, 0.53, 0.5],
-    };
+    }
+}
+
+/// Linear RGBA colour of a biome, for vertex colours.
+fn biome_color(b: Biome) -> [f32; 4] {
+    let srgb = biome_srgb(b);
     let lin = |c: f32| c.powf(2.2);
     [lin(srgb[0]), lin(srgb[1]), lin(srgb[2]), 1.0]
 }
