@@ -66,7 +66,9 @@ honestly with their output.
 
 ## Debugging and visual checks
 
-- **Debug overlay** (F3 toggles): FPS and frame time, simulation tick time and budget, region
+- **Inspector** (F4 toggles; `ULTRA_SPACE_INSPECTOR=1` shows it at start): regions, frame tree,
+  and a selected object's id, region, frame, position and velocity. `[` / `]` change selection.
+- **Debug overlay** (F3 toggles, hidden at start): FPS and frame time, simulation tick time and budget, region
   and entity counts. Logging uses Bevy's `LogPlugin`; override the filter with `RUST_LOG`.
 - **Ship controls** (flying is the default): see `impl/rust/README.md`. Tab switches to the
   debug camera.
