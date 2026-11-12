@@ -1,0 +1,42 @@
+# A rover from scratch (task 3.9). Run with ULTRA_SPACE_START_ALTITUDE=1500. Step out, start a
+# new vehicle (Shift+B), make its root a rover chassis (Home), put the cab on top, four wheels
+# (mirror symmetry, two placements), leave, board it and drive. Look for: the log lines
+# "started a new vehicle", "root is now a Rover Chassis", "placed" (cab, then wheels 4 and 6
+# parts), "boarded the New vehicle 1"; the rover standing on four wheels and driving off.
+0.5  press Z
+1    wait landed 20
+2    press F                 # step out
+3    hold Shift 0.3
+3.1  press B                 # new vehicle (a cockpit)
+4    press Down              # palette: cockpit, rover cab, hull section, rover chassis
+4.1  press Down
+4.2  press Down
+4.4  press Home              # the root becomes a rover chassis
+5    press Up                # back to the rover cab
+5.1  press Up
+5.5  press Enter             # cab on the chassis top (node 1)
+6    shot 01-chassis-and-cab.png
+6.5  press Down              # to the wheel (10th entry from the cab)
+6.6  press Down
+6.7  press Down
+6.8  press Down
+6.9  press Down
+7    press Down
+7.1  press Down
+7.2  press Down
+7.3  press Down
+7.5  press M                 # mirror
+8    press Right             # nodes: top, wheel left front, ...
+8.5  press Enter             # left and right front wheels
+9    press Right
+9.1  press Right
+9.5  press Enter             # left and right rear wheels
+10   shot 02-four-wheels.png
+10.5 press B                 # leave: it drops onto its wheels
+13   shot 03-on-its-wheels.png
+13.5 press F                 # board it
+15   hold W 5                # drive
+18   shot 04-driving.png
+20   hold X 2
+22   shot 05-stopped.png
+23   quit

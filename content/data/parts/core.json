@@ -396,9 +396,65 @@
             0
           ],
           "size": "medium"
+        },
+        {
+          "id": "wheel_left_front",
+          "position_m": [
+            -1.6,
+            -0.2,
+            -1.8
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "wheel_right_front",
+          "position_m": [
+            1.6,
+            -0.2,
+            -1.8
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "wheel_left_rear",
+          "position_m": [
+            -1.6,
+            -0.2,
+            1.8
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "wheel_right_rear",
+          "position_m": [
+            1.6,
+            -0.2,
+            1.8
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "small"
         }
       ],
-      "description": "Flat frame for a small rover: wheels attach to its sides, a cab on top.",
+      "description": "Flat frame for a small rover: a cab or other parts on top, a wheel mount on each corner.",
       "form": {
         "model": "rover.chassis",
         "material_slots": [

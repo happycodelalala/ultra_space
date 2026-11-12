@@ -213,6 +213,37 @@ fn exit_or_board(
     info!("stepped out of the ship");
 }
 
+/// A state `distance` metres ahead of the walker, `height` metres above the ground there,
+/// upright and facing the walker's way, moving with the turning ground (in the walker's region
+/// body's inertial frame). Returns the region too.
+pub fn spot_ahead(
+    sim: &Simulation,
+    system: &sim_core::StarSystem,
+    walker: ObjectId,
+    distance: f64,
+    height: f64,
+) -> Option<(usize, ObjectState)> {
+    let t = sim.universe_time().as_secs_f64();
+    let (region, state, _) = walker_status(sim, walker)?;
+    let frame = system.bodies[region].inertial_frame;
+    let s = state.in_frame(&system.frames, frame, t).state;
+    let forward = s.rotation * DVec3::NEG_Z;
+    let env = sim_vehicle::flight::region_env(
+        system,
+        region,
+        t,
+        sim.regions
+            .get(region)
+            .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>()),
+    );
+    let spot = (s.position + forward * distance).normalize();
+    let position = spot * (env.radius + env.ground_height(spot * env.radius) + height);
+    let mut placed = ObjectState::at_rest(frame, position, upright(forward, spot));
+    placed.state.velocity = env.spin.cross(position);
+    placed.state.angular_velocity = env.spin;
+    Some((region, placed))
+}
+
 /// Debug (G, on foot): a rover appears a few metres ahead (task 3.5).
 fn spawn_rover_key(
     keys: Res<ButtonInput<KeyCode>>,
@@ -234,26 +265,9 @@ fn spawn_rover_key(
     };
     let system = &universe.0;
     let sim = &mut sim.0;
-    let t = sim.universe_time().as_secs_f64();
-    let Some((region, state, _)) = walker_status(sim, on_foot.id) else {
+    let Some((region, rover)) = spot_ahead(sim, system, on_foot.id, ROVER_DISTANCE, 1.5) else {
         return;
     };
-    let frame = system.bodies[region].inertial_frame;
-    let s = state.in_frame(&system.frames, frame, t).state;
-    let forward = s.rotation * DVec3::NEG_Z;
-    let env = sim_vehicle::flight::region_env(
-        system,
-        region,
-        t,
-        sim.regions
-            .get(region)
-            .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>()),
-    );
-    let spot = (s.position + forward * ROVER_DISTANCE).normalize();
-    let position = spot * (env.radius + env.ground_height(spot * env.radius) + 1.5);
-    let mut rover = ObjectState::at_rest(frame, position, upright(forward, spot));
-    rover.state.velocity = env.spin.cross(position);
-    rover.state.angular_velocity = env.spin;
     let vehicle = Vehicle::from_design(design);
     let Some(body) = VehicleBody::of(&vehicle) else {
         return;

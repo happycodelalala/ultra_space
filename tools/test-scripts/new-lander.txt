@@ -1,0 +1,37 @@
+# A lander from scratch (task 3.9). Run with ULTRA_SPACE_START_ALTITUDE=1500. Step out, start a
+# new vehicle (Shift+B: a cockpit), add a hull section behind it, a main engine on the hull's
+# bottom (pointing down), a reaction wheel on top, a mirrored pair of legs, leave, board it and
+# lift off with Space. Look for: the panel turning to "can hover" once the engine is on; the log
+# "placed" lines and "boarded the New vehicle 1"; the lander rising (AGL climbing in 05/06).
+0.5  press Z
+1    wait landed 20
+2    press F
+3    hold Shift 0.3
+3.1  press B                 # new vehicle: a cockpit
+4    press Down              # hull section (3rd entry)
+4.1  press Down
+4.5  press Enter             # behind the cockpit
+5    press Down              # main engine (6th entry)
+5.1  press Down
+5.2  press Down
+5.5  press Right             # hull nodes: rear, top, bottom, left, right
+5.6  press Right
+6    press Enter             # engine on the bottom, pointing down
+6.5  shot 01-engine.png
+7    press Down              # reaction wheel (8th entry)
+7.1  press Down
+7.5  press Left              # the top node
+8    press Enter
+8.5  press Down              # landing leg (10th entry)
+8.6  press Down
+9    press M                 # mirror
+9.5  press Right             # the left node
+10   press Enter
+10.5 shot 02-lander.png
+11   press B                 # leave
+13   shot 03-standing.png
+13.5 press F                 # board it
+15   hold Space 6            # lift off
+17   shot 04-lifting.png
+20   shot 05-up.png
+21   quit

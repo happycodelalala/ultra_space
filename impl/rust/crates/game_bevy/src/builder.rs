@@ -12,6 +12,9 @@
 //! everything attached below, S saves the selected part and what hangs below it as a section;
 //! Ctrl+Z / Ctrl+Y undo and redo. Left click picks a node marker or selects a part; right mouse
 //! orbits the camera, the wheel zooms (task 3.8).
+//!
+//! On foot, B with no vehicle in reach (or Shift+B) starts a new vehicle: one cockpit a few
+//! metres ahead; Home swaps that lone root for the chosen part, e.g. a rover chassis (task 3.9).
 
 use std::sync::Arc;
 
@@ -25,19 +28,24 @@ use sim_vehicle::builder::{
     FreeNode, Section, Symmetry, attach_at_node, attach_to_surface, fitting_nodes, free_nodes,
     place_section, place_symmetric, placement_at_node, remove_with_symmetry, stats,
 };
-use sim_vehicle::{FlightTelemetry, Frozen, PartDef, Vehicle, VehicleBody, VehiclePart};
+use sim_vehicle::{
+    Cruise, FlightControl, FlightTelemetry, Frozen, PartDef, Vehicle, VehicleBody, VehiclePart,
+};
 
 use crate::camera::{CameraBlend, CameraStage, SpaceCamera};
 use crate::ship::{PilotState, PlayerShip};
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::universe::{Catalog, InGame, Universe};
 use crate::vehicle_visual::{VehicleVisual, merged_meshes, shape_mesh};
-use crate::walk::{OnFoot, walker_status};
+use crate::walk::{OnFoot, spot_ahead, walker_status};
 
 /// A vehicle can be edited from this close on foot (m from its centre).
 const REACH: f64 = 15.0;
 /// ...if it stands still on the ground (m/s relative to it).
 const STILL: f64 = 1.0;
+/// A new vehicle starts as this part, this far ahead of the walker (m).
+const NEW_ROOT: &str = "cockpit.small";
+const NEW_DISTANCE: f64 = 8.0;
 /// Orbit camera: mouse sensitivity (rad/px) and zoom per wheel notch.
 const ORBIT_SENSITIVITY: f64 = 0.004;
 const ZOOM_STEP: f64 = 0.9;
@@ -208,6 +216,7 @@ fn enter_or_leave(
     camera: Res<SpaceCamera>,
     real: Res<Time<Real>>,
     mut sim: ResMut<Sim>,
+    mut made: Local<u32>,
 ) {
     if !keys.just_pressed(KeyCode::KeyB) || !pilot.flying {
         return;
@@ -232,9 +241,11 @@ fn enter_or_leave(
         return;
     }
 
-    // Which vehicle: the one we're in, or the nearest one within reach on foot.
+    // Which vehicle: the one we're in, or the nearest one within reach on foot (Shift+B on foot,
+    // or B with none in reach, starts a new one).
     let system = &universe.0;
     let t = sim.universe_time().as_secs_f64();
+    let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
     let target = if let Some(on_foot) = &on_foot {
         let Some((region, state, _)) = walker_status(sim, on_foot.id) else {
             return;
@@ -256,15 +267,66 @@ fn enter_or_leave(
     } else {
         ship.map(|s| s.id)
     };
-    let Some(target) = target else {
-        info!("no vehicle within {REACH:.0} m to build on");
-        return;
+    let target = match (target, &on_foot) {
+        (Some(id), _) if !shift => id,
+        (_, Some(on_foot)) => {
+            // A new vehicle: one part, a few metres ahead, held in place.
+            let Some(root) = catalog.0.get(NEW_ROOT).cloned() else {
+                return;
+            };
+            *made += 1;
+            let vehicle = Vehicle {
+                design_id: "custom".into(),
+                name: format!("New vehicle {}", *made),
+                parts: vec![VehiclePart {
+                    name: "root".into(),
+                    def: root,
+                    ..Default::default()
+                }],
+            };
+            let Some(body) = VehicleBody::of(&vehicle) else {
+                return;
+            };
+            let Some((region, state)) = spot_ahead(sim, system, on_foot.id, NEW_DISTANCE, 1.5)
+            else {
+                return;
+            };
+            let Ok(id) = sim.objects.spawn(
+                &mut sim.regions,
+                region,
+                state,
+                (
+                    vehicle,
+                    body,
+                    FlightControl::default(),
+                    FlightTelemetry {
+                        in_contact: true,
+                        ..Default::default()
+                    },
+                    Cruise::default(),
+                    Frozen,
+                ),
+            ) else {
+                return;
+            };
+            info!("builder: started a new vehicle {NEW_DISTANCE:.0} m ahead");
+            id
+        }
+        _ => {
+            info!("no vehicle within {REACH:.0} m to build on");
+            return;
+        }
     };
     let Some((region, state, telemetry, vehicle)) = vehicle_status(sim, target) else {
         return;
     };
     let speed = telemetry.relative_velocity.length();
-    if !telemetry.in_contact || speed > STILL {
+    let frozen = sim
+        .objects
+        .location(target)
+        .and_then(|loc| sim.regions.get(loc.region)?.world.get::<Frozen>(loc.entity))
+        .is_some();
+    if !frozen && (!telemetry.in_contact || speed > STILL) {
         info!("land first: the builder needs the vehicle standing still on the ground");
         return;
     }
@@ -389,6 +451,22 @@ fn edit(
     if pressed(KeyCode::KeyT) {
         b.joint += 1;
         b.changed("next joint node");
+    }
+    if pressed(KeyCode::Home) {
+        match b.entry().clone() {
+            Entry::Part(def) if b.vehicle.parts.len() == 1 => {
+                let before = b.vehicle.clone();
+                b.vehicle.parts[0].def = def.clone();
+                b.undo.push(before);
+                b.redo.clear();
+                b.node = 0;
+                info!("builder: the root is now a {}", def.name);
+                b.changed(format!("root: {}", def.name));
+                write_back(&mut sim.0, b.target, &b.vehicle);
+            }
+            Entry::Part(_) => b.changed("only a lone root part can be swapped"),
+            Entry::Section(_) => b.changed("a section can't be the root"),
+        }
     }
     if pressed(KeyCode::KeyM) {
         b.symmetry = b.symmetry.next();
@@ -908,7 +986,7 @@ fn update_panel(
         s += &format!("\n\n{}", b.message);
     }
     s += "\n\nUp/Down part | Left/Right or click node | R roll | T joint | M symmetry | Enter place\n\
-          PgUp/PgDn or click select | Del remove | S save section | Ctrl+Z/Y undo/redo\n\
+          PgUp/PgDn or click select | Del remove | S save section | Home make root | Ctrl+Z/Y undo/redo\n\
           RMB orbit | wheel zoom | B leave";
     text.0 = s;
 }
