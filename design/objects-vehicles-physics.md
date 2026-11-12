@@ -152,6 +152,22 @@ throttle for every actual thruster, plus reaction-wheel torque.
 - Region transfers work the same while cruising.
 - Tuned so neighbouring planets take 1–3 minutes (universe design §2).
 
+**As built (task 1.13):**
+
+| Parameter | Value |
+|---|---|
+| Speed | 0.25/s × distance to the nearest body surface, capped by the drive part (the small drive: 200,000 km/s, two-thirds of light speed) |
+| Engage | J; 3 s charge; refused within 1.2× any body's drop altitude or without a drive |
+| Drop altitude | Above the atmosphere (or 5% of the radius if airless) + 10 km; e.g. Meridian 80 km |
+| Drop out | J, or automatically below a drop altitude; velocity set to a circular orbit around the nearest body, along the nose's horizontal direction |
+| Steering | Rotation stick turns the ship directly (0.5 rad/s) |
+| Time warp | Substeps, and no step covers more than 5% of the distance to a surface, so even ×10,000 can't overshoot |
+| Measured | Meridian → Hoarfell 137 s; Cinder → Leviathan (across the system) 275 s |
+
+Because speed is proportional to distance, a ship heading straight at a body slows
+exponentially and can never reach it; the drop altitude ends the approach about 15 s after
+slowing begins.
+
 ## 6. Builder integration (Batch 3)
 
 The Batch 3 builder edits a vehicle instance's part list. Everything above is already shaped

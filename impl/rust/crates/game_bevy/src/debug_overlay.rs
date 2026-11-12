@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use sim_core::RollingStats;
 
 use crate::camera::SpaceCamera;
-use crate::ship::{PilotState, PlayerShip, player_ship_state};
+use crate::ship::{PilotState, PlayerShip, player_cruise_status, player_ship_state};
 use crate::sim::Sim;
 use crate::universe::Universe;
 
@@ -139,7 +139,7 @@ fn update_overlay(
         .and_then(|ship| player_ship_state(sim, ship))
     {
         Some((region, _, telemetry, assist)) if pilot.flying => format!(
-            "Flying near {}  assist {:?}  ref {:?}  speed {}/s  alt {}{}{}  (T assist, X brake, V view, Tab free cam, 1-8 teleport, Esc {})",
+            "Flying near {}  assist {:?}  ref {:?}  speed {}/s  alt {}{}{}{}  (T assist, X brake, J cruise, V view, Tab free cam, 1-8 teleport, Esc {})",
             universe.0.bodies[region].name,
             assist,
             telemetry.reference,
@@ -147,6 +147,9 @@ fn update_overlay(
             distance(telemetry.altitude),
             if telemetry.on_rails { "  ON RAILS" } else { "" },
             if telemetry.in_contact { "  LANDED" } else { "" },
+            ship.as_deref()
+                .map(|s| player_cruise_status(sim, s, &universe.0))
+                .unwrap_or_default(),
             if pilot.mouse_free {
                 "MOUSE FREE: click to capture"
             } else {

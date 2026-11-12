@@ -2,7 +2,7 @@
 //!
 //! Controls (design: objects-vehicles-physics.md §10): W/S forward/back, A/D strafe,
 //! Space/Ctrl up/down, mouse pitch/yaw (cursor locked), Q/E roll, T cycles flight assist,
-//! X brakes (assist), Tab switches between flying and the free debug camera, V toggles the
+//! X brakes (assist), J engages or drops out of the cruise drive, Tab switches between flying and the free debug camera, V toggles the
 //! cockpit view, right mouse orbits the chase camera. Esc releases the mouse (click to capture it
 //! again); the mouse is also released when the window loses focus. 1–8 teleport the ship into a
 //! parking orbit around a body (debug, until the cruise drive exists).
@@ -14,8 +14,8 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
-    AssistMode, FlightControl, FlightTelemetry, PartCatalog, PartKind, Shape, Vehicle, VehicleBody,
-    VehicleDesign,
+    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartCatalog,
+    PartKind, Shape, Vehicle, VehicleBody, VehicleDesign,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -42,7 +42,7 @@ impl Plugin for ShipPlugin {
                 Update,
                 (
                     (pilot_mode_keys, release_mouse_on_focus_loss).chain(),
-                    (teleport_keys, pilot_input)
+                    (teleport_keys, cruise_keys, pilot_input)
                         .chain()
                         .after(pilot_mode_keys)
                         .before(SimSet),
@@ -135,6 +135,7 @@ fn spawn_player_ship(
                 body,
                 FlightControl::default(),
                 FlightTelemetry::default(),
+                Cruise::default(),
             ),
         )
         .expect("start region exists");
@@ -257,6 +258,12 @@ fn teleport_keys(
         // Drop any held velocity target from the old body.
         control.desired_velocity = None;
     }
+    if let Some(loc) = sim.objects.location(ship.id)
+        && let Some(region) = sim.regions.get_mut(loc.region)
+        && let Some(mut cruise) = region.world.get_mut::<Cruise>(loc.entity)
+    {
+        *cruise = Cruise::default();
+    }
     info!(
         "teleported to a {:.0} km parking orbit around {}",
         (parking_radius(system, index) - system.bodies[index].radius) / 1_000.0,
@@ -266,6 +273,41 @@ fn teleport_keys(
 
 fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f64 {
     f64::from(keys.pressed(positive)) - f64::from(keys.pressed(negative))
+}
+
+/// How long a refused cruise engage stays on screen (s).
+const CRUISE_NOTICE_TIME: f32 = 3.0;
+
+/// J engages or drops out of the cruise drive; a refusal notice clears after a few seconds.
+fn cruise_keys(
+    time: Res<Time<Real>>,
+    mut notice: Local<f32>,
+    keys: Res<ButtonInput<KeyCode>>,
+    ship: Option<Res<PlayerShip>>,
+    pilot: Res<PilotState>,
+    mut sim: ResMut<Sim>,
+) {
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(mut cruise) = sim
+        .regions
+        .get_mut(loc.region)
+        .and_then(|r| r.world.get_mut::<Cruise>(loc.entity))
+    else {
+        return;
+    };
+    if pilot.flying && keys.just_pressed(KeyCode::KeyJ) {
+        cruise.toggle = true;
+        *notice = 0.0;
+    } else if cruise.blocked.is_some() {
+        *notice += time.delta_secs();
+        if *notice > CRUISE_NOTICE_TIME {
+            cruise.blocked = None;
+        }
+    }
 }
 
 fn pilot_input(
@@ -346,6 +388,28 @@ fn cursor_lock(
 // ---------------------------------------------------------------------------------------------
 
 /// Current state and flight data of the player ship, if it exists.
+/// The player ship's cruise drive status as overlay text ("" when off).
+pub fn player_cruise_status(sim: &Simulation, ship: &PlayerShip, system: &StarSystem) -> String {
+    let Some(cruise) = sim
+        .objects
+        .location(ship.id)
+        .and_then(|loc| sim.regions.get(loc.region)?.world.get::<Cruise>(loc.entity))
+    else {
+        return String::new();
+    };
+    match (cruise.phase, &cruise.blocked) {
+        (CruisePhase::Charging { remaining }, _) => format!("  CRUISE CHARGING {remaining:.1} s"),
+        (CruisePhase::Cruising { speed, .. }, _) => {
+            format!("  CRUISE {:.0} km/s (J drop)", speed / 1_000.0)
+        }
+        (CruisePhase::Off, Some(CruiseBlocked::NoDrive)) => "  NO CRUISE DRIVE".into(),
+        (CruisePhase::Off, Some(CruiseBlocked::TooClose(i))) => {
+            format!("  CRUISE BLOCKED: too close to {}", system.bodies[*i].name)
+        }
+        (CruisePhase::Off, None) => String::new(),
+    }
+}
+
 pub fn player_ship_state(
     sim: &Simulation,
     ship: &PlayerShip,

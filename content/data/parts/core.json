@@ -52,7 +52,7 @@
       "kind": "cruise_drive",
       "mass_kg": 1200,
       "shape": { "type": "box", "size_m": [2.0, 1.6, 1.6] },
-      "cruise_drive": { "max_speed_ms": 30000000 }
+      "cruise_drive": { "max_speed_ms": 200000000 }
     }
   ]
 }

@@ -17,6 +17,7 @@ use sim_core::objects::{RegionBody, RegionStage, SimClock, SystemRef};
 use sim_core::{KeplerOrbit, ObjectState};
 
 use crate::allocation::Wrench;
+use crate::cruise::{Cruise, cruise_system};
 use crate::vehicle::{AXIS_DIRECTIONS, Vehicle, VehicleBody};
 
 /// Longest physics substep (s).
@@ -428,6 +429,7 @@ pub fn flight_system(
             &mut FlightControl,
             &mut FlightTelemetry,
             Option<&OnRails>,
+            Option<&Cruise>,
         ),
         With<Vehicle>,
     >,
@@ -436,7 +438,10 @@ pub fn flight_system(
     let t = clock.time.as_secs_f64();
     let env = body_env(system, region.0, t);
     let inertial = system.bodies[region.0].inertial_frame;
-    for (entity, mut state, body, mut control, mut telemetry, on_rails) in &mut vehicles {
+    for (entity, mut state, body, mut control, mut telemetry, on_rails, cruise) in &mut vehicles {
+        if cruise.is_some_and(Cruise::is_cruising) {
+            continue; // moved by the cruise drive
+        }
         if control.desired_body != Some(region.0) {
             rebase_desired_velocity(system, &mut control, region.0, t);
         }
@@ -501,7 +506,11 @@ fn rebase_desired_velocity(
 
 /// Adds flight to a region schedule (used with `Simulation::for_star_system`).
 pub fn add_flight_systems(schedule: &mut Schedule) {
-    schedule.add_systems(flight_system.in_set(RegionStage::Simulate));
+    schedule.add_systems(
+        (flight_system, cruise_system)
+            .chain()
+            .in_set(RegionStage::Simulate),
+    );
 }
 
 /// Directions matching the performance summary, re-exported for HUDs.
