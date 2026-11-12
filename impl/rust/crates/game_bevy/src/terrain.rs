@@ -97,11 +97,10 @@ struct TerrainTile {
     origin: DVec3,
 }
 
-/// Vertex colours blend into the baked map between these distances (m). Per-vertex biome
-/// colours step visibly once vertices are more than about half a map texel apart (vertex
-/// spacing ≈ distance × 12 px / 935 px per radian; a Meridian map texel is ≈ 3.7 km), and the
-/// smoothly filtered map looks better from there on.
-const MAP_BLEND: (f32, f32) = (40_000.0, 120_000.0);
+/// Vertex fields blend into the baked map's fields between these distances (m): where tile
+/// vertex spacing (≈ distance × 12 px / 935 px per radian) passes a map texel (≈ 3.7 km on
+/// Meridian), so the finer source is always used.
+const MAP_BLEND: (f32, f32) = (150_000.0, 400_000.0);
 /// Fine ground detail fades out by this distance (m).
 const DETAIL_FADE: f32 = 3_000.0;
 
@@ -131,10 +130,11 @@ fn setup_terrains(
             let ground = ground_materials.add(TerrainMaterial {
                 data: TerrainUniform {
                     params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, DETAIL_FADE),
-                    rock: linear(biome_srgb(Biome::Rock)),
+                    surface: surface_flags(body),
+                    palette: biome_palette(),
                     ..default()
                 },
-                color_map: None,
+                field_map: None,
             });
             let sky = body.atmosphere.as_ref().map_or(Vec4::ZERO, |a| {
                 Vec4::new(a.color[0] as f32, a.color[1] as f32, a.color[2] as f32, 1.0) * 0.35
@@ -165,8 +165,8 @@ fn setup_terrains(
     commands.insert_resource(Terrains { bodies, frame: 0 });
 }
 
-/// sRGB colour of a biome (placeholder palette until task 2.5). Shared by tiles and the baked
-/// orbit-view maps so both show the same planet.
+/// sRGB colour of a biome. Shaders get these (as linear colours) and decide biomes per pixel, so
+/// tiles and the orbit view show the same planet.
 pub fn biome_srgb(b: Biome) -> [f32; 3] {
     match b {
         Biome::Ocean => [0.05, 0.2, 0.45],
@@ -184,17 +184,47 @@ pub fn biome_srgb(b: Biome) -> [f32; 3] {
     }
 }
 
-/// Linear RGBA colour of a biome, for vertex colours.
-fn biome_color(b: Biome) -> [f32; 4] {
-    let srgb = biome_srgb(b);
-    let lin = |c: f32| c.powf(2.2);
-    [lin(srgb[0]), lin(srgb[1]), lin(srgb[2]), 1.0]
+/// Biomes in shader index order (matches `sim_planet::Biome` and the shaders' biome rules).
+pub const BIOMES: [Biome; 12] = [
+    Biome::Ocean,
+    Biome::SeaIce,
+    Biome::Beach,
+    Biome::Desert,
+    Biome::Grassland,
+    Biome::Forest,
+    Biome::Jungle,
+    Biome::Taiga,
+    Biome::Tundra,
+    Biome::Ice,
+    Biome::Rock,
+    Biome::Regolith,
+];
+
+/// Linear biome colours in shader index order.
+pub fn biome_palette() -> [Vec4; 12] {
+    BIOMES.map(|b| linear(biome_srgb(b)))
 }
 
+/// Biome-rule flags for shaders: x = has ocean, y = has atmosphere.
+pub fn surface_flags(body: &sim_core::Body) -> Vec4 {
+    let ocean = body
+        .terrain
+        .as_ref()
+        .is_some_and(|t| t.ocean_coverage > 0.0);
+    Vec4::new(
+        f32::from(u8::from(ocean)),
+        f32::from(u8::from(body.atmosphere.is_some())),
+        0.0,
+        0.0,
+    )
+}
+
+/// A tile mesh; `fields` (height, temperature, moisture, continent signal) go into the two UV
+/// channels for per-pixel biomes.
 fn tile_mesh(
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
-    colors: Option<Vec<[f32; 4]>>,
+    fields: Option<&[[f32; 4]]>,
 ) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -203,8 +233,11 @@ fn tile_mesh(
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_indices(Indices::U32(tile_indices().to_vec()));
-    if let Some(colors) = colors {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+    if let Some(fields) = fields {
+        let a: Vec<[f32; 2]> = fields.iter().map(|f| [f[0], f[1]]).collect();
+        let b: Vec<[f32; 2]> = fields.iter().map(|f| [f[2], f[3]]).collect();
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, a);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, b);
     }
     mesh
 }
@@ -357,8 +390,7 @@ fn update_terrain(
             // Upload a few finished tiles.
             let count = bt.finished.len().min(UPLOADS_PER_FRAME);
             for m in bt.finished.drain(..count) {
-                let colors = m.biomes.iter().map(|b| biome_color(*b)).collect();
-                let ground = meshes.add(tile_mesh(m.positions, m.normals, Some(colors)));
+                let ground = meshes.add(tile_mesh(m.positions, m.normals, Some(&m.fields)));
                 let mut entities = vec![
                     commands
                         .spawn((
@@ -507,10 +539,10 @@ fn place_tiles(
             m.data.star = star;
             m.data.center = center;
             m.data.rotation = q;
-            if m.color_map.is_none()
-                && let Some(map) = maps.color.get(&bt.body)
+            if m.field_map.is_none()
+                && let Some(map) = maps.fields.get(&bt.body)
             {
-                m.color_map = Some(map.clone());
+                m.field_map = Some(map.clone());
                 m.data.params.x = 1.0;
             }
         }
@@ -536,6 +568,27 @@ fn place_tiles(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn biome_block(shader: &str) -> &str {
+        let start = shader.find("// BIOMES BEGIN").expect("biome block start");
+        let end = shader.find("// BIOMES END").expect("biome block end");
+        &shader[start..end]
+    }
+
+    #[test]
+    fn shader_biome_rules_are_identical_in_both_shaders() {
+        let planet = include_str!("shaders/planet.wesl");
+        let terrain = include_str!("shaders/terrain.wesl");
+        assert_eq!(biome_block(planet), biome_block(terrain));
+    }
+
+    #[test]
+    fn palette_order_matches_the_biome_enum() {
+        // The shaders index the palette by `sim_planet::Biome` order.
+        for (i, b) in BIOMES.iter().enumerate() {
+            assert_eq!(*b as usize, i, "{b:?}");
+        }
+    }
 
     #[test]
     fn cover_falls_back_to_the_parent_until_all_children_are_ready() {

@@ -62,16 +62,21 @@ pub struct PlanetUniform {
     /// x = kind (0 rocky, 1 gas giant, 2 star), y = seed, z = polar ice, w = 1 when baked maps
     /// are present.
     pub params: Vec4,
+    /// x = has ocean, y = has atmosphere (biome rules).
+    pub surface: Vec4,
+    /// Linear biome colours by biome index.
+    pub palette: [Vec4; 12],
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct PlanetMaterial {
     #[uniform(0)]
     pub data: PlanetUniform,
-    /// Baked biome colours (alpha = water), in the body's frame; set `params.w` = 1 when present.
+    /// Baked surface fields (height, temperature, moisture, continent signal) in the body's
+    /// frame; set `params.w` = 1 when present.
     #[texture(1, dimension = "cube")]
     #[sampler(2)]
-    pub color_map: Option<Handle<Image>>,
+    pub field_map: Option<Handle<Image>>,
     /// Baked surface normals (body frame, encoded 0–1).
     #[texture(3, dimension = "cube")]
     #[sampler(4)]
@@ -191,8 +196,10 @@ fn spawn_bodies(
                 star: Vec4::ZERO,
                 rotation: Vec4::new(0.0, 0.0, 0.0, 1.0),
                 params: Vec4::new(kind, (i as f32) * 17.31 + 3.7, a.polar_ice as f32, 0.0),
+                surface: crate::terrain::surface_flags(body),
+                palette: crate::terrain::biome_palette(),
             },
-            color_map: None,
+            field_map: None,
             normal_map: None,
         });
         commands.spawn((

@@ -18,6 +18,9 @@ use crate::climate::{Biome, Climate};
 use crate::quadtree::{GRID, TileKey, face_direction};
 use crate::terrain::Terrain;
 
+/// Temperature recorded for bodies without a climate (°C).
+pub const NO_CLIMATE_TEMPERATURE: f64 = -100.0;
+
 /// Skirt depth in vertex spacings.
 const SKIRT_DEPTH: f64 = 4.0;
 
@@ -31,6 +34,9 @@ pub struct TileMesh {
     /// Height above the reference radius (m), per vertex.
     pub heights: Vec<f32>,
     pub biomes: Vec<Biome>,
+    /// Surface fields per vertex for per-pixel biomes in shaders: height (m), temperature
+    /// (°C), moisture (0–1) and the continent signal (positive on land).
+    pub fields: Vec<[f32; 4]>,
     pub min_height: f64,
     pub max_height: f64,
     /// Sea surface over the same grid (same indices), when part of the tile is under water.
@@ -146,6 +152,7 @@ pub fn build_tile(
         normals: Vec::with_capacity(n),
         heights: Vec::with_capacity(n),
         biomes: Vec::with_capacity(n),
+        fields: Vec::with_capacity(n),
         min_height: f64::MAX,
         max_height: f64::MIN,
         water: None,
@@ -156,12 +163,18 @@ pub fn build_tile(
             let d = vertex_direction(key, i, j);
             let sample = terrain.sample(d, min_wavelength);
             let normal = terrain_normal(terrain, d, spacing, min_wavelength);
+            let (t, m) = climate.map_or((NO_CLIMATE_TEMPERATURE, 0.0), |c| {
+                (
+                    c.temperature_at(terrain, d, sample.height, subsolar_latitude),
+                    c.moisture(terrain, d, &sample),
+                )
+            });
             let biome = climate.map_or(Biome::Regolith, |c| {
-                let t = c.temperature_at(terrain, d, sample.height, subsolar_latitude);
-                let m = c.moisture(terrain, d, &sample);
                 let slope = normal.dot(d).clamp(-1.0, 1.0).acos();
                 c.biome(terrain, &sample, t, m, slope)
             });
+            mesh.fields
+                .push([sample.height as f32, t as f32, m as f32, sample.land as f32]);
             let p = d * (r + sample.height) - origin;
             mesh.positions.push(p.as_vec3().to_array());
             mesh.normals.push(normal.as_vec3().to_array());
@@ -184,6 +197,7 @@ pub fn build_tile(
             mesh.normals.push(mesh.normals[v]);
             mesh.heights.push((h - drop) as f32);
             mesh.biomes.push(mesh.biomes[v]);
+            mesh.fields.push(mesh.fields[v]);
         }
     }
     if terrain.has_ocean() && mesh.min_height < 0.0 {
@@ -291,6 +305,7 @@ mod tests {
         ] {
             let m = build_tile(&terrain, Some(&climate), key, 0.0);
             assert_eq!(m.positions.len(), VERTEX_COUNT);
+            assert_eq!(m.fields.len(), VERTEX_COUNT);
             let up = key.center();
             let outward = m
                 .normals

@@ -10,12 +10,52 @@ struct TerrainUniform {
     center: vec4<f32>,    // xyz body centre (render space), w radius
     rotation: vec4<f32>,  // body rotation quaternion (xyzw)
     params: vec4<f32>,    // x baked map present, y blend start (m), z blend end (m), w detail fade (m)
-    rock: vec4<f32>,      // rock colour (linear rgb)
+    surface: vec4<f32>,   // x has ocean, y has atmosphere
+    palette: array<vec4<f32>, 12>, // linear biome colours by biome index
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> terrain: TerrainUniform;
-@group(constants::MATERIAL_BIND_GROUP) @binding(1) var color_map: texture_cube<f32>;
-@group(constants::MATERIAL_BIND_GROUP) @binding(2) var color_sampler: sampler;
+// Baked surface fields (height, temperature, moisture, continent signal) in the body's frame.
+@group(constants::MATERIAL_BIND_GROUP) @binding(1) var field_map: texture_cube<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(2) var field_sampler: sampler;
+
+// BIOMES BEGIN
+// Biome rules: keep in sync with sim_planet::climate::Climate::biome (authoritative for
+// gameplay) and with the same block in the other planet shader (a test checks the copies).
+// Indices follow sim_planet::Biome: 0 Ocean, 1 SeaIce, 2 Beach, 3 Desert, 4 Grassland,
+// 5 Forest, 6 Jungle, 7 Taiga, 8 Tundra, 9 Ice, 10 Rock, 11 Regolith.
+// fields: x height (m), y temperature (°C), z moisture (0–1), w continent signal (land > 0).
+// slope: radians from horizontal. flags: x has ocean, y has atmosphere.
+fn biome_index(f: vec4<f32>, slope: f32, flags: vec4<f32>) -> u32 {
+    let h = f.x;
+    let t = f.y;
+    let m = f.z;
+    let land = f.w;
+    let ocean = flags.x > 0.5;
+    if ocean && h < 0.0 {
+        if t < -2.0 { return 1u; }
+        return 0u;
+    }
+    if flags.y < 0.5 {
+        if t < -150.0 { return 9u; }
+        return 11u;
+    }
+    if slope > 0.7 { return 10u; }
+    if t < -50.0 { return 9u; }
+    if m < 0.2 { return 3u; }
+    if t < -10.0 { return 9u; }
+    if t < 0.0 { return 8u; }
+    if ocean && h < 25.0 && land < 0.03 { return 2u; }
+    if t < 8.0 {
+        if m > 0.4 { return 7u; }
+        return 8u;
+    }
+    if t > 22.0 && m > 0.6 { return 6u; }
+    if m > 0.45 { return 5u; }
+    return 4u;
+}
+// BIOMES END
+
 
 fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
     let t = 2.0 * cross(q.xyz, v);
@@ -62,17 +102,16 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.world_normal);
     let dist = length(p - view.world_position);
 
-    // Colour: vertex biomes close up, the baked map far away.
-    var albedo = in.color.rgb;
+        // Surface fields: interpolated from the vertices close up, from the baked map far away.
+    // Biomes are decided per pixel from the interpolated fields, so boundaries (coasts, snow
+    // lines, desert edges) are smooth curves instead of following the vertex grid.
+    var fields = vec4<f32>(in.uv.x, in.uv.y, in.uv_b.x, in.uv_b.y);
     if terrain.params.x > 0.5 {
-        let far = textureSample(color_map, color_sampler, dir).rgb;
-        albedo = mix(albedo, far, smoothstep(terrain.params.y, terrain.params.z, dist));
+        let far = textureSample(field_map, field_sampler, dir);
+        fields = mix(fields, far, smoothstep(terrain.params.y, terrain.params.z, dist));
     }
-
-    // Steep slopes are bare rock (the mesh normal is sharper than the vertex biomes).
-    let near = 1.0 - smoothstep(terrain.params.y, terrain.params.z, dist);
-    let steepness = 1.0 - dot(n, up);
-    albedo = mix(albedo, terrain.rock.rgb, smoothstep(0.22, 0.35, steepness) * near);
+    let slope = acos(clamp(dot(n, up), -1.0, 1.0));
+    var albedo = terrain.palette[biome_index(fields, slope, terrain.surface)].rgb;
 
     // Fine detail near the camera: two scales of brightness variation, fading with distance.
     let fade = 1.0 - smoothstep(0.0, terrain.params.w, dist);

@@ -32,21 +32,23 @@ pub struct TerrainUniform {
     pub center: Vec4,
     /// Body rotation (quaternion xyzw).
     pub rotation: Vec4,
-    /// x = baked map present, y/z = distance range (m) blending vertex colours into the map,
+    /// x = baked map present, y/z = distance range (m) blending vertex fields into the map,
     /// w = distance (m) over which fine detail fades out.
     pub params: Vec4,
-    /// Linear rock colour for steep slopes.
-    pub rock: Vec4,
+    /// x = has ocean, y = has atmosphere (biome rules).
+    pub surface: Vec4,
+    /// Linear biome colours by biome index.
+    pub palette: [Vec4; 12],
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct TerrainMaterial {
     #[uniform(0)]
     pub data: TerrainUniform,
-    /// The body's baked colour map (same as the distant planet's).
+    /// The body's baked field map (same as the distant planet's).
     #[texture(1, dimension = "cube")]
     #[sampler(2)]
-    pub color_map: Option<Handle<Image>>,
+    pub field_map: Option<Handle<Image>>,
 }
 
 impl Material for TerrainMaterial {
