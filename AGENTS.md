@@ -97,6 +97,9 @@ honestly with their output.
   `game_bevy/src/script.rs`, examples in `tools/test-scripts/`). A window opens on the
   developer's desktop (tell them before launching); it doesn't grab the mouse. The script logs a
   frame-time summary; screenshots land in `C:\Users\yangc\Apps\ultra_space\runs\<script>\`.
+    Background test agents build in their own worktree with a shared build cache
+  (`CARGO_TARGET_DIR=$HOME/.cache/ultra_space/test-target`) and export to
+  `ULTRA_SPACE_EXPORT_DIR=/mnt/c/Users/yangc/Apps/ultra_space-test`, never the developer's build.
   WSL itself can only render in software (OpenGL on Mesa's D3D12 driver can't present to a
   window or run the atmosphere shader), so in-WSL captures are a fallback.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
