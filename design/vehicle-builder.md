@@ -100,6 +100,14 @@ Decided with the developer on 2026-11-12.
   vehicles and can stand on them, with slope limits and steps (planet-surface §5 deferred these).
 - It stays kinematic: gravity, jumps and riding the turning ground work as in Batch 2.
 
+**As built (3.6):** the controller sweeps the walker's capsule against **vehicles only**
+(blocked by hulls, standing on decks); the ground stays the terrain height function, which the
+patches match to about a centimetre. Sweeping against the patches got stuck on their triangles
+(rapier only pushes a shape out of overlaps on a zero move, and fixing internal edges made it
+worse), and walkers then don't need patches built around them. Walkers move first in each tick,
+against the vehicles as the last step left them, then turn with the planet. Slope limits stay
+for later (the height function has none).
+
 ## 3. Data format additions
 
 Added to the part and vehicle formats (ships-stations-interiors §8), with JSON Schemas:

@@ -13,6 +13,7 @@ use sim_core::frames::FrameState;
 use sim_core::objects::{RegionBody, SimClock, SystemRef};
 
 use crate::flight::{BodyEnv, RegionTerrain, ground_altitude, region_env};
+use crate::physics::RegionPhysics;
 
 /// Walking and running speeds (m/s).
 pub const WALK_SPEED: f64 = 5.0;
@@ -56,18 +57,30 @@ fn upright(forward: DVec3, up: DVec3) -> DQuat {
     DQuat::from_mat3(&glam::DMat3::from_cols(right, up, -f)).normalize()
 }
 
+/// Moves a walker's feet from a position along `up` by a desired displacement against the
+/// world's colliders: returns the displacement made and whether it stands on something
+/// ([`crate::PhysicsScene::sweep_character`]).
+pub type Mover<'a> = &'a mut dyn FnMut(DVec3, DVec3, DVec3) -> (DVec3, bool);
+
 /// Advances a walker by `dt` (state in the body's inertial frame; `position` is the feet).
+///
+/// It walks on the terrain height. With a `mover` it also moves against the region's vehicles
+/// (as they were at the start of the step: blocked by hulls, standing on decks), then turns with
+/// the planet.
 pub fn walk_step(
     state: &mut FrameState,
     walker: &mut Walker,
     control: &mut WalkerControl,
     env: &BodyEnv,
     dt: f64,
+    mover: Option<Mover<'_>>,
 ) {
-    // Ride with the turning ground.
     let spin = DQuat::from_scaled_axis(env.spin * dt);
-    state.position = spin * state.position;
-    state.rotation = (spin * state.rotation).normalize();
+    if mover.is_none() {
+        // Ride with the turning ground.
+        state.position = spin * state.position;
+        state.rotation = (spin * state.rotation).normalize();
+    }
 
     // Stand upright along local gravity, then turn.
     let up = state.position.normalize();
@@ -101,6 +114,37 @@ pub fn walk_step(
     // Gravity, then move.
     let r = state.position.length();
     walker.velocity -= up * (env.mu / (r * r)) * dt;
+    if let Some(mover) = mover {
+        // Vehicles: blocked by hulls, standing on decks.
+        let (moved, on_vehicle) = mover(state.position, up, walker.velocity * dt);
+        state.position += moved;
+        let vertical = walker.velocity.dot(up);
+        let tangential = (moved - up * moved.dot(up)) / dt;
+        walker.velocity = tangential + up * vertical;
+        // The ground: the terrain height, as without vehicles.
+        let ground = env.radius + env.ground_height(state.position);
+        let feet = state.position.length() - ground;
+        let rising = walker.velocity.dot(up) > 0.0;
+        let on_ground = feet <= 0.0 || (walker.grounded && !rising && feet < STEP_DOWN);
+        if on_ground && !on_vehicle {
+            state.position = state.position.normalize() * ground;
+        }
+        if on_ground || on_vehicle {
+            let vertical = walker.velocity.dot(up);
+            if vertical < 0.0 || walker.grounded {
+                walker.velocity -= up * vertical;
+            }
+        }
+        walker.grounded = on_ground || on_vehicle;
+        // Then ride with the turning ground.
+        state.position = spin * state.position;
+        state.rotation = (spin * state.rotation).normalize();
+        walker.velocity = spin * walker.velocity;
+        walker.ground_altitude = (state.position.length() - ground).max(0.0);
+        state.velocity = env.spin.cross(state.position) + walker.velocity;
+        state.angular_velocity = env.spin;
+        return;
+    }
     state.position += walker.velocity * dt;
 
     // Ground: land, stay on it, or follow it down small steps.
@@ -129,6 +173,7 @@ pub fn walker_system(
     system: Res<SystemRef>,
     clock: Res<SimClock>,
     terrain: Option<Res<RegionTerrain>>,
+    physics: Option<Res<RegionPhysics>>,
     mut walkers: Query<(&mut ObjectState, &mut Walker, &mut WalkerControl)>,
 ) {
     let system = &system.0;
@@ -140,8 +185,23 @@ pub fn walker_system(
         // Steps of at most 1/60 s so jumps and slopes stay smooth under light time warp.
         let steps = (clock.dt / (1.0 / 60.0)).ceil().clamp(1.0, 64.0) as u32;
         let h = clock.dt / f64::from(steps);
+        // Against the region's vehicles when there is a physics scene.
+        let scene = physics.as_deref().map(|p| &p.0);
         for _ in 0..steps {
-            walk_step(&mut local.state, &mut walker, &mut control, &env, h);
+            match &scene {
+                Some(scene) => {
+                    let mut sweep = |feet, up, desired| scene.sweep_character(feet, up, desired, h);
+                    walk_step(
+                        &mut local.state,
+                        &mut walker,
+                        &mut control,
+                        &env,
+                        h,
+                        Some(&mut sweep),
+                    );
+                }
+                None => walk_step(&mut local.state, &mut walker, &mut control, &env, h, None),
+            }
         }
         walker.ground_altitude = ground_altitude(&env, local.state.position).max(0.0);
         *state = local;
@@ -198,7 +258,7 @@ mod tests {
         let (mut s, mut w) = standing(&env);
         let mut c = WalkerControl::default();
         for _ in 0..600 {
-            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
         }
         assert!(w.grounded);
         assert!(feet_above_ground(&env, &s).abs() < 0.01);
@@ -214,7 +274,7 @@ mod tests {
         for _ in 0..(60 * 20) {
             c.movement = DVec2::new(0.0, 1.0);
             c.run = true;
-            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
             assert!(
                 feet_above_ground(&env, &s) > -0.01,
                 "never below the ground"
@@ -240,7 +300,7 @@ mod tests {
             };
             let mut highest: f64 = 0.0;
             for _ in 0..(60 * 30) {
-                walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+                walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
                 highest = highest.max(feet_above_ground(&env, &s));
                 if w.grounded && highest > 0.1 {
                     break;

@@ -767,10 +767,12 @@ fn rebase_desired_velocity(
 pub fn add_flight_systems(schedule: &mut Schedule) {
     schedule.add_systems(
         (
+            // Walkers first: they move against the ground and vehicles as the last physics step
+            // left them, then turn with the planet like everything else this tick.
+            crate::walker::walker_system,
             flight_system,
             arcade_system,
             cruise_system,
-            crate::walker::walker_system,
         )
             .chain()
             .in_set(RegionStage::Simulate),

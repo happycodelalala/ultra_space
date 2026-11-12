@@ -1,0 +1,14 @@
+# Walker against a vehicle (task 3.6). Run with ULTRA_SPACE_START_ALTITUDE=1500. Step out (the
+# walker appears 6 m to the ship's right, facing the same way), then strafe left into the hull
+# for 3 s (15 m: without collisions it would walk through the ship). Look for: the walker stops
+# at the hull (the last shots show the hull right there to the left, not the far side of the
+# ship), feet on the ground.
+0.5  press Z
+1    wait landed 20
+2    press F                 # step out
+3    shot 01-beside-ship.png
+3.5  hold A 3                # strafe left, into the ship
+6.8  shot 02-at-the-hull.png
+7    mouse -10 0 0.5         # look left at the hull
+8    shot 03-looking-at-hull.png
+9    quit

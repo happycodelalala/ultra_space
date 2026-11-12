@@ -16,7 +16,11 @@ use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
-use rapier3d_f64::control::DynamicRayCastVehicleController;
+use rapier3d_f64::control::{
+    CharacterLength, DynamicRayCastVehicleController, KinematicCharacterController,
+};
+use rapier3d_f64::parry::query::Ray;
+use rapier3d_f64::parry::shape::Capsule;
 use rapier3d_f64::prelude::{
     ColliderBuilder, ColliderHandle, Group, InteractionGroups, InteractionTestMode,
     MassProperties as RapierMass, PhysicsWorld, Pose, QueryFilter, RigidBodyBuilder,
@@ -45,6 +49,10 @@ const CONTACT_ITERATIONS: usize = 4;
 const REST_SPEED: f64 = 0.1;
 const REST_SPIN: f64 = 0.05;
 const REST_AFTER: f64 = 1.0;
+/// Walkers' capsule (m).
+const CHARACTER_HEIGHT: f64 = 1.8;
+const CHARACTER_RADIUS: f64 = 0.3;
+const CHARACTER_GAP: f64 = 0.02;
 /// Most look-ahead along a body's motion when choosing patches (m).
 const PATCH_LOOKAHEAD: f64 = 60.0;
 /// Patches are built this far around a body (m), plus a second and a half of travel.
@@ -418,7 +426,7 @@ impl PhysicsScene {
                 self.world.remove_body(e.handle);
             }
         }
-        if self.bodies.is_empty() || dt <= 0.0 {
+        if (self.bodies.is_empty() && self.ground.is_none()) || dt <= 0.0 {
             return;
         }
         let started = std::time::Instant::now();
@@ -615,6 +623,65 @@ impl PhysicsScene {
         }
     }
 
+    /// Moves a walker's capsule (feet at `feet`, standing along `up`) by `desired`, against the
+    /// vehicles as the last step left them (not the ground: walkers stand on the terrain height,
+    /// which the patches match). Returns the movement actually made and whether it stands on
+    /// a vehicle.
+    pub fn sweep_character(
+        &self,
+        feet: DVec3,
+        up: DVec3,
+        desired: DVec3,
+        dt: f64,
+    ) -> (DVec3, bool) {
+        let controller = KinematicCharacterController {
+            up,
+            offset: CharacterLength::Absolute(CHARACTER_GAP),
+            ..Default::default()
+        };
+        let half = CHARACTER_HEIGHT / 2.0 - CHARACTER_RADIUS;
+        let shape = Capsule::new_y(half, CHARACTER_RADIUS);
+        let pose = Pose::from_parts(
+            // The controller keeps its gap from surfaces: the capsule floats that far above the
+            // feet (touching the ground counts as stuck in it).
+            feet + up * (CHARACTER_HEIGHT / 2.0 + CHARACTER_GAP),
+            DQuat::from_rotation_arc(DVec3::Y, up),
+        );
+        let world = &self.world;
+        let vehicles_only = QueryFilter::default().groups(InteractionGroups::new(
+            Group::ALL,
+            Group::ALL.difference(GROUND_GROUP),
+            InteractionTestMode::And,
+        ));
+        let queries = world.broad_phase.as_query_pipeline(
+            world.narrow_phase.query_dispatcher(),
+            &world.bodies,
+            &world.colliders,
+            vehicles_only,
+        );
+        // First out of any vehicle the capsule overlaps (rapier only depenetrates on a zero
+        // move), then the move itself from there.
+        let out = controller.move_shape(dt, &queries, &shape, &pose, DVec3::ZERO, |_| {});
+        let pose = Pose::from_parts(pose.translation + out.translation, pose.rotation);
+        let moved = controller.move_shape(dt, &queries, &shape, &pose, desired, |_| {});
+        (out.translation + moved.translation, moved.grounded)
+    }
+
+    /// Distance along a ray to the first collider it hits (ground patches and vehicles, as the
+    /// last step left them), within `max` metres.
+    pub fn cast_ray(&self, origin: DVec3, direction: DVec3, max: f64) -> Option<f64> {
+        let world = &self.world;
+        let queries = world.broad_phase.as_query_pipeline(
+            world.narrow_phase.query_dispatcher(),
+            &world.bodies,
+            &world.colliders,
+            QueryFilter::default(),
+        );
+        queries
+            .cast_ray(&Ray::new(origin, direction), max, true)
+            .map(|(_, toi)| toi)
+    }
+
     /// How many of a vehicle's wheels touch something.
     pub fn wheels_on_ground(&self, id: ObjectId) -> usize {
         self.bodies
@@ -635,7 +702,8 @@ impl PhysicsScene {
 
     /// Keeps the ground body and its patches in step with the region's terrain, and asks for
     /// the patches every body near the ground needs.
-    fn update_ground(&mut self, env: &BodyEnv) {
+    /// Keeps the ground body and its patches in step with the region's terrain.
+    fn sync_ground(&mut self, env: &BodyEnv) {
         let terrain = env.terrain.as_ref().filter(|_| self.patches && env.solid);
         let current = self.ground.as_ref().map(|g| Arc::clone(g.terrain()));
         let same = match (&current, terrain) {
@@ -663,6 +731,10 @@ impl PhysicsScene {
             self.ground =
                 terrain.map(|t| Ground::new(&mut self.world, Arc::clone(t), self.inline_patches));
         }
+    }
+
+    fn update_ground(&mut self, env: &BodyEnv) {
+        self.sync_ground(env);
         let Some(ground) = &mut self.ground else {
             for e in self.bodies.values_mut() {
                 e.on_patches = false;
