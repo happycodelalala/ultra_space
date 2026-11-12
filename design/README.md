@@ -8,6 +8,7 @@ which engine API does it. Engine-specific notes belong in `impl/<implementation>
 | [technical-overview.md](technical-overview.md) | Game systems and how they work: scale, planets, simulation tiers, vehicles, cultures, combat, capital ships, AI/LLM systems, object model, persistence and streaming |
 | [universe-scale-time-and-flight.md](universe-scale-time-and-flight.md) | Planet scale, distances and travel modes, flight model, universe and game clocks, seasons, planet climate, the first star system (Halcyon) |
 | [objects-vehicles-physics.md](objects-vehicles-physics.md) | Objects (identity, frame-relative state, regions, transfers), vehicles made of parts, mass properties, thrust allocation, flight and cruise; how the Batch 3 builder plugs in |
+| [ships-stations-interiors.md](ships-stations-interiors.md) | Ship and station design: fine parts, section kits, capital hulls with slots, station modules, style families; buying, capturing and building ships; interiors from a few rooms to station cities; design compilation; art and performance |
 | [development-plan.md](development-plan.md) | Engine decision and rationale, parallel simulation architecture, environment, LLM integration, development batches |
 
 Suggested additions as the design grows:

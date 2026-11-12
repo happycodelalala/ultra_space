@@ -101,6 +101,9 @@ connected on a grid or at snap points.
 - **Walking inside moving ships:** a ship's interior gets its own local physics frame, so
   the player can walk around a cockpit while the ship is in orbit.
 
+Ship and station building levels, interiors and design compilation:
+[ships-stations-interiors.md](ships-stations-interiors.md).
+
 ## 6. Cultures at different tech levels
 
 Cultures are **data-driven**, not hand-built:
@@ -442,6 +445,9 @@ watch them play out.
 **New systems:** reparenting between frames, per-volume gravity with magnetic boots,
 room-graph atmosphere and breaches, visual-only effects for low-attention combat, and
 streaming ship interiors.
+
+How interiors are built from modules and scale to station cities:
+[ships-stations-interiors.md](ships-stations-interiors.md) §5.
 
 ---
 
