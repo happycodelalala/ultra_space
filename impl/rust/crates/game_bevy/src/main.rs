@@ -1,21 +1,54 @@
 //! Ultra Space: Bevy front end.
 //!
-//! Placeholder scene until Batch 1. Game logic lives in the engine-independent
-//! `sim_*` crates; this crate only renders, handles input and wires plugins together.
+//! Game logic lives in the engine-independent `sim_*` crates; this crate only renders, handles
+//! input and wires plugins together.
 
+mod capture;
+mod debug_overlay;
+mod sim;
+
+use bevy::log::LogPlugin;
 use bevy::prelude::*;
+
+/// Default log filter. Override at runtime with `RUST_LOG`, e.g. `RUST_LOG=debug`.
+const LOG_FILTER: &str = "info,wgpu=error,naga=warn,ultra_space=debug,sim_core=debug";
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Ultra Space".into(),
-                ..default()
-            }),
-            ..default()
-        }))
-        .add_systems(Startup, scene.spawn())
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Ultra Space".into(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(LogPlugin {
+                    filter: LOG_FILTER.into(),
+                    ..default()
+                }),
+        )
+        .add_plugins((
+            sim::SimPlugin,
+            debug_overlay::DebugOverlayPlugin,
+            capture::CapturePlugin,
+        ))
+        .add_systems(Startup, (log_startup, scene.spawn()))
         .run();
+}
+
+fn log_startup() {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    info!(
+        "Ultra Space {} ({profile} build), {threads} logical CPUs",
+        env!("CARGO_PKG_VERSION")
+    );
 }
 
 /// A placeholder "planet" and light, replaced in Batch 1.

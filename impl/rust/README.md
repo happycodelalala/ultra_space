@@ -6,7 +6,7 @@ Cargo workspace: engine-independent simulation crates plus a Bevy front end.
 
 | Crate | Role | May depend on |
 |---|---|---|
-| `sim_core` | Frame tree, 64-bit coordinates, orbits, tick scheduler | std, math/ECS crates (e.g. `bevy_ecs`) |
+| `sim_core` | Regions ticked in parallel, fixed-rate clock, timing stats; later frame tree, 64-bit coordinates, orbits | std, math/ECS crates (e.g. `bevy_ecs`) |
 | `sim_planet` | Terrain generation, player-made deltas | `sim_core` |
 | `sim_vehicle` | Part graphs, mass properties, control allocation | `sim_core` |
 | `sim_economy` | Factories, factions, tiered simulation | `sim_core` |
@@ -48,8 +48,18 @@ crates may use standalone `bevy_ecs` for parallel scheduling, which works with a
 | Lint | `cargo clippy --workspace --all-targets` |
 | Format | `cargo fmt --all` |
 | Run the game (WSL, via WSLg) | `cargo run -p game_bevy` |
+| Save a screenshot and exit | `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` |
+| More/less logging | `RUST_LOG=debug cargo run -p game_bevy` |
 | Export a Windows build | `../../tools/export-windows.sh` |
 
 Windows builds are exported to `C:\Users\yangc\Apps\ultra_space\`
 (`/mnt/c/Users/yangc/Apps/ultra_space/` from WSL). Judge visuals and performance there, not
 in WSL.
+
+## In-game debug tools
+
+- **F3** toggles the debug overlay: FPS and frame time, simulation tick time and budget use,
+  regions, entities, total and dropped ticks.
+- The simulation (`sim_core::Simulation`) runs at a fixed 30 Hz, decoupled from the frame
+  rate. It runs at most 4 ticks per frame; time beyond that is dropped and shown as "dropped".
+- An over-budget tick logs a warning (at most every 5 s).

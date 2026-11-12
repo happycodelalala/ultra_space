@@ -45,6 +45,14 @@ Before calling work done, run `tools/ci.sh` from the repo root (secrets, engine 
 format, Clippy with warnings as errors, tests) and make sure it passes. Report failures
 honestly with their output.
 
+## Debugging and visual checks
+
+- **Debug overlay** (F3 toggles): FPS and frame time, simulation tick time and budget, region
+  and entity counts. Logging uses Bevy's `LogPlugin`; override the filter with `RUST_LOG`.
+- **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
+  ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
+  there are software-rendered and meaningless.
+
 ## Environment
 
 - Development runs in WSL2 (Ubuntu 24.04) on an AMD Ryzen AI Max+ 395 (16 cores / 32 threads).

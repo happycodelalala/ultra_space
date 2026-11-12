@@ -6,9 +6,10 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# Engine-independent: must not depend on bevy or any rendering crate.
+# Engine-independent: standalone ECS and task pool only, nothing from rendering.
 [dependencies]
-
+bevy_ecs = { workspace = true }
+bevy_tasks = { workspace = true }
 
 [lints]
 workspace = true

@@ -4906,6 +4906,7 @@ dependencies = [
  "bevy_ecs",
  "bevy_tasks",
  "glam",
+ "sim_core",
 ]
 
 [[package]]
@@ -4918,6 +4919,10 @@ dependencies = [
 [[package]]
 name = "sim_core"
 version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_tasks",
+]
 
 [[package]]
 name = "sim_economy"
