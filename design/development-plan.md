@@ -372,11 +372,24 @@ Decisions behind these tasks: [planet-surface.md](planet-surface.md).
 **Exit criteria:** land anywhere on Meridian from orbit and walk around with no loading screen
 and no frame over 50 ms; terrain matches from orbit to the ground; CI passes.
 
-**Status (2026-11-12):** 2.1–2.12 done on branch `batch2/terrain` (not merged yet); 2.13's tool
-(`ULTRA_SPACE_BODY_RADIUS`) is done and the size decision deferred (universe design §1); next
-is the 2.14 review. Debug aids added along the way: full stop (Z), arcade flight (N), flattened
-pad (K), start position, time of day and camera angle by environment variables, scripted test
-rounds on Windows (`AGENTS.md`).
+**Status:** done on branch `batch2/terrain`. The 2.14 review (2026-11-12, scripted test
+rounds on Windows) passed:
+- Descent from orbit to the ground: 0 frames over 50 ms in 96 s (worst 48 ms), no loading screen
+  after the start-up warm-up.
+- Landing (stays put), arcade flight near the ground, horizon levelling, walking out, running,
+  jumping and boarding, the flattened pad and a sunset over the sea all look right.
+- CI passes.
+
+2.13's tool (`ULTRA_SPACE_BODY_RADIUS`) is done; the size decision is deferred (universe design
+§1). Known polish for later:
+- distant mountains look angular, with hard color bands
+- staircase coastlines
+- arcade flight near the ground at 300 m/s runs at ~46 fps
+- no slope limits or swimming on foot
+
+Debug aids added along the way: full stop (Z), arcade flight (N), flattened pad (K), start
+position, time of day and camera angle by environment variables, scripted test rounds on Windows
+(`AGENTS.md`).
 
 ### 7.1 When the object system is built
 
