@@ -311,7 +311,7 @@ fn update_hud(
             text.0 = format!(
                 "{} | ON FOOT\n\
                  SPEED {}   ALT {}{}\n\
-                 WASD walk | Shift run | Space jump | F board ship (within 12 m) | H HUD",
+                 WASD walk | Shift run | Space jump | F board (vehicle ahead, 12 m) | G rover | H HUD",
                 body.name.to_uppercase(),
                 speed(walker.velocity.length()),
                 distance(local.position.length() - body.radius),

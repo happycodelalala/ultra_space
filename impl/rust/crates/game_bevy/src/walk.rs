@@ -25,8 +25,10 @@ const EXIT_MAX_ALTITUDE: f64 = 30.0;
 const EXIT_MAX_SPEED: f64 = 2.0;
 /// Where the walker appears: this far to the ship's right (m).
 const EXIT_OFFSET: f64 = 6.0;
-/// Boarding reach from the ship's centre (m).
+/// Boarding reach from a vehicle's centre (m).
 const BOARD_REACH: f64 = 12.0;
+/// A vehicle counts as ahead when it is within about 60° of where the walker faces.
+const BOARD_FACING: f64 = 0.5;
 /// Where G puts a rover: this far ahead of the walker (m).
 const ROVER_DISTANCE: f64 = 8.0;
 /// Mouse look sensitivity (radians per pixel).
@@ -125,24 +127,34 @@ fn exit_or_board(
         };
         let frame = system.bodies[region].inertial_frame;
         let here = state.in_frame(&system.frames, frame, t).state.position;
-        let nearest = sim.regions.get_mut(region).and_then(|r| {
-            let mut query = r.world.query::<(&Object, &ObjectState, &Vehicle)>();
-            query
-                .iter(&r.world)
-                .map(|(o, s, v)| {
-                    let p = s.in_frame(&system.frames, frame, t).state.position;
-                    (o.id, v.name.clone(), (p - here).length())
-                })
-                .min_by(|a, b| a.2.total_cmp(&b.2))
-        });
-        let Some((id, name, distance)) = nearest else {
-            info!("no vehicle here to board");
+        // Of the vehicles in reach, the one most directly ahead (else the nearest).
+        let look = state.in_frame(&system.frames, frame, t).state.rotation * DVec3::NEG_Z;
+        let mut in_reach: Vec<(ObjectId, String, f64, f64)> = sim
+            .regions
+            .get_mut(region)
+            .map(|r| {
+                let mut query = r.world.query::<(&Object, &ObjectState, &Vehicle)>();
+                query
+                    .iter(&r.world)
+                    .map(|(o, s, v)| {
+                        let to = s.in_frame(&system.frames, frame, t).state.position - here;
+                        let facing = to.normalize_or_zero().dot(look);
+                        (o.id, v.name.clone(), to.length(), facing)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        in_reach.retain(|c| c.2 <= BOARD_REACH);
+        let chosen = in_reach
+            .iter()
+            .filter(|c| c.3 > BOARD_FACING)
+            .max_by(|a, b| a.3.total_cmp(&b.3))
+            .or_else(|| in_reach.iter().min_by(|a, b| a.2.total_cmp(&b.2)))
+            .cloned();
+        let Some((id, name, _, _)) = chosen else {
+            info!("no vehicle within {BOARD_REACH:.0} m to board");
             return;
         };
-        if distance > BOARD_REACH {
-            info!("too far from the {name} to board ({distance:.0} m)");
-            return;
-        }
         let _ = sim.objects.despawn(&mut sim.regions, on_foot.id);
         blend.start(&camera, now);
         commands.remove_resource::<OnFoot>();
