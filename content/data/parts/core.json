@@ -1,0 +1,58 @@
+{
+  "description": "Core ship parts for Batch 1. Thrusters push the vehicle along their local +Y axis (the nozzle faces -Y).",
+  "parts": [
+    {
+      "id": "cockpit.small",
+      "name": "Small Cockpit",
+      "kind": "cockpit",
+      "mass_kg": 1800,
+      "shape": { "type": "box", "size_m": [2.4, 1.8, 3.0] }
+    },
+    {
+      "id": "hull.section.medium",
+      "name": "Medium Hull Section",
+      "kind": "hull",
+      "mass_kg": 2500,
+      "shape": { "type": "box", "size_m": [3.0, 2.4, 3.0] }
+    },
+    {
+      "id": "tank.medium",
+      "name": "Medium Fuel Tank",
+      "kind": "tank",
+      "mass_kg": 9000,
+      "shape": { "type": "cylinder", "radius_m": 1.1, "length_m": 3.0 }
+    },
+    {
+      "id": "thruster.main.medium",
+      "name": "Medium Main Engine",
+      "kind": "thruster",
+      "mass_kg": 1500,
+      "shape": { "type": "cylinder", "radius_m": 0.9, "length_m": 2.0 },
+      "thruster": { "max_thrust_n": 600000 }
+    },
+    {
+      "id": "thruster.rcs.small",
+      "name": "Small Maneuvering Thruster",
+      "kind": "thruster",
+      "mass_kg": 40,
+      "shape": { "type": "box", "size_m": [0.3, 0.3, 0.3] },
+      "thruster": { "max_thrust_n": 4000 }
+    },
+    {
+      "id": "reaction_wheel.medium",
+      "name": "Medium Reaction Wheel",
+      "kind": "reaction_wheel",
+      "mass_kg": 500,
+      "shape": { "type": "sphere", "radius_m": 0.5 },
+      "reaction_wheel": { "max_torque_nm": 40000 }
+    },
+    {
+      "id": "cruise_drive.small",
+      "name": "Small Cruise Drive",
+      "kind": "cruise_drive",
+      "mass_kg": 1200,
+      "shape": { "type": "box", "size_m": [2.0, 1.6, 1.6] },
+      "cruise_drive": { "max_speed_ms": 30000000 }
+    }
+  ]
+}
