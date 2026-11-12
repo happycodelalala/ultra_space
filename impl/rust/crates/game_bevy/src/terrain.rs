@@ -38,6 +38,8 @@ use crate::universe::{GameState, InGame, Universe};
 const ACTIVE_DISTANCE: f64 = 2.5;
 /// Most tile generation tasks in flight.
 const MAX_IN_FLIGHT: usize = 48;
+/// Frames between creating a tile's mesh and drawing it (time for the GPU upload).
+const DRAW_DELAY_FRAMES: u64 = 3;
 /// Most finished tiles turned into meshes per frame.
 const UPLOADS_PER_FRAME: usize = 16;
 /// A tile not needed for this many frames is dropped.
@@ -64,6 +66,10 @@ enum Tile {
         entities: Vec<Entity>,
         heights: (f64, f64),
         last_needed: u64,
+        /// First frame the tile may be drawn: its mesh needs a few frames to reach the GPU,
+        /// and swapping it in earlier leaves a brief hole where neither it nor the tile it
+        /// replaces is drawn.
+        drawable_from: u64,
     },
 }
 
@@ -250,9 +256,13 @@ fn cover(
     leaves: &HashSet<TileKey>,
     needed: &HashSet<TileKey>,
     tiles: &HashMap<TileKey, Tile>,
+    frame: u64,
     out: &mut Vec<TileKey>,
 ) -> bool {
-    let ready = matches!(tiles.get(&key), Some(Tile::Ready { .. }));
+    let ready = matches!(
+        tiles.get(&key),
+        Some(Tile::Ready { drawable_from, .. }) if frame >= *drawable_from
+    );
     if leaves.contains(&key) {
         if ready {
             out.push(key);
@@ -265,7 +275,7 @@ fn cover(
     let children_ok = key
         .children()
         .iter()
-        .all(|c| !needed.contains(c) || cover(*c, leaves, needed, tiles, out));
+        .all(|c| !needed.contains(c) || cover(*c, leaves, needed, tiles, frame, out));
     if children_ok {
         return true;
     }
@@ -429,6 +439,7 @@ fn update_terrain(
                         entities,
                         heights: (m.min_height, m.max_height),
                         last_needed: frame,
+                        drawable_from: frame + DRAW_DELAY_FRAMES,
                     },
                 );
             }
@@ -437,7 +448,7 @@ fn update_terrain(
             let mut covered = true;
             for face in 0..6u8 {
                 let root = TileKey::root(face);
-                covered &= cover(root, &leaves, &needed, &bt.tiles, &mut shown);
+                covered &= cover(root, &leaves, &needed, &bt.tiles, frame, &mut shown);
             }
             bt.covered |= covered;
         } else {
@@ -601,25 +612,41 @@ mod tests {
             entities: Vec::new(),
             heights: (0.0, 0.0),
             last_needed: 0,
+            drawable_from: 0,
         };
         let mut tiles = HashMap::new();
         tiles.insert(root, ready());
         tiles.insert(children[0], ready());
         let mut out = Vec::new();
-        assert!(cover(root, &leaves, &needed, &tiles, &mut out));
+        assert!(cover(root, &leaves, &needed, &tiles, 10, &mut out));
         assert_eq!(out, vec![root], "parent until all children are ready");
 
         for c in &children[1..] {
             tiles.insert(*c, ready());
         }
         out.clear();
-        assert!(cover(root, &leaves, &needed, &tiles, &mut out));
+        assert!(cover(root, &leaves, &needed, &tiles, 10, &mut out));
         assert_eq!(out.len(), 4);
         assert!(!out.contains(&root));
 
+        // A child that only just arrived isn't drawn yet: the parent stays.
+        if let Some(Tile::Ready { drawable_from, .. }) = tiles.get_mut(&children[3]) {
+            *drawable_from = 12;
+        }
+        out.clear();
+        assert!(cover(root, &leaves, &needed, &tiles, 10, &mut out));
+        assert_eq!(out, vec![root], "new tile waits for its GPU upload");
+
         // Nothing ready: not drawable.
         out.clear();
-        assert!(!cover(root, &leaves, &needed, &HashMap::new(), &mut out));
+        assert!(!cover(
+            root,
+            &leaves,
+            &needed,
+            &HashMap::new(),
+            10,
+            &mut out
+        ));
         assert!(out.is_empty());
     }
 }
