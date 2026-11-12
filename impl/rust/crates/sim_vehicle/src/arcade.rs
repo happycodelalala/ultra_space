@@ -14,7 +14,8 @@ use sim_core::objects::{RegionBody, SimClock, SystemRef};
 
 use crate::cruise::Cruise;
 use crate::flight::{
-    BodyEnv, FlightControl, FlightTelemetry, OnRails, RegionTerrain, ground_altitude, region_env,
+    BodyEnv, FlightControl, FlightTelemetry, OnRails, RegionTerrain, ground_altitude,
+    horizon_weight, level_roll_rate, region_env,
 };
 use crate::vehicle::{Vehicle, VehicleBody};
 
@@ -55,7 +56,13 @@ pub fn arcade_step(
     if control.brake {
         arcade.speed = 0.0;
     }
-    let spin = control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0)) * TURN_RATE;
+    let mut spin = control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0)) * TURN_RATE;
+    // Level the wings with the horizon near the ground while the pilot isn't rolling.
+    if control.rotate.z.abs() < 0.05 {
+        let altitude = state.position.length() - env.radius;
+        spin.z += horizon_weight(env, altitude)
+            * level_roll_rate(state.rotation, state.position.normalize());
+    }
     state.rotation = (state.rotation * DQuat::from_scaled_axis(spin * dt)).normalize();
     state.angular_velocity = state.rotation * spin;
 

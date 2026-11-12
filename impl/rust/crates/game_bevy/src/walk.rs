@@ -12,7 +12,7 @@ use sim_core::{ObjectId, ObjectState, Simulation};
 use sim_vehicle::walker::EYE_HEIGHT;
 use sim_vehicle::{FlightTelemetry, Walker, WalkerControl};
 
-use crate::camera::{CameraSet, CameraStage, SpaceCamera};
+use crate::camera::{CameraBlend, CameraSet, CameraStage, SpaceCamera};
 use crate::ship::{PilotState, PlayerShip, interpolate_state};
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::universe::{InGame, Universe};
@@ -85,11 +85,15 @@ fn exit_or_board(
     on_foot: Option<Res<OnFoot>>,
     mut pilot: ResMut<PilotState>,
     mut render: ResMut<WalkerRenderState>,
+    mut blend: ResMut<CameraBlend>,
+    camera: Res<SpaceCamera>,
+    real: Res<Time<Real>>,
     mut sim: ResMut<Sim>,
 ) {
     if !pilot.flying || !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
+    let now = real.elapsed_secs_f64();
     let Some(ship) = ship else { return };
     let system = &universe.0;
     let sim = &mut sim.0;
@@ -120,6 +124,7 @@ fn exit_or_board(
             return;
         }
         let _ = sim.objects.despawn(&mut sim.regions, on_foot.id);
+        blend.start(&camera, now);
         commands.remove_resource::<OnFoot>();
         pilot.on_foot = false;
         info!("boarded the ship");
@@ -165,6 +170,7 @@ fn exit_or_board(
         return;
     };
     *render = WalkerRenderState::default();
+    blend.start(&camera, now);
     commands.insert_resource(OnFoot { id, pitch: 0.0 });
     pilot.on_foot = true;
     info!("stepped out of the ship");

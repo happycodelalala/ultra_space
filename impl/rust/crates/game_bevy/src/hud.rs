@@ -356,13 +356,17 @@ fn update_hud(
             } else {
                 String::new()
             },
-            orbit_summary(
-                body.mu,
-                body.radius,
-                body.soi_radius,
-                local.position,
-                local.velocity
-            ),
+            if telemetry.in_contact {
+                "(on the ground)".to_string()
+            } else {
+                orbit_summary(
+                    body.mu,
+                    body.radius,
+                    body.soi_radius,
+                    local.position,
+                    local.velocity,
+                )
+            },
             assist,
         );
     }
@@ -414,7 +418,11 @@ pub fn predict_path(
     points
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_orbits(
+    sim: Res<Sim>,
+    ship: Option<Res<PlayerShip>>,
+    on_foot: Option<Res<OnFoot>>,
     settings: Res<HudSettings>,
     render: Res<RenderTime>,
     universe: Res<Universe>,
@@ -454,7 +462,14 @@ fn draw_orbits(
         gizmos.linestrip(points, BODY_ORBIT_COLOR);
     }
 
-    if let Some(object) = tracked.state
+    // No orbit line while landed or walking: it would just lie along the ground.
+    let grounded = on_foot.is_some()
+        || ship
+            .as_deref()
+            .and_then(|s| player_ship_state(&sim.0, s))
+            .is_some_and(|(_, _, telemetry, _)| telemetry.in_contact);
+    if !grounded
+        && let Some(object) = tracked.state
         && let Some(region) = system
             .bodies
             .iter()

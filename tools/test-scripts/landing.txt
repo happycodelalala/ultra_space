@@ -1,13 +1,16 @@
-# Landing on terrain (task 2.8). Run with ULTRA_SPACE_START_ALTITUDE=1500.
-# Stop dead (Z), then fall without thrust onto the ground; the ship should come to rest on the
-# terrain (HUD: LANDED, AGL a few metres) and stay put while the planet turns.
+# Landing on terrain (task 2.8). Run with ULTRA_SPACE_START_ALTITUDE=3000 (the start spot's ground
+# is about 1920 m high, so this is about 1 km up). Stop dead (Z), then fall without thrust onto the
+# ground; the ship should come to rest (HUD: LANDED, AGL ~5 m = centre to ground) and stay put
+# while the planet turns. The last shot is from the side to show the hull on the ground.
 1    press Z
 1.5  hold MouseRight 1.5      # swing the chase camera to look down at the ground
 1.5  mouse 0 5 1.5
 4    shot 01-falling.png
-4    log falling
 20   shot 02-near-ground.png
 35   shot 03-landed.png
-35   log should be landed
-50   shot 04-still-landed.png
+36   hold MouseRight 1.5      # swing back to a low side view
+36   mouse 0 -6 1.5
+36   mouse 6 0 1.5
+40   shot 04-side-view.png
+50   shot 05-still-landed.png
 51   quit

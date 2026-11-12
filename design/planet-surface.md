@@ -81,7 +81,14 @@ Rules:
   field), gravity toward the planet's center, first-person camera; exit and enter the ship;
   low-gravity jumps on small bodies.
 - **Gravity transitions:** "down" and the camera's up direction follow local gravity, from
-  standing on the ground to orbit, without a snap.
+  standing on the ground to orbit, without a snap:
+  - On foot, the walker's up always points along local gravity.
+  - In a ship, flight assist (and arcade flight) levels the wings with the horizon below the
+    atmosphere top while the pilot isn't rolling; the effect fades in from the top of the
+    atmosphere to half its height, and stays off when the nose points nearly straight up or
+    down. Pitch and heading stay the pilot's.
+  - Switching between the ship's chase camera and first person (stepping out, boarding)
+    glides over 0.6 s instead of cutting.
 
 ## 6. Deltas and streaming (object system, development plan §7.1)
 

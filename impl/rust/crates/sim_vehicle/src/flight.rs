@@ -262,6 +262,36 @@ impl BodyEnv {
     }
 }
 
+/// Fastest roll rate horizon levelling asks for (rad/s), and how quickly it closes the error
+/// (1/s).
+const LEVEL_MAX_RATE: f64 = 0.6;
+const LEVEL_GAIN: f64 = 1.2;
+
+/// How strongly the horizon is levelled at `altitude`: off above the surface reference
+/// altitude (the top of the atmosphere), fading in to full strength at half of it, so a
+/// descent never snaps.
+pub fn horizon_weight(env: &BodyEnv, altitude: f64) -> f64 {
+    if !env.solid {
+        return 0.0;
+    }
+    let top = env.surface_reference_altitude;
+    let t = ((top - altitude) / (0.5 * top)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Roll rate (rad/s, about the vehicle's +Z) that turns its up (+Y) towards the local `up`,
+/// keeping pitch and heading. Zero when the nose points nearly straight up or down, where
+/// "level" is undefined.
+pub fn level_roll_rate(rotation: DQuat, up: DVec3) -> f64 {
+    let u = rotation.inverse() * up;
+    if u.z.abs() > 0.95 {
+        return 0.0;
+    }
+    // Rolling by θ about +Z turns +Y into (−sin θ, cos θ).
+    let error = (-u.x).atan2(u.y);
+    (error * LEVEL_GAIN).clamp(-LEVEL_MAX_RATE, LEVEL_MAX_RATE)
+}
+
 /// Works out the force and torque to request this tick (vehicle axes) and updates assist state.
 pub fn assist_request(
     state: &RigidState,
@@ -337,7 +367,12 @@ pub fn assist_request(
     let stick = control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0));
     let torque = match control.assist {
         AssistMode::Full | AssistMode::Rotation => {
-            let desired = stick * MAX_TURN_RATE;
+            let mut desired = stick * MAX_TURN_RATE;
+            // Near the ground, level the wings with the horizon while the pilot isn't rolling.
+            if stick.z.abs() < 0.05 {
+                let weight = horizon_weight(env, altitude);
+                desired.z += weight * level_roll_rate(state.rotation, state.position.normalize());
+            }
             body.mass.inertia * ((desired - omega_body) / ROTATION_RESPONSE)
         }
         AssistMode::Off => stick * SATURATE,
@@ -1063,6 +1098,55 @@ mod tests {
             (60.0..250.0).contains(&speed),
             "terminal speed near the ground {speed:.0} m/s"
         );
+    }
+
+    #[test]
+    fn assist_levels_the_horizon_near_the_ground_only() {
+        let body = kestrel();
+        let env = meridian();
+        let run = |altitude: f64| {
+            let p = DVec3::new(env.radius + altitude, 0.0, 0.0);
+            // Nose level (along −Z), rolled 45° away from the local up (+X).
+            let level = DQuat::from_rotation_arc(DVec3::Y, DVec3::X);
+            let mut s = RigidState {
+                position: p,
+                velocity: env.spin.cross(p),
+                rotation: level * DQuat::from_rotation_z(0.8),
+                angular_velocity: DVec3::ZERO,
+            };
+            let mut control = FlightControl::default();
+            let mut telemetry = FlightTelemetry::default();
+            let mut rails = None;
+            for _ in 0..(30 * 8) {
+                let origin = s.to_origin(body.mass.center_of_mass);
+                let next = fly(
+                    &origin,
+                    &body,
+                    &mut control,
+                    &mut telemetry,
+                    &mut rails,
+                    &env,
+                    0.0,
+                    1.0 / 30.0,
+                );
+                s = RigidState::from_origin(&next, body.mass.center_of_mass);
+            }
+            let up_body = s.rotation * DVec3::Y;
+            up_body.angle_between(s.position.normalize())
+        };
+        assert!(run(5_000.0) < 0.05, "levelled low down");
+        assert!((run(200_000.0) - 0.8).abs() < 0.05, "left alone in space");
+    }
+
+    #[test]
+    fn level_roll_rate_signs() {
+        let up = DVec3::Y;
+        assert_eq!(level_roll_rate(DQuat::IDENTITY, up), 0.0);
+        // Rolled positively: roll back negatively.
+        assert!(level_roll_rate(DQuat::from_rotation_z(0.3), up) < 0.0);
+        assert!(level_roll_rate(DQuat::from_rotation_z(-0.3), up) > 0.0);
+        // Nose straight up: no levelling.
+        assert_eq!(level_roll_rate(DQuat::from_rotation_x(1.57), up), 0.0);
     }
 
     #[test]

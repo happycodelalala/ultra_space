@@ -1,20 +1,19 @@
-# Walking on foot (task 2.9). Run with ULTRA_SPACE_START_ALTITUDE=1500.
-# Land (stop and fall), step out, look around, run, jump, walk back and board.
-1    press Z
-36   log should be landed now
-36   press F                 # step out
-38   shot 01-stepped-out.png
-39   mouse 8 0 1             # turn right
-41   shot 02-looking-around.png
-42   mouse 0 -4 0.5          # look up a little
-43   hold W 6                # run forward
-43   hold Shift 6
-46   shot 03-running.png
-47   press Space             # jump
-47.3 shot 04-jumping.png
-50   mouse -16 0 1           # turn round
-51   hold W 7
-51   hold Shift 7
-58   press F                 # board (if back within reach)
-60   shot 05-boarded.png
-61   quit
+# Walking on foot (task 2.9). Run with ULTRA_SPACE_START_ALTITUDE=1500: that is below the start
+# spot's ground (~1920 m), so the ship is placed on the surface at once and is landed.
+# Step out, look around, run, jump, walk back and board.
+3    press F                 # step out
+5    shot 01-stepped-out.png
+6    mouse 8 0 1             # turn right
+8    shot 02-looking-around.png
+9    mouse 0 -4 0.5          # look up a little
+10   hold W 5                # run forward
+10   hold Shift 5
+13   shot 03-running.png
+15.5 press Space             # jump
+15.8 shot 04-jumping.png
+17   mouse -16 0 1           # turn round
+18.5 hold W 5
+18.5 hold Shift 5
+24   press F                 # board (back within reach after running back)
+26   shot 05-boarded.png
+27   quit
