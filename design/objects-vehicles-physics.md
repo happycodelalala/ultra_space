@@ -208,6 +208,7 @@ compilation: [ships-stations-interiors.md](ships-stations-interiors.md).
 | Streaming regions in and out | 2 |
 | Damage, parts breaking off | 5 |
 | Atmospheric lift and drag | 2–3 |
+| Per-ship cruise characteristics: charge time, speed curve, top speed and turn rate from the drive part and the ship (mass, class) instead of global constants | 3 (with the builder), tuned in 6 |
 
 ## 9. Many ships and stations
 

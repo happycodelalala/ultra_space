@@ -1,4 +1,4 @@
-//! Debug overlay: frame time, simulation tick time and counts. Toggle with F3.
+//! Debug overlay: frame time, simulation tick time and counts. Hidden at start; F3 toggles.
 
 use std::time::Duration;
 
@@ -51,6 +51,8 @@ fn spawn_overlay(mut commands: Commands) {
         },
         TextColor(Color::WHITE),
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)),
+        // Hidden by default now that the HUD shows flight data; F3 shows it.
+        Visibility::Hidden,
         Node {
             position_type: PositionType::Absolute,
             top: px(8),

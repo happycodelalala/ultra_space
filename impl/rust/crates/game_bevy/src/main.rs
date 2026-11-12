@@ -6,6 +6,7 @@
 mod camera;
 mod capture;
 mod debug_overlay;
+mod hud;
 mod ship;
 mod sim;
 mod sky;
@@ -43,6 +44,7 @@ fn main() {
             sky::SkyPlugin,
             ship::ShipPlugin,
             debug_overlay::DebugOverlayPlugin,
+            hud::HudPlugin,
             capture::CapturePlugin,
         ))
         .add_systems(Startup, log_startup)

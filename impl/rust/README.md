@@ -77,7 +77,11 @@ Windows export copies `content/data` next to the `.exe`.
   mouse wheel changes speed, **1–8** jump to Halcyon, Cinder, Meridian, Lantern, Hoarfell,
   Leviathan, Forge, Rime. `ULTRA_SPACE_VIEW=<body id>` picks the starting view.
 - **, / .** change time warp.
-- **F3** toggles the debug overlay: FPS and frame time, simulation tick time and budget use,
+- **HUD** (H toggles): reference body and frame, speed, vertical speed, altitude, apoapsis,
+  periapsis and period, assist and cruise status (bottom); Galactic Standard Time, local solar
+  time under the ship and time warp (top right). **O** cycles orbit lines: the ship's predicted
+  path, plus the other bodies' orbits, or none.
+- **F3** toggles the debug overlay (hidden at start): FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
 - The simulation (`sim_core::Simulation`) runs at a fixed 30 Hz, decoupled from the frame
   rate. It runs at most 4 ticks per frame; time beyond that is dropped and shown as "dropped".
