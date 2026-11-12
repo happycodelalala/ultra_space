@@ -56,6 +56,10 @@ The **object registry** maps each `ObjectId` to the region and entity that curre
   body's sphere of influence, and leaves when it goes outside. A small **hysteresis margin**
   (enter below 99%, leave above 101% of the sphere's radius) stops an object on the boundary
   from flickering between regions.
+- **State that refers to a body moves with it.** Flight assist's held velocity is relative to
+  the region's body, so on transfer it is re-expressed relative to the new body; otherwise
+  assist would see the moon's orbital speed as an error and fire the thrusters (found and fixed
+  in task 1.12, covered by `sim_vehicle/tests/region_transfer.rs`).
 - The same mechanism later moves objects for streaming, docking (ship into a station's
   frame) and boarding.
 
