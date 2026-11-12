@@ -113,6 +113,8 @@ fn update_overlay(
     let hz = sim.clock().tick_hz();
     let dropped = sim.clock().dropped().as_secs_f64();
     let total = sim.ticks_total();
+    let galactic = sim.universe_time().galactic_standard();
+    let warp = sim.time_warp();
     let regions = sim.regions.len();
     let entities = sim.regions.entity_count();
 
@@ -120,6 +122,7 @@ fn update_overlay(
         "FPS {fps:.0}  frame {:.2} ms (max {:.2})\n\
          Sim {hz:.0} Hz  tick {:.3} ms (max {:.3})  budget {budget:.1}%\n\
          regions {regions}  entities {entities}  ticks {total}  dropped {dropped:.2} s\n\
+         GST {galactic}  warp x{warp}  (, / . to change)\n\
          F3: toggle overlay",
         ms(frame_avg),
         ms(frame_max),
