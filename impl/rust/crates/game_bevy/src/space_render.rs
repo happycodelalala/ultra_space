@@ -91,14 +91,49 @@ impl Material for PlanetMaterial {
 
 #[derive(Clone, Copy, Debug, Default, ShaderType)]
 pub struct AtmosphereUniform {
-    /// rgb = color, w = strength.
-    pub color: Vec4,
     /// xyz = star position relative to the camera, w = starlight brightness.
     pub star: Vec4,
-    /// xyz = planet center relative to the camera, w = planet radius.
+    /// xyz = planet center relative to the camera, w = planet radius (sea level).
     pub center: Vec4,
-    /// x = atmosphere top radius, y = scale height.
+    /// x = atmosphere top radius, y = Rayleigh scale height, z = Mie scale height, w = Mie
+    /// asymmetry g.
     pub shell: Vec4,
+    /// rgb = Rayleigh scattering coefficients at sea level (1/m), w = Mie coefficient.
+    pub scatter: Vec4,
+}
+
+/// Rayleigh scattering of Earth's air in blue light at sea level (1/m).
+const EARTH_RAYLEIGH_BLUE: f64 = 33.1e-6;
+/// Mie (haze) scattering at sea level for 1 atm (1/m).
+const MIE_SCATTERING: f64 = 4.0e-6;
+/// Earth's Rayleigh scale height relative to its effective atmosphere height (8 km of 70 km).
+const RAYLEIGH_SCALE: f64 = 8.0 / 70.0;
+/// Mie scale height relative to the Rayleigh one (1.2 km vs 8 km on Earth).
+const MIE_SCALE: f64 = 0.15;
+/// Forward scattering of haze (Earth ≈ 0.76).
+const MIE_G: f32 = 0.76;
+
+/// Scattering parameters for an atmosphere: `(shell, scatter)` uniforms. The data colour sets
+/// the scattering strength per channel as its square (Meridian's (0.45, 0.65, 1.0) gives
+/// Earth's Rayleigh ratios); surface pressure scales the amount of air.
+pub fn atmosphere_scattering(radius: f64, atm: &sim_core::system::Atmosphere) -> (Vec4, Vec4) {
+    let h_r = atm.height * RAYLEIGH_SCALE;
+    let p = atm.surface_pressure_atm;
+    let beta = |c: f64| (EARTH_RAYLEIGH_BLUE * c * c * p) as f32;
+    (
+        Vec4::new(
+            (radius + atm.height) as f32,
+            h_r as f32,
+            (h_r * MIE_SCALE) as f32,
+            MIE_G,
+        ),
+        Vec4::new(
+            beta(atm.color[0]),
+            beta(atm.color[1]),
+            beta(atm.color[2]),
+            (MIE_SCATTERING * p) as f32,
+        ),
+    )
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -113,7 +148,19 @@ impl Material for AtmosphereMaterial {
     }
 
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Add
+        AlphaMode::Premultiplied
+    }
+
+    /// The shell is seen from inside too (the sky from the ground): draw both faces; the shader
+    /// keeps the right one.
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::mesh::MeshVertexBufferLayoutRef,
+        _key: bevy::pbr::MaterialPipelineKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        descriptor.primitive.cull_mode = None;
+        Ok(())
     }
 }
 
@@ -152,6 +199,8 @@ fn spawn_camera(mut commands: Commands) {
         }),
         Tonemapping::TonyMcMapface,
         Bloom::NATURAL,
+        // Scene depth for the atmosphere: haze only covers the air in front of surfaces.
+        bevy::core_pipeline::prepass::DepthPrepass,
         Transform::IDENTITY,
     ));
 }
@@ -213,18 +262,13 @@ fn spawn_bodies(
             Transform::IDENTITY,
         ));
         if let Some(atm) = &body.atmosphere {
+            let (shell, scatter) = atmosphere_scattering(body.radius, atm);
             let material = atmospheres.add(AtmosphereMaterial {
                 data: AtmosphereUniform {
-                    color: rgb(atm.color).extend(1.0),
                     star: Vec4::ZERO,
                     center: Vec4::ZERO,
-                    // Most of the air is in the lowest fifth of the atmosphere.
-                    shell: Vec4::new(
-                        (body.radius + atm.height) as f32,
-                        (atm.height / 5.0) as f32,
-                        0.0,
-                        0.0,
-                    ),
+                    shell,
+                    scatter,
                 },
             });
             commands.spawn((
@@ -328,6 +372,24 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+
+    #[test]
+    fn meridian_air_scatters_blue_most_like_earth() {
+        let sys = halcyon();
+        let body = sys.body("meridian").unwrap();
+        let (shell, scatter) =
+            atmosphere_scattering(body.radius, body.atmosphere.as_ref().unwrap());
+        assert!(scatter.z > scatter.y && scatter.y > scatter.x, "{scatter}");
+        // Close to Earth's ratios (5.8 : 13.5 : 33.1).
+        assert!((scatter.x / scatter.z - 5.8 / 33.1).abs() < 0.05);
+        assert!((scatter.y / scatter.z - 13.5 / 33.1).abs() < 0.05);
+        assert!((shell.y - 8_000.0).abs() < 1.0, "Earth-like scale height");
+        let thin = sys.body("hoarfell").unwrap();
+        let (_, thin_scatter) =
+            atmosphere_scattering(thin.radius, thin.atmosphere.as_ref().unwrap());
+        assert!(thin_scatter.x > thin_scatter.z, "dusty red sky");
+        assert!(thin_scatter.x < scatter.z, "thin");
+    }
     use crate::camera::view_of_body;
 
     fn halcyon() -> StarSystem {
