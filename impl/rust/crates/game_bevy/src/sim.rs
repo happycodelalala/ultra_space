@@ -41,14 +41,27 @@ pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
     sim
 }
 
+/// Universe time (s) shown this frame: between the last two ticks (see
+/// `Simulation::render_time`). Everything drawn uses it instead of the simulation's own time,
+/// so motion is smooth at any frame rate.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct RenderTime(pub f64);
+
 impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
-        app.configure_sets(Update, SimSet.in_set(InGame))
+        app.init_resource::<RenderTime>()
+            .configure_sets(Update, SimSet.in_set(InGame))
             .add_systems(
                 Update,
-                (time_warp_keys, advance_simulation).chain().in_set(SimSet),
+                (time_warp_keys, advance_simulation, update_render_time)
+                    .chain()
+                    .in_set(SimSet),
             );
     }
+}
+
+fn update_render_time(sim: Res<Sim>, mut render: ResMut<RenderTime>) {
+    render.0 = sim.0.render_time();
 }
 
 fn advance_simulation(

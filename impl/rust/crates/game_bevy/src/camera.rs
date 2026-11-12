@@ -17,7 +17,7 @@ use glam::{DMat3, DQuat, DVec3};
 use sim_core::StarSystem;
 
 use crate::ship::PilotState;
-use crate::sim::Sim;
+use crate::sim::{RenderTime, Sim};
 use crate::universe::{GameState, InGame, Universe};
 
 /// Camera pose in `f64`, relative to the anchor body's inertial frame. All inertial frames share
@@ -214,8 +214,12 @@ fn jump_to_body(
     }
 }
 
-fn update_anchor(universe: Res<Universe>, sim: Res<Sim>, mut camera: ResMut<SpaceCamera>) {
-    let t = sim.0.universe_time().as_secs_f64();
+fn update_anchor(
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    mut camera: ResMut<SpaceCamera>,
+) {
+    let t = render.0;
     let (anchor, offset) = anchor_for(&universe.0, camera.anchor, camera.offset, t);
     if anchor != camera.anchor {
         info!("camera: now near {}", universe.0.bodies[anchor].name);

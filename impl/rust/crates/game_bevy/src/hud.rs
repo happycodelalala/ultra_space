@@ -17,8 +17,10 @@ use sim_core::{KeplerOrbit, StarSystem};
 use sim_vehicle::Reference;
 
 use crate::camera::{CameraSet, SpaceCamera};
-use crate::ship::{PilotState, PlayerShip, player_cruise_status, player_ship_state};
-use crate::sim::Sim;
+use crate::ship::{
+    PilotState, PlayerShip, ShipRenderState, player_cruise_status, player_ship_state,
+};
+use crate::sim::{RenderTime, Sim};
 use crate::space_render::body_poses;
 use crate::universe::{InGame, Universe};
 
@@ -383,18 +385,17 @@ pub fn predict_path(
 
 fn draw_orbits(
     settings: Res<HudSettings>,
-    sim: Res<Sim>,
+    render: Res<RenderTime>,
     universe: Res<Universe>,
     camera: Res<SpaceCamera>,
-    ship: Option<Res<PlayerShip>>,
+    tracked: Res<ShipRenderState>,
     mut gizmos: Gizmos,
 ) {
     if settings.orbits == OrbitLines::None || !settings.visible {
         return;
     }
     let system = &universe.0;
-    let sim = &sim.0;
-    let t = sim.universe_time().as_secs_f64();
+    let t = render.0;
     let poses = body_poses(system, &camera, t);
 
     // The orbits of the body the camera is near and of its parents pass right through the
@@ -422,9 +423,14 @@ fn draw_orbits(
         gizmos.linestrip(points, BODY_ORBIT_COLOR);
     }
 
-    if let Some((region, state, _, _)) = ship.as_deref().and_then(|s| player_ship_state(sim, s)) {
+    if let Some(object) = tracked.state
+        && let Some(region) = system
+            .bodies
+            .iter()
+            .position(|b| b.inertial_frame == object.frame)
+    {
         let body = &system.bodies[region];
-        let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
+        let local = object.state;
         let center = poses[region].0;
         let soi = if body.soi_radius.is_finite() {
             body.soi_radius

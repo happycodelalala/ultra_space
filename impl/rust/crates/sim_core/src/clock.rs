@@ -38,6 +38,12 @@ impl FixedClock {
         self.dropped
     }
 
+    /// How far real time has run into the next tick, in `[0, 1)`. Rendering uses it to
+    /// interpolate between the last two ticks.
+    pub fn alpha(&self) -> f64 {
+        (self.accumulator.as_secs_f64() / self.tick.as_secs_f64()).clamp(0.0, 1.0)
+    }
+
     /// Adds `elapsed` real time and returns how many ticks to run now.
     pub fn advance(&mut self, elapsed: Duration) -> u32 {
         self.accumulator += elapsed;
@@ -80,6 +86,14 @@ mod tests {
         // 7 s at 10 Hz = 70 ticks.
         assert_eq!(ticks, 70);
         assert_eq!(c.dropped(), Duration::ZERO);
+    }
+
+    #[test]
+    fn alpha_is_the_fraction_into_the_next_tick() {
+        let mut c = FixedClock::new(10, 8);
+        assert_eq!(c.alpha(), 0.0);
+        c.advance(Duration::from_millis(125));
+        assert!((c.alpha() - 0.25).abs() < 1e-9);
     }
 
     #[test]
