@@ -510,6 +510,29 @@ pub fn stats(vehicle: &Vehicle, g: f64) -> BuildStats {
     if perf.forward_acceleration() <= 0.0 && wheels.is_empty() && perf.max_acceleration[2] <= 0.0 {
         problems.push("no way to move (no engines or wheels)".into());
     }
+    // Engines pushing one way must push through the centre of mass, or full thrust turns the
+    // vehicle faster than it can turn back.
+    let inertia = body.mass.inertia;
+    let alpha = perf.max_angular_acceleration;
+    let counter = (alpha.x * inertia.col(0).x)
+        .min(alpha.y * inertia.col(1).y)
+        .min(alpha.z * inertia.col(2).z);
+    for (axis, name) in [(DVec3::NEG_Z, "forward"), (DVec3::Y, "up")] {
+        let torque: DVec3 = body
+            .allocator
+            .thrusters()
+            .iter()
+            .filter(|t| t.direction.dot(axis) > 0.9)
+            .map(|t| t.position.cross(t.direction * t.max_thrust))
+            .sum();
+        if torque.length() > counter.max(0.0) * 1.2 + 1.0 {
+            problems.push(format!(
+                "{name} engines push {:.0} kN m off the centre of mass (it can counter {:.0})",
+                torque.length() / 1000.0,
+                counter / 1000.0
+            ));
+        }
+    }
     BuildStats {
         parts: vehicle.parts.len(),
         mass_kg: body.mass.mass,

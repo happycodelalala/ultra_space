@@ -43,6 +43,8 @@ use crate::walk::{OnFoot, spot_ahead, walker_status};
 const REACH: f64 = 15.0;
 /// ...if it stands still on the ground (m/s relative to it).
 const STILL: f64 = 1.0;
+/// A vehicle held for building is kept this far above the ground (m).
+const GROUND_CLEARANCE: f64 = 0.3;
 /// A new vehicle starts as this part, this far ahead of the walker (m).
 const NEW_ROOT: &str = "cockpit.small";
 const NEW_DISTANCE: f64 = 8.0;
@@ -188,18 +190,57 @@ fn vehicle_status(
     ))
 }
 
-/// Writes the edited parts back to the simulation (and recompiles the vehicle).
-fn write_back(sim: &mut Simulation, id: ObjectId, vehicle: &Vehicle) {
+/// Writes the edited parts back to the simulation (and recompiles the vehicle). The vehicle is
+/// held in place while building, so if new parts reach into the ground it is lifted until its
+/// lowest part clears it.
+fn write_back(
+    sim: &mut Simulation,
+    system: &sim_core::StarSystem,
+    id: ObjectId,
+    vehicle: &Vehicle,
+) {
     let Some(loc) = sim.objects.location(id) else {
         return;
     };
     let Some(body) = VehicleBody::of(vehicle) else {
         return;
     };
-    if let Some(region) = sim.regions.get_mut(loc.region) {
-        let mut e = region.world.entity_mut(loc.entity);
-        e.insert((vehicle.clone(), body));
+    let t = sim.universe_time().as_secs_f64();
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let env = sim_vehicle::flight::region_env(
+        system,
+        loc.region,
+        t,
+        region
+            .world
+            .get_resource::<sim_vehicle::flight::RegionTerrain>(),
+    );
+    let mut e = region.world.entity_mut(loc.entity);
+    if let Some(mut state) = e.get_mut::<ObjectState>() {
+        let local = state.in_frame(&system.frames, system.bodies[loc.region].inertial_frame, t);
+        let s = local.state;
+        let up = s.position.normalize();
+        // The lowest corner of any part, along the local up direction.
+        let lowest = vehicle
+            .parts
+            .iter()
+            .map(|p| {
+                let dir = (s.rotation * p.rotation).inverse() * up;
+                let reach = half_extent(&p.def, dir);
+                let centre = s.position + s.rotation * p.position;
+                let point = centre - up * reach;
+                point.length() - (env.radius + env.ground_height(point))
+            })
+            .fold(f64::MAX, f64::min);
+        if lowest < GROUND_CLEARANCE {
+            let mut lifted = local;
+            lifted.state.position += up * (GROUND_CLEARANCE - lowest);
+            *state = lifted;
+        }
     }
+    e.insert((vehicle.clone(), body));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -405,6 +446,7 @@ fn edit(
     motion: Res<AccumulatedMouseMotion>,
     scroll: Res<AccumulatedMouseScroll>,
     building: Option<ResMut<Building>>,
+    universe: Res<Universe>,
     mut sim: ResMut<Sim>,
 ) {
     let Some(mut b) = building else { return };
@@ -462,7 +504,7 @@ fn edit(
                 b.node = 0;
                 info!("builder: the root is now a {}", def.name);
                 b.changed(format!("root: {}", def.name));
-                write_back(&mut sim.0, b.target, &b.vehicle);
+                write_back(&mut sim.0, &universe.0, b.target, &b.vehicle);
             }
             Entry::Part(_) => b.changed("only a lone root part can be swapped"),
             Entry::Section(_) => b.changed("a section can't be the root"),
@@ -604,7 +646,7 @@ fn edit(
         }
     }
     if edited {
-        write_back(&mut sim.0, b.target, &b.vehicle);
+        write_back(&mut sim.0, &universe.0, b.target, &b.vehicle);
     }
 }
 
