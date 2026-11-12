@@ -41,6 +41,21 @@ Decided with the developer on 2026-11-12.
 - **Orbits stay stable:** the orbital-energy and region-transfer tests from Batch 1 must keep
   passing with the rapier integrator (substeps as needed).
 
+**As built (3.1–3.2):**
+
+- Rapier splits each step into solver iterations that share one force. In free flight a step
+  is one iteration (1/60 s substeps), so gravity is re-evaluated every substep and orbits stay
+  symplectic; while any body is near the ground, steps use rapier's usual four iterations for
+  good contacts and friction.
+- Rapier's default 400 m/s speed cap is lifted (orbits need thousands).
+- The object state stays the authority between ticks: each tick writes every vehicle into the
+  scene and reads it back, so transfers and teleports need no extra bookkeeping.
+- **Landed vehicles rest:** with idle controls on the ground, flight assist switches the
+  engines off; after a second still on the ground with no thrust, the body is pinned to the
+  turning ground (kinematic, exactly co-rotating, nearly free to simulate). Thrust, a terrain
+  change under it or another body touching it wakes it, moving with the ground. Rapier's
+  friction alone let a ship creep a few millimetres per second on a slope.
+
 ### 2.2 Terrain collision
 
 - The ground is a set of **collision patches**: small triangle meshes (e.g. 64 × 64 m, 2 m
@@ -49,9 +64,11 @@ Decided with the developer on 2026-11-12.
 - Patches are attached to one **kinematic body per region that turns with the planet**, so a
   contact's ground velocity is `spin × r` and landed vehicles ride along through friction, as
   in Batch 2.
-- Patches are built around each dynamic body and ahead along its velocity, cached by key, on
-  the worker pool; a body never moves into ground without a patch (it waits on the old
-  height-function contact as a fallback while a patch builds).
+- Patches are built around each body near the ground (radius plus 20 m, plus 1.5 s of travel)
+  on two background threads (~4 ms each), cached by key and dropped 10 s after the last use; a
+  body over ground without patches yet uses the Batch 2 height-function contact as a fallback.
+- Adding a delta (a pad) rebuilds only the patches it touches; each old patch stays until its
+  replacement is ready.
 - The sea surface stays a floor for now.
 
 ### 2.3 Vehicles as rigid bodies

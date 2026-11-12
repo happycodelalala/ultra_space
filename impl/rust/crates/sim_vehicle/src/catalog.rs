@@ -6,20 +6,180 @@ use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
+use glam::DVec3;
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PartKind {
     Cockpit,
+    #[default]
     Hull,
+    Structure,
     Tank,
     Thruster,
     ReactionWheel,
     CruiseDrive,
+    LandingLeg,
+    Wheel,
+    Battery,
 }
 
-/// Shape used for the part's inertia (and later collision).
+/// Size class of attach nodes, connectors and slots: only matching sizes join.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SizeClass {
+    Tiny,
+    Small,
+    Medium,
+    Large,
+    Huge,
+}
+
+/// A point where another part's node can join this one (part axes).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttachNode {
+    pub id: String,
+    pub position_m: [f64; 3],
+    /// Outward direction.
+    pub direction: [f64; 3],
+    pub size: SizeClass,
+}
+
+impl AttachNode {
+    pub fn position(&self) -> DVec3 {
+        DVec3::from(self.position_m)
+    }
+
+    pub fn direction(&self) -> DVec3 {
+        DVec3::from(self.direction).normalize_or_zero()
+    }
+}
+
+/// Interior passage through a connector.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Passage {
+    #[default]
+    None,
+    Hatch,
+    Door,
+    Corridor,
+    VehicleRamp,
+}
+
+/// A structural connector of a section or module (ships-stations-interiors §3.2).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Connector {
+    pub id: String,
+    pub position_m: [f64; 3],
+    pub direction: [f64; 3],
+    pub size: SizeClass,
+    pub profile: String,
+    #[serde(default)]
+    pub passage: Passage,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotType {
+    Engine,
+    Weapon,
+    Hangar,
+    Module,
+    Utility,
+}
+
+/// A loadout slot on a hull (capital ships, Batch 11).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Slot {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub slot_type: SlotType,
+    pub size: SizeClass,
+    #[serde(default)]
+    pub position_m: Option<[f64; 3]>,
+    #[serde(default)]
+    pub direction: Option<[f64; 3]>,
+}
+
+/// How a part looks; never affects the simulation.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Form {
+    pub model: String,
+    #[serde(default)]
+    pub material_slots: Vec<String>,
+    #[serde(default)]
+    pub style: String,
+}
+
+/// A space inside a part (interiors come after Batch 3).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Space {
+    pub id: String,
+    pub kind: String,
+    #[serde(default)]
+    pub size_m: Option<[f64; 3]>,
+    #[serde(default)]
+    pub position_m: Option<[f64; 3]>,
+}
+
+/// Interior definition (ships-stations-interiors §5.1); in the format from Batch 3.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Interior {
+    #[serde(default)]
+    pub spaces: Vec<Space>,
+    #[serde(default)]
+    pub properties: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TankDef {
+    pub capacity_kg: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BatteryDef {
+    pub capacity_wh: f64,
+}
+
+/// A leg reaching down along the part's local −Y axis to a foot.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LandingLegDef {
+    pub length_m: f64,
+    pub foot_radius_m: f64,
+    #[serde(default)]
+    pub stiffness_n_per_m: Option<f64>,
+    #[serde(default)]
+    pub damping_n_s_per_m: Option<f64>,
+}
+
+/// A driven wheel on suspension along the part's local −Y axis, rolling along −Z (task 3.5).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WheelDef {
+    pub radius_m: f64,
+    pub width_m: f64,
+    pub suspension_m: f64,
+    pub stiffness_n_per_m: f64,
+    pub damping_n_s_per_m: f64,
+    pub max_motor_torque_nm: f64,
+    #[serde(default)]
+    pub max_steer_deg: f64,
+    pub max_brake_torque_nm: f64,
+    pub friction: f64,
+}
+
+/// Shape used for the part's inertia (and collision, unless the part has its own collider).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Shape {
@@ -34,6 +194,12 @@ pub enum Shape {
     Sphere {
         radius_m: f64,
     },
+}
+
+impl Default for Shape {
+    fn default() -> Self {
+        Self::Sphere { radius_m: 1.0 }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -56,7 +222,7 @@ pub struct CruiseDriveDef {
     pub max_speed_ms: f64,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PartDef {
     pub id: String,
@@ -71,7 +237,53 @@ pub struct PartDef {
     #[serde(default)]
     pub cruise_drive: Option<CruiseDriveDef>,
     #[serde(default)]
+    pub tank: Option<TankDef>,
+    #[serde(default)]
+    pub battery: Option<BatteryDef>,
+    #[serde(default)]
+    pub landing_leg: Option<LandingLegDef>,
+    #[serde(default)]
+    pub wheel: Option<WheelDef>,
+    #[serde(default)]
+    pub attach_nodes: Vec<AttachNode>,
+    /// Can attach to other parts' surfaces (default true).
+    #[serde(default)]
+    pub surface_attach: Option<bool>,
+    /// A control source (default: cockpits are).
+    #[serde(default)]
+    pub control: Option<bool>,
+    /// Collision shape when different from the mass shape.
+    #[serde(default)]
+    pub collider: Option<Shape>,
+    #[serde(default)]
+    pub connectors: Vec<Connector>,
+    #[serde(default)]
+    pub slots: Vec<Slot>,
+    #[serde(default)]
+    pub form: Option<Form>,
+    #[serde(default)]
+    pub interior: Option<Interior>,
+    #[serde(default)]
     pub description: String,
+}
+
+impl PartDef {
+    pub fn node(&self, id: &str) -> Option<&AttachNode> {
+        self.attach_nodes.iter().find(|n| n.id == id)
+    }
+
+    pub fn can_surface_attach(&self) -> bool {
+        self.surface_attach.unwrap_or(true)
+    }
+
+    pub fn is_control(&self) -> bool {
+        self.control.unwrap_or(self.kind == PartKind::Cockpit)
+    }
+
+    /// The shape used for collisions.
+    pub fn collision_shape(&self) -> Shape {
+        self.collider.unwrap_or(self.shape)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,13 +397,25 @@ fn validate(p: &PartDef) -> Vec<String> {
     if !positive(p.mass_kg) {
         problems.push(format!("{}: mass_kg must be positive", p.id));
     }
-    let shape_ok = match p.shape {
+    let shape_ok = |shape: Shape| match shape {
         Shape::Box { size_m } => size_m.iter().all(|&s| positive(s)),
         Shape::Cylinder { radius_m, length_m } => positive(radius_m) && positive(length_m),
         Shape::Sphere { radius_m } => positive(radius_m),
     };
-    if !shape_ok {
+    if !shape_ok(p.shape) || p.collider.is_some_and(|c| !shape_ok(c)) {
         problems.push(format!("{}: shape dimensions must be positive", p.id));
+    }
+    let mut node_ids = std::collections::BTreeSet::new();
+    for node in &p.attach_nodes {
+        if !node_ids.insert(node.id.as_str()) {
+            problems.push(format!("{}: duplicate attach node {:?}", p.id, node.id));
+        }
+        if node.direction() == DVec3::ZERO {
+            problems.push(format!(
+                "{}: attach node {:?} needs a direction",
+                p.id, node.id
+            ));
+        }
     }
     let needs = |present: bool, field: &str, kind: PartKind| {
         (p.kind == kind && !present)
@@ -208,6 +432,13 @@ fn validate(p: &PartDef) -> Vec<String> {
         "cruise_drive",
         PartKind::CruiseDrive,
     ));
+    problems.extend(needs(
+        p.landing_leg.is_some(),
+        "landing_leg",
+        PartKind::LandingLeg,
+    ));
+    problems.extend(needs(p.wheel.is_some(), "wheel", PartKind::Wheel));
+    problems.extend(needs(p.battery.is_some(), "battery", PartKind::Battery));
     if p.thruster.is_some_and(|t| !positive(t.max_thrust_n)) {
         problems.push(format!("{}: max_thrust_n must be positive", p.id));
     }

@@ -1,58 +1,317 @@
 {
-  "description": "Core ship parts for Batch 1. Thrusters push the vehicle along their local +Y axis (the nozzle faces -Y).",
+  "description": "Core ship parts. Thrusters push the vehicle along their local +Y axis (the nozzle faces -Y). Attach nodes are in part axes; parts without nodes attach to surfaces.",
   "parts": [
     {
       "id": "cockpit.small",
       "name": "Small Cockpit",
       "kind": "cockpit",
       "mass_kg": 1800,
-      "shape": { "type": "box", "size_m": [2.4, 1.8, 3.0] }
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.4,
+          1.8,
+          3.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "rear",
+          "position_m": [
+            0,
+            0,
+            1.5
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "size": "medium"
+        }
+      ],
+      "form": {
+        "model": "cockpit.small",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      },
+      "interior": {
+        "spaces": [
+          {
+            "id": "cockpit",
+            "kind": "cockpit",
+            "size_m": [
+              2.0,
+              1.5,
+              2.4
+            ]
+          }
+        ]
+      }
     },
     {
       "id": "hull.section.medium",
       "name": "Medium Hull Section",
       "kind": "hull",
       "mass_kg": 2500,
-      "shape": { "type": "box", "size_m": [3.0, 2.4, 3.0] }
+      "shape": {
+        "type": "box",
+        "size_m": [
+          3.0,
+          2.4,
+          3.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "front",
+          "position_m": [
+            0,
+            0,
+            -1.5
+          ],
+          "direction": [
+            0,
+            0,
+            -1
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "rear",
+          "position_m": [
+            0,
+            0,
+            1.5
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "size": "medium"
+        }
+      ],
+      "form": {
+        "model": "hull.section.medium",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     },
     {
       "id": "tank.medium",
       "name": "Medium Fuel Tank",
       "kind": "tank",
       "mass_kg": 9000,
-      "shape": { "type": "cylinder", "radius_m": 1.1, "length_m": 3.0 }
+      "shape": {
+        "type": "cylinder",
+        "radius_m": 1.1,
+        "length_m": 3.0
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "form": {
+        "model": "tank.medium",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      },
+      "tank": {
+        "capacity_kg": 7500
+      }
     },
     {
       "id": "thruster.main.medium",
       "name": "Medium Main Engine",
       "kind": "thruster",
       "mass_kg": 1500,
-      "shape": { "type": "cylinder", "radius_m": 0.9, "length_m": 2.0 },
-      "thruster": { "max_thrust_n": 600000 }
+      "shape": {
+        "type": "cylinder",
+        "radius_m": 0.9,
+        "length_m": 2.0
+      },
+      "thruster": {
+        "max_thrust_n": 600000
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "form": {
+        "model": "thruster.main.medium",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     },
     {
       "id": "thruster.rcs.small",
       "name": "Small Maneuvering Thruster",
       "kind": "thruster",
       "mass_kg": 40,
-      "shape": { "type": "box", "size_m": [0.3, 0.3, 0.3] },
-      "thruster": { "max_thrust_n": 4000 }
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.3,
+          0.3,
+          0.3
+        ]
+      },
+      "thruster": {
+        "max_thrust_n": 4000
+      },
+      "form": {
+        "model": "thruster.rcs.small",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     },
     {
       "id": "reaction_wheel.medium",
       "name": "Medium Reaction Wheel",
       "kind": "reaction_wheel",
       "mass_kg": 500,
-      "shape": { "type": "sphere", "radius_m": 0.5 },
-      "reaction_wheel": { "max_torque_nm": 40000 }
+      "shape": {
+        "type": "sphere",
+        "radius_m": 0.5
+      },
+      "reaction_wheel": {
+        "max_torque_nm": 40000
+      },
+      "form": {
+        "model": "reaction_wheel.medium",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     },
     {
       "id": "cruise_drive.small",
       "name": "Small Cruise Drive",
       "kind": "cruise_drive",
       "mass_kg": 1200,
-      "shape": { "type": "box", "size_m": [2.0, 1.6, 1.6] },
-      "cruise_drive": { "max_speed_ms": 200000000 }
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.0,
+          1.6,
+          1.6
+        ]
+      },
+      "cruise_drive": {
+        "max_speed_ms": 200000000
+      },
+      "attach_nodes": [
+        {
+          "id": "front",
+          "position_m": [
+            0,
+            0,
+            -0.8
+          ],
+          "direction": [
+            0,
+            0,
+            -1
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "rear",
+          "position_m": [
+            0,
+            0,
+            0.8
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "size": "medium"
+        }
+      ],
+      "form": {
+        "model": "cruise_drive.small",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
+    },
+    {
+      "id": "landing_leg.small",
+      "name": "Small Landing Leg",
+      "kind": "landing_leg",
+      "mass_kg": 120,
+      "shape": {
+        "type": "cylinder",
+        "radius_m": 0.2,
+        "length_m": 1.6
+      },
+      "landing_leg": {
+        "length_m": 1.6,
+        "foot_radius_m": 0.3,
+        "stiffness_n_per_m": 400000,
+        "damping_n_s_per_m": 40000
+      },
+      "description": "A fixed leg reaching down along its local -Y axis. Suspension values are for later; for now it is a rigid strut.",
+      "form": {
+        "model": "landing_leg.small",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     }
   ]
 }

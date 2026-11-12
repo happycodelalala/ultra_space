@@ -33,6 +33,13 @@ const HULL_FRICTION: f64 = 0.8;
 /// Bodies closer to the ground than their radius plus this (m), plus a few seconds of travel,
 /// get collision patches.
 const PATCH_ALTITUDE: f64 = 50.0;
+/// Solver iterations per step while bodies are near the ground.
+const CONTACT_ITERATIONS: usize = 4;
+/// A body still on the ground (slower than these, relative to it) with no thrust for
+/// `REST_AFTER` seconds comes to rest: pinned to the turning ground until something wakes it.
+const REST_SPEED: f64 = 0.05;
+const REST_SPIN: f64 = 0.01;
+const REST_AFTER: f64 = 1.0;
 /// Patches are built this far around a body (m), plus a second and a half of travel.
 const PATCH_MARGIN: f64 = 20.0;
 /// Drag coefficient times reference area, as a fraction of the vehicle's bounding disc.
@@ -61,6 +68,10 @@ struct Entry {
     contact: bool,
     /// The ground under it has collision patches (otherwise the Batch 2 contact model applies).
     on_patches: bool,
+    /// How long it has been still on the ground (s).
+    still: f64,
+    /// At rest: its pose in the ground's (surface) frame.
+    rest: Option<Pose>,
 }
 
 /// A region's rapier world and its vehicles' bodies.
@@ -74,6 +85,8 @@ pub struct PhysicsScene {
     inline_patches: bool,
     /// Time stepped so far (s), for patch lifetimes.
     time: f64,
+    /// The ground's angular velocity in the last step.
+    ground_spin: DVec3,
 }
 
 impl Default for PhysicsScene {
@@ -83,8 +96,7 @@ impl Default for PhysicsScene {
         world.gravity = DVec3::ZERO;
         // Rapier caps speeds at 400 m/s by default; orbits need thousands.
         world.integration_parameters.normalized_max_linear_velocity = f64::MAX;
-        // One solver substep per step: gravity (applied per body) is re-evaluated every step,
-        // which keeps orbits symplectic. We substep the steps ourselves.
+        // Solver iterations are set per step (see `step`).
         world.integration_parameters.num_solver_iterations = 1;
         Self {
             world,
@@ -93,6 +105,7 @@ impl Default for PhysicsScene {
             patches: true,
             inline_patches: false,
             time: 0.0,
+            ground_spin: DVec3::ZERO,
         }
     }
 }
@@ -228,6 +241,8 @@ impl PhysicsScene {
                 placed: true,
                 contact: false,
                 on_patches: false,
+                still: 0.0,
+                rest: None,
             }
         });
         entry.wrench = wrench;
@@ -237,8 +252,8 @@ impl PhysicsScene {
         let com = body.mass.center_of_mass;
         let rb = &mut world.bodies[entry.handle];
         let kind = match motion {
-            Motion::Dynamic => RigidBodyType::Dynamic,
-            Motion::Kinematic => RigidBodyType::KinematicPositionBased,
+            Motion::Dynamic if entry.rest.is_none() => RigidBodyType::Dynamic,
+            _ => RigidBodyType::KinematicPositionBased,
         };
         if rb.body_type() != kind {
             rb.set_body_type(kind, true);
@@ -267,7 +282,15 @@ impl PhysicsScene {
         if self.bodies.is_empty() || dt <= 0.0 {
             return;
         }
+        self.ground_spin = env.spin;
         self.update_ground(env);
+        self.update_rest(env);
+        // Rapier splits each step into solver iterations that share one force: in free flight
+        // one iteration per step keeps gravity re-evaluated every step (symplectic orbits);
+        // near the ground, contacts and friction need rapier's usual four.
+        let near_ground = self.bodies.values().any(|e| e.on_patches);
+        self.world.integration_parameters.num_solver_iterations =
+            if near_ground { CONTACT_ITERATIONS } else { 1 };
         let substeps = (dt / MAX_SUBSTEP)
             .ceil()
             .clamp(1.0, f64::from(MAX_SUBSTEPS)) as u32;
@@ -276,7 +299,15 @@ impl PhysicsScene {
         for k in 0..substeps {
             if let Some(ground) = &self.ground {
                 let turned = DQuat::from_scaled_axis(env.spin * (h * f64::from(k + 1)));
-                ground.turn_to(&mut self.world, (turned * env.surface_rotation).normalize());
+                let rotation = (turned * env.surface_rotation).normalize();
+                ground.turn_to(&mut self.world, rotation);
+                // Resting bodies turn with it.
+                for e in self.bodies.values() {
+                    if let Some(local) = e.rest {
+                        let world = Pose::from_rotation(rotation) * local;
+                        self.world.bodies[e.handle].set_next_kinematic_position(world);
+                    }
+                }
             }
             for e in self.bodies.values() {
                 if e.motion != Motion::Dynamic {
@@ -308,6 +339,10 @@ impl PhysicsScene {
                 if e.motion != Motion::Dynamic {
                     continue;
                 }
+                if e.rest.is_some() {
+                    e.contact = true;
+                    continue;
+                }
                 if e.on_patches {
                     if let Some(ground) = ground {
                         e.contact |= touching(&self.world, e, ground);
@@ -322,9 +357,64 @@ impl PhysicsScene {
             }
         }
         self.time += dt;
+        self.settle(env, dt);
         for e in self.bodies.values_mut() {
             e.placed = false;
         }
+    }
+
+    /// Wakes resting bodies that thrust, left the patches or were hit, and pins the others to
+    /// the ground's current rotation.
+    fn update_rest(&mut self, env: &BodyEnv) {
+        let ground = self.ground.as_ref().map(|g| g.body);
+        for e in self.bodies.values_mut() {
+            let Some(local) = e.rest else { continue };
+            let thrusting = e.wrench.force != DVec3::ZERO || e.wrench.torque != DVec3::ZERO;
+            let hit = ground.is_some_and(|g| touched_by_other(&self.world, e, g));
+            if thrusting || e.motion != Motion::Dynamic || !e.on_patches || hit {
+                wake(&mut self.world, e, env.spin);
+                continue;
+            }
+            let rb = &mut self.world.bodies[e.handle];
+            if rb.body_type() != RigidBodyType::KinematicPositionBased {
+                rb.set_body_type(RigidBodyType::KinematicPositionBased, true);
+            }
+            rb.set_position(Pose::from_rotation(env.surface_rotation) * local, false);
+        }
+    }
+
+    /// Puts bodies that have been still on the ground long enough to rest.
+    fn settle(&mut self, env: &BodyEnv, dt: f64) {
+        if self.ground.is_none() {
+            return;
+        }
+        // The ground's rotation at the end of this step.
+        let rotation = (DQuat::from_scaled_axis(env.spin * dt) * env.surface_rotation).normalize();
+        for e in self.bodies.values_mut() {
+            if e.motion != Motion::Dynamic || e.rest.is_some() {
+                continue;
+            }
+            let idle = e.wrench.force == DVec3::ZERO && e.wrench.torque == DVec3::ZERO;
+            let s = read(&self.world, e);
+            let speed = (s.velocity - env.spin.cross(s.position)).length();
+            let spin = (s.angular_velocity - env.spin).length();
+            if idle && e.on_patches && e.contact && speed < REST_SPEED && spin < REST_SPIN {
+                e.still += dt;
+            } else {
+                e.still = 0.0;
+            }
+            if e.still >= REST_AFTER {
+                let pose = *self.world.bodies[e.handle].position();
+                e.rest = Some(Pose::from_rotation(rotation.inverse()) * pose);
+                self.world.bodies[e.handle]
+                    .set_body_type(RigidBodyType::KinematicPositionBased, true);
+            }
+        }
+    }
+
+    /// Whether a body is resting on the ground (pinned to it until woken).
+    pub fn at_rest(&self, id: ObjectId) -> bool {
+        self.bodies.get(&id).is_some_and(|e| e.rest.is_some())
     }
 
     /// Keeps the ground body and its patches in step with the region's terrain, and asks for
@@ -342,6 +432,12 @@ impl PhysicsScene {
                 (Some(g), Some(t)) => g.extend_terrain(Arc::clone(t)),
                 _ => false,
             };
+        if !same {
+            // The ground changed: everything resting on it settles again.
+            for e in self.bodies.values_mut() {
+                wake(&mut self.world, e, env.spin);
+            }
+        }
         if !same && !extended {
             // A different terrain: rebuild every patch from it.
             if let Some(old) = self.ground.take() {
@@ -363,7 +459,11 @@ impl PhysicsScene {
         for e in self.bodies.values_mut() {
             let rb = &self.world.bodies[e.handle];
             let p = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
-            let speed = (rb.linvel() - env.spin.cross(p)).length();
+            let speed = if e.rest.is_some() {
+                0.0
+            } else {
+                (rb.linvel() - env.spin.cross(p)).length()
+            };
             let reach = e.radius + PATCH_ALTITUDE + speed * 3.0;
             if p.length() > highest + reach
                 || p.length() - env.radius - env.ground_height(p) > reach
@@ -389,9 +489,15 @@ impl PhysicsScene {
     }
 
     /// A body's centre-of-mass state after the last step, and whether it touched the ground.
+    /// `spin` is the ground's angular velocity (resting bodies move with it).
     pub fn state(&self, id: ObjectId) -> Option<(RigidState, bool)> {
         let e = self.bodies.get(&id)?;
-        Some((read(&self.world, e), e.contact))
+        let mut s = read(&self.world, e);
+        if e.rest.is_some() {
+            s.velocity = self.ground_spin.cross(s.position);
+            s.angular_velocity = self.ground_spin;
+        }
+        Some((s, e.contact || e.rest.is_some()))
     }
 }
 
@@ -406,6 +512,34 @@ fn touching(world: &PhysicsWorld, e: &Entry, ground: RigidBodyHandle) -> bool {
             };
             pair.has_any_active_contact()
                 && world.colliders.get(other).and_then(|o| o.parent()) == Some(ground)
+        })
+    })
+}
+
+/// Ends a body's rest: dynamic again, moving with the turning ground.
+fn wake(world: &mut PhysicsWorld, e: &mut Entry, spin: DVec3) {
+    e.still = 0.0;
+    if e.rest.take().is_none() || e.motion != Motion::Dynamic {
+        return;
+    }
+    let rb = &mut world.bodies[e.handle];
+    let com = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
+    rb.set_body_type(RigidBodyType::Dynamic, true);
+    rb.set_linvel(spin.cross(com), true);
+    rb.set_angvel(spin, true);
+}
+
+/// Whether a body is in contact with anything other than the ground (another vehicle).
+fn touched_by_other(world: &PhysicsWorld, e: &Entry, ground: RigidBodyHandle) -> bool {
+    e.collider_handles.iter().any(|&c| {
+        world.narrow_phase.contact_pairs_with(c).any(|pair| {
+            let other = if pair.collider1 == c {
+                pair.collider2
+            } else {
+                pair.collider1
+            };
+            let parent = world.colliders.get(other).and_then(|o| o.parent());
+            pair.has_any_active_contact() && parent.is_some_and(|p| p != ground && p != e.handle)
         })
     })
 }
@@ -564,7 +698,8 @@ mod tests {
             })
             .unwrap();
         let ground = env.radius + env.ground_height(up * env.radius);
-        let p = up * (ground + 15.0);
+        // Touching down from 3 m, nearly at rest relative to the ground.
+        let p = up * (ground + 5.0);
         let mut s = RigidState {
             position: p,
             velocity: env.spin.cross(p),
@@ -574,7 +709,9 @@ mod tests {
         let mut scene = PhysicsScene::with_inline_patches();
         let id = ObjectId(1);
         let dt = 1.0 / 30.0;
-        let ticks = 30 * 20;
+        let ticks = 30 * 70;
+        let settle = 30 * 10;
+        let (mut settled_at, mut settled_t) = (DVec3::ZERO, 0.0);
         let mut touched = false;
         for tick in 0..ticks {
             let t = f64::from(tick) * dt;
@@ -584,6 +721,10 @@ mod tests {
             let (next, contact) = scene.state(id).unwrap();
             s = next;
             touched |= contact;
+            if tick == settle {
+                settled_at = s.position.normalize();
+                settled_t = t + dt;
+            }
         }
         assert!(touched, "touched the ground");
         assert!(
@@ -599,7 +740,13 @@ mod tests {
             "holds still on the slope: {relative:.3} m/s"
         );
         let drift = (s.position.normalize() - turned).length() * env.radius;
-        assert!(drift < 2.0, "stayed where it landed: {drift:.2} m");
+        assert!(drift < 2.0, "landed where it touched down: {drift:.2} m");
+        // A minute standing on the slope after settling: no creep.
+        let turned =
+            DQuat::from_scaled_axis(env.spin * (f64::from(ticks) * dt - settled_t)) * settled_at;
+        let creep = (s.position.normalize() - turned).length() * env.radius;
+        assert!(creep < 0.05, "crept {creep:.3} m in a minute");
+        assert!(scene.at_rest(id), "came to rest");
         // Resting on its hull: the centre of mass is a little above the ground, not sunk.
         let height = s.position.length() - (env.radius + env.ground_height(s.position));
         assert!(

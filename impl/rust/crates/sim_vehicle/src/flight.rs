@@ -34,6 +34,9 @@ pub const MAX_SUBSTEP: f64 = 1.0 / 60.0;
 pub const MAX_SUBSTEPS: u32 = 64;
 /// Thrust is ignored when a tick spans more than this much universe time (time warp above ~4×).
 pub const MAX_THRUST_DT: f64 = 4.0 / 30.0 + 1e-9;
+/// A vehicle touching the ground slower than this (m/s, relative to it) with idle controls
+/// switches its engines off.
+const LANDED_IDLE_SPEED: f64 = 0.5;
 /// Assist time constants (s): how quickly velocity and spin errors are corrected.
 const VELOCITY_RESPONSE: f64 = 0.8;
 const ROTATION_RESPONSE: f64 = 0.25;
@@ -505,6 +508,20 @@ pub fn plan_flight(
 
     *rails = None;
     telemetry.on_rails = false;
+    // Landed with the controls idle: the engines rest too (no thrust spent holding still).
+    let idle = control.translate == DVec3::ZERO && control.rotate == DVec3::ZERO;
+    let (_, ground_velocity) = env.standing_still(state.position);
+    let relative = state.velocity - ground_velocity;
+    if telemetry.in_contact && idle && relative.length() < LANDED_IDLE_SPEED {
+        control.desired_velocity = None;
+        telemetry.reference = Reference::Surface;
+        telemetry.relative_velocity = relative;
+        telemetry.throttles.iter_mut().for_each(|u| *u = 0.0);
+        return FlightPlan::Integrate {
+            state,
+            wrench: Wrench::default(),
+        };
+    }
     let (request, reference, relative) = assist_request(&state, body, control, env, dt);
     let warm = (telemetry.throttles.len() == body.allocator.thrusters().len())
         .then_some(telemetry.throttles.as_slice());

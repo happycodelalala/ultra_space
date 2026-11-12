@@ -814,10 +814,14 @@ fn spawn_ship_visual(
             for part in &vehicle.parts {
                 let material = match part.def.kind {
                     PartKind::Cockpit => glass.clone(),
-                    PartKind::Thruster | PartKind::ReactionWheel | PartKind::CruiseDrive => {
-                        dark.clone()
+                    PartKind::Thruster
+                    | PartKind::ReactionWheel
+                    | PartKind::CruiseDrive
+                    | PartKind::LandingLeg
+                    | PartKind::Wheel => dark.clone(),
+                    PartKind::Hull | PartKind::Structure | PartKind::Tank | PartKind::Battery => {
+                        hull.clone()
                     }
-                    PartKind::Hull | PartKind::Tank => hull.clone(),
                 };
                 let transform = Transform::from_translation(part.position.as_vec3())
                     .with_rotation(part.rotation.as_quat());

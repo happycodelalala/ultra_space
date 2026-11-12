@@ -82,13 +82,11 @@ mod tests {
                 kind: PartKind::Hull,
                 mass_kg: mass,
                 shape,
-                thruster: None,
-                reaction_wheel: None,
-                cruise_drive: None,
-                description: String::new(),
+                ..Default::default()
             }),
             position,
             rotation,
+            ..VehiclePart::default()
         }
     }
 

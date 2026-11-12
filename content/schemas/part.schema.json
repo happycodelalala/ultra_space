@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "part.schema.json",
   "title": "Part catalog",
-  "description": "A file of vehicle part types. Thrusters push the vehicle along their local +Y axis. Loaded by sim_vehicle::catalog; ids must be unique across all catalog files.",
+  "description": "A file of vehicle part types. Thrusters push the vehicle along their local +Y axis. Loaded by sim_vehicle::catalog; ids must be unique across all catalog files. Function data (mass, shape, kind blocks, nodes) drives the simulation; form only affects looks.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -115,7 +115,11 @@
             "tank",
             "thruster",
             "reaction_wheel",
-            "cruise_drive"
+            "cruise_drive",
+            "landing_leg",
+            "wheel",
+            "battery",
+            "structure"
           ]
         },
         "mass_kg": {
@@ -166,6 +170,151 @@
         },
         "description": {
           "type": "string"
+        },
+        "attach_nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/attach_node"
+          }
+        },
+        "surface_attach": {
+          "type": "boolean",
+          "description": "Whether the part can be attached to another part's surface (anywhere, not only at nodes). Defaults to true."
+        },
+        "control": {
+          "type": "boolean",
+          "description": "A control source (cockpit or probe core): a vehicle needs at least one. Defaults to true for cockpits."
+        },
+        "collider": {
+          "$ref": "#/$defs/shape",
+          "description": "Collision shape if different from the mass shape."
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/connector"
+          }
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/slot"
+          }
+        },
+        "form": {
+          "$ref": "#/$defs/form"
+        },
+        "interior": {
+          "$ref": "#/$defs/interior"
+        },
+        "tank": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_kg"
+          ],
+          "properties": {
+            "capacity_kg": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "Fuel capacity (consumption from Batch 4)."
+        },
+        "battery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capacity_wh"
+          ],
+          "properties": {
+            "capacity_wh": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "Stored energy (consumption from Batch 4)."
+        },
+        "landing_leg": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "length_m",
+            "foot_radius_m"
+          ],
+          "description": "A leg reaching down along the part's local -Y axis to a foot.",
+          "properties": {
+            "length_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "foot_radius_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "stiffness_n_per_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "damping_n_s_per_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "wheel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "radius_m",
+            "width_m",
+            "suspension_m",
+            "stiffness_n_per_m",
+            "damping_n_s_per_m",
+            "max_motor_torque_nm",
+            "max_brake_torque_nm",
+            "friction"
+          ],
+          "description": "A driven wheel on suspension along the part's local -Y axis, rolling forward along -Z (task 3.5).",
+          "properties": {
+            "radius_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "width_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "suspension_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "stiffness_n_per_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "damping_n_s_per_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "max_motor_torque_nm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max_steer_deg": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 90
+            },
+            "max_brake_torque_nm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "friction": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       },
       "allOf": [
@@ -210,8 +359,227 @@
               "cruise_drive"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "landing_leg"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "landing_leg"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "wheel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "wheel"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "battery"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "battery"
+            ]
+          }
         }
       ]
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "size_class": {
+      "enum": [
+        "tiny",
+        "small",
+        "medium",
+        "large",
+        "huge"
+      ],
+      "description": "Size class of nodes, connectors and slots: only matching sizes join."
+    },
+    "attach_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "position_m",
+        "direction",
+        "size"
+      ],
+      "description": "A point where another part's node can join this one: position and outward direction in part axes.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "position_m": {
+          "$ref": "#/$defs/vec3"
+        },
+        "direction": {
+          "$ref": "#/$defs/vec3"
+        },
+        "size": {
+          "$ref": "#/$defs/size_class"
+        }
+      }
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "position_m",
+        "direction",
+        "size",
+        "profile"
+      ],
+      "description": "A structural connector for sections and modules (ships-stations-interiors \u00a73.2): joins only the same size and profile; may carry an interior passage.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "position_m": {
+          "$ref": "#/$defs/vec3"
+        },
+        "direction": {
+          "$ref": "#/$defs/vec3"
+        },
+        "size": {
+          "$ref": "#/$defs/size_class"
+        },
+        "profile": {
+          "type": "string",
+          "description": "Shape of the joint face, e.g. round, square, wedge."
+        },
+        "passage": {
+          "enum": [
+            "none",
+            "hatch",
+            "door",
+            "corridor",
+            "vehicle_ramp"
+          ],
+          "description": "Interior passage through the connector (defaults to none)."
+        }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "size"
+      ],
+      "description": "A loadout slot on a hull (capital ships, Batch 11): what can be fitted where.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "engine",
+            "weapon",
+            "hangar",
+            "module",
+            "utility"
+          ]
+        },
+        "size": {
+          "$ref": "#/$defs/size_class"
+        },
+        "position_m": {
+          "$ref": "#/$defs/vec3"
+        },
+        "direction": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "form": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model"
+      ],
+      "description": "How the part looks (never affects the simulation): a visual model id, its material slots and its style family.",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "material_slots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "style": {
+          "type": "string"
+        }
+      }
+    },
+    "interior": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Interior definition (ships-stations-interiors \u00a75.1). In the format from Batch 3; used when walking inside ships arrives.",
+      "properties": {
+        "spaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "description": "e.g. cockpit, corridor, cargo_bay, bunk"
+              },
+              "size_m": {
+                "$ref": "#/$defs/vec3"
+              },
+              "position_m": {
+                "$ref": "#/$defs/vec3"
+              }
+            }
+          }
+        },
+        "properties": {
+          "type": "object",
+          "description": "Gravity, air volume, capacity and so on (free form for now)."
+        }
+      }
     }
   }
 }

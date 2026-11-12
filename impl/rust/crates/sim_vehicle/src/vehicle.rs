@@ -74,6 +74,59 @@ pub const AXIS_DIRECTIONS: [DVec3; 6] = [
     DVec3::NEG_Z,
 ];
 
+impl Vehicle {
+    /// Hash of the vehicle's function data (parts, placement, attachment; not looks): equal
+    /// for identical designs, so their compiled forms can be shared (vehicle-builder.md §4).
+    /// Stable across runs and machines (FNV-1a over a canonical byte stream).
+    pub fn design_hash(&self) -> u64 {
+        let mut h = Fnv(0xcbf2_9ce4_8422_2325);
+        h.write_u64(self.parts.len() as u64);
+        for p in &self.parts {
+            h.write_str(&p.def.id);
+            for v in p
+                .position
+                .to_array()
+                .into_iter()
+                .chain(p.rotation.to_array())
+            {
+                // +0.0 and -0.0 hash alike.
+                h.write_u64((v + 0.0).to_bits());
+            }
+            h.write_u64(p.parent.map_or(u64::MAX, |i| i as u64));
+            match &p.attach {
+                crate::design::Attach::Root => h.write_u64(0),
+                crate::design::Attach::Surface => h.write_u64(1),
+                crate::design::Attach::Node { node, to } => {
+                    h.write_u64(2);
+                    h.write_str(node);
+                    h.write_str(to);
+                }
+            }
+        }
+        h.0
+    }
+}
+
+struct Fnv(u64);
+
+impl Fnv {
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 ^= u64::from(b);
+            self.0 = self.0.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn write_u64(&mut self, v: u64) {
+        self.write(&v.to_le_bytes());
+    }
+
+    fn write_str(&mut self, s: &str) {
+        self.write_u64(s.len() as u64);
+        self.write(s.as_bytes());
+    }
+}
+
 impl VehicleBody {
     /// `None` if the vehicle has no parts.
     pub fn of(vehicle: &Vehicle) -> Option<Self> {
@@ -109,7 +162,7 @@ impl VehicleBody {
             .parts
             .iter()
             .map(|p| PartCollider {
-                shape: p.def.shape,
+                shape: p.def.collision_shape(),
                 position: p.position,
                 rotation: p.rotation,
             })
@@ -174,6 +227,9 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data")
     }
 
+    /// Parts' total mass (kg), landing legs included.
+    const KESTREL_MASS: f64 = 20_120.0;
+
     fn kestrel() -> Vehicle {
         let catalog =
             PartCatalog::load_dir(content().join("parts")).unwrap_or_else(|e| panic!("{e}"));
@@ -186,15 +242,19 @@ mod tests {
     fn kestrel_matches_the_design_doc() {
         // objects-vehicles-physics.md §10: about 20 tonnes, lifts off Meridian at ~3× its weight.
         let v = kestrel();
-        assert_eq!(v.parts.len(), 7 + 16);
+        assert_eq!(v.parts.len(), 7 + 16 + 4);
         let body = VehicleBody::of(&v).unwrap();
         assert!(
-            (body.mass.mass - 19_640.0).abs() < 1e-6,
+            (body.mass.mass - KESTREL_MASS).abs() < 1e-6,
             "{}",
             body.mass.mass
         );
-        // Symmetric left/right and up/down: center of mass on the Z axis.
-        assert!(body.mass.center_of_mass.x.abs() < 1e-9 && body.mass.center_of_mass.y.abs() < 1e-9);
+        // Symmetric left/right: center of mass on the YZ plane, a little low (the legs).
+        let com = body.mass.center_of_mass;
+        assert!(
+            com.x.abs() < 1e-9 && (-0.1..0.0).contains(&com.y),
+            "{com:?}"
+        );
         let twr = body.performance.forward_acceleration() / 9.81;
         assert!((3.0..3.3).contains(&twr), "thrust-to-weight {twr}");
         assert!(body.performance.cruise.is_some());
@@ -207,15 +267,15 @@ mod tests {
         // Two 4 kN thrusters push each lateral direction: ~0.41 m/s².
         for i in 0..2 {
             assert!(
-                (p.max_acceleration[i] - 8_000.0 / 19_640.0).abs() < 1e-3,
+                (p.max_acceleration[i] - 8_000.0 / KESTREL_MASS).abs() < 1e-3,
                 "{:?}",
                 p.max_acceleration
             );
         }
         // Four up thrusters: ~0.81 m/s² (hovering needs the main engine).
-        assert!((p.max_acceleration[2] - 16_000.0 / 19_640.0).abs() < 1e-3);
+        assert!((p.max_acceleration[2] - 16_000.0 / KESTREL_MASS).abs() < 1e-3);
         // Forward = main engine plus two rear maneuvering thrusters.
-        assert!((p.forward_acceleration() - 608_000.0 / 19_640.0).abs() < 1e-3);
+        assert!((p.forward_acceleration() - 608_000.0 / KESTREL_MASS).abs() < 1e-3);
         assert!(
             p.max_angular_acceleration.min_element() > 0.0,
             "can turn about every axis"
@@ -247,8 +307,8 @@ mod tests {
             VehicleDesign::from_path(content().join("vehicles/kestrel.json"), &catalog).unwrap();
         let mut v = Vehicle::from_design(&design);
         v.parts.pop();
-        assert_eq!(design.parts.len(), 23);
-        assert_eq!(v.parts.len(), 22);
+        assert_eq!(design.parts.len(), 27);
+        assert_eq!(v.parts.len(), 26);
     }
 
     #[test]
@@ -259,5 +319,22 @@ mod tests {
         let thruster_without_block = r#"{"parts": [{"id": "t.x", "name": "T", "kind": "thruster", "mass_kg": 1,
             "shape": {"type": "sphere", "radius_m": 1}}]}"#;
         assert!(PartCatalog::from_sources([("x.json", thruster_without_block)]).is_err());
+    }
+
+    #[test]
+    fn design_hash_follows_function_not_identity() {
+        let a = kestrel();
+        let b = kestrel();
+        assert_eq!(a.design_hash(), b.design_hash());
+        let mut moved = kestrel();
+        moved.parts[3].position.x += 0.01;
+        assert_ne!(a.design_hash(), moved.design_hash());
+        let mut fewer = kestrel();
+        fewer.parts.pop();
+        assert_ne!(a.design_hash(), fewer.design_hash());
+        // Renaming a part doesn't change what the vehicle is.
+        let mut renamed = kestrel();
+        renamed.parts[0].name = "bridge".into();
+        assert_eq!(a.design_hash(), renamed.design_hash());
     }
 }
