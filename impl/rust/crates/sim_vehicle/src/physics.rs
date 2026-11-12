@@ -17,15 +17,16 @@ use std::sync::Arc;
 use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
 use rapier3d_f64::prelude::{
-    ColliderBuilder, ColliderHandle, MassProperties as RapierMass, PhysicsWorld, Pose,
-    RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
+    ColliderBuilder, ColliderHandle, Group, InteractionGroups, InteractionTestMode,
+    MassProperties as RapierMass, PhysicsWorld, Pose, RigidBodyBuilder, RigidBodyHandle,
+    RigidBodyType, SharedShape,
 };
 use sim_core::ObjectId;
 
 use crate::allocation::Wrench;
 use crate::catalog::Shape;
 use crate::flight::{BodyEnv, MAX_SUBSTEP, MAX_SUBSTEPS, RigidState, ground_contact};
-use crate::ground::Ground;
+use crate::ground::{GROUND_GROUP, Ground};
 use crate::vehicle::{PartCollider, VehicleBody};
 
 /// Hull friction (combined with the other collider's by averaging).
@@ -33,13 +34,17 @@ const HULL_FRICTION: f64 = 0.8;
 /// Bodies closer to the ground than their radius plus this (m), plus a few seconds of travel,
 /// get collision patches.
 const PATCH_ALTITUDE: f64 = 50.0;
+/// Collision group of vehicles.
+const VEHICLE_GROUP: Group = Group::GROUP_2;
 /// Solver iterations per step while bodies are near the ground.
 const CONTACT_ITERATIONS: usize = 4;
 /// A body still on the ground (slower than these, relative to it) with no thrust for
 /// `REST_AFTER` seconds comes to rest: pinned to the turning ground until something wakes it.
-const REST_SPEED: f64 = 0.05;
-const REST_SPIN: f64 = 0.01;
+const REST_SPEED: f64 = 0.1;
+const REST_SPIN: f64 = 0.05;
 const REST_AFTER: f64 = 1.0;
+/// Most look-ahead along a body's motion when choosing patches (m).
+const PATCH_LOOKAHEAD: f64 = 60.0;
 /// Patches are built this far around a body (m), plus a second and a half of travel.
 const PATCH_MARGIN: f64 = 20.0;
 /// Drag coefficient times reference area, as a fraction of the vehicle's bounding disc.
@@ -57,9 +62,9 @@ enum Motion {
 struct Entry {
     handle: RigidBodyHandle,
     collider_handles: Vec<ColliderHandle>,
-    /// What the body was built from, to rebuild when the vehicle's parts change.
+    /// The design hash it was built from; a different hash means the parts changed.
+    hash: u64,
     mass: crate::mass::MassProperties,
-    colliders: Vec<PartCollider>,
     /// Radius of a sphere around the centre of mass containing the vehicle (m).
     radius: f64,
     wrench: Wrench,
@@ -78,6 +83,8 @@ struct Entry {
 pub struct PhysicsScene {
     world: PhysicsWorld,
     bodies: HashMap<ObjectId, Entry>,
+    /// Compound collision shapes by design hash, shared by every vehicle of a design.
+    shapes: HashMap<u64, SharedShape>,
     ground: Option<Ground>,
     /// Whether terrain gets collision patches (single-vehicle helpers use the contact model).
     patches: bool,
@@ -101,6 +108,7 @@ impl Default for PhysicsScene {
         Self {
             world,
             bodies: HashMap::new(),
+            shapes: HashMap::new(),
             ground: None,
             patches: true,
             inline_patches: false,
@@ -114,21 +122,99 @@ impl Default for PhysicsScene {
 #[derive(Resource, Default)]
 pub struct RegionPhysics(pub PhysicsScene);
 
-fn collider_for(part: &PartCollider) -> ColliderBuilder {
-    let builder = match part.shape {
+fn part_shape(shape: Shape) -> SharedShape {
+    match shape {
         Shape::Box { size_m } => {
-            ColliderBuilder::cuboid(size_m[0] / 2.0, size_m[1] / 2.0, size_m[2] / 2.0)
+            SharedShape::cuboid(size_m[0] / 2.0, size_m[1] / 2.0, size_m[2] / 2.0)
         }
-        Shape::Cylinder { radius_m, length_m } => {
-            ColliderBuilder::cylinder(length_m / 2.0, radius_m)
-        }
-        Shape::Sphere { radius_m } => ColliderBuilder::ball(radius_m),
+        Shape::Cylinder { radius_m, length_m } => SharedShape::cylinder(length_m / 2.0, radius_m),
+        Shape::Sphere { radius_m } => SharedShape::ball(radius_m),
+    }
+}
+
+/// Grid cells per axis (x, y, z) for merging parts into boxes.
+const HULL_GRID: [usize; 3] = [4, 2, 4];
+
+/// Points on a part shape's surface (its corners, or rings for round shapes), placed.
+fn shape_points(c: &PartCollider) -> Vec<DVec3> {
+    let corners = |h: DVec3| -> Vec<DVec3> {
+        (0..8)
+            .map(|i| {
+                let s = |bit: usize| if i & bit == 0 { -1.0 } else { 1.0 };
+                DVec3::new(s(1) * h.x, s(2) * h.y, s(4) * h.z)
+            })
+            .collect()
     };
-    builder
-        .position(Pose::from_parts(part.position, part.rotation))
-        // Mass and inertia come from our own mass properties.
-        .density(0.0)
-        .friction(HULL_FRICTION)
+    let local: Vec<DVec3> = match c.shape {
+        Shape::Box { size_m } => corners(DVec3::from(size_m) / 2.0),
+        Shape::Cylinder { radius_m, length_m } => (0..16)
+            .map(|i| {
+                let a = std::f64::consts::TAU * f64::from(i % 8) / 8.0;
+                let y = if i < 8 {
+                    -length_m / 2.0
+                } else {
+                    length_m / 2.0
+                };
+                DVec3::new(a.cos() * radius_m, y, a.sin() * radius_m)
+            })
+            .collect(),
+        Shape::Sphere { radius_m } => [
+            DVec3::X,
+            DVec3::NEG_X,
+            DVec3::Y,
+            DVec3::NEG_Y,
+            DVec3::Z,
+            DVec3::NEG_Z,
+        ]
+        .into_iter()
+        .chain(corners(DVec3::ONE).into_iter().map(DVec3::normalize))
+        .map(|d| d * radius_m)
+        .collect(),
+    };
+    local
+        .into_iter()
+        .map(|p| c.position + c.rotation * p)
+        .collect()
+}
+
+/// A vehicle's compiled collision shape (vehicle-builder.md §4): one compound collider whose
+/// pieces are the exact shapes of feet and wheels plus a few boxes, each wrapping the other
+/// parts within one cell of a coarse grid over the vehicle (boxes step cheaper than convex
+/// hulls). Its cost per step then stays about the same however many parts the vehicle has.
+pub fn compound_shape(colliders: &[PartCollider]) -> SharedShape {
+    let mut pieces = Vec::new();
+    let (lo, hi) = colliders.iter().fold(
+        (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN)),
+        |(lo, hi), c| (lo.min(c.position), hi.max(c.position)),
+    );
+    let size = (hi - lo).max(DVec3::splat(1e-6));
+    let mut cells: HashMap<[usize; 3], Vec<DVec3>> = HashMap::new();
+    for c in colliders {
+        if c.exact {
+            pieces.push((
+                Pose::from_parts(c.position, c.rotation),
+                part_shape(c.shape),
+            ));
+            continue;
+        }
+        let f = (c.position - lo) / size;
+        let cell = [0, 1, 2].map(|i| ((f[i] * HULL_GRID[i] as f64) as usize).min(HULL_GRID[i] - 1));
+        cells.entry(cell).or_default().extend(shape_points(c));
+    }
+    let mut cells: Vec<_> = cells.into_iter().collect();
+    cells.sort_by_key(|(cell, _)| *cell);
+    for (_, points) in cells {
+        let (lo, hi) = points.iter().fold(
+            (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN)),
+            |(lo, hi), p| (lo.min(*p), hi.max(*p)),
+        );
+        let half = ((hi - lo) / 2.0).max(DVec3::splat(0.05));
+        pieces.push((
+            Pose::from_translation((lo + hi) / 2.0),
+            SharedShape::cuboid(half.x, half.y, half.z),
+        ));
+    }
+    SharedShape::compound(pieces)
 }
 
 /// Radius of a sphere around the centre of mass that contains the vehicle (rough; the
@@ -206,14 +292,12 @@ impl PhysicsScene {
         wrench: Wrench,
         motion: Motion,
     ) {
-        let stale = self
-            .bodies
-            .get(&id)
-            .is_some_and(|e| e.mass != body.mass || e.colliders != body.colliders);
+        let stale = self.bodies.get(&id).is_some_and(|e| e.hash != body.hash);
         if stale && let Some(old) = self.bodies.remove(&id) {
             self.world.remove_body(old.handle);
         }
         let world = &mut self.world;
+        let shapes = &mut self.shapes;
         let entry = self.bodies.entry(id).or_insert_with(|| {
             let m = &body.mass;
             let rigid = RigidBodyBuilder::dynamic()
@@ -225,16 +309,21 @@ impl PhysicsScene {
                 ))
                 .build();
             let handle = world.insert_body(rigid);
-            let collider_handles = body
-                .colliders
-                .iter()
-                .map(|part| world.insert_collider(collider_for(part), Some(handle)))
-                .collect();
+            let shape = shapes
+                .entry(body.hash)
+                .or_insert_with(|| compound_shape(&body.colliders))
+                .clone();
+            let collider = ColliderBuilder::new(shape)
+                // Mass and inertia come from our own mass properties.
+                .density(0.0)
+                .friction(HULL_FRICTION)
+                .collision_groups(vehicle_groups(true));
+            let collider_handles = vec![world.insert_collider(collider, Some(handle))];
             Entry {
                 handle,
                 collider_handles,
+                hash: body.hash,
                 mass: body.mass,
-                colliders: body.colliders.clone(),
                 radius: vehicle_radius(body),
                 wrench,
                 motion,
@@ -408,6 +497,8 @@ impl PhysicsScene {
                 e.rest = Some(Pose::from_rotation(rotation.inverse()) * pose);
                 self.world.bodies[e.handle]
                     .set_body_type(RigidBodyType::KinematicPositionBased, true);
+                // Pinned to the ground: no need to collide with it (other bodies still hit it).
+                set_ground_collisions(&mut self.world, e, false);
             }
         }
     }
@@ -457,6 +548,11 @@ impl PhysicsScene {
         let to_surface = env.surface_rotation.inverse();
         let highest = env.radius + env.max_ground_height();
         for e in self.bodies.values_mut() {
+            // Kinematic movers (arcade flight, cruise) follow the ground their own way.
+            if e.motion != Motion::Dynamic {
+                e.on_patches = false;
+                continue;
+            }
             let rb = &self.world.bodies[e.handle];
             let p = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
             let speed = if e.rest.is_some() {
@@ -464,7 +560,10 @@ impl PhysicsScene {
             } else {
                 (rb.linvel() - env.spin.cross(p)).length()
             };
-            let reach = e.radius + PATCH_ALTITUDE + speed * 3.0;
+            // Look ahead with the speed, within limits (a fast pass over the ground uses the
+            // fallback contact rather than streaming hundreds of patches).
+            let ahead = (speed * 1.5).min(PATCH_LOOKAHEAD);
+            let reach = e.radius + PATCH_ALTITUDE + (speed * 3.0).min(PATCH_LOOKAHEAD * 2.0);
             if p.length() > highest + reach
                 || p.length() - env.radius - env.ground_height(p) > reach
             {
@@ -472,12 +571,7 @@ impl PhysicsScene {
                 continue;
             }
             let dir = to_surface * p.normalize();
-            e.on_patches = ground.want(
-                dir,
-                e.radius + PATCH_MARGIN + speed * 1.5,
-                e.radius + 2.0,
-                now,
-            );
+            e.on_patches = ground.want(dir, e.radius + PATCH_MARGIN + ahead, e.radius + 2.0, now);
         }
         ground.update(&mut self.world, now);
     }
@@ -516,12 +610,31 @@ fn touching(world: &PhysicsWorld, e: &Entry, ground: RigidBodyHandle) -> bool {
     })
 }
 
+/// Collision groups of a vehicle collider: everything, or everything but the ground.
+fn vehicle_groups(with_ground: bool) -> InteractionGroups {
+    let filter = if with_ground {
+        Group::ALL
+    } else {
+        Group::ALL.difference(GROUND_GROUP)
+    };
+    InteractionGroups::new(VEHICLE_GROUP, filter, InteractionTestMode::And)
+}
+
+fn set_ground_collisions(world: &mut PhysicsWorld, e: &Entry, on: bool) {
+    for &c in &e.collider_handles {
+        if let Some(collider) = world.colliders.get_mut(c) {
+            collider.set_collision_groups(vehicle_groups(on));
+        }
+    }
+}
+
 /// Ends a body's rest: dynamic again, moving with the turning ground.
 fn wake(world: &mut PhysicsWorld, e: &mut Entry, spin: DVec3) {
     e.still = 0.0;
     if e.rest.take().is_none() || e.motion != Motion::Dynamic {
         return;
     }
+    set_ground_collisions(world, e, true);
     let rb = &mut world.bodies[e.handle];
     let com = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
     rb.set_body_type(RigidBodyType::Dynamic, true);

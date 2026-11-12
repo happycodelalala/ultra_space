@@ -16,10 +16,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use glam::{DQuat, DVec3};
 use rapier3d_f64::prelude::{
-    ColliderBuilder, ColliderHandle, PhysicsWorld, Pose, RigidBodyBuilder, RigidBodyHandle,
+    ColliderBuilder, ColliderHandle, Group, InteractionGroups, InteractionTestMode, PhysicsWorld,
+    Pose, RigidBodyBuilder, RigidBodyHandle, SharedShape,
 };
 use sim_planet::quadtree::level_for_spacing;
-use sim_planet::{CollisionPatch, Terrain, TileKey, collision_patch, locate};
+use sim_planet::{Terrain, TileKey, collision_patch, locate};
+
+/// Collision group of ground patches (resting bodies leave it out of their filter).
+pub(crate) const GROUND_GROUP: Group = Group::GROUP_1;
 
 /// Target vertex spacing of collision patches (m).
 const PATCH_SPACING: f64 = 2.0;
@@ -31,6 +35,8 @@ const GROUND_FRICTION: f64 = 0.8;
 const PATCH_LIFETIME: f64 = 10.0;
 /// Background threads building patches.
 const WORKERS: usize = 2;
+/// Most finished patches added to the physics world per tick.
+const PATCHES_PER_TICK: usize = 8;
 
 type Job = Box<dyn FnOnce() + Send>;
 
@@ -78,7 +84,7 @@ pub(crate) struct Ground {
     pending: HashSet<TileKey>,
     /// Patches finished by the workers (with the terrain generation they were built from),
     /// waiting to be added.
-    done: Arc<Mutex<Vec<(u64, CollisionPatch)>>>,
+    done: Arc<Mutex<Vec<(u64, TileKey, SharedShape)>>>,
     /// Bumped whenever the terrain changes; older results are dropped.
     generation: u64,
     /// Build patches on the calling thread (tests).
@@ -150,9 +156,14 @@ impl Ground {
         let done = Arc::clone(&self.done);
         let generation = self.generation;
         let job = move || {
+            // The collision shape (with its search tree) is built here too, off the
+            // simulation thread.
             let patch = collision_patch(&terrain, key, PATCH_DETAIL);
+            let Ok(shape) = SharedShape::trimesh(patch.vertices, patch.triangles) else {
+                return;
+            };
             if let Ok(mut done) = done.lock() {
-                done.push((generation, patch));
+                done.push((generation, key, shape));
             }
         };
         if self.inline {
@@ -216,26 +227,32 @@ impl Ground {
 
     /// Adds finished patches to the world and drops ones nobody wants any more.
     pub(crate) fn update(&mut self, world: &mut PhysicsWorld, now: f64) {
-        let finished = self
-            .done
-            .lock()
-            .map(|mut d| std::mem::take(&mut *d))
-            .unwrap_or_default();
-        for (generation, patch) in finished {
-            if generation != self.generation || !self.pending.remove(&patch.key) {
+        // A few finished patches per tick keep the cost of inserting them small.
+        let finished: Vec<_> = match self.done.lock() {
+            Ok(mut done) => {
+                let n = done.len().min(PATCHES_PER_TICK);
+                done.drain(..n).collect()
+            }
+            Err(_) => Vec::new(),
+        };
+        for (generation, key, shape) in finished {
+            if generation != self.generation || !self.pending.remove(&key) {
                 continue; // built from an older terrain
             }
             // Replace the old patch (kept until now so nothing stood on a hole).
-            if let Some(old) = self.patches.remove(&patch.key) {
+            if let Some(old) = self.patches.remove(&key) {
                 world.remove_collider(old.collider);
             }
-            let Ok(builder) = ColliderBuilder::trimesh(patch.vertices, patch.triangles) else {
-                continue;
-            };
-            let collider =
-                world.insert_collider(builder.friction(GROUND_FRICTION), Some(self.body));
+            let builder = ColliderBuilder::new(shape)
+                .friction(GROUND_FRICTION)
+                .collision_groups(InteractionGroups::new(
+                    GROUND_GROUP,
+                    Group::ALL,
+                    InteractionTestMode::And,
+                ));
+            let collider = world.insert_collider(builder, Some(self.body));
             self.patches.insert(
-                patch.key,
+                key,
                 Patch {
                     collider,
                     wanted_at: now,

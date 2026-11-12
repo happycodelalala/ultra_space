@@ -134,6 +134,23 @@ ships-stations-interiors §6, first real use:
 - **Rule:** nothing at runtime loops over parts every frame (ships-stations-interiors §6.4). A
   benchmark checks that a 300-part ship costs about the same per tick as the Kestrel.
 
+**As built (3.4):**
+
+- **Collider:** one compound per design, cached by hash and shared. Landing legs and wheels keep
+  their exact shapes; every other part is merged into at most 32 boxes (a 4 × 2 × 4 grid over the
+  vehicle, one box around the parts in each cell). Rapier's per-step cost grew with the number
+  and complexity of a compound's pieces (300 shapes: 4×; convex hulls cost more than boxes).
+- **Meshes:** one merged mesh per material, built on the worker pool and cached by design hash;
+  plumes stay separate entities.
+- **Measured** (`sim_vehicle/tests/part_count_cost.rs`, release): flying, the Kestrel 9 µs per
+  tick and a 300-part ship 17 µs; landed at rest, 22 µs and about 80 µs (resting bodies skip
+  ground contacts; the rest of the gap is open).
+- **Ground patches** are built off the simulation thread including their collision trees, at
+  most eight are added per tick, look-ahead is capped at 60 m, and only dynamic bodies ask for
+  them (arcade flight and cruise follow the ground their own way). An earlier version streamed
+  patches for every fast mover and built their trees on the simulation thread: multi-second
+  frames on Windows.
+
 ## 5. Builder
 
 ### 5.1 Entering and leaving

@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
 
 use crate::allocation::{Allocator, Thruster, Wrench};
-use crate::catalog::{CruiseDriveDef, Shape};
+use crate::catalog::{CruiseDriveDef, PartKind, Shape};
 use crate::design::{VehicleDesign, VehiclePart};
 use crate::mass::MassProperties;
 
@@ -54,6 +54,9 @@ pub struct VehicleBody {
     pub performance: Performance,
     /// One collision shape per part, in vehicle axes (the compound collider).
     pub colliders: Vec<PartCollider>,
+    /// [`Vehicle::design_hash`] of the parts this was compiled from: identical designs share
+    /// compiled data (colliders, meshes), and a changed hash means the vehicle was rebuilt.
+    pub hash: u64,
 }
 
 /// A part's collision shape, placed in the vehicle frame.
@@ -62,6 +65,9 @@ pub struct PartCollider {
     pub shape: Shape,
     pub position: DVec3,
     pub rotation: DQuat,
+    /// Keep this exact shape in the compiled collider (feet and wheels); other parts are merged
+    /// into a few boxes.
+    pub exact: bool,
 }
 
 /// Directions matching [`Performance::max_acceleration`].
@@ -165,6 +171,7 @@ impl VehicleBody {
                 shape: p.def.collision_shape(),
                 position: p.position,
                 rotation: p.rotation,
+                exact: matches!(p.def.kind, PartKind::LandingLeg | PartKind::Wheel),
             })
             .collect();
         Some(Self {
@@ -172,6 +179,7 @@ impl VehicleBody {
             allocator,
             performance,
             colliders,
+            hash: vehicle.design_hash(),
         })
     }
 }

@@ -16,7 +16,7 @@ use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
-    OnRails, PartKind, Shape, Vehicle, VehicleBody,
+    OnRails, Shape, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -24,6 +24,7 @@ use crate::script::ScriptRunning;
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{GameState, InGame, StartingVehicle, Universe};
+use crate::vehicle_visual::{VehicleMesh, VehicleMeshes};
 
 const START_BODY: &str = "meridian";
 
@@ -203,6 +204,7 @@ fn spawn_player_ship(
     mut sim: ResMut<Sim>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut vehicle_meshes: ResMut<VehicleMeshes>,
 ) {
     let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
@@ -246,7 +248,13 @@ fn spawn_player_ship(
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
 
-    spawn_ship_visual(&mut commands, &vehicle, &mut meshes, &mut materials);
+    spawn_ship_visual(
+        &mut commands,
+        &vehicle,
+        &mut vehicle_meshes,
+        &mut meshes,
+        &mut materials,
+    );
     let sim = &mut sim.0;
     let id = sim
         .objects
@@ -760,40 +768,15 @@ struct Plume {
     nozzle_y: f32,
 }
 
-fn shape_mesh(shape: Shape) -> Mesh {
-    match shape {
-        Shape::Box { size_m: [x, y, z] } => Cuboid::new(x as f32, y as f32, z as f32).into(),
-        Shape::Cylinder { radius_m, length_m } => {
-            Cylinder::new(radius_m as f32, length_m as f32).into()
-        }
-        Shape::Sphere { radius_m } => Sphere::new(radius_m as f32).mesh().ico(3).expect("valid"),
-    }
-}
-
+/// Spawns the player ship's visual: its merged meshes (built in the background, see
+/// [`crate::vehicle_visual`]) and a mount with an exhaust plume per thruster.
 fn spawn_ship_visual(
     commands: &mut Commands,
     vehicle: &Vehicle,
+    vehicle_meshes: &mut VehicleMeshes,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) {
-    let hull = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.62, 0.64, 0.68),
-        metallic: 0.6,
-        perceptual_roughness: 0.45,
-        ..default()
-    });
-    let glass = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.12, 0.2, 0.3),
-        metallic: 0.2,
-        perceptual_roughness: 0.15,
-        ..default()
-    });
-    let dark = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.18, 0.18, 0.2),
-        metallic: 0.8,
-        perceptual_roughness: 0.5,
-        ..default()
-    });
     let flame = materials.add(StandardMaterial {
         base_color: Color::BLACK,
         emissive: LinearRgba::rgb(9.0, 5.0, 2.0),
@@ -801,47 +784,33 @@ fn spawn_ship_visual(
         ..default()
     });
     let plume_mesh = meshes.add(Cone::new(1.0, 1.0));
+    vehicle_meshes.request(vehicle);
 
     let mut thruster_index = 0;
     commands
         .spawn((
             Name::new(vehicle.name.clone()),
             ShipVisual,
+            VehicleMesh::new(vehicle.design_hash()),
             Transform::default(),
             Visibility::default(),
         ))
         .with_children(|ship| {
-            for part in &vehicle.parts {
-                let material = match part.def.kind {
-                    PartKind::Cockpit => glass.clone(),
-                    PartKind::Thruster
-                    | PartKind::ReactionWheel
-                    | PartKind::CruiseDrive
-                    | PartKind::LandingLeg
-                    | PartKind::Wheel => dark.clone(),
-                    PartKind::Hull | PartKind::Structure | PartKind::Tank | PartKind::Battery => {
-                        hull.clone()
-                    }
-                };
+            for part in vehicle.parts.iter().filter(|p| p.def.thruster.is_some()) {
                 let transform = Transform::from_translation(part.position.as_vec3())
                     .with_rotation(part.rotation.as_quat());
-                let mut part_entity = ship.spawn((
-                    Mesh3d(meshes.add(shape_mesh(part.def.shape))),
-                    MeshMaterial3d(material),
-                    transform,
-                ));
-                if part.def.thruster.is_some() {
-                    // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
-                    let (radius, length) = match part.def.shape {
-                        Shape::Cylinder { radius_m, length_m } => {
-                            (radius_m as f32 * 0.8, length_m as f32)
-                        }
-                        Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
-                        Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
-                    };
-                    let plume_length = radius * 8.0;
-                    let nozzle_y = -length / 2.0;
-                    part_entity.with_children(|p| {
+                // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
+                let (radius, length) = match part.def.shape {
+                    Shape::Cylinder { radius_m, length_m } => {
+                        (radius_m as f32 * 0.8, length_m as f32)
+                    }
+                    Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
+                    Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
+                };
+                let plume_length = radius * 8.0;
+                let nozzle_y = -length / 2.0;
+                ship.spawn((transform, Visibility::default()))
+                    .with_children(|p| {
                         p.spawn((
                             Plume {
                                 index: thruster_index,
@@ -856,8 +825,7 @@ fn spawn_ship_visual(
                             Visibility::Hidden,
                         ));
                     });
-                    thruster_index += 1;
-                }
+                thruster_index += 1;
             }
         });
 }

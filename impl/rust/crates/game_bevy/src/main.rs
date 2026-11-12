@@ -17,6 +17,7 @@ mod space_render;
 mod terrain;
 mod terrain_material;
 mod universe;
+mod vehicle_visual;
 mod walk;
 mod warmup;
 mod workers;
@@ -66,6 +67,7 @@ fn main() {
             walk::WalkPlugin,
             warmup::WarmupPlugin,
         ))
+        .add_plugins(vehicle_visual::VehicleVisualPlugin)
         .add_systems(Startup, log_startup)
         .run();
 }
