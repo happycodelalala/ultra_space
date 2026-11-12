@@ -20,7 +20,7 @@ use crate::camera::{CameraSet, SpaceCamera};
 use crate::ship::{PilotState, PlayerShip, player_cruise_status, player_ship_state};
 use crate::sim::Sim;
 use crate::space_render::body_poses;
-use crate::universe::Universe;
+use crate::universe::{InGame, Universe};
 
 /// How often the HUD text is rebuilt.
 const REFRESH_INTERVAL: Duration = Duration::from_millis(100);
@@ -46,7 +46,7 @@ impl Plugin for HudPlugin {
         .add_systems(Startup, spawn_hud)
         .add_systems(
             Update,
-            ((hud_keys, update_hud).chain(), draw_orbits.after(CameraSet)),
+            ((hud_keys, update_hud).chain(), draw_orbits.after(CameraSet)).in_set(InGame),
         );
     }
 }

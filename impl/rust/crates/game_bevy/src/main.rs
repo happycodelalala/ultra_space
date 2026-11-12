@@ -36,7 +36,7 @@ fn main() {
                     ..default()
                 }),
         )
-        // The universe must load before the camera and renderer, which read it while building.
+        // Loads the universe on a worker and owns the Loading -> Running game state.
         .add_plugins(universe::UniversePlugin)
         .add_plugins((
             sim::SimPlugin,

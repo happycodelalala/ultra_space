@@ -14,17 +14,16 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
-    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartCatalog,
-    PartKind, Shape, Vehicle, VehicleBody, VehicleDesign,
+    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartKind,
+    Shape, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
 use crate::sim::{Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
-use crate::universe::{Universe, content_dir};
+use crate::universe::{GameState, InGame, StartingVehicle, Universe};
 
 const START_BODY: &str = "meridian";
-const START_DESIGN: &str = "kestrel";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
@@ -37,7 +36,10 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PilotState>()
-            .add_systems(Startup, (spawn_player_ship, spawn_starlight))
+            .add_systems(
+                OnEnter(GameState::Running),
+                (spawn_player_ship, spawn_starlight),
+            )
             .add_systems(
                 Update,
                 (
@@ -49,7 +51,8 @@ impl Plugin for ShipPlugin {
                     follow_ship.in_set(CameraStage::Follow),
                     (place_ship_visual, update_plumes, aim_starlight).after(CameraSet),
                     cursor_lock,
-                ),
+                )
+                    .in_set(InGame),
             );
     }
 }
@@ -92,23 +95,16 @@ impl Default for PilotState {
 fn spawn_player_ship(
     mut commands: Commands,
     universe: Res<Universe>,
+    start: Res<StartingVehicle>,
     mut sim: ResMut<Sim>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let content = content_dir().expect("content folder");
-    let catalog =
-        PartCatalog::load_dir(content.join("data/parts")).unwrap_or_else(|e| panic!("{e}"));
-    let design = VehicleDesign::from_path(
-        content.join(format!("data/vehicles/{START_DESIGN}.json")),
-        &catalog,
-    )
-    .unwrap_or_else(|e| panic!("{e}"));
-    let vehicle = Vehicle::from_design(&design);
+    let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
     info!(
         "spawning {}: {:.1} t, forward {:.1} m/s², {} thrusters",
-        design.name,
+        vehicle.name,
         body.mass.mass / 1_000.0,
         body.performance.forward_acceleration(),
         body.allocator.thrusters().len()

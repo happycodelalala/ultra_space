@@ -86,6 +86,10 @@ Windows export copies `content/data` next to the `.exe`.
   velocity (also in the star's frame), rails, cruise and assist state. `[` / `]` select objects.
 - **F3** toggles the debug overlay (hidden at start): FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
+- **Loading:** the star system, starting ship and simulation are built on a worker thread
+  while the window shows "Loading"; game systems run once loading finishes. Frames over the
+  50 ms hitch budget are logged as warnings, and a "startup frames" summary is logged after
+  the first 10 s of play (meaningful only in the native Windows build).
 - The simulation (`sim_core::Simulation`) runs at a fixed 30 Hz, decoupled from the frame
   rate. It runs at most 4 ticks per frame; time beyond that is dropped and shown as "dropped".
 - An over-budget tick logs a warning (at most every 5 s).

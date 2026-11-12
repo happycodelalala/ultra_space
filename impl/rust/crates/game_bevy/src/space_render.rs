@@ -19,7 +19,7 @@ use sim_core::{BodyKind, StarSystem};
 
 use crate::camera::SpaceCamera;
 use crate::sim::Sim;
-use crate::universe::Universe;
+use crate::universe::{GameState, InGame, Universe};
 
 const PLANET_SHADER: &str = "embedded://ultra_space/shaders/planet.wesl";
 const ATMOSPHERE_SHADER: &str = "embedded://ultra_space/shaders/atmosphere.wesl";
@@ -39,8 +39,11 @@ impl Plugin for SpaceRenderPlugin {
             MaterialPlugin::<PlanetMaterial>::default(),
             MaterialPlugin::<AtmosphereMaterial>::default(),
         ))
-        .add_systems(Startup, (spawn_camera, spawn_bodies))
-        .add_systems(Update, place_bodies.after(crate::camera::CameraSet));
+        .add_systems(OnEnter(GameState::Running), (spawn_camera, spawn_bodies))
+        .add_systems(
+            Update,
+            place_bodies.after(crate::camera::CameraSet).in_set(InGame),
+        );
     }
 }
 

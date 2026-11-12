@@ -15,7 +15,7 @@ use sim_vehicle::{Cruise, FlightControl, OnRails, Vehicle};
 
 use crate::ship::PlayerShip;
 use crate::sim::Sim;
-use crate::universe::Universe;
+use crate::universe::{InGame, Universe};
 
 const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -30,7 +30,10 @@ impl Plugin for InspectorPlugin {
             since_refresh: REFRESH_INTERVAL,
         })
         .add_systems(Startup, spawn_inspector)
-        .add_systems(Update, (inspector_keys, update_inspector).chain());
+        .add_systems(
+            Update,
+            (inspector_keys, update_inspector).chain().in_set(InGame),
+        );
     }
 }
 
