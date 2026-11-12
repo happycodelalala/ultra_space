@@ -193,3 +193,49 @@ fn a_parked_ship_blocks_the_way() {
     let past = (s.position - ship.position).dot(forward);
     assert!(past < 0.0, "ended up past the ship ({past:.1} m)");
 }
+
+/// Strafing into the ship's side anywhere along its length (legs, thrusters, hull) never throws
+/// the walker.
+#[test]
+fn bumping_the_ship_anywhere_never_throws_the_walker() {
+    let catalog = PartCatalog::load_dir(content().join("parts")).unwrap();
+    let design =
+        VehicleDesign::from_path(content().join("vehicles/kestrel.json"), &catalog).unwrap();
+    let body = VehicleBody::of(&Vehicle::from_design(&design)).unwrap();
+    for along in [-5.0, -3.5, -2.4, -1.0, 0.0, 1.5, 2.4, 3.5, 5.0] {
+        let mut world = World::new();
+        let (up, frame) = spot(&world.env);
+        let ship_spot = up;
+        let ship_ground = world.env.radius + world.env.ground_height(ship_spot * world.env.radius);
+        let p = ship_spot * (ship_ground + 3.0);
+        let mut ship = RigidState {
+            position: p,
+            velocity: world.env.spin.cross(p),
+            rotation: frame,
+            angular_velocity: world.env.spin,
+        };
+        // The walker 6 m to the ship's right, `along` metres along it, facing the same way.
+        let mut s = standing(&world.env, up, frame, DVec3::new(6.0, 0.0, along));
+        let mut w = Walker {
+            grounded: true,
+            ..Default::default()
+        };
+        let mut c = WalkerControl::default();
+        for _ in 0..(30 * 4) {
+            world.tick((&mut s, &mut w, &mut c), Some((&body, &mut ship)));
+            ship = ship_state(&world.scene).unwrap().0;
+        }
+        let mut fastest: f64 = 0.0;
+        for _ in 0..(30 * 3) {
+            c.movement = DVec2::new(-1.0, 0.0); // strafe left, into the ship
+            world.tick((&mut s, &mut w, &mut c), Some((&body, &mut ship)));
+            ship = ship_state(&world.scene).unwrap().0;
+            let rel = s.velocity - world.env.spin.cross(s.position);
+            fastest = fastest.max(rel.length());
+        }
+        assert!(
+            fastest < 6.0,
+            "thrown at {fastest:.0} m/s when bumping the ship {along} m along"
+        );
+    }
+}

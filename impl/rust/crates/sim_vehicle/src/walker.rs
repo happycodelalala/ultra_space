@@ -26,6 +26,8 @@ const GROUND_ACCELERATION: f64 = 40.0;
 const AIR_CONTROL: f64 = 0.15;
 /// Grounded feet follow the ground down steps up to this high (m) instead of falling off.
 const STEP_DOWN: f64 = 0.6;
+/// Most a walker is pushed out of an overlap with a vehicle per step (m).
+const MAX_PUSH: f64 = 0.2;
 /// Eye height above the feet (m).
 pub const EYE_HEIGHT: f64 = 1.7;
 
@@ -128,11 +130,19 @@ pub fn walk_step(
     walker.velocity -= up * (env.mu / (r * r)) * dt;
     if let Some(mover) = mover {
         // Vehicles: blocked by hulls, standing on decks.
-        let (out, moved, on_vehicle) = mover(state.position, up, walker.velocity * dt);
+        let desired = walker.velocity * dt;
+        let (out, moved, on_vehicle) = mover(state.position, up, desired);
+        // Rapier's controller can return more movement than asked (snapping and sliding over
+        // the edges of a hull): never more than asked plus a little, and a push out of an
+        // overlap of at most MAX_PUSH per step, or a bump can throw the walker.
+        let moved = moved.clamp_length_max(desired.length() + 0.02);
+        let out = out.clamp_length_max(MAX_PUSH);
         // The push out of an overlap moves the walker but isn't its own speed.
         state.position += out + moved;
         let vertical = walker.velocity.dot(up);
-        let tangential = (moved - up * moved.dot(up)) / dt;
+        // Sliding along a hull redirects the walker's speed but never adds to it.
+        let asked = (desired - up * desired.dot(up)).length() / dt;
+        let tangential = ((moved - up * moved.dot(up)) / dt).clamp_length_max(asked);
         walker.velocity = tangential + up * vertical;
         // The ground: the terrain height, as without vehicles.
         let ground = env.radius + env.ground_height(state.position);
