@@ -291,7 +291,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | # | Batch | Deliverable | Est. |
 |---|---|---|---|
 | **0** | **Foundation** | Cargo workspace and crates; tests, CI, benchmark harness; **parallel-scaling benchmark** (100k+ factory items and many ships across several star-system regions, measured at 1/4/8/16 threads); debug overlay; logging; `AGENTS.md` (AI assistant rules); key-leak check; Windows cross-compile. *(The in-game inspector and save-format versioning moved to the batches that first need them; see 7.1.)* | 3–5 wk |
-| **1** | **Space-scale core** | Frame tree, floating origin, orbits on rails, one star system with raymarched distant planets, star field and nebula skybox, fly a simple ship | 1–2 mo |
+| **1** | **Space-scale core** | Frame tree, floating origin, orbits on rails, the hand-made Halcyon system with raymarched distant planets, star field and nebula skybox, universe and game clocks, fly a simple ship between planets with a placeholder cruise drive (see 7.2) | 1.5–2.5 mo |
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
@@ -311,6 +311,37 @@ of it in early access. Checkpoint A should come within roughly the first year.
 
 Until Batch 7, earlier systems use a simple placeholder interface for generated text
 (names, codex entries), so they plug into the AI gateway later without changes.
+
+### 7.2 Batch 1 tasks
+
+Decisions behind these tasks: [universe-scale-time-and-flight.md](universe-scale-time-and-flight.md).
+
+| # | Task | Done when |
+|---|---|---|
+| 1.1 | **Units and conventions:** meters, seconds, `f64` positions, right-handed Y-up | Documented; math helpers tested |
+| 1.2 | **Frame tree:** frames with parents; relative position and rotation between any two frames in `f64` | Correct relative transforms; under 1 mm error at 10¹² m |
+| 1.3 | **Orbits on rails:** Kepler orbits at time *t*, planet spin and axial tilt | Periods, energy conservation and reference values tested |
+| 1.4 | **Clocks:** integer universe tick counter; Galactic Standard Time (16×); local planet time; debug time warp | Clock conversions tested; orbits visibly advance under warp |
+| 1.5 | **Star system data:** engine-neutral JSON schema and the hand-made Halcyon system, with star mass tuned for 20–60 hour years | Halcyon loads into the frame tree; invalid data gives clear errors |
+| 1.6 | **Floating origin rendering:** camera = frame + `f64` offset; camera-relative `f32` transforms for Bevy | No visible jitter 10⁹ m from the star |
+| 1.7 | **Distant planets via shaders:** raymarched spheres with lighting and atmosphere rims; placeholder meshes up close | Planets look right from 1,000 km to the whole system; no depth glitches |
+| 1.8 | **Star and lighting:** glare, light from the star's real direction, HDR and bloom | Correct day and night sides on every body |
+| 1.9 | **Sky:** procedural star field and nebula, fixed to the galaxy | Stable while flying |
+| 1.10 | **First persistent objects:** `ObjectId`, frame-referenced locations; ship and player as objects (7.1) | Tested |
+| 1.11 | **Ship flight:** `f64` rigid body, 6 degrees of freedom, thrust limits, gravity from the current sphere of influence, sphere collision with planets; flight assist modes with automatic "standing still" reference | Physics and energy tests; assist holds speed and hovers correctly |
+| 1.12 | **Moving between frames:** crossing spheres of influence moves the ship to the new frame and region at a tick boundary | Position and velocity preserved; no visible jump |
+| 1.13 | **Placeholder cruise drive:** speed scaled by distance to the nearest body, auto-slowdown, drop to normal flight | Neighbouring planets reached in 1–3 minutes |
+| 1.14 | **Controls and camera:** keyboard and mouse, chase camera, assist toggle | Developer judges the feel on Windows |
+| 1.15 | **HUD:** speed, reference body, altitude, galactic and local time, time warp; orbit lines | Readable at a glance |
+| 1.16 | **Inspector:** frames, regions, a selected object's `ObjectId`, frame and position | Usable for debugging 1.10–1.13 |
+| 1.17 | **Background loading:** Halcyon is built on a worker thread at startup | No startup frame over the 50 ms hitch budget |
+| 1.18 | **Batch review:** fly Meridian → Lantern → Leviathan on Windows; check jitter, transitions, frame times | Exit criteria met |
+
+**Exit criteria:** flight between planets with no jitter and no frame over 50 ms; orbit physics
+tests pass; sphere-of-influence transitions without visible jumps; CI passes.
+
+**Not in Batch 1:** planet surfaces, climate computation and landing (Batch 2); building
+vehicles (Batch 3).
 
 ### 7.1 When the object system is built
 

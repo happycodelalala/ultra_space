@@ -29,6 +29,9 @@ The challenge is making all of these systems share one world, not inventing any 
 
 ## 1. Scale: the foundation
 
+> Concrete decisions on planet size, distances, travel, flight and time are in
+> [universe-scale-time-and-flight.md](universe-scale-time-and-flight.md).
+
 32-bit floats lose precision a few kilometers from the origin, which causes physics jitter
 and "shaking" models. Planet- and system-scale worlds need several layers of fixes:
 
