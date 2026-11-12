@@ -35,3 +35,4 @@ See [`impl/rust/README.md`](impl/rust/README.md) for setup, build, test and Wind
 
 - [Technical overview](design/technical-overview.md): game systems and how they work
 - [Development plan](design/development-plan.md): engine decision, architecture, batches
+- [Agent instructions](AGENTS.md): working rules for AI coding assistants

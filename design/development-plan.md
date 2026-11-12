@@ -284,7 +284,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 
 | # | Batch | Deliverable | Est. |
 |---|---|---|---|
-| **0** | **Foundation** | Cargo workspace and crates; tests, CI, benchmark harness; **parallel-scaling benchmark** (100k+ factory items and many ships across several star-system regions, measured at 1/4/8/16 threads); debug overlays and in-game inspector; logging; save-format versioning; project conventions file for AI-assisted sessions; key-leak check; Windows cross-compile | 3–5 wk |
+| **0** | **Foundation** | Cargo workspace and crates; tests, CI, benchmark harness; **parallel-scaling benchmark** (100k+ factory items and many ships across several star-system regions, measured at 1/4/8/16 threads); debug overlays and in-game inspector; logging; save-format versioning; `AGENTS.md` (AI assistant rules); key-leak check; Windows cross-compile | 3–5 wk |
 | **1** | **Space-scale core** | Frame tree, floating origin, orbits on rails, one star system with raymarched distant planets, star field and nebula skybox, fly a simple ship | 1–2 mo |
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
@@ -335,6 +335,6 @@ is realistic for one person and scales well.
 4. **Data-driven content** (parts, buildings, cultures as data files), so content can be
    generated and validated in bulk.
 5. **A git branch per feature;** review changes as diffs.
-6. **Keep the docs and the project conventions file updated,** so each session starts with
+6. **Keep the docs and `AGENTS.md` (AI assistant rules) updated,** so each session starts with
    full context.
 7. **Cut scope ruthlessly.** If a batch runs past twice its estimate, simplify it and move on.
