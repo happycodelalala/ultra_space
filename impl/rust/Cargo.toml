@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+# Internal crates
+sim_core = { path = "crates/sim_core" }
+sim_planet = { path = "crates/sim_planet" }
+sim_vehicle = { path = "crates/sim_vehicle" }
+sim_economy = { path = "crates/sim_economy" }
+sim_combat = { path = "crates/sim_combat" }
+ai_gateway = { path = "crates/ai_gateway" }
+
+# Engine (pinned; upgrade deliberately between batches, never mid-batch)
+bevy = "=0.20.1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+# Bevy's recommended dev setup: our code builds fast, dependencies run fast.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

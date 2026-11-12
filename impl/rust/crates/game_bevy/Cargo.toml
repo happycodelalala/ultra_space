@@ -1,0 +1,18 @@
+[package]
+name = "game_bevy"
+description = "Bevy front end: rendering, input, UI and audio on top of the sim crates."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ultra_space"
+path = "src/main.rs"
+
+[dependencies]
+bevy.workspace = true
+sim_core.workspace = true
+
+[lints]
+workspace = true

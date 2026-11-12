@@ -1,0 +1,18 @@
+# Rust build output
+target/
+
+# Secrets: API keys live in env vars or .env, never in the repo
+.env
+.env.*
+!.env.example
+
+# Local exports, logs and caches
+/exports/
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

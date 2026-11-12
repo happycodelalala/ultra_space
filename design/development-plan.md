@@ -121,24 +121,41 @@ up to ~10× more simulation per frame than a single-threaded one.
 
 ---
 
-## 3. Workspace layout
+## 3. Repository layout
+
+Design and ideas are kept separate from the implementation, so the engine or framework can
+change without touching design, content or assets.
 
 ```
-ultra_space/  (Cargo workspace)
-├─ crates/
-│   ├─ sim_core/      frame tree, f64 math, orbits, tick scheduler
-│   ├─ sim_planet/    terrain generation, deltas
-│   ├─ sim_vehicle/   part graphs, mass properties, control allocation
-│   ├─ sim_economy/   factories, factions, tiered simulation
-│   ├─ sim_combat/    damage events, morale, AI
-│   ├─ ai_gateway/    LLM providers (Anthropic, OpenAI, replay), caching, validation
-│   └─ game/          Bevy app: rendering, input, UI, audio
-├─ tools/             content generators, validators, benchmarks, scripts
-├─ assets/            models, textures, data files
-└─ docs/
+ultra_space/
+├─ design/            game design, ideas and plans (engine-agnostic, no code)
+├─ content/           game data in engine-neutral formats (JSON/TOML)
+│   ├─ schemas/       JSON Schemas for all data types
+│   ├─ data/          parts, buildings, items, tech tiers, culture kits
+│   ├─ prompts/       LLM prompt templates
+│   └─ lore/          world bible
+├─ assets/
+│   ├─ source/        Blender files, layered textures, raw audio
+│   └─ export/        glTF/GLB, PNG/KTX2, OGG loaded by the game
+├─ impl/              implementations (all engine- or language-specific code)
+│   └─ rust/          Cargo workspace
+│       └─ crates/
+│           ├─ sim_core/      frame tree, f64 math, orbits, tick scheduler
+│           ├─ sim_planet/    terrain generation, deltas
+│           ├─ sim_vehicle/   part graphs, mass properties, control allocation
+│           ├─ sim_economy/   factories, factions, tiered simulation
+│           ├─ sim_combat/    damage events, morale, AI
+│           ├─ ai_gateway/    LLM providers (Anthropic, OpenAI, replay), caching, validation
+│           └─ game_bevy/     Bevy app: rendering, input, UI, audio
+└─ tools/             repo-wide scripts: git hooks, secret check, Windows export
 ```
 
-- `sim_*` crates may depend on `bevy_ecs` but not on rendering.
+- `design/`, `content/` and `assets/` never reference engine APIs or engine file formats.
+- Only `game_bevy` depends on Bevy. `sim_*` crates may use standalone `bevy_ecs` for parallel
+  scheduling, but nothing from rendering.
+- **Changing engines:** a new front-end crate next to `game_bevy` (same language, e.g.
+  Godot via godot-rust), or a new `impl/<name>/` (different language). Design, content and
+  assets stay where they are.
 - Each crate has unit tests; performance-critical crates also have benchmarks.
 
 ---
@@ -209,7 +226,8 @@ WSL2 (Ubuntu 24.04)                        Windows
   to `C:\Users\yangc\Apps\ultra_space\` (`/mnt/c/Users/yangc/Apps/ultra_space/` from WSL); run the
   `.exe` natively.
 - `.gitattributes` with LF line endings; build outputs gitignored.
-- A `tools/` script for each common action (test, bench, screenshot, export-windows).
+- Repo-wide scripts in `tools/` (secret check, Windows export); Rust commands in
+  `impl/rust/README.md`.
 
 ---
 

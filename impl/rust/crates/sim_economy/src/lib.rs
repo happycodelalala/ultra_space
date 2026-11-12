@@ -1,0 +1,9 @@
+//! Factories, factions, economy and tiered simulation.
+//!
+//! Engine-independent simulation code: no rendering or engine dependencies.
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn crate_builds() {}
+}

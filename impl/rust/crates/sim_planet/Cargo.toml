@@ -1,0 +1,14 @@
+[package]
+name = "sim_planet"
+description = "Planet terrain generation and player-made deltas."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Engine-independent: must not depend on bevy or any rendering crate.
+[dependencies]
+sim_core.workspace = true
+
+[lints]
+workspace = true
