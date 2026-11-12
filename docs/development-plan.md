@@ -198,14 +198,15 @@ WSL2 (Ubuntu 24.04)                        Windows
 ├─ cargo build / test / bench              │      performance (native GPU)
 ├─ headless simulation tests & benchmarks  └─ Blender, asset tools
 ├─ debug screenshots (test scenes)
-└─ cross-compile → Windows build ────────► C:\ultra_space_builds\
+└─ cross-compile → Windows build ────────► C:\Users\yangc\Apps\ultra_space\
 ```
 
 - **The repo stays on the Linux filesystem.** File access across the Windows/Linux boundary
   is slow.
 - **GPU inside WSL** goes through a generic Direct3D 12 translation layer. It's fine for
   automated runs and screenshots, not for judging visuals or performance.
-- **Windows builds:** cross-compile with `cargo build --target x86_64-pc-windows-gnu`; run the
+- **Windows builds:** cross-compile with `cargo build --target x86_64-pc-windows-gnu` and export
+  to `C:\Users\yangc\Apps\ultra_space\` (`/mnt/c/Users/yangc/Apps/ultra_space/` from WSL); run the
   `.exe` natively.
 - `.gitattributes` with LF line endings; build outputs gitignored.
 - A `tools/` script for each common action (test, bench, screenshot, export-windows).
