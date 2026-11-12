@@ -20,7 +20,7 @@ use sim_planet::mesh::{NO_CLIMATE_TEMPERATURE, terrain_normal};
 use sim_planet::{Climate, Terrain, subsolar_latitude};
 
 use crate::sky::face_direction;
-use crate::space_render::{BodyVisual, Layer, PlanetMaterial};
+use crate::space_render::{AtmosphereMaterial, BodyVisual, Layer, PlanetMaterial};
 use crate::universe::{GameState, InGame, Universe};
 
 /// Texels per cube face edge.
@@ -165,7 +165,9 @@ fn attach_maps(
     mut tasks: Option<ResMut<BakeTasks>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<PlanetMaterial>>,
+    mut atmospheres: ResMut<Assets<AtmosphereMaterial>>,
     visuals: Query<(&BodyVisual, &MeshMaterial3d<PlanetMaterial>)>,
+    atmosphere_visuals: Query<(&BodyVisual, &MeshMaterial3d<AtmosphereMaterial>)>,
 ) {
     let Some(tasks) = tasks.as_mut() else { return };
     let mut i = 0;
@@ -187,6 +189,15 @@ fn attach_maps(
                 m.field_map = Some(fields.clone());
                 m.normal_map = Some(normal.clone());
                 m.data.params.w = 1.0;
+            }
+        }
+        // Clouds follow the moisture field.
+        for (visual, handle) in &atmosphere_visuals {
+            if visual.body == maps.body
+                && let Some(mut m) = atmospheres.get_mut(&handle.0)
+            {
+                m.field_map = Some(fields.clone());
+                m.data.clouds.y = 1.0;
             }
         }
     }

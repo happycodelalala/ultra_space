@@ -100,7 +100,15 @@ pub struct AtmosphereUniform {
     pub shell: Vec4,
     /// rgb = Rayleigh scattering coefficients at sea level (1/m), w = Mie coefficient.
     pub scatter: Vec4,
+    /// Body rotation (quaternion xyzw), so clouds stay fixed to the planet.
+    pub rotation: Vec4,
+    /// x = cloud deck radius, y = 1 when clouds are on (needs the baked moisture map),
+    /// z = time (s) for drift, w = noise seed.
+    pub clouds: Vec4,
 }
+
+/// Cloud deck altitude as a fraction of the atmosphere's height (≈ 5.6 km on Meridian).
+pub const CLOUD_ALTITUDE: f64 = 0.08;
 
 /// Rayleigh scattering of Earth's air in blue light at sea level (1/m).
 const EARTH_RAYLEIGH_BLUE: f64 = 33.1e-6;
@@ -140,6 +148,10 @@ pub fn atmosphere_scattering(radius: f64, atm: &sim_core::system::Atmosphere) ->
 pub struct AtmosphereMaterial {
     #[uniform(0)]
     pub data: AtmosphereUniform,
+    /// The body's baked surface fields; clouds follow the moisture channel.
+    #[texture(1, dimension = "cube")]
+    #[sampler(2)]
+    pub field_map: Option<Handle<Image>>,
 }
 
 impl Material for AtmosphereMaterial {
@@ -152,7 +164,9 @@ impl Material for AtmosphereMaterial {
     }
 
     /// The shell is seen from inside too (the sky from the ground): draw both faces; the shader
-    /// keeps the right one.
+    /// keeps the right one. From inside, the visible faces are on the far side of the planet,
+    /// behind the terrain, so the depth test is off: the shader stops each ray at the scene
+    /// depth itself (depth prepass).
     fn specialize(
         _pipeline: &bevy::pbr::MaterialPipeline,
         descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
@@ -160,6 +174,10 @@ impl Material for AtmosphereMaterial {
         _key: bevy::pbr::MaterialPipelineKey<Self>,
     ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
         descriptor.primitive.cull_mode = None;
+        if let Some(depth) = descriptor.depth_stencil.as_mut() {
+            depth.depth_compare = Some(bevy::render::render_resource::CompareFunction::Always);
+            depth.depth_write_enabled = Some(false);
+        }
         Ok(())
     }
 }
@@ -269,7 +287,15 @@ fn spawn_bodies(
                     center: Vec4::ZERO,
                     shell,
                     scatter,
+                    rotation: Vec4::W,
+                    clouds: Vec4::new(
+                        (body.radius + CLOUD_ALTITUDE * atm.height) as f32,
+                        0.0,
+                        0.0,
+                        (i as f32) * 37.7 + 11.3,
+                    ),
                 },
+                field_map: None,
             });
             commands.spawn((
                 Name::new(format!("{} atmosphere", body.name)),
@@ -328,6 +354,7 @@ fn place_bodies(
     mut visuals: Query<VisualQuery>,
     mut planets: ResMut<Assets<PlanetMaterial>>,
     mut atmospheres: ResMut<Assets<AtmosphereMaterial>>,
+    real: Res<Time<Real>>,
 ) {
     let system = &universe.0;
     let t = render.0;
@@ -363,6 +390,9 @@ fn place_bodies(
         {
             m.data.star = star;
             m.data.center = transform.translation.extend(body.radius as f32);
+            let q = transform.rotation;
+            m.data.rotation = Vec4::new(q.x, q.y, q.z, q.w);
+            m.data.clouds.z = real.elapsed_secs_wrapped();
         }
     }
 }
