@@ -5,10 +5,13 @@
 //! once (its merged meshes rebuild in the background). B again leaves: the vehicle is released
 //! and settles on its gear.
 //!
-//! Keys while building: Up/Down choose a part, Left/Right choose a free attach node (yellow),
-//! R rolls the part 90° about the joint, T picks which of its nodes joins, Enter places it;
-//! PageUp/PageDown select a placed part (red), Delete removes it with everything attached below
-//! it; Ctrl+Z / Ctrl+Y undo and redo. Right mouse orbits the camera, the wheel zooms.
+//! Keys while building: Up/Down choose a part (or a saved section), Left/Right choose a free
+//! attach node (yellow), R rolls the part 90° about the joint, T picks which of its nodes joins,
+//! M cycles symmetry (mirror, radial ×2–×8), Enter places it (with its symmetric copies);
+//! PageUp/PageDown select a placed part (red), Delete removes it with its symmetry group and
+//! everything attached below, S saves the selected part and what hangs below it as a section;
+//! Ctrl+Z / Ctrl+Y undo and redo. Left click picks a node marker or selects a part; right mouse
+//! orbits the camera, the wheel zooms (task 3.8).
 
 use std::sync::Arc;
 
@@ -17,9 +20,10 @@ use bevy::prelude::*;
 use glam::{DQuat, DVec3};
 use sim_core::objects::Object;
 use sim_core::{ObjectId, ObjectState, Simulation};
+use sim_vehicle::Attach;
 use sim_vehicle::builder::{
-    FreeNode, attach_at_node, attach_to_surface, fitting_nodes, free_nodes, placement_at_node,
-    remove_part,
+    FreeNode, Section, Symmetry, attach_at_node, attach_to_surface, fitting_nodes, free_nodes,
+    place_section, place_symmetric, placement_at_node, remove_with_symmetry, stats,
 };
 use sim_vehicle::{FlightTelemetry, Frozen, PartDef, Vehicle, VehicleBody, VehiclePart};
 
@@ -45,7 +49,7 @@ impl Plugin for BuilderPlugin {
         app.add_systems(Startup, spawn_panel).add_systems(
             Update,
             (
-                (enter_or_leave, edit).chain().before(SimSet),
+                (enter_or_leave, pick, edit).chain().before(SimSet),
                 builder_camera.in_set(CameraStage::Follow),
                 (show_markers, update_panel).after(crate::camera::CameraSet),
             )
@@ -61,7 +65,10 @@ pub struct Building {
     vehicle: Vehicle,
     undo: Vec<Vehicle>,
     redo: Vec<Vehicle>,
-    palette: Vec<Arc<PartDef>>,
+    palette: Vec<Entry>,
+    symmetry: Symmetry,
+    /// Surface gravity of the body the vehicle stands on (m/s²), for thrust-to-weight.
+    gravity: f64,
     /// Chosen palette part, free node, joint node of the part, roll (quarter turns).
     choice: usize,
     node: usize,
@@ -76,13 +83,40 @@ pub struct Building {
     generation: u64,
 }
 
+/// A palette entry: a catalog part, or a section saved in this session.
+#[derive(Clone)]
+enum Entry {
+    Part(Arc<PartDef>),
+    Section(Section),
+}
+
+impl Entry {
+    fn root(&self) -> &Arc<PartDef> {
+        match self {
+            Entry::Part(def) => def,
+            Entry::Section(section) => section.root(),
+        }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            Entry::Part(def) => def.name.clone(),
+            Entry::Section(section) => format!("[section] {}", section.name),
+        }
+    }
+}
+
 impl Building {
     fn free(&self) -> Vec<FreeNode> {
         free_nodes(&self.vehicle)
     }
 
-    fn part(&self) -> &Arc<PartDef> {
+    fn entry(&self) -> &Entry {
         &self.palette[self.choice % self.palette.len()]
+    }
+
+    fn part(&self) -> &Arc<PartDef> {
+        self.entry().root()
     }
 
     fn target_node(&self) -> Option<FreeNode> {
@@ -234,19 +268,22 @@ fn enter_or_leave(
         info!("land first: the builder needs the vehicle standing still on the ground");
         return;
     }
-    let _ = (region, state);
+    let _ = state;
     if let Some(loc) = sim.objects.location(target)
         && let Some(r) = sim.regions.get_mut(loc.region)
     {
         r.world.entity_mut(loc.entity).insert(Frozen);
     }
-    let mut palette: Vec<Arc<PartDef>> = catalog.0.iter().cloned().collect();
-    palette.sort_by(|a, b| {
+    let mut parts: Vec<Arc<PartDef>> = catalog.0.iter().cloned().collect();
+    parts.sort_by(|a, b| {
         a.kind
             .cmp_key()
             .cmp(&b.kind.cmp_key())
             .then(a.id.cmp(&b.id))
     });
+    let palette = parts.into_iter().map(Entry::Part).collect();
+    let body = &system.bodies[region];
+    let gravity = body.mu / (body.radius * body.radius);
     let size = VehicleBody::of(&vehicle).map_or(10.0, |b| {
         b.colliders
             .iter()
@@ -264,6 +301,8 @@ fn enter_or_leave(
         undo: Vec::new(),
         redo: Vec::new(),
         palette,
+        symmetry: Symmetry::None,
+        gravity,
         choice: 0,
         node: 0,
         joint: 0,
@@ -276,6 +315,14 @@ fn enter_or_leave(
     });
     blend.start(&camera, now);
     pilot.building = true;
+}
+
+fn symmetry_name(s: Symmetry) -> String {
+    match s {
+        Symmetry::None => "off".into(),
+        Symmetry::Mirror => "mirror".into(),
+        Symmetry::Radial(n) => format!("radial ×{n}"),
+    }
 }
 
 /// Sorting key for part kinds in the palette.
@@ -317,13 +364,13 @@ fn edit(
     if pressed(KeyCode::ArrowDown) {
         b.choice = (b.choice + 1) % count;
         b.joint = 0;
-        let name = b.part().name.clone();
+        let name = b.entry().name();
         b.changed(name);
     }
     if pressed(KeyCode::ArrowUp) {
         b.choice = (b.choice + count - 1) % count;
         b.joint = 0;
-        let name = b.part().name.clone();
+        let name = b.entry().name();
         b.changed(name);
     }
     let free = b.free().len().max(1);
@@ -343,6 +390,31 @@ fn edit(
         b.joint += 1;
         b.changed("next joint node");
     }
+    if pressed(KeyCode::KeyM) {
+        b.symmetry = b.symmetry.next();
+        let msg = format!("symmetry: {}", symmetry_name(b.symmetry));
+        b.changed(msg);
+    }
+    if pressed(KeyCode::KeyS)
+        && let Some(i) = b.selected
+    {
+        let n = b
+            .palette
+            .iter()
+            .filter(|e| matches!(e, Entry::Section(_)))
+            .count()
+            + 1;
+        let name = format!("{n} ({})", b.vehicle.parts[i].def.name);
+        if let Some(section) = Section::of(&b.vehicle, i, name.clone()) {
+            info!(
+                "builder: saved section {name} ({} parts)",
+                section.parts.len()
+            );
+            b.palette.push(Entry::Section(section));
+            b.choice = b.palette.len() - 1;
+            b.changed(format!("saved section {name}"));
+        }
+    }
     let parts = b.vehicle.parts.len();
     if pressed(KeyCode::PageDown) {
         b.selected = Some(b.selected.map_or(1, |s| s + 1) % parts);
@@ -358,11 +430,38 @@ fn edit(
         let before = b.vehicle.clone();
         let result = match (b.target_node(), b.preview()) {
             (Some(at), Some((position, rotation, own))) => {
-                let def = b.part().clone();
+                let entry = b.entry().clone();
                 let roll = b.roll_angle();
-                match own {
-                    Some(own) => attach_at_node(&mut b.vehicle, &def, &own, &at, roll),
-                    None => attach_to_surface(&mut b.vehicle, &def, at.part, position, rotation),
+                let symmetry = b.symmetry;
+                match entry {
+                    Entry::Part(def) => {
+                        let placed = match own {
+                            Some(own) => attach_at_node(&mut b.vehicle, &def, &own, &at, roll),
+                            None => {
+                                attach_to_surface(&mut b.vehicle, &def, at.part, position, rotation)
+                            }
+                        };
+                        placed.inspect(|&i| {
+                            place_symmetric(&mut b.vehicle, i, symmetry);
+                        })
+                    }
+                    Entry::Section(section) => {
+                        let attach = match own {
+                            Some(own) => Attach::Node {
+                                node: own,
+                                to: at.node.clone(),
+                            },
+                            None => Attach::Surface,
+                        };
+                        place_section(
+                            &mut b.vehicle,
+                            &section,
+                            at.part,
+                            attach,
+                            position,
+                            rotation,
+                        )
+                    }
                 }
             }
             (None, _) => Err("no free attach node".into()),
@@ -387,7 +486,7 @@ fn edit(
         && let Some(i) = b.selected
     {
         let before = b.vehicle.clone();
-        match remove_part(&mut b.vehicle, i) {
+        match remove_with_symmetry(&mut b.vehicle, i) {
             Ok(n) => {
                 b.undo.push(before);
                 b.redo.clear();
@@ -428,6 +527,112 @@ fn edit(
     }
     if edited {
         write_back(&mut sim.0, b.target, &b.vehicle);
+    }
+}
+
+/// Where a ray (vehicle axes) first meets a box at `center`, turned `rotation`, with half sizes
+/// `half`: the distance along the ray.
+fn ray_box(origin: DVec3, dir: DVec3, center: DVec3, rotation: DQuat, half: DVec3) -> Option<f64> {
+    let inv = rotation.inverse();
+    let o = inv * (origin - center);
+    let d = inv * dir;
+    let (mut near, mut far) = (f64::MIN, f64::MAX);
+    for i in 0..3 {
+        if d[i].abs() < 1e-12 {
+            if o[i].abs() > half[i] {
+                return None;
+            }
+            continue;
+        }
+        let a = (-half[i] - o[i]) / d[i];
+        let b = (half[i] - o[i]) / d[i];
+        near = near.max(a.min(b));
+        far = far.min(a.max(b));
+    }
+    (near <= far && far >= 0.0).then_some(near.max(0.0))
+}
+
+/// Half sizes of the box around a part's shape (part axes).
+fn shape_half(shape: sim_vehicle::Shape) -> DVec3 {
+    match shape {
+        sim_vehicle::Shape::Box { size_m } => DVec3::from(size_m) / 2.0,
+        sim_vehicle::Shape::Cylinder { radius_m, length_m } => {
+            DVec3::new(radius_m, length_m / 2.0, radius_m)
+        }
+        sim_vehicle::Shape::Sphere { radius_m } => DVec3::splat(radius_m),
+    }
+}
+
+/// Left click: a node marker under the cursor becomes the chosen node; else the part under it
+/// is selected (or nothing).
+fn pick(
+    buttons: Res<ButtonInput<MouseButton>>,
+    building: Option<ResMut<Building>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<crate::space_render::MainCamera>>,
+    visuals: Query<(&VehicleVisual, &GlobalTransform)>,
+) {
+    let Some(mut b) = building else { return };
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let Some(cursor) = windows.single().ok().and_then(|w| w.cursor_position()) else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = cameras.single() else {
+        return;
+    };
+    let Ok(ray) = camera.viewport_to_world(camera_transform, cursor) else {
+        return;
+    };
+    let Some((_, vehicle_transform)) = visuals.iter().find(|(v, _)| v.id == b.target) else {
+        return;
+    };
+    // The ray in vehicle axes.
+    let to_vehicle = vehicle_transform.affine().inverse();
+    let origin = to_vehicle.transform_point3(ray.origin).as_dvec3();
+    let dir = to_vehicle
+        .transform_vector3(*ray.direction)
+        .as_dvec3()
+        .normalize();
+
+    let free = b.free();
+    let node_hit = free
+        .iter()
+        .enumerate()
+        .filter_map(|(i, n)| {
+            ray_box(origin, dir, n.position, DQuat::IDENTITY, DVec3::splat(0.4)).map(|t| (i, t))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    if let Some((i, _)) = node_hit {
+        b.node = i;
+        let msg = format!(
+            "node {} of {}",
+            free[i].node, b.vehicle.parts[free[i].part].name
+        );
+        b.changed(msg);
+        return;
+    }
+    let part_hit = b
+        .vehicle
+        .parts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| {
+            ray_box(origin, dir, p.position, p.rotation, shape_half(p.def.shape)).map(|t| (i, t))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    match part_hit {
+        Some((i, _)) => {
+            b.selected = Some(i);
+            let msg = format!("selected {}", b.vehicle.parts[i].name);
+            b.changed(msg);
+        }
+        None if b.selected.is_some() => {
+            b.selected = None;
+            b.changed("");
+        }
+        None => {}
     }
 }
 
@@ -541,13 +746,24 @@ fn show_markers(
             ));
         }
         if let Some((position, rotation, _)) = b.preview() {
-            let part = VehiclePart {
-                def: b.part().clone(),
-                position,
-                rotation,
-                ..Default::default()
+            let parts: Vec<VehiclePart> = match b.entry() {
+                Entry::Part(def) => vec![VehiclePart {
+                    def: def.clone(),
+                    position,
+                    rotation,
+                    ..Default::default()
+                }],
+                Entry::Section(section) => section
+                    .parts
+                    .iter()
+                    .map(|p| VehiclePart {
+                        position: position + rotation * p.position,
+                        rotation: rotation * p.rotation,
+                        ..p.clone()
+                    })
+                    .collect(),
             };
-            for (_, mesh) in merged_meshes(&[part]) {
+            for (_, mesh) in merged_meshes(&parts) {
                 v.spawn((
                     BuildMarker,
                     Mesh3d(meshes.add(mesh)),
@@ -614,17 +830,52 @@ fn update_panel(
     }
     *shown = b.generation;
     *visibility = Visibility::Inherited;
+    let st = stats(&b.vehicle, b.gravity);
     let mut s = format!(
-        "BUILD  {}  ({} parts, {:.1} t)\n\n",
+        "BUILD  {}  ({} parts, {:.1} t, {:.0}×{:.0}×{:.0} m)\n",
         b.vehicle.name,
-        b.vehicle.parts.len(),
-        VehicleBody::of(&b.vehicle).map_or(0.0, |body| body.mass.mass / 1000.0)
+        st.parts,
+        st.mass_kg / 1000.0,
+        st.size.x,
+        st.size.y,
+        st.size.z,
     );
+    s += &format!(
+        "thrust/weight {:.2} | up {:.1} m/s² ({}) | side {:.1} m/s² | turn {:.2} rad/s²\n",
+        st.thrust_to_weight,
+        st.up_acceleration,
+        if st.can_hover {
+            "can hover"
+        } else {
+            "can't hover"
+        },
+        st.side_acceleration,
+        st.turn_acceleration,
+    );
+    s += &format!(
+        "fuel {:.0} kg | battery {:.0} kWh",
+        st.fuel_kg,
+        st.battery_wh / 1000.0
+    );
+    if st.wheels > 0 {
+        s += &format!(" | {} wheels", st.wheels);
+        if let Some(t) = st.tipping {
+            s += if t > 1.0 {
+                " (tips easily!)"
+            } else {
+                " (stable)"
+            };
+        }
+    }
+    for problem in &st.problems {
+        s += &format!("\n! {problem}");
+    }
+    s += &format!("\nsymmetry: {}\n\n", symmetry_name(b.symmetry));
     let n = b.palette.len();
     for k in 0..7 {
         let i = (b.choice + n + k - 3) % n;
         let mark = if k == 3 { "> " } else { "  " };
-        s += &format!("{mark}{}\n", b.palette[i].name);
+        s += &format!("{mark}{}\n", b.palette[i].name());
     }
     let free = b.free();
     if let Some(at) = b.target_node() {
@@ -656,7 +907,59 @@ fn update_panel(
     if !b.message.is_empty() {
         s += &format!("\n\n{}", b.message);
     }
-    s += "\n\nUp/Down part | Left/Right node | R roll | T joint | Enter place\n\
-          PgUp/PgDn select | Del remove | Ctrl+Z/Y undo/redo | RMB orbit | wheel zoom | B leave";
+    s += "\n\nUp/Down part | Left/Right or click node | R roll | T joint | M symmetry | Enter place\n\
+          PgUp/PgDn or click select | Del remove | S save section | Ctrl+Z/Y undo/redo\n\
+          RMB orbit | wheel zoom | B leave";
     text.0 = s;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ray_box_hits_what_it_points_at() {
+        let half = DVec3::new(1.0, 0.5, 2.0);
+        // Straight at a box 10 m ahead: hits its near face.
+        let t = ray_box(
+            DVec3::ZERO,
+            DVec3::NEG_Z,
+            DVec3::new(0.0, 0.0, -10.0),
+            DQuat::IDENTITY,
+            half,
+        );
+        assert!((t.unwrap() - 8.0).abs() < 1e-9);
+        // Beside it: misses.
+        assert!(
+            ray_box(
+                DVec3::new(3.0, 0.0, 0.0),
+                DVec3::NEG_Z,
+                DVec3::new(0.0, 0.0, -10.0),
+                DQuat::IDENTITY,
+                half
+            )
+            .is_none()
+        );
+        // Behind the ray: misses.
+        assert!(
+            ray_box(
+                DVec3::ZERO,
+                DVec3::Z,
+                DVec3::new(0.0, 0.0, -10.0),
+                DQuat::IDENTITY,
+                half
+            )
+            .is_none()
+        );
+        // A turned box: 90° about Y swaps its X and Z sizes.
+        let turned = DQuat::from_rotation_y(std::f64::consts::FRAC_PI_2);
+        let t = ray_box(
+            DVec3::ZERO,
+            DVec3::NEG_Z,
+            DVec3::new(0.0, 0.0, -10.0),
+            turned,
+            half,
+        );
+        assert!((t.unwrap() - 9.0).abs() < 1e-9);
+    }
 }

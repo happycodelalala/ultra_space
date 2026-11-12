@@ -1,0 +1,36 @@
+# Builder tools (task 3.8). Run with ULTRA_SPACE_START_ALTITUDE=1500. In the builder on the
+# landed Kestrel: mirror symmetry, a landing leg on the front hull's right node (and its mirror
+# copy on the left), select the copy, save it as a section, place the section, remove the leg
+# pair (the symmetry group), leave. Look for: the panel's stats block (thrust/weight, can't
+# hover, fuel), "symmetry: mirror", the log lines "placed Small Landing Leg (29 parts)",
+# "saved section", "removed 2 parts"; two new legs side by side in 03.
+0.5  press Z
+1    wait landed 20
+2    press B
+3    shot 01-panel.png
+3.5  press M                 # mirror
+4    press Down              # palette to the landing leg (10th entry)
+4.1  press Down
+4.2  press Down
+4.3  press Down
+4.4  press Down
+4.5  press Down
+4.6  press Down
+4.7  press Down
+4.8  press Down
+5    press Right             # front hull: top, bottom, left, right
+5.1  press Right
+5.2  press Right
+5.5  shot 02-leg-ghost.png
+6    press Enter             # the leg and its mirror copy
+7    shot 03-legs.png
+7.5  press PageUp            # select the last part (the copy)
+8    press S                 # save it as a section
+8.5  press Enter             # place the section
+9    press PageUp            # the section's leg is last
+9.2  press PageUp            # the mirror copy
+9.5  press Delete            # removes the leg pair
+10.5 shot 04-after-remove.png
+11   press B
+13   shot 05-after.png
+14   quit
