@@ -2,8 +2,7 @@
 //!
 //! Controls (design: objects-vehicles-physics.md §10): W/S forward/back, A/D strafe,
 //! Space/Ctrl up/down, mouse pitch/yaw (cursor locked), Q/E roll, T cycles flight assist,
-//! X brakes (assist), B toggles a ×10 test boost on all thrust, J engages or drops out of the
-//! cruise drive, Tab switches between flying and the free debug camera, V toggles the
+//! X brakes (assist), J engages or drops out of the cruise drive, Tab switches between flying and the free debug camera, V toggles the
 //! cockpit view, right mouse orbits the chase camera. Esc releases the mouse (click to capture it
 //! again); the mouse is also released when the window loses focus. 1–8 teleport the ship into a
 //! parking orbit around a body (debug, until the cruise drive exists).
@@ -26,8 +25,6 @@ use crate::universe::{GameState, InGame, StartingVehicle, Universe};
 
 const START_BODY: &str = "meridian";
 
-/// Thrust multiplier of the test boost (B), for getting in and out of orbit quickly.
-pub const TEST_BOOST: f64 = 10.0;
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
 /// Chase camera offset behind and above the ship (vehicle axes).
@@ -461,14 +458,6 @@ fn pilot_input(
         control.assist = control.assist.next();
         info!("flight assist: {:?}", control.assist);
     }
-    if keys.just_pressed(KeyCode::KeyB) {
-        control.thrust_scale = if control.thrust_scale > 1.0 {
-            1.0
-        } else {
-            TEST_BOOST
-        };
-        info!("test boost: thrust x{}", control.thrust_scale);
-    }
     if orbiting {
         let d = motion.delta.as_dvec2() * 0.004;
         pilot.orbit.0 -= d.x;
@@ -519,13 +508,6 @@ pub fn player_cruise_status(sim: &Simulation, ship: &PlayerShip, system: &StarSy
         }
         (CruisePhase::Off, None) => String::new(),
     }
-}
-
-/// The player ship's thrust multiplier (test boost), if the ship exists.
-pub fn player_thrust_scale(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
-    let loc = sim.objects.location(ship.id)?;
-    let world = &sim.regions.get(loc.region)?.world;
-    Some(world.get::<FlightControl>(loc.entity)?.thrust_scale)
 }
 
 pub fn player_ship_state(

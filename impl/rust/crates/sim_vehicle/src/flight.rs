@@ -69,7 +69,7 @@ pub enum Reference {
 }
 
 /// Pilot input and flight-assist state.
-#[derive(Component, Clone, Debug, PartialEq)]
+#[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct FlightControl {
     /// Translation stick in vehicle axes, each in [−1, 1] (+X right, +Y up, −Z forward).
     pub translate: DVec3,
@@ -83,23 +83,6 @@ pub struct FlightControl {
     /// Region body that `desired_velocity` is relative to. When the vehicle moves to another
     /// body's region, [`flight_system`] converts the desired velocity so assist doesn't react.
     pub desired_body: Option<usize>,
-    /// Multiplier on every thruster's maximum thrust (1 = as built). A testing aid (the
-    /// player's boost key); ships' real performance comes from their parts.
-    pub thrust_scale: f64,
-}
-
-impl Default for FlightControl {
-    fn default() -> Self {
-        Self {
-            translate: DVec3::ZERO,
-            rotate: DVec3::ZERO,
-            assist: AssistMode::default(),
-            brake: false,
-            desired_velocity: None,
-            desired_body: None,
-            thrust_scale: 1.0,
-        }
-    }
 }
 
 /// Results of the last tick, for HUD and visuals.
@@ -237,15 +220,11 @@ pub fn assist_request(
                 let local = control
                     .translate
                     .clamp(DVec3::splat(-1.0), DVec3::splat(1.0));
-                let accel_local = control.thrust_scale.max(0.0)
-                    * DVec3::new(
-                        local.x
-                            * body.performance.max_acceleration[if local.x >= 0.0 { 0 } else { 1 }],
-                        local.y
-                            * body.performance.max_acceleration[if local.y >= 0.0 { 2 } else { 3 }],
-                        local.z
-                            * body.performance.max_acceleration[if local.z >= 0.0 { 4 } else { 5 }],
-                    );
+                let accel_local = DVec3::new(
+                    local.x * body.performance.max_acceleration[if local.x >= 0.0 { 0 } else { 1 }],
+                    local.y * body.performance.max_acceleration[if local.y >= 0.0 { 2 } else { 3 }],
+                    local.z * body.performance.max_acceleration[if local.z >= 0.0 { 4 } else { 5 }],
+                );
                 feed_forward = state.rotation * accel_local;
                 desired += feed_forward * dt;
             }
@@ -407,21 +386,10 @@ pub fn fly(
     let (request, reference, relative) = assist_request(&state, body, control, env, dt);
     let warm = (telemetry.throttles.len() == body.allocator.thrusters().len())
         .then_some(telemetry.throttles.as_slice());
-    // Scaled thrust: allocate a proportionally smaller request against the real thrusters, then
-    // scale what they achieve.
-    let scale = control.thrust_scale.max(1e-6);
-    let scaled = Wrench {
-        force: request.force / scale,
-        torque: request.torque / scale,
-    };
-    let allocation = body.allocator.solve(scaled, warm);
-    let achieved = Wrench {
-        force: allocation.achieved.force * scale,
-        torque: allocation.achieved.torque * scale,
-    };
+    let allocation = body.allocator.solve(request, warm);
     telemetry.reference = reference;
     telemetry.relative_velocity = relative;
-    telemetry.in_contact = integrate(&mut state, body, achieved, env, dt);
+    telemetry.in_contact = integrate(&mut state, body, allocation.achieved, env, dt);
     telemetry.throttles = allocation.throttles;
     state.to_origin(com)
 }
@@ -831,42 +799,6 @@ mod tests {
         assert!(
             (s.velocity - ground).length() < 1.0,
             "resting on the rotating ground"
-        );
-    }
-
-    #[test]
-    fn thrust_scale_multiplies_acceleration() {
-        let body = kestrel();
-        let env = meridian();
-        let run = |scale: f64| {
-            let mut state = circular(&env, 200_000.0);
-            let v0 = state.velocity;
-            let mut control = FlightControl {
-                assist: AssistMode::Off,
-                translate: DVec3::new(0.0, 0.0, -1.0),
-                thrust_scale: scale,
-                ..Default::default()
-            };
-            let mut telemetry = FlightTelemetry::default();
-            let mut rails = None;
-            let origin = state.to_origin(body.mass.center_of_mass);
-            let next = fly(
-                &origin,
-                &body,
-                &mut control,
-                &mut telemetry,
-                &mut rails,
-                &env,
-                0.0,
-                0.1,
-            );
-            state = RigidState::from_origin(&next, body.mass.center_of_mass);
-            (state.velocity - v0 - gravity(env.mu, state.position) * 0.1).length()
-        };
-        let (normal, boosted) = (run(1.0), run(10.0));
-        assert!(
-            (boosted / normal - 10.0).abs() < 0.5,
-            "{normal} vs {boosted}"
         );
     }
 

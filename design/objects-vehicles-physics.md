@@ -298,7 +298,6 @@ from catalog parts:
 | Q / E | Roll |
 | T | Cycle flight-assist modes |
 | J | Engage / drop out of cruise drive |
-| B | Test boost: all thrust ×10 (a testing aid, not ship performance) |
 | Tab | Switch between flying the ship and the free debug camera |
 | Esc | Release the mouse (click to capture again); losing window focus also releases it |
 | 1–8 | Debug: teleport the ship into a parking orbit around a body (until the cruise drive) |
