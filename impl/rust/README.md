@@ -86,6 +86,9 @@ Windows export copies `content/data` next to the `.exe`.
   velocity (also in the star's frame), rails, cruise and assist state. `[` / `]` select objects.
 - **F3** toggles the debug overlay (hidden at start): FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
+- **Planet maps:** `cargo run --release -p sim_planet --example planet_map -- <body id>
+  <out.ppm> [width]` renders a body's biome map with hill shading (equirectangular), for
+  tuning terrain and climate parameters.
 - **Loading:** the star system, starting ship and simulation are built on a worker thread
   while the window shows "Loading"; game systems run once loading finishes. Frames over the
   50 ms hitch budget are logged as warnings, and a "startup frames" summary is logged after

@@ -50,15 +50,43 @@ struct BodyFile {
     #[serde(default)]
     appearance: Option<AppearanceFile>,
     #[serde(default)]
+    terrain: Option<TerrainFile>,
+    #[serde(default)]
+    climate: Option<ClimateFile>,
+    #[serde(default)]
     description: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerrainFile {
+    seed: u64,
+    relief_km: f64,
+    #[serde(default)]
+    ocean_depth_km: f64,
+    #[serde(default)]
+    ocean_coverage: f64,
+    #[serde(default)]
+    mountains: f64,
+    #[serde(default)]
+    roughness: f64,
+    #[serde(default)]
+    craters: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ClimateFile {
+    equator_temperature_c: f64,
+    pole_temperature_c: f64,
+    #[serde(default)]
+    moisture: f64,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AppearanceFile {
     colors: [[f64; 3]; 2],
-    #[serde(default)]
-    ocean_coverage: f64,
     #[serde(default)]
     ocean_color: Option<[f64; 3]>,
     #[serde(default)]
@@ -135,12 +163,41 @@ pub struct Atmosphere {
     pub color: [f64; 3],
 }
 
+/// Parameters of a solid body's terrain (interpreted by `sim_planet`). SI units.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TerrainData {
+    pub seed: u64,
+    /// Height of the tallest mountains above sea level (m).
+    pub relief: f64,
+    /// Depth of the deepest ocean floor below sea level (m).
+    pub ocean_depth: f64,
+    /// Fraction of the surface below sea level, 0–1.
+    pub ocean_coverage: f64,
+    /// How much of the land carries mountain ranges, 0–1.
+    pub mountains: f64,
+    /// Strength of hills and small-scale relief, 0–1.
+    pub roughness: f64,
+    /// Crater density, 0–1 (airless bodies).
+    pub craters: f64,
+}
+
+/// Climate parameters; rules in `sim_planet` compute temperature and moisture from them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClimateData {
+    /// Annual mean temperature at sea level on the equator (°C).
+    pub equator_temperature_c: f64,
+    /// Annual mean temperature at sea level at the poles (°C).
+    pub pole_temperature_c: f64,
+    /// Overall wetness, 0 (none) to 1 (very wet).
+    pub moisture: f64,
+}
+
 /// How a body looks from a distance. Engine-neutral parameters a renderer interprets.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Appearance {
     /// Low and high terrain colors (rocky) or band colors (gas giant), linear RGB 0–1.
     pub colors: [[f64; 3]; 2],
-    /// Fraction of the surface covered by ocean, 0–1.
+    /// Fraction of the surface covered by ocean, 0–1 (from the terrain data).
     pub ocean_coverage: f64,
     pub ocean_color: [f64; 3],
     /// Fraction of the pole-to-equator range covered by ice caps, 0–1.
@@ -179,6 +236,8 @@ pub struct Body {
     pub spin: Spin,
     pub atmosphere: Option<Atmosphere>,
     pub appearance: Appearance,
+    pub terrain: Option<TerrainData>,
+    pub climate: Option<ClimateData>,
     pub description: String,
     /// Non-rotating frame following the orbit.
     pub inertial_frame: FrameId,
@@ -320,11 +379,46 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
             if colors.flatten().any(|c| !(0.0..=1.0).contains(c)) {
                 problems.push(format!("{}: appearance colors must be in [0, 1]", b.id));
             }
-            if !(0.0..=1.0).contains(&a.ocean_coverage) || !(0.0..=1.0).contains(&a.polar_ice) {
+            if !(0.0..=1.0).contains(&a.polar_ice) {
+                problems.push(format!("{}: polar_ice must be in [0, 1]", b.id));
+            }
+        }
+        if let Some(t) = &b.terrain {
+            if b.kind != BodyKind::Rocky {
+                problems.push(format!("{}: only rocky bodies have terrain", b.id));
+            }
+            if !positive(t.relief_km) || t.ocean_depth_km.is_nan() || t.ocean_depth_km < 0.0 {
                 problems.push(format!(
-                    "{}: ocean_coverage and polar_ice must be in [0, 1]",
+                    "{}: terrain relief_km must be positive and ocean_depth_km >= 0",
                     b.id
                 ));
+            }
+            let fractions = [t.ocean_coverage, t.mountains, t.roughness, t.craters];
+            if fractions.iter().any(|f| !(0.0..=1.0).contains(f)) {
+                problems.push(format!(
+                    "{}: terrain ocean_coverage, mountains, roughness and craters must be in [0, 1]",
+                    b.id
+                ));
+            }
+            if t.ocean_coverage > 0.0 && !positive(t.ocean_depth_km) {
+                problems.push(format!(
+                    "{}: an ocean needs a positive ocean_depth_km",
+                    b.id
+                ));
+            }
+        }
+        if let Some(c) = &b.climate {
+            if !c.equator_temperature_c.is_finite()
+                || !c.pole_temperature_c.is_finite()
+                || c.pole_temperature_c > c.equator_temperature_c
+            {
+                problems.push(format!(
+                    "{}: climate temperatures must be finite, poles no warmer than the equator",
+                    b.id
+                ));
+            }
+            if !(0.0..=1.0).contains(&c.moisture) {
+                problems.push(format!("{}: climate moisture must be in [0, 1]", b.id));
             }
         }
         match &b.rotation {
@@ -509,11 +603,25 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                 .as_ref()
                 .map_or_else(Appearance::default, |a| Appearance {
                     colors: a.colors,
-                    ocean_coverage: a.ocean_coverage,
+                    ocean_coverage: b.terrain.as_ref().map_or(0.0, |t| t.ocean_coverage),
                     ocean_color: a.ocean_color.unwrap_or(DEFAULT_OCEAN_COLOR),
                     polar_ice: a.polar_ice,
                     glow_color: a.glow_color,
                 }),
+            terrain: b.terrain.as_ref().map(|t| TerrainData {
+                seed: t.seed,
+                relief: t.relief_km * KM,
+                ocean_depth: t.ocean_depth_km * KM,
+                ocean_coverage: t.ocean_coverage,
+                mountains: t.mountains,
+                roughness: t.roughness,
+                craters: t.craters,
+            }),
+            climate: b.climate.as_ref().map(|c| ClimateData {
+                equator_temperature_c: c.equator_temperature_c,
+                pole_temperature_c: c.pole_temperature_c,
+                moisture: c.moisture,
+            }),
             description: b.description.clone(),
             inertial_frame,
             surface_frame,
