@@ -132,8 +132,10 @@ A flat grid can't tile a sphere. Instead, use **local tangent-plane grids**:
 | Godot 4 (double precision) | Free; lightweight; fast iteration | Weaker large-world rendering; more custom low-level work |
 | Custom / Bevy (Rust) | Total control | Only worthwhile if building engine tech is the goal |
 
-**Recommendation:** Unity or Godot for a solo developer or small team; Unreal 5 for a
-visually ambitious team.
+**Decision:** Bevy (Rust), with the simulation in separate engine-independent Rust
+crates. The deciding factor is safe, automatic multi-core parallelism for large-scale
+simulation. See [development-plan.md](development-plan.md) for the full rationale and the
+options considered.
 
 ---
 
@@ -462,7 +464,7 @@ AI Gateway
    └─ Fallback           (templates / procedural content when no model is available)
    │
    ▼
-Model backends: local small model | cloud model | build-time batch generation
+Model backends: cloud APIs (Anthropic, OpenAI) | build-time batch generation | replay (tests)
 ```
 
 Rules:
@@ -599,8 +601,13 @@ Each step uses the output of the step before, so the galaxy reads as if one auth
 |---|---|---|
 | Content shipped with the game (base cultures, lore, item text) | Large cloud model, **batch processing** at build time | Highest quality; batch is cheaper; no runtime cost |
 | Per-planet cultures, creatures, faction ship designs | Cloud model in the background on discovery, cached forever | One-time cost per planet; latency hidden |
-| Live NPC dialogue | Small, fast cloud model or local model | Low latency and low cost per line |
-| Offline / no account | Small local model (quantized, e.g. via llama.cpp) or templates | Works anywhere; competes with rendering for GPU memory |
+| Live NPC dialogue | Small, fast cloud model | Low latency and low cost per line |
+| Offline / no account / no key | Templates and procedural content | Game stays fully playable |
+
+- **Providers:** OpenAI and Anthropic APIs through a provider interface, plus a replay
+  adapter for tests. No local models. See
+  [development-plan.md](development-plan.md#6-llm-integration-cloud-apis) for API key
+  handling and cost control.
 
 - **Prompt caching:** keep the world bible, culture profile and character card as a stable
   prompt prefix so repeat calls cost much less.
@@ -622,6 +629,10 @@ Each step uses the output of the step before, so the galaxy reads as if one auth
 ---
 
 ## 14. Scope and roadmap
+
+> The ordered development batches, with estimates and checkpoints, are in
+> [development-plan.md](development-plan.md#7-development-batches). The milestones below are
+> the design-level vertical slices those batches deliver.
 
 The full scope is studio-sized. To keep it achievable, build it as **vertical slices**,
 where each milestone is a playable toy on its own:
