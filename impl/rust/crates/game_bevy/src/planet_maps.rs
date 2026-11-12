@@ -14,7 +14,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{
     Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
 };
-use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, poll_once};
+use bevy::tasks::{Task, block_on, poll_once};
 use sim_planet::mesh::terrain_normal;
 use sim_planet::{Climate, Terrain, subsolar_latitude};
 
@@ -88,7 +88,7 @@ pub fn bake(
 
 fn start_baking(mut commands: Commands, universe: Res<Universe>) {
     let system = &universe.0;
-    let pool = AsyncComputeTaskPool::get();
+    let pool = crate::workers::workers();
     let tasks = system
         .bodies
         .iter()
@@ -145,6 +145,7 @@ fn attach_maps(
             continue;
         };
         drop(tasks.0.swap_remove(i));
+        info!("planet maps: attaching maps for body {}", maps.body);
         let color = images.add(cube_image(maps.color, TextureFormat::Rgba8UnormSrgb));
         let normal = images.add(cube_image(maps.normal, TextureFormat::Rgba8Unorm));
         for (visual, handle) in &visuals {

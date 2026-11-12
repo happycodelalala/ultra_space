@@ -117,12 +117,20 @@ fn watch_hitches(real: Res<Time<Real>>, state: Res<State<GameState>>, mut h: Res
             }
         }
     }
+    // Every hitch is logged until the startup summary (to see what each one coincides with);
+    // after that, at most one warning per interval.
     if dt > HITCH_BUDGET
-        && h.last_warning
-            .is_none_or(|t| now - t >= HITCH_WARNING_INTERVAL)
+        && (!h.reported
+            || h.last_warning
+                .is_none_or(|t| now - t >= HITCH_WARNING_INTERVAL))
     {
         h.last_warning = Some(now);
-        warn!("hitch: frame took {:.1} ms ({:?})", ms(dt), state.get());
+        warn!(
+            "hitch: frame took {:.1} ms, ending {:.2} s after launch ({:?})",
+            ms(dt),
+            now.as_secs_f64(),
+            state.get()
+        );
     }
 }
 

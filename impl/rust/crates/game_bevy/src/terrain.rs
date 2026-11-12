@@ -18,7 +18,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::Indices;
 use bevy::prelude::*;
 use bevy::render::render_resource::PrimitiveTopology;
-use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, poll_once};
+use bevy::tasks::{Task, block_on, poll_once};
 use bevy::window::PrimaryWindow;
 use glam::{DQuat, DVec3};
 use sim_planet::quadtree::DEFAULT_SPACING_PIXELS;
@@ -330,7 +330,7 @@ fn update_terrain(
                 }
                 let terrain = bt.terrain.clone();
                 let climate = bt.climate.clone();
-                let task = AsyncComputeTaskPool::get()
+                let task = crate::workers::workers()
                     .spawn(async move { build_tile(&terrain, climate.as_deref(), key, season) });
                 bt.tiles.insert(key, Tile::Pending(task));
                 bt.in_flight += 1;

@@ -15,11 +15,15 @@ mod sky;
 mod space_render;
 mod terrain;
 mod universe;
+mod workers;
 
-use bevy::log::LogPlugin;
+use bevy::log::{BoxedLayer, LogPlugin};
 use bevy::prelude::*;
 
 /// Default log filter. Override at runtime with `RUST_LOG`, e.g. `RUST_LOG=debug`.
+/// Log file written next to the executable on every run.
+const LOG_FILE: &str = "ultra_space.log";
+
 const LOG_FILTER: &str = "info,wgpu=error,naga=warn,ultra_space=debug,sim_core=debug";
 
 fn main() {
@@ -35,6 +39,7 @@ fn main() {
                 })
                 .set(LogPlugin {
                     filter: LOG_FILTER.into(),
+                    custom_layer: log_file_layer,
                     ..default()
                 }),
         )
@@ -55,6 +60,24 @@ fn main() {
         ))
         .add_systems(Startup, log_startup)
         .run();
+}
+
+/// Also writes the log to `ultra_space.log` next to the executable (or in the working
+/// directory), replaced on every run, so testers can send one file.
+fn log_file_layer(_app: &mut App) -> Option<BoxedLayer> {
+    use bevy::log::tracing_subscriber::{Layer, fmt};
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let path = dir.join(LOG_FILE);
+    let file = std::fs::File::create(&path).ok()?;
+    Some(
+        fmt::layer()
+            .with_ansi(false)
+            .with_writer(std::sync::Mutex::new(file))
+            .boxed(),
+    )
 }
 
 fn log_startup() {

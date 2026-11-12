@@ -68,6 +68,11 @@ honestly with their output.
 
 - **Inspector** (F4 toggles; `ULTRA_SPACE_INSPECTOR=1` shows it at start): regions, frame tree,
   and a selected object's id, region, frame, position and velocity. `[` / `]` change selection.
+- **Log file:** every run writes `ultra_space.log` next to the executable (replaced each run);
+  testers send that file. Hitches during startup are all logged with their time since launch.
+- **Generation threads:** heavy background work (tiles, planet maps, sky) runs on the
+  `workers()` pool in `game_bevy/src/workers.rs`, never on Bevy's `AsyncComputeTaskPool`, which
+  Bevy needs for its own work (pipeline compilation).
 - **Debug overlay** (F3 toggles, hidden at start): FPS and frame time, simulation tick time and budget, region
   and entity counts. Logging uses Bevy's `LogPlugin`; override the filter with `RUST_LOG`.
 - **Ship controls** (flying is the default): see `impl/rust/README.md`. Tab switches to the
