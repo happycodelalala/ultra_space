@@ -1,0 +1,20 @@
+# Walking on foot (task 2.9). Run with ULTRA_SPACE_START_ALTITUDE=1500.
+# Land (stop and fall), step out, look around, run, jump, walk back and board.
+1    press Z
+36   log should be landed now
+36   press F                 # step out
+38   shot 01-stepped-out.png
+39   mouse 8 0 1             # turn right
+41   shot 02-looking-around.png
+42   mouse 0 -4 0.5          # look up a little
+43   hold W 6                # run forward
+43   hold Shift 6
+46   shot 03-running.png
+47   press Space             # jump
+47.3 shot 04-jumping.png
+50   mouse -16 0 1           # turn round
+51   hold W 7
+51   hold Shift 7
+58   press F                 # board (if back within reach)
+60   shot 05-boarded.png
+61   quit

@@ -17,6 +17,7 @@ mod space_render;
 mod terrain;
 mod terrain_material;
 mod universe;
+mod walk;
 mod workers;
 
 use bevy::log::{BoxedLayer, LogPlugin};
@@ -61,6 +62,7 @@ fn main() {
             inspector::InspectorPlugin,
             capture::CapturePlugin,
             script::ScriptPlugin,
+            walk::WalkPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

@@ -160,6 +160,8 @@ pub struct PilotState {
     pub orbit: (f64, f64),
     /// The mouse is released (Esc or focus loss): the cursor is free and doesn't steer.
     pub mouse_free: bool,
+    /// Walking on foot (see `walk`): ship controls and the ship camera stand down.
+    pub on_foot: bool,
 }
 
 /// Initial chase-camera orbit from `ULTRA_SPACE_CHASE_ORBIT=<yaw>,<pitch>` (degrees; negative
@@ -189,6 +191,7 @@ impl Default for PilotState {
             view: ShipView::Chase,
             orbit: start_orbit(),
             mouse_free: false,
+            on_foot: false,
         }
     }
 }
@@ -356,7 +359,7 @@ fn teleport_keys(
     mut sim: ResMut<Sim>,
 ) {
     let Some(ship) = ship else { return };
-    if !pilot.flying {
+    if !pilot.flying || pilot.on_foot {
         return; // the free camera uses 1–8 to jump the camera instead
     }
     let system = &universe.0;
@@ -415,7 +418,7 @@ fn full_stop_key(
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || !keys.just_pressed(KeyCode::KeyZ) {
+    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyZ) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -464,7 +467,7 @@ fn arcade_key(
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || !keys.just_pressed(KeyCode::KeyN) {
+    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyN) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -521,7 +524,7 @@ fn cruise_keys(
     else {
         return;
     };
-    if pilot.flying && keys.just_pressed(KeyCode::KeyJ) {
+    if pilot.flying && !pilot.on_foot && keys.just_pressed(KeyCode::KeyJ) {
         cruise.toggle = true;
         *notice = 0.0;
     } else if cruise.blocked.is_some() {
@@ -552,7 +555,7 @@ fn pilot_input(
         return;
     };
 
-    if !pilot.flying {
+    if !pilot.flying || pilot.on_foot {
         // Let go of the controls; assist keeps the ship steady.
         control.translate = DVec3::ZERO;
         control.rotate = DVec3::ZERO;
@@ -659,7 +662,7 @@ fn follow_ship(
     universe: Res<Universe>,
     mut camera: ResMut<SpaceCamera>,
 ) {
-    if !pilot.flying {
+    if !pilot.flying || pilot.on_foot {
         return;
     }
     let Some(object) = tracked.state else { return };

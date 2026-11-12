@@ -66,7 +66,9 @@ Windows export copies `content/data` next to the `.exe`.
 
 - **Flying the Kestrel** (default): W/S forward/back, A/D strafe, Space/Ctrl up/down, mouse to
     pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
-    **N** arcade flight (debug; No Man's Sky style: no gravity, the ship flies where the nose
+      **F** steps out when landed (or low and nearly still); on foot WASD walk, Shift run, Space
+  jump, mouse look, and **F** within 12 m of the ship boards it again,
+  **N** arcade flight (debug; No Man's Sky style: no gravity, the ship flies where the nose
   points, W/S raise or lower the held speed up to 4 km/s, X stops),
   **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the
   planet when in orbit (drop straight down),

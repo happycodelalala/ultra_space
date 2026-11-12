@@ -24,6 +24,7 @@ use crate::ship::{
 use crate::sim::{RenderTime, Sim};
 use crate::space_render::body_poses;
 use crate::universe::{InGame, Universe};
+use crate::walk::{OnFoot, walker_status};
 
 /// How often the HUD text is rebuilt.
 const REFRESH_INTERVAL: Duration = Duration::from_millis(100);
@@ -254,6 +255,7 @@ type FlightPanelQuery = (&'static mut Text, &'static mut Visibility);
 
 #[allow(clippy::too_many_arguments)]
 fn update_hud(
+    on_foot: Option<Res<OnFoot>>,
     real: Res<Time<Real>>,
     mut refresh: ResMut<HudRefresh>,
     settings: Res<HudSettings>,
@@ -301,6 +303,26 @@ fn update_hud(
             continue;
         }
         *visibility = Visibility::Inherited;
+        if let Some((region, state, walker)) =
+            on_foot.as_deref().and_then(|f| walker_status(sim, f.id))
+        {
+            let body = &system.bodies[region];
+            let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
+            text.0 = format!(
+                "{} | ON FOOT\n\
+                 SPEED {}   ALT {}{}\n\
+                 WASD walk | Shift run | Space jump | F board ship (within 12 m) | H HUD",
+                body.name.to_uppercase(),
+                speed(walker.velocity.length()),
+                distance(local.position.length() - body.radius),
+                if walker.grounded {
+                    String::new()
+                } else {
+                    format!("   AIRBORNE {}", distance(walker.ground_altitude))
+                },
+            );
+            continue;
+        }
         let body = &system.bodies[*region];
         let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
         let up = local.position.normalize_or_zero();
@@ -324,7 +346,7 @@ fn update_hud(
              SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | Z stop | N arcade | J cruise | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | N arcade | J cruise | F exit (landed) | V view | O orbits | H HUD | F3 debug",
             body.name.to_uppercase(),
             speed(relative.length()),
             speed(relative.dot(up)),

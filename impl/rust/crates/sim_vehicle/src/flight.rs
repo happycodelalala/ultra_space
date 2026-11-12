@@ -663,7 +663,12 @@ fn rebase_desired_velocity(
 /// Adds flight to a region schedule (used with `Simulation::for_star_system`).
 pub fn add_flight_systems(schedule: &mut Schedule) {
     schedule.add_systems(
-        (flight_system, arcade_system, cruise_system)
+        (
+            flight_system,
+            arcade_system,
+            cruise_system,
+            crate::walker::walker_system,
+        )
             .chain()
             .in_set(RegionStage::Simulate),
     );
