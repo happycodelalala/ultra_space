@@ -315,7 +315,132 @@ the layers together and gives first-person play a role inside large battles.
 
 ---
 
-## 12. Scope and roadmap
+## 12. Capital ships, hull walking, EVA and boarding
+
+Inspired by X4: the player can pilot a huge battleship, stand on its outer hull to watch a
+space battle, or EVA to other ships and stations.
+
+### 12.1 Frame tree
+
+The nested reference frames from Section 1 become a **frame tree**. Any ship or station
+can be a frame that other things live inside:
+
+```
+Star system frame (64-bit, orbits on rails)
+ └─ Battle region frame (e.g. a 50 km bubble around the fight)
+     ├─ Player battleship frame
+     │   ├─ Interior: bridge, corridors, crew, player
+     │   ├─ Outer hull: magnetic-boot surface
+     │   └─ Hangar → fighters docked inside
+     ├─ Enemy carrier frame
+     │   └─ Interior (not loaded until boarded)
+     ├─ Station frame
+     └─ Player on EVA (a small rigid body in the region frame)
+```
+
+- **Moving between frames means reparenting:**
+  - Exiting an airlock: ship frame → battle region frame.
+  - Flying into a hangar: region frame → carrier frame.
+  - Docking: ship frame becomes a child of the station frame.
+- Each switch converts position and velocity between frames, so it is seamless: an object
+  leaving a ship keeps the velocity it had on exit.
+- The floating origin always follows the player, wherever in the tree they are.
+
+### 12.2 Standing on a moving ship
+
+- The capital ship is **one rigid body** (part graph merged, Section 5) moving through the
+  battle region.
+- **The interior is simulated in ship-local coordinates.** The physics engine never sees the
+  ship's real velocity inside, so crew, cargo and the player stay stable even at high speed.
+- **Gravity is per volume:**
+  - Interior: artificial gravity with a constant "down" in ship-local space.
+  - Outer hull: no gravity. **Magnetic boots** align the player to the hull's surface
+    direction. Stepping off the hull starts EVA.
+- **Fictitious forces (optional):** hard maneuvers or heavy hits apply a scripted jolt or
+  stagger to interior occupants. This gives the feel of motion without physics instability.
+- **Hull breaches:** the interior is a **room graph of atmosphere volumes**:
+  - A breach vents a room and pulls loose objects and players toward the hole.
+  - Doors seal automatically.
+  - This connects per-part damage (Section 10.1) to the interior.
+
+### 12.3 Bridge control stations
+
+Sitting in a station switches the player's input mode:
+
+| Station | Input mode |
+|---|---|
+| Helm | Direct flight, using the generic thruster control (Section 5) |
+| Turret seat | Manual gunnery for one turret; the others stay AI-controlled |
+| Command table | **Tactical RTS view** (Homeworld-style): orders for the fleet |
+| Walk away | The ship's AI captain carries out the last orders |
+
+Orders are data, so the player can issue them from the bridge, then walk to the hull and
+watch them play out.
+
+### 12.4 Watching the battle: simulation vs. visuals
+
+- **Simulation and visuals are kept separate** (X4's "high attention vs. low attention"):
+  - **High attention** (near the player, or being looked at): full projectile simulation,
+    physics, per-part damage.
+  - **Low attention:** stat-based hit rolls, while **still showing** tracers, beams and
+    explosions as visual-only effects.
+- **What the player looks at counts:** looking at a distant ship through binoculars or a
+  turret scope promotes it to high attention.
+- **Large-scale rendering:**
+  - GPU-instanced tracers and missiles.
+  - Lower-detail meshes, then flat impostors, for distant ships.
+  - Explosion effects whose detail scales with distance.
+  - Logarithmic or reversed depth buffer, so 5 m to 50 km fits in one view.
+
+### 12.5 EVA between ships
+
+- On EVA the player is a small rigid body with a **thruster pack**, flown with the same
+  generic thruster control.
+- **The "too slow" problem.** Capital ships fight 2–10 km apart; at 10 m/s, a crossing
+  takes 3–15 minutes. Options that keep it realistic but playable:
+  - **EVA sled or boarding pod:** a small buildable vehicle.
+  - **Grapple or tether lines** for short hops along hulls and between nearby ships.
+  - **Booster packs** with limited fuel for fast but risky crossings.
+  - **Time compression** when out of combat (single-player only).
+
+### 12.6 Boarding actions
+
+- Marines cross in boarding pods or on EVA, breach hull points, and fight inside the enemy
+  ship using the **same first-person and melee combat systems** as on planets
+  (Sections 9–10).
+- The enemy interior loads as the player approaches the breach point, like streaming in a
+  level.
+- Without the player, boarding falls back to the stat-based resolver (crew vs. marine
+  strength).
+
+### 12.7 Streaming and performance
+
+- **Interiors:** only the interior the player is in runs at full detail. Other interiors load
+  only when the player approaches an airlock or breach point.
+- **Crew as two tiers:**
+  - Player aboard: 3D agents with jobs (e.g. repair crews running to damaged sections).
+  - Player not aboard: crew is stats: skill, morale, headcount.
+- **Hangars:** docked fighters are frozen children of the carrier frame with no physics.
+  When launched, they are reparented into the battle region and become active.
+
+### 12.8 Integration summary
+
+| Need | Existing system it reuses |
+|---|---|
+| Ships, stations and hulls as frames | Nested reference frames, generalized into a tree |
+| Capital ship flight and damage | Vehicle part graph with per-part damage |
+| Fleet command | Doctrine AI and the orbit battle layer (Section 11.3) |
+| Boarding combat | FPS/melee combat and the unified damage pipeline |
+| Distant battle detail | Simulation LOD (attention levels) |
+| Crew | Two-tier agents (3D when present, stats when absent) |
+
+**New systems:** reparenting between frames, per-volume gravity with magnetic boots,
+room-graph atmosphere and breaches, visual-only effects for low-attention combat, and
+streaming ship interiors.
+
+---
+
+## 13. Scope and roadmap
 
 The full scope is studio-sized. To keep it achievable, build it as **vertical slices**,
 where each milestone is a playable toy on its own:
@@ -336,5 +461,8 @@ where each milestone is a playable toy on its own:
    Proves the unified damage pipeline, morale and the supply link.
 8. **Orbital layer:** a ship in orbit calls a designated strike on a ground battle, with a
    persistent crater. Proves cross-frame strike events and layered battles.
-9. **Broaden:** more tech tiers, mechs, airships, more star systems, sieges, faction
+9. **Capital ship battle:** walk from a battleship's bridge out onto the hull during a
+   20-ship battle, EVA to a nearby ship, and breach it. Proves the frame tree with
+   reparenting, hull walking, attention-based battle LOD and boarding.
+10. **Broaden:** more tech tiers, mechs, airships, more star systems, sieges, faction
    diplomacy and the character layer.
