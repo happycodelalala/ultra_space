@@ -628,7 +628,113 @@ Each step uses the output of the step before, so the galaxy reads as if one auth
 
 ---
 
-## 14. Scope and roadmap
+## 14. Object model, persistence and streaming
+
+Goal: Bethesda-style persistence (anything the player moves, drops, builds or kills stays that
+way) at galaxy scale, **without loading screens**.
+
+### 14.1 Lessons from Creation Engine (Starfield)
+
+Commonly cited causes of Starfield's frequent loading screens. Outside analysis can't be
+certain, but these are widely agreed on:
+
+| Cause | Effect |
+|---|---|
+| Cell-based world | Interiors, ship interiors, landing zones and space are separate cells or worldspaces; every move between them is an unload/load |
+| 32-bit coordinates | Worldspace size is limited, so a planet can't be continuous and space can't contain the surface |
+| Heavy objects | Each placed reference carries scripts, physics and 3D state; loading a cell sets up thousands of them, much of it on the main thread |
+| Persistent references kept loaded | Quest-relevant objects stay in memory globally, so load work and memory grow with content |
+| Engine heritage | Built around discrete cells; space and planets were added on top rather than rebuilding the foundations |
+
+**Design stance:** Creation Engine treats places as rooms you enter. This game treats the
+universe as **one continuous space whose detail streams in and out.**
+
+### 14.2 Object model
+
+**Base definitions:** templates in `content/data/` with stable, namespaced IDs
+(`item.iron_sword`, `part.thruster.small`). They define stats, model and value once. Mods
+override or add definitions in load order.
+
+**Persistent identity:** every object that can persist has an `ObjectId`, a 64-bit value that
+is never reused. It is separate from the temporary internal ECS entity ID. Saves, quests,
+ownership and NPC memories refer to `ObjectId`s.
+
+**Three levels of existence:**
+
+| Level | Example | Stored as | Cost |
+|---|---|---|---|
+| **Active** | A sword the player just dropped nearby | Full entity in its region's world, with physics | Highest |
+| **Persistent, unloaded** | The player's stash on another planet | Compact record: ID, base, placement, state | Small |
+| **Procedural, untouched** | Rocks, trees and ruins nobody has interacted with | **Nothing:** regenerated from seeds | Zero |
+
+Interacting with a procedural object (mining a rock, looting a ruin) makes it persistent: the
+change is saved as a delta (Section 2).
+
+**Inventory and containers:**
+
+- Stackable generic items (ore, ammo) are counts in a container, with no `ObjectId`.
+- Unique items (named weapons, artifacts with generated histories) keep their `ObjectId` in
+  inventories, so they stay the same object when dropped, sold or stolen.
+
+**Built structures:** a ship or base is **one** persistent object holding its part graph
+(Section 5). Parts become separate objects only when they break off.
+
+**Moving between regions:** the player and any other object move between regions by being
+removed from one region's world at a tick boundary and spawned into the next (matching
+frame-tree reparenting, Section 12).
+
+**Quests and scripts reference IDs, not loaded objects.** A quest can check an object's record
+("is the artifact in the player's inventory?") without loading it.
+
+**Physics for clutter:** only objects near the player have active physics. Objects at rest
+sleep, and become records when their region unloads.
+
+### 14.3 Saves
+
+- **Per region:** changed and created objects, IDs of destroyed objects, removed procedural
+  objects, and the region's procedural seed. Loading one planet never reads the whole galaxy.
+- **Versioned:** each save file starts with a format version. Older saves are upgraded by a
+  chain of migrations; saves from newer game versions are refused with a clear error.
+- **Golden files:** a saved fixture from each format version stays in the repo, and tests
+  check it still loads after every change.
+- **Bloat control:** junk dropped outside player-owned areas expires after some in-game time;
+  anything in a player home, base, ship or container persists forever.
+
+### 14.4 Streaming rules
+
+| Rule | Purpose |
+|---|---|
+| **Never block a frame on loading** | All loading and generation runs on background threads |
+| **Build regions in the background** | A region's whole world is built on a worker thread, then handed to the simulation at a tick boundary |
+| **Spawn gradually** | Promoting records to active entities happens a set number per frame, never thousands at once |
+| **Prefetch from travel** | Approaching a planet or ship starts streaming its terrain, regions and assets early; travel time hides loading |
+| **Level of detail everywhere** | Terrain, models, textures, AI and simulation fidelity all scale with distance |
+| **Warm up GPU pipelines** | Precompile shaders and pipelines at startup or during travel, avoiding first-use stutter |
+| **Disguised transitions only as a deliberate fallback** | For a place too dense to stream smoothly (a huge city, a capital ship), an airlock cycle, elevator or docking clamp may hide a short load. A design choice for specific places, not a limit that applies to every door |
+
+### 14.5 Remaining risks
+
+| Risk | Mitigation |
+|---|---|
+| Spawn spikes | Gradual spawning with a per-frame budget |
+| Shader compilation stutter | Pipeline warm-up |
+| Asset bandwidth and video memory | Level-of-detail tiers, compressed textures, predictive prefetch |
+| Dense places exceed streaming capacity | Disguised transitions, chosen per place |
+| Bevy's asset streaming is less proven than older engines' | Measure early with the hitch budget below |
+| Save size growth | Per-region saves, compression, expiry rules |
+
+### 14.6 Hitch budget
+
+"No loading screens" is a measurable requirement:
+
+- **No frame over 50 ms during any transition:** orbit → surface, entering or leaving a ship,
+  docking, entering a settlement.
+- **Stress test (Batches 1–2):** fly from orbit to the surface and into a settlement while
+  recording frame times with the debug overlay; fix any spike over budget before moving on.
+
+---
+
+## 15. Scope and roadmap
 
 > The ordered development batches, with estimates and checkpoints, are in
 > [development-plan.md](development-plan.md#7-development-batches). The milestones below are
