@@ -68,6 +68,9 @@ Windows export copies `content/data` next to the `.exe`.
   pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
   V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
   camera. Thrust is disabled above ×4 time warp, where coasting ships go on rails.
+  **Esc** releases the mouse (click in the window to capture it again); switching windows
+  releases it too. **1–8** teleport the ship into a parking orbit around a body (debug, until
+  the cruise drive).
 - **Debug camera** (after Tab): hold right mouse to look; WASD move, R/F up/down, Q/E roll, Shift ×10,
   mouse wheel changes speed, **1–8** jump to Halcyon, Cinder, Meridian, Lantern, Hoarfell,
   Leviathan, Forge, Rime. `ULTRA_SPACE_VIEW=<body id>` picks the starting view.

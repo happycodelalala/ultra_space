@@ -139,7 +139,7 @@ fn update_overlay(
         .and_then(|ship| player_ship_state(sim, ship))
     {
         Some((region, _, telemetry, assist)) if pilot.flying => format!(
-            "Flying near {}  assist {:?}  ref {:?}  speed {}/s  alt {}{}{}  (T assist, X brake, V view, Tab free cam)",
+            "Flying near {}  assist {:?}  ref {:?}  speed {}/s  alt {}{}{}  (T assist, X brake, V view, Tab free cam, 1-8 teleport, Esc {})",
             universe.0.bodies[region].name,
             assist,
             telemetry.reference,
@@ -147,16 +147,26 @@ fn update_overlay(
             distance(telemetry.altitude),
             if telemetry.on_rails { "  ON RAILS" } else { "" },
             if telemetry.in_contact { "  LANDED" } else { "" },
+            if pilot.mouse_free {
+                "MOUSE FREE: click to capture"
+            } else {
+                "frees mouse"
+            },
         ),
         _ => "Free camera  (Tab: fly the ship)".to_string(),
     };
     let near = &universe.0.bodies[camera.anchor];
     let altitude = camera.offset.length() - near.radius;
     let camera_line = format!(
-        "Camera near {}  altitude {}  speed {}/s  (1-8: jump to body)",
+        "Camera near {}  altitude {}  speed {}/s{}",
         near.name,
         distance(altitude),
-        distance(camera.speed)
+        distance(camera.speed),
+        if pilot.flying {
+            ""
+        } else {
+            "  (1-8: jump to body)"
+        }
     );
     let galactic = sim.universe_time().galactic_standard();
     let warp = sim.time_warp();

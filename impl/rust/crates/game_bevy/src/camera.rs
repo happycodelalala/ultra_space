@@ -185,7 +185,7 @@ fn camera_controls(
     }
 }
 
-const BODY_KEYS: [KeyCode; 8] = [
+pub const BODY_KEYS: [KeyCode; 8] = [
     KeyCode::Digit1,
     KeyCode::Digit2,
     KeyCode::Digit3,

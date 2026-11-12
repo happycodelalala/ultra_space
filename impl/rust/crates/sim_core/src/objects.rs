@@ -313,6 +313,46 @@ impl Objects {
         Ok(())
     }
 
+    /// Moves an object to `region` with a new `state`, keeping its identity and transferable
+    /// components (used by debug teleports and, later, scripted moves). Call between ticks.
+    pub fn relocate(
+        &mut self,
+        regions: &mut RegionSet,
+        id: ObjectId,
+        region: usize,
+        state: ObjectState,
+    ) -> Result<(), ObjectError> {
+        let loc = self.location(id).ok_or(ObjectError::UnknownObject(id))?;
+        if regions.get(region).is_none() {
+            return Err(ObjectError::UnknownRegion(region));
+        }
+        let source = &mut regions
+            .get_mut(loc.region)
+            .ok_or(ObjectError::UnknownRegion(loc.region))?
+            .world;
+        let mut e = source
+            .get_entity_mut(loc.entity)
+            .map_err(|_| ObjectError::UnknownObject(id))?;
+        let components: Vec<_> = self
+            .transferable
+            .iter()
+            .filter_map(|(_, take)| take(&mut e))
+            .collect();
+        e.despawn();
+
+        let target = &mut regions
+            .get_mut(region)
+            .ok_or(ObjectError::UnknownRegion(region))?
+            .world;
+        let mut e = target.spawn((Object { id }, state));
+        for insert in components {
+            insert(&mut e);
+        }
+        let entity = e.id();
+        self.locations.insert(id, ObjectLocation { region, entity });
+        Ok(())
+    }
+
     /// An object's current state.
     pub fn state(&self, regions: &RegionSet, id: ObjectId) -> Option<ObjectState> {
         let loc = self.location(id)?;
@@ -519,6 +559,50 @@ mod tests {
         regions.tick();
         objects.apply_transfers(&mut regions, &sys, t);
         assert_eq!(objects.location(id).unwrap().region, 0, "the star's region");
+    }
+
+    #[test]
+    fn relocate_moves_an_object_and_keeps_its_identity() {
+        let sys = halcyon();
+        let (m, h) = (index(&sys, "meridian"), index(&sys, "hoarfell"));
+        let mut regions = body_regions(&sys, 0.0);
+        let mut objects = Objects::new();
+        objects.register_transferable::<Cargo>();
+        let start = ObjectState::at_rest(
+            sys.bodies[m].inertial_frame,
+            DVec3::new(sys.bodies[m].radius * 2.0, 0.0, 0.0),
+            DQuat::IDENTITY,
+        );
+        let id = objects.spawn(&mut regions, m, start, Cargo(3)).unwrap();
+
+        let target = ObjectState::at_rest(
+            sys.bodies[h].inertial_frame,
+            DVec3::new(sys.bodies[h].radius * 1.5, 0.0, 0.0),
+            DQuat::IDENTITY,
+        );
+        objects.relocate(&mut regions, id, h, target).unwrap();
+
+        let loc = objects.location(id).unwrap();
+        assert_eq!(loc.region, h);
+        let world = &regions.get(h).unwrap().world;
+        assert_eq!(world.get::<Cargo>(loc.entity), Some(&Cargo(3)));
+        assert_eq!(world.get::<Object>(loc.entity).unwrap().id, id);
+        assert_eq!(
+            objects.state(&regions, id).unwrap().state.position,
+            target.state.position
+        );
+        let world = &mut regions.get_mut(m).unwrap().world;
+        assert_eq!(world.query::<&Object>().iter(world).count(), 0);
+
+        assert_eq!(
+            objects.relocate(&mut regions, id, 999, target),
+            Err(ObjectError::UnknownRegion(999))
+        );
+        assert_eq!(
+            objects.location(id).unwrap(),
+            loc,
+            "failed relocate changes nothing"
+        );
     }
 
     #[test]

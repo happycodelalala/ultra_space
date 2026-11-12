@@ -3,26 +3,27 @@
 //! Controls (design: objects-vehicles-physics.md §10): W/S forward/back, A/D strafe,
 //! Space/Ctrl up/down, mouse pitch/yaw (cursor locked), Q/E roll, T cycles flight assist,
 //! X brakes (assist), Tab switches between flying and the free debug camera, V toggles the
-//! cockpit view, right mouse orbits the chase camera.
+//! cockpit view, right mouse orbits the chase camera. Esc releases the mouse (click to capture it
+//! again); the mouse is also released when the window loses focus. 1–8 teleport the ship into a
+//! parking orbit around a body (debug, until the cruise drive exists).
 
 use bevy::camera::Exposure;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
-use sim_core::{ObjectId, ObjectState, Simulation};
+use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
     AssistMode, FlightControl, FlightTelemetry, PartCatalog, PartKind, Shape, Vehicle, VehicleBody,
     VehicleDesign,
 };
 
-use crate::camera::{CameraSet, CameraStage, SpaceCamera, look_rotation};
+use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
 use crate::sim::{Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{Universe, content_dir};
 
 const START_BODY: &str = "meridian";
-const START_ALTITUDE: f64 = 150_000.0;
 const START_DESIGN: &str = "kestrel";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
@@ -40,8 +41,11 @@ impl Plugin for ShipPlugin {
             .add_systems(
                 Update,
                 (
-                    pilot_mode_keys,
-                    pilot_input.before(SimSet),
+                    (pilot_mode_keys, release_mouse_on_focus_loss).chain(),
+                    (teleport_keys, pilot_input)
+                        .chain()
+                        .after(pilot_mode_keys)
+                        .before(SimSet),
                     follow_ship.in_set(CameraStage::Follow),
                     (place_ship_visual, update_plumes, aim_starlight).after(CameraSet),
                     cursor_lock,
@@ -70,6 +74,8 @@ pub struct PilotState {
     pub view: ShipView,
     /// Chase-camera orbit around the ship (yaw, pitch), radians.
     pub orbit: (f64, f64),
+    /// The mouse is released (Esc or focus loss): the cursor is free and doesn't steer.
+    pub mouse_free: bool,
 }
 
 impl Default for PilotState {
@@ -78,6 +84,7 @@ impl Default for PilotState {
             flying: true,
             view: ShipView::Chase,
             orbit: (0.0, 0.0),
+            mouse_free: false,
         }
     }
 }
@@ -107,30 +114,13 @@ fn spawn_player_ship(
         body.allocator.thrusters().len()
     );
 
-    // Circular, prograde, equatorial orbit over the day side, 30° short of the subsolar point
-    // so the terminator is in view; nose along the velocity, belly toward the planet.
     let system = &universe.0;
     let index = system
         .bodies
         .iter()
         .position(|b| b.id == START_BODY)
         .unwrap_or(0);
-    let planet = &system.bodies[index];
-    let r = planet.radius + START_ALTITUDE;
-    let speed = (planet.mu / r).sqrt();
-    let to_star = system.frames.transform_point(
-        planet.inertial_frame,
-        system.star().inertial_frame,
-        0.0,
-        DVec3::ZERO,
-    );
-    let sunward = DVec3::new(to_star.x, 0.0, to_star.z).normalize_or(DVec3::X);
-    let up = DQuat::from_rotation_y(-30f64.to_radians()) * sunward;
-    // Orbits with angular momentum along +Y move along Y × r.
-    let prograde = DVec3::Y.cross(up);
-    let mut state =
-        ObjectState::at_rest(planet.inertial_frame, up * r, look_rotation(prograde, up));
-    state.state.velocity = prograde * speed;
+    let state = parking_orbit(system, index, 0.0);
 
     spawn_ship_visual(&mut commands, &vehicle, &mut meshes, &mut materials);
     let sim = &mut sim.0;
@@ -151,12 +141,44 @@ fn spawn_player_ship(
     commands.insert_resource(PlayerShip { id });
 }
 
+/// Parking-orbit altitude above a body: a quarter of its radius (150 km for Meridian), at least
+/// 20 km above the atmosphere, and well inside its sphere of influence.
+pub fn parking_radius(system: &StarSystem, index: usize) -> f64 {
+    let body = &system.bodies[index];
+    let atmosphere = body.atmosphere.as_ref().map_or(0.0, |a| a.height);
+    let altitude = (0.25 * body.radius).max(atmosphere + 20_000.0);
+    (body.radius + altitude).min(0.5 * body.soi_radius)
+}
+
+/// A circular, prograde, equatorial parking orbit over the day side at time `t`, 30° short of
+/// the subsolar point so the terminator is in view; nose along the velocity, belly toward the
+/// body. The state is in the body's inertial frame.
+pub fn parking_orbit(system: &StarSystem, index: usize, t: f64) -> ObjectState {
+    let body = &system.bodies[index];
+    let r = parking_radius(system, index);
+    let speed = (body.mu / r).sqrt();
+    let to_star = system.frames.transform_point(
+        body.inertial_frame,
+        system.star().inertial_frame,
+        t,
+        DVec3::ZERO,
+    );
+    let sunward = DVec3::new(to_star.x, 0.0, to_star.z).normalize_or(DVec3::X);
+    let up = DQuat::from_rotation_y(-30f64.to_radians()) * sunward;
+    // Orbits with angular momentum along +Y move along Y × r.
+    let prograde = DVec3::Y.cross(up);
+    let mut state = ObjectState::at_rest(body.inertial_frame, up * r, look_rotation(prograde, up));
+    state.state.velocity = prograde * speed;
+    state
+}
+
 // ---------------------------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------------------------
 
 fn pilot_mode_keys(
     keys: Res<ButtonInput<KeyCode>>,
+    buttons: Res<ButtonInput<MouseButton>>,
     mut pilot: ResMut<PilotState>,
     mut camera: ResMut<SpaceCamera>,
 ) {
@@ -175,12 +197,71 @@ fn pilot_mode_keys(
             }
         );
     }
+    if keys.just_pressed(KeyCode::Escape) {
+        pilot.mouse_free = !pilot.mouse_free;
+    } else if pilot.mouse_free && pilot.flying && buttons.just_pressed(MouseButton::Left) {
+        pilot.mouse_free = false;
+    }
     if keys.just_pressed(KeyCode::KeyV) {
         pilot.view = match pilot.view {
             ShipView::Chase => ShipView::Cockpit,
             ShipView::Cockpit => ShipView::Chase,
         };
     }
+}
+
+/// Releases the mouse when the window loses focus (Alt+Tab, clicking another window).
+fn release_mouse_on_focus_loss(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut pilot: ResMut<PilotState>,
+) {
+    if !pilot.mouse_free && windows.iter().any(|w| !w.focused) {
+        pilot.mouse_free = true;
+    }
+}
+
+/// While flying, 1–8 move the ship into a parking orbit around that body (debug teleport).
+fn teleport_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    universe: Res<Universe>,
+    ship: Option<Res<PlayerShip>>,
+    pilot: Res<PilotState>,
+    mut sim: ResMut<Sim>,
+) {
+    let Some(ship) = ship else { return };
+    if !pilot.flying {
+        return; // the free camera uses 1–8 to jump the camera instead
+    }
+    let system = &universe.0;
+    let Some(index) = BODY_KEYS
+        .iter()
+        .position(|k| keys.just_pressed(*k))
+        .filter(|&i| i < system.bodies.len())
+    else {
+        return;
+    };
+    let sim = &mut sim.0;
+    let t = sim.universe_time().as_secs_f64();
+    let state = parking_orbit(system, index, t);
+    if let Err(e) = sim
+        .objects
+        .relocate(&mut sim.regions, ship.id, index, state)
+    {
+        warn!("teleport failed: {e}");
+        return;
+    }
+    if let Some(loc) = sim.objects.location(ship.id)
+        && let Some(region) = sim.regions.get_mut(loc.region)
+        && let Some(mut control) = region.world.get_mut::<FlightControl>(loc.entity)
+    {
+        // Drop any held velocity target from the old body.
+        control.desired_velocity = None;
+    }
+    info!(
+        "teleported to a {:.0} km parking orbit around {}",
+        (parking_radius(system, index) - system.bodies[index].radius) / 1_000.0,
+        system.bodies[index].name
+    );
 }
 
 fn axis(keys: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f64 {
@@ -219,8 +300,8 @@ fn pilot_input(
         axis(&keys, KeyCode::Space, KeyCode::ControlLeft),
         axis(&keys, KeyCode::KeyS, KeyCode::KeyW),
     );
-    let orbiting = buttons.pressed(MouseButton::Right);
-    let mouse = if orbiting {
+    let orbiting = buttons.pressed(MouseButton::Right) && !pilot.mouse_free;
+    let mouse = if orbiting || pilot.mouse_free {
         Vec2::ZERO
     } else {
         motion.delta / MOUSE_FULL_STICK
@@ -250,7 +331,7 @@ fn cursor_lock(
         return;
     }
     for mut cursor in &mut windows {
-        if pilot.flying {
+        if pilot.flying && !pilot.mouse_free {
             cursor.grab_mode = CursorGrabMode::Locked;
             cursor.visible = false;
         } else {
@@ -514,5 +595,44 @@ fn aim_starlight(
         for mut transform in &mut lights {
             *transform = Transform::default().looking_to(direction, Vec3::Y);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    fn halcyon() -> StarSystem {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../content/data/star_systems/halcyon.json");
+        StarSystem::from_path(path).unwrap()
+    }
+
+    #[test]
+    fn parking_orbits_are_circular_above_the_air_and_inside_the_sphere_of_influence() {
+        let sys = halcyon();
+        for (i, body) in sys.bodies.iter().enumerate() {
+            let state = parking_orbit(&sys, i, 12_345.0);
+            assert_eq!(state.frame, body.inertial_frame);
+            let r = state.state.position.length();
+            let air = body.atmosphere.as_ref().map_or(0.0, |a| a.height);
+            assert!(r > body.radius + air, "{}: below the atmosphere", body.id);
+            assert!(r < body.soi_radius, "{}: outside its sphere", body.id);
+            let v = state.state.velocity;
+            assert!(
+                (v.length() - (body.mu / r).sqrt()).abs() < 1e-6,
+                "{}",
+                body.id
+            );
+            assert!(v.dot(state.state.position).abs() < 1e-3 * r * v.length());
+        }
+        let m = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+        let altitude = parking_radius(&sys, m) - sys.bodies[m].radius;
+        assert!(
+            (altitude - 150_000.0).abs() < 1.0,
+            "Meridian start altitude"
+        );
     }
 }

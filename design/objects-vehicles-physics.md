@@ -277,6 +277,8 @@ from catalog parts:
 | T | Cycle flight-assist modes |
 | J | Engage / drop out of cruise drive |
 | Tab | Switch between flying the ship and the free debug camera |
+| Esc | Release the mouse (click to capture again); losing window focus also releases it |
+| 1–8 | Debug: teleport the ship into a parking orbit around a body (until the cruise drive) |
 
 **Camera:** chase camera behind and above the ship, orbited by holding the right mouse button;
 **V** toggles a cockpit view.
