@@ -51,8 +51,10 @@ This layer must be built first. Every other system depends on it.
 ## 2. Seamless procedural planets
 
 - **Cube-sphere with quadtree LOD:** a cube projected onto a sphere, with each face split
-  into finer tiles as the camera gets closer. Terrain is generated on the GPU (compute
-  shaders) from layered noise, erosion and biome rules.
+  into finer tiles as the camera gets closer. Terrain is generated from layered noise,
+  erosion and biome rules by one deterministic function on CPU worker threads, so collision
+  and gameplay use exactly what is drawn (decision and details:
+  [planet-surface.md](planet-surface.md)).
 - **Heightmap vs. voxel:**
   - Heightmaps are cheap and look good, but can't have caves or overhangs.
   - Voxels or SDFs (Space Engineers, Astroneer) allow digging and caves, at higher cost.

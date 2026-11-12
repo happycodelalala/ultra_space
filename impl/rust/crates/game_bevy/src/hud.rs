@@ -18,11 +18,13 @@ use sim_vehicle::Reference;
 
 use crate::camera::{CameraSet, SpaceCamera};
 use crate::ship::{
-    PilotState, PlayerShip, ShipRenderState, player_cruise_status, player_ship_state,
+    PilotState, PlayerShip, ShipRenderState, player_arcade_speed, player_cruise_status,
+    player_ship_state,
 };
 use crate::sim::{RenderTime, Sim};
 use crate::space_render::body_poses;
 use crate::universe::{InGame, Universe};
+use crate::walk::{OnFoot, walker_status};
 
 /// How often the HUD text is rebuilt.
 const REFRESH_INTERVAL: Duration = Duration::from_millis(100);
@@ -253,6 +255,7 @@ type FlightPanelQuery = (&'static mut Text, &'static mut Visibility);
 
 #[allow(clippy::too_many_arguments)]
 fn update_hud(
+    on_foot: Option<Res<OnFoot>>,
     real: Res<Time<Real>>,
     mut refresh: ResMut<HudRefresh>,
     settings: Res<HudSettings>,
@@ -300,6 +303,26 @@ fn update_hud(
             continue;
         }
         *visibility = Visibility::Inherited;
+        if let Some((region, state, walker)) =
+            on_foot.as_deref().and_then(|f| walker_status(sim, f.id))
+        {
+            let body = &system.bodies[region];
+            let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
+            text.0 = format!(
+                "{} | ON FOOT\n\
+                 SPEED {}   ALT {}{}\n\
+                 WASD walk | Shift run | Space jump | F board ship (within 12 m) | H HUD",
+                body.name.to_uppercase(),
+                speed(walker.velocity.length()),
+                distance(local.position.length() - body.radius),
+                if walker.grounded {
+                    String::new()
+                } else {
+                    format!("   AIRBORNE {}", distance(walker.ground_altitude))
+                },
+            );
+            continue;
+        }
         let body = &system.bodies[*region];
         let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
         let up = local.position.normalize_or_zero();
@@ -309,30 +332,47 @@ fn update_hud(
             Reference::Inertial => "ORBIT",
         };
         let cruise = player_cruise_status(sim, ship, system);
+        let arcade = player_arcade_speed(sim, ship)
+            .map_or(String::new(), |s| format!("  ARCADE {}", speed(s)));
         let state_flags = format!(
-            "{}{}{}",
+            "{}{}{}{}",
             if telemetry.on_rails { "  ON RAILS" } else { "" },
             if telemetry.in_contact { "  LANDED" } else { "" },
+            arcade,
             cruise
         );
         text.0 = format!(
             "{} | {frame}\n\
-             SPEED {}   V/S {}   ALT {}\n\
+             SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | J cruise | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | N arcade | J cruise{} | V view | O orbits | H HUD | F3 debug",
             body.name.to_uppercase(),
             speed(relative.length()),
             speed(relative.dot(up)),
             distance(local.position.length() - body.radius),
-            orbit_summary(
-                body.mu,
-                body.radius,
-                body.soi_radius,
-                local.position,
-                local.velocity
-            ),
+            if telemetry.ground_altitude < 20_000.0 {
+                format!("   AGL {}", distance(telemetry.ground_altitude))
+            } else {
+                String::new()
+            },
+            if telemetry.in_contact {
+                "(on the ground)".to_string()
+            } else {
+                orbit_summary(
+                    body.mu,
+                    body.radius,
+                    body.soi_radius,
+                    local.position,
+                    local.velocity,
+                )
+            },
             assist,
+            if telemetry.ground_altitude < 30.0 && relative.length() < 2.0 {
+                " | F exit"
+            } else {
+                ""
+            },
         );
     }
 }
@@ -383,7 +423,11 @@ pub fn predict_path(
     points
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_orbits(
+    sim: Res<Sim>,
+    ship: Option<Res<PlayerShip>>,
+    on_foot: Option<Res<OnFoot>>,
     settings: Res<HudSettings>,
     render: Res<RenderTime>,
     universe: Res<Universe>,
@@ -423,7 +467,14 @@ fn draw_orbits(
         gizmos.linestrip(points, BODY_ORBIT_COLOR);
     }
 
-    if let Some(object) = tracked.state
+    // No orbit line while landed or walking: it would just lie along the ground.
+    let grounded = on_foot.is_some()
+        || ship
+            .as_deref()
+            .and_then(|s| player_ship_state(&sim.0, s))
+            .is_some_and(|(_, _, telemetry, _)| telemetry.in_contact);
+    if !grounded
+        && let Some(object) = tracked.state
         && let Some(region) = system
             .bodies
             .iter()

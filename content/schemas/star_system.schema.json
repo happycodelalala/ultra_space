@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "star_system.schema.json",
   "title": "Star system",
-  "description": "A star system: one star plus planets and moons on Kepler orbits. Units are in field names (km, deg, hours, m/s\u00b2). Loaded by sim_core::system, which also checks cross-field rules (unique ids, parents exist, moons inside their parent's sphere of influence, orbits clear of their parent).",
+  "description": "A star system: one star plus planets and moons on Kepler orbits. Units are in field names (km, deg, hours, m/s²). Loaded by sim_core::system, which also checks cross-field rules (unique ids, parents exist, moons inside their parent's sphere of influence, orbits clear of their parent).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -154,11 +154,6 @@
               "minItems": 2,
               "maxItems": 2
             },
-            "ocean_coverage": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
             "ocean_color": {
               "$ref": "#/$defs/rgb"
             },
@@ -171,6 +166,81 @@
             "glow_color": {
               "description": "Self-emitted light: the star's color, or glowing lava.",
               "$ref": "#/$defs/rgb"
+            }
+          }
+        },
+        "terrain": {
+          "description": "Solid-surface terrain parameters (rocky bodies only), interpreted by the terrain generator.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "seed",
+            "relief_km"
+          ],
+          "properties": {
+            "seed": {
+              "description": "Terrain noise seed.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "relief_km": {
+              "description": "Height of the tallest mountains above sea level.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "ocean_depth_km": {
+              "description": "Depth of the deepest ocean floor below sea level.",
+              "type": "number",
+              "minimum": 0
+            },
+            "ocean_coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Fraction of the surface below sea level."
+            },
+            "mountains": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "How much of the land carries mountain ranges."
+            },
+            "roughness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Strength of hills and small-scale relief."
+            },
+            "craters": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Crater density (airless bodies)."
+            }
+          }
+        },
+        "climate": {
+          "description": "Climate parameters; rules compute temperature and moisture by latitude, season and altitude.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "equator_temperature_c",
+            "pole_temperature_c"
+          ],
+          "properties": {
+            "equator_temperature_c": {
+              "description": "Annual mean sea-level temperature at the equator.",
+              "type": "number"
+            },
+            "pole_temperature_c": {
+              "description": "Annual mean sea-level temperature at the poles.",
+              "type": "number"
+            },
+            "moisture": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Overall wetness, 0 (none) to 1 (very wet)."
             }
           }
         },

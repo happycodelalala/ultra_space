@@ -1,9 +1,16 @@
-//! Planet terrain generation and player-made deltas.
+//! Planet terrain, climate and biomes (Batch 2; design: planet-surface.md).
 //!
-//! Engine-independent simulation code: no rendering or engine dependencies.
+//! Engine-independent simulation code: no rendering or engine dependencies. One deterministic
+//! function per body gives heights, climate and biomes, shared by rendering, collision and
+//! gameplay.
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_builds() {}
-}
+pub mod climate;
+pub mod mesh;
+pub mod noise;
+pub mod quadtree;
+pub mod terrain;
+
+pub use climate::{Biome, Climate, latitude, subsolar_latitude};
+pub use mesh::{TileMesh, build_tile, tile_indices};
+pub use quadtree::{Extent, TileKey, View, estimated_heights, select};
+pub use terrain::{Pad, Sample, Terrain, fibonacci_directions};

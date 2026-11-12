@@ -13,8 +13,10 @@ TARGET=x86_64-pc-windows-gnu
 cd "$ROOT/impl/rust"
 cargo build --release -p game_bevy --target "$TARGET"
 
+# Honour a shared build folder (test runs use one to avoid full rebuilds).
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 mkdir -p "$DEST"
-cp "target/$TARGET/release/ultra_space.exe" "$DEST/"
+cp "$TARGET_DIR/$TARGET/release/ultra_space.exe" "$DEST/"
 if [[ -d "$ROOT/assets/export" ]]; then
     mkdir -p "$DEST/assets"
     rsync -a --exclude .gitkeep "$ROOT/assets/export/" "$DEST/assets/"

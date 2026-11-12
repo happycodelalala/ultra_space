@@ -13,6 +13,7 @@ use crate::camera::SpaceCamera;
 use crate::ship::{PilotState, PlayerShip, player_cruise_status, player_ship_state};
 use crate::sim::Sim;
 use crate::universe::{GameState, InGame, Universe};
+use crate::warmup::WarmupDone;
 
 /// How often the overlay text is rebuilt (formatting every frame is wasted work).
 const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
@@ -88,15 +89,23 @@ struct Hitches {
     last_warning: Option<Duration>,
 }
 
-fn watch_hitches(real: Res<Time<Real>>, state: Res<State<GameState>>, mut h: ResMut<Hitches>) {
+fn watch_hitches(
+    real: Res<Time<Real>>,
+    state: Res<State<GameState>>,
+    shown: Option<Res<WarmupDone>>,
+    mut h: ResMut<Hitches>,
+) {
     let dt = real.delta();
     let now = real.elapsed();
-    match state.get() {
-        GameState::Loading => {
+    // Loading and the warm-up behind the loading overlay count as loading; play starts when
+    // the world is shown.
+    let playing = *state.get() == GameState::Running && shown.is_some();
+    match playing {
+        false => {
             h.loading_worst = h.loading_worst.max(dt);
             h.loading_frames += 1;
         }
-        GameState::Running => {
+        true => {
             let since = *h.running_since.get_or_insert(now);
             if !h.reported {
                 h.startup_worst = h.startup_worst.max(dt);
@@ -104,7 +113,7 @@ fn watch_hitches(real: Res<Time<Real>>, state: Res<State<GameState>>, mut h: Res
                 if now - since >= STARTUP_WINDOW {
                     h.reported = true;
                     info!(
-                        "startup frames: worst {:.1} ms over {} loading frames, worst {:.1} ms \
+                        "startup frames: worst {:.1} ms over {} loading and warm-up frames, worst {:.1} ms \
                          in the first {} s of play, {} frames over the {} ms budget",
                         ms(h.loading_worst),
                         h.loading_frames,
@@ -117,12 +126,20 @@ fn watch_hitches(real: Res<Time<Real>>, state: Res<State<GameState>>, mut h: Res
             }
         }
     }
+    // Every hitch is logged until the startup summary (to see what each one coincides with);
+    // after that, at most one warning per interval.
     if dt > HITCH_BUDGET
-        && h.last_warning
-            .is_none_or(|t| now - t >= HITCH_WARNING_INTERVAL)
+        && (!h.reported
+            || h.last_warning
+                .is_none_or(|t| now - t >= HITCH_WARNING_INTERVAL))
     {
         h.last_warning = Some(now);
-        warn!("hitch: frame took {:.1} ms ({:?})", ms(dt), state.get());
+        warn!(
+            "hitch: frame took {:.1} ms, ending {:.2} s after launch ({})",
+            ms(dt),
+            now.as_secs_f64(),
+            if playing { "playing" } else { "loading" }
+        );
     }
 }
 

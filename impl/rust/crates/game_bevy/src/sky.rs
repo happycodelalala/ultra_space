@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{
     Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
 };
-use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, poll_once};
+use bevy::tasks::{Task, block_on, poll_once};
 use glam::DVec3;
 
 use crate::space_render::MainCamera;
@@ -35,7 +35,7 @@ impl Plugin for SkyPlugin {
 struct SkyTask(Task<Vec<u8>>);
 
 fn start_sky_generation(mut commands: Commands) {
-    let task = AsyncComputeTaskPool::get().spawn(async move {
+    let task = crate::workers::workers().spawn(async move {
         let start = std::time::Instant::now();
         let bytes = generate_sky(FACE_SIZE, SKY_SEED);
         info!("sky generated in {:.2} s", start.elapsed().as_secs_f64());
@@ -55,6 +55,7 @@ fn attach_sky_when_ready(
         return;
     };
     commands.remove_resource::<SkyTask>();
+    info!("sky: attaching the star field cube map");
 
     let size = Extent3d {
         width: FACE_SIZE as u32,

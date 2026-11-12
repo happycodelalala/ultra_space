@@ -65,7 +65,15 @@ Windows export copies `content/data` next to the `.exe`.
 ## In-game debug tools
 
 - **Flying the Kestrel** (default): W/S forward/back, A/D strafe, Space/Ctrl up/down, mouse to
-  pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
+    pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
+      **F** steps out when landed (or low and nearly still); on foot WASD walk, Shift run, Space
+  jump, mouse look, and **F** within 12 m of the ship boards it again,
+    **K** flattens a 60 m landing pad under the ship or walker (debug, first terrain delta; not saved
+  yet),
+  **N** arcade flight (debug; No Man's Sky style: no gravity, the ship flies where the nose
+  points, W/S raise or lower the held speed up to 4 km/s, X stops),
+  **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the
+  planet when in orbit (drop straight down),
   **J** engages the cruise drive (3 s charge; steer with the mouse; J again or approaching a body
   drops out into orbit),
   V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
@@ -86,6 +94,9 @@ Windows export copies `content/data` next to the `.exe`.
   velocity (also in the star's frame), rails, cruise and assist state. `[` / `]` select objects.
 - **F3** toggles the debug overlay (hidden at start): FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
+- **Planet maps:** `cargo run --release -p sim_planet --example planet_map -- <body id>
+  <out.ppm> [width]` renders a body's biome map with hill shading (equirectangular), for
+  tuning terrain and climate parameters.
 - **Loading:** the star system, starting ship and simulation are built on a worker thread
   while the window shows "Loading"; game systems run once loading finishes. Frames over the
   50 ms hitch budget are logged as warnings, and a "startup frames" summary is logged after

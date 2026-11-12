@@ -32,8 +32,14 @@ What a 600 km, 1g planet gives:
   asteroids, higher on super-earths.
 - Smaller planets look like toys (close horizon, visible curvature); bigger ones need denser
   content to avoid feeling empty.
-- *Provisional:* in Batch 2 the same planet is compared at 300, 600 and 1,000 km on Windows,
-  and the ranges are locked in by feel.
+- *Provisional:* 600 km stays the baseline. The size decision is **deferred** (2026-11-12): the
+  developer will judge it once there is content at planet scale. Revisit points:
+  - real travel between systems (Batch 6)
+  - settlements (Batch 8)
+  - ground battles (Batch 9)
+  `ULTRA_SPACE_BODY_RADIUS=<body>:<km>` compares sizes on the same planet. Radius is data per
+  body, so it can change freely until Checkpoint A; after that, resizing a planet with saved
+  bases needs a save migration (or applies to new planets only).
 
 ## 2. Distances and travel
 

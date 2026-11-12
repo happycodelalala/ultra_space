@@ -41,6 +41,8 @@
       "appearance": {
         "colors": [[0.3, 0.26, 0.24], [0.62, 0.52, 0.44]]
       },
+      "terrain": { "seed": 11, "relief_km": 4, "mountains": 0.2, "roughness": 0.6, "craters": 0.8 },
+      "climate": { "equator_temperature_c": 350, "pole_temperature_c": 120 },
       "description": "Hot, airless rock close to the star, with long, scorching days and freezing nights."
     },
     {
@@ -69,10 +71,11 @@
       },
       "appearance": {
         "colors": [[0.22, 0.38, 0.16], [0.55, 0.5, 0.36]],
-        "ocean_coverage": 0.62,
         "ocean_color": [0.03, 0.12, 0.3],
         "polar_ice": 0.12
       },
+      "terrain": { "seed": 1, "relief_km": 6, "ocean_depth_km": 5, "ocean_coverage": 0.62, "mountains": 0.35, "roughness": 0.5 },
+      "climate": { "equator_temperature_c": 27, "pole_temperature_c": -25, "moisture": 0.6 },
       "description": "Temperate home world with oceans and seasons: the baseline planet and future home of many cultures."
     },
     {
@@ -96,6 +99,8 @@
       "appearance": {
         "colors": [[0.42, 0.42, 0.44], [0.76, 0.75, 0.73]]
       },
+      "terrain": { "seed": 3, "relief_km": 3, "mountains": 0.1, "roughness": 0.5, "craters": 1.0 },
+      "climate": { "equator_temperature_c": -20, "pole_temperature_c": -150 },
       "description": "Airless moon that always shows Meridian the same pale face."
     },
     {
@@ -126,6 +131,8 @@
         "colors": [[0.52, 0.3, 0.18], [0.85, 0.7, 0.55]],
         "polar_ice": 0.25
       },
+      "terrain": { "seed": 4, "relief_km": 8, "mountains": 0.45, "roughness": 0.6, "craters": 0.2 },
+      "climate": { "equator_temperature_c": -5, "pole_temperature_c": -90, "moisture": 0.15 },
       "description": "Cold desert world with a thin atmosphere, a strong axial tilt and ice caps."
     },
     {
@@ -179,6 +186,8 @@
         "colors": [[0.22, 0.17, 0.06], [0.82, 0.72, 0.25]],
         "glow_color": [1.0, 0.35, 0.05]
       },
+      "terrain": { "seed": 6, "relief_km": 5, "mountains": 0.5, "roughness": 0.7, "craters": 0.1 },
+      "climate": { "equator_temperature_c": -60, "pole_temperature_c": -140 },
       "description": "Volcanic inner moon, kneaded by Leviathan's tides."
     },
     {
@@ -202,6 +211,8 @@
       "appearance": {
         "colors": [[0.58, 0.68, 0.76], [0.92, 0.95, 0.97]]
       },
+      "terrain": { "seed": 7, "relief_km": 2, "roughness": 0.3, "craters": 0.4 },
+      "climate": { "equator_temperature_c": -170, "pole_temperature_c": -205 },
       "description": "Icy outer moon with a cracked shell over a dark ocean."
     }
   ]

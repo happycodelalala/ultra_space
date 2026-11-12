@@ -1,0 +1,13 @@
+# Low arcade flight over terrain (task 2.8). Run with ULTRA_SPACE_START_ALTITUDE=2300 (the ground
+# here is about 1900–2040 m). Dive steeply, then skim; the ship must never go into the ground
+# (arcade keeps it at least 8 m up: HUD AGL >= ~8 m).
+1    press Z
+1.5  press N
+2    mouse 0 10 0.8          # nose well down
+3    hold W 2                # about 300 m/s
+6    shot 01-diving.png
+8    mouse 0 -6 0.6          # pull up a bit; the floor catches the rest
+12   shot 02-skimming.png
+18   shot 03-skimming-later.png
+24   shot 04-skimming-end.png
+25   quit

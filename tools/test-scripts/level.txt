@@ -1,0 +1,8 @@
+# Horizon levelling (task 2.10). Run with ULTRA_SPACE_START_ALTITUDE=8000 (~6 km above ground).
+# Roll the ship, let go: below the atmosphere top, assist rolls the wings level again.
+1    press Z
+2    hold Q 1.5              # roll left
+3.6  shot 01-rolled.png
+6    shot 02-levelling.png
+10   shot 03-level.png
+11   quit

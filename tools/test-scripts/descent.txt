@@ -1,0 +1,11 @@
+# Hitch stress test (task 2.12): orbit to the ground in one go, streaming terrain all the way.
+# Run with the default start (150 km orbit). Performance test: runs alone; no screenshots until
+# the end (screenshots cause small hitches of their own). Check the script summary: frames over
+# 50 ms and the worst frame while the world is shown.
+0.5  press N                 # arcade flight
+1    mouse 0 12 1.5          # nose about 50 degrees down
+3    hold W 20               # up to 3 km/s
+70   log should be skimming the ground by now
+75   hold S 15               # slow down to ~750 m/s
+95   shot descent-end.png
+96   quit

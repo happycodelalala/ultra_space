@@ -1,0 +1,13 @@
+# Smoke test: start in the default orbit, look around, switch to arcade flight and dive toward
+# Meridian, then level out. Screenshots along the way; a frame-time summary at the end.
+2    shot 01-orbit.png
+3    hold MouseRight 2       # orbit the chase camera...
+3    mouse 0 6 2             # ...to look down at the planet
+6    shot 02-looking-down.png
+7    press N                 # arcade flight
+7.5  mouse 0 10 1.2          # pitch the nose down
+9    hold W 6                # speed up toward the ground
+16   shot 03-diving.png
+17   mouse 0 -10 1.2         # pull up
+20   shot 04-level.png
+21   quit

@@ -1,0 +1,16 @@
+# Sunset from the ground (tasks 2.6, 2.7). Run with ULTRA_SPACE_START_SUN_ANGLE=89
+# ULTRA_SPACE_START_ALTITUDE=300 ULTRA_SPACE_CHASE_ORBIT=0,-8: the start spot is then over the
+# ocean (sea level), the sun low ahead and the chase camera nearly level behind the ship, looking
+# towards it. Look for: warm horizon around the sun, lit cloud undersides, dim ground and sea,
+# nothing black or broken.
+0.5  shot 01-flying-low.png    # 300 m up at orbital speed, horizon ahead
+1    press Z                    # stop and fall to the sea surface
+1.5  wait landed 30
+3    shot 02-landed-horizon.png
+3.5  hold MouseRight 1.5        # look up at the sky above the sun
+3.5  mouse 0 -3 1.5
+6    shot 03-sky.png
+6.5  hold MouseRight 2          # swing round to the side away from the sun, looking down a little
+6.5  mouse 10 5 2
+10   shot 04-away-from-sun.png
+11   quit

@@ -85,7 +85,13 @@ impl Plugin for SpaceCameraPlugin {
                     .in_set(CameraStage::Controls)
                     .run_if(|pilot: Res<PilotState>| !pilot.flying),
             )
-            .add_systems(Update, update_anchor.in_set(CameraStage::Anchor));
+            .init_resource::<CameraBlend>()
+            .add_systems(
+                Update,
+                (blend_camera, update_anchor)
+                    .chain()
+                    .in_set(CameraStage::Anchor),
+            );
     }
 }
 
@@ -212,6 +218,51 @@ fn jump_to_body(
             info!("camera: viewing {}", universe.0.bodies[i].name);
         }
     }
+}
+
+/// How long a camera hand-over (ship to first person and back) glides (s).
+const BLEND_TIME: f64 = 0.6;
+
+/// A short glide from the previous camera pose after the camera switches what it follows, so
+/// leaving or boarding the ship doesn't snap the view.
+#[derive(Resource, Default)]
+pub struct CameraBlend {
+    from: Option<(SpaceCamera, f64)>,
+}
+
+impl CameraBlend {
+    /// Starts a glide from the camera's current pose (call before the new view takes over).
+    pub fn start(&mut self, camera: &SpaceCamera, now: f64) {
+        self.from = Some((camera.clone(), now));
+    }
+}
+
+fn blend_camera(
+    mut blend: ResMut<CameraBlend>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    real: Res<Time<Real>>,
+    mut camera: ResMut<SpaceCamera>,
+) {
+    let Some((from, started)) = &blend.from else {
+        return;
+    };
+    let f = ((real.elapsed_secs_f64() - started) / BLEND_TIME).clamp(0.0, 1.0);
+    if f >= 1.0 {
+        blend.from = None;
+        return;
+    }
+    let s = f * f * (3.0 - 2.0 * f);
+    let system = &universe.0;
+    // The old pose in the current anchor's frame (inertial frames share axes).
+    let start = system.frames.transform_point(
+        system.bodies[camera.anchor].inertial_frame,
+        system.bodies[from.anchor].inertial_frame,
+        render.0,
+        from.offset,
+    );
+    camera.offset = start.lerp(camera.offset, s);
+    camera.rotation = from.rotation.slerp(camera.rotation, s).normalize();
 }
 
 fn update_anchor(
