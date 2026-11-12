@@ -321,7 +321,7 @@ fn symmetry_name(s: Symmetry) -> String {
     match s {
         Symmetry::None => "off".into(),
         Symmetry::Mirror => "mirror".into(),
-        Symmetry::Radial(n) => format!("radial ×{n}"),
+        Symmetry::Radial(n) => format!("radial x{n}"),
     }
 }
 
@@ -832,7 +832,7 @@ fn update_panel(
     *visibility = Visibility::Inherited;
     let st = stats(&b.vehicle, b.gravity);
     let mut s = format!(
-        "BUILD  {}  ({} parts, {:.1} t, {:.0}×{:.0}×{:.0} m)\n",
+        "BUILD  {}  ({} parts, {:.1} t, {:.0} x {:.0} x {:.0} m)\n",
         b.vehicle.name,
         st.parts,
         st.mass_kg / 1000.0,
@@ -841,7 +841,7 @@ fn update_panel(
         st.size.z,
     );
     s += &format!(
-        "thrust/weight {:.2} | up {:.1} m/s² ({}) | side {:.1} m/s² | turn {:.2} rad/s²\n",
+        "thrust/weight {:.2} | up {:.1} m/s2 ({}) | side {:.1} m/s2 | turn {:.2} rad/s2\n",
         st.thrust_to_weight,
         st.up_acceleration,
         if st.can_hover {

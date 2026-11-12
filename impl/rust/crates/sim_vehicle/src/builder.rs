@@ -525,13 +525,13 @@ pub fn stats(vehicle: &Vehicle, g: f64) -> BuildStats {
             .iter()
             .filter_map(|p| p.def.tank)
             .map(|t| t.capacity_kg)
-            .sum(),
+            .fold(0.0, |a, b| a + b),
         battery_wh: vehicle
             .parts
             .iter()
             .filter_map(|p| p.def.battery)
             .map(|b| b.capacity_wh)
-            .sum(),
+            .fold(0.0, |a, b| a + b),
         wheels: wheels.len(),
         tipping,
         problems,
