@@ -343,6 +343,33 @@ tests pass; sphere-of-influence transitions without visible jumps; CI passes.
 **Not in Batch 1:** planet surfaces, climate computation and landing (Batch 2); building
 vehicles (Batch 3).
 
+**Status:** 1.1–1.17 done; the 1.18 review on Windows is still open, to be done when a Windows
+session is available.
+
+### 7.3 Batch 2 tasks
+
+Decisions behind these tasks: [planet-surface.md](planet-surface.md).
+
+| # | Task | Done when |
+|---|---|---|
+| 2.1 | **Terrain function:** deterministic `f64` height, climate and biome fields in `sim_planet`; `terrain` parameters in the star system data | Determinism and range tests; ocean fraction matches the data |
+| 2.2 | **Cube-sphere quadtree:** tile keys, split and merge by screen-space error, tile meshes with skirts | Tests for keys, neighbours and crack-free edges |
+| 2.3 | **Tile streaming:** generation on worker threads, per-frame upload budget, parents kept until children are ready | No holes; no frame over 50 ms in a descent |
+| 2.4 | **Orbit view from the same function:** baked cube maps for the distant planet shader; seamless handover to tiles | No visible switch from orbit to low altitude |
+| 2.5 | **Terrain look:** biome colors, slope rock, snow, detail noise; water | Readable biomes from orbit and on the ground |
+| 2.6 | **Atmosphere from the ground:** sky color, sunsets, aerial haze | Matches the orbit view |
+| 2.7 | **Clouds** following the moisture field | Cloud belts and clear deserts |
+| 2.8 | **Landing:** ground contact on terrain, drag, landed vehicles in the surface frame | Land on a slope and stay put; tests |
+| 2.9 | **Walking on foot:** character controller, first-person camera, exit and enter the ship, gravity-aligned up | Walk from the ship over hills and back |
+| 2.10 | **Gravity transitions:** camera and controls follow local up from orbit to ground | No snap during descent |
+| 2.11 | **Terrain deltas:** keyed by tile; a flattened landing pad as the first use | Delta applies identically on regeneration |
+| 2.12 | **Hitch stress test:** scripted orbit → surface descent with frame-time report | Report on Windows |
+| 2.13 | **Planet size comparison:** 300 / 600 / 1,000 km on foot (universe design §1) | Developer decides on Windows |
+| 2.14 | **Batch review** | Exit criteria met |
+
+**Exit criteria:** land anywhere on Meridian from orbit and walk around with no loading screen
+and no frame over 50 ms; terrain matches from orbit to the ground; CI passes.
+
 ### 7.1 When the object system is built
 
 The object model, persistence and streaming design (technical overview §14) is settled up
