@@ -154,12 +154,32 @@ pub struct PilotState {
     pub mouse_free: bool,
 }
 
+/// Initial chase-camera orbit from `ULTRA_SPACE_CHASE_ORBIT=<yaw>,<pitch>` (degrees; negative
+/// pitch looks down), for screenshots. Defaults to straight behind.
+fn start_orbit() -> (f64, f64) {
+    std::env::var("ULTRA_SPACE_CHASE_ORBIT")
+        .ok()
+        .and_then(|v| {
+            let (yaw, pitch) = v.split_once(',')?;
+            Some((
+                yaw.trim().parse::<f64>().ok()?.to_radians(),
+                pitch
+                    .trim()
+                    .parse::<f64>()
+                    .ok()?
+                    .to_radians()
+                    .clamp(-1.4, 1.4),
+            ))
+        })
+        .unwrap_or((0.0, 0.0))
+}
+
 impl Default for PilotState {
     fn default() -> Self {
         Self {
             flying: true,
             view: ShipView::Chase,
-            orbit: (0.0, 0.0),
+            orbit: start_orbit(),
             mouse_free: false,
         }
     }
@@ -189,7 +209,18 @@ fn spawn_player_ship(
         .iter()
         .position(|b| b.id == START_BODY)
         .unwrap_or(0);
-    let state = parking_orbit(system, index, 0.0);
+    let mut state = parking_orbit(system, index, 0.0);
+    // Debug: `ULTRA_SPACE_START_ALTITUDE=<m>` starts in a circular orbit at that altitude.
+    if let Some(altitude) = std::env::var("ULTRA_SPACE_START_ALTITUDE")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+    {
+        let body = &system.bodies[index];
+        let r = body.radius + altitude.max(0.0);
+        let s = &mut state.state;
+        s.position = s.position.normalize() * r;
+        s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
+    }
 
     spawn_ship_visual(&mut commands, &vehicle, &mut meshes, &mut materials);
     let sim = &mut sim.0;

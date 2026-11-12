@@ -2809,6 +2809,7 @@ dependencies = [
  "bevy",
  "glam",
  "sim_core",
+ "sim_planet",
  "sim_vehicle",
 ]
 

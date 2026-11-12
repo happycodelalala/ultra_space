@@ -12,6 +12,7 @@ mod ship;
 mod sim;
 mod sky;
 mod space_render;
+mod terrain;
 mod universe;
 
 use bevy::log::LogPlugin;
@@ -42,6 +43,7 @@ fn main() {
             sim::SimPlugin,
             camera::SpaceCameraPlugin,
             space_render::SpaceRenderPlugin,
+            terrain::TerrainPlugin,
             sky::SkyPlugin,
             ship::ShipPlugin,
             debug_overlay::DebugOverlayPlugin,

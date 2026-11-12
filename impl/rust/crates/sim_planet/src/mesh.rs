@@ -33,6 +33,15 @@ pub struct TileMesh {
     pub biomes: Vec<Biome>,
     pub min_height: f64,
     pub max_height: f64,
+    /// Sea surface over the same grid (same indices), when part of the tile is under water.
+    pub water: Option<WaterMesh>,
+}
+
+/// A tile's sea surface: positions relative to the tile origin, and normals.
+#[derive(Clone, Debug)]
+pub struct WaterMesh {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
 }
 
 /// Number of vertices in a tile mesh (grid plus skirt).
@@ -139,6 +148,7 @@ pub fn build_tile(
         biomes: Vec::with_capacity(n),
         min_height: f64::MAX,
         max_height: f64::MIN,
+        water: None,
     };
     let mut grid_dirs = Vec::with_capacity((GRID * GRID) as usize);
     for j in 0..GRID {
@@ -175,6 +185,23 @@ pub fn build_tile(
             mesh.heights.push((h - drop) as f32);
             mesh.biomes.push(mesh.biomes[v]);
         }
+    }
+    if terrain.has_ocean() && mesh.min_height < 0.0 {
+        let mut dirs = grid_dirs.clone();
+        for side in border_vertices() {
+            dirs.extend(side.iter().map(|&v| grid_dirs[v as usize]));
+        }
+        let grid = grid_dirs.len();
+        let positions = dirs
+            .iter()
+            .enumerate()
+            .map(|(k, d)| {
+                let r = if k < grid { r } else { r - drop };
+                (*d * r - origin).as_vec3().to_array()
+            })
+            .collect();
+        let normals = dirs.iter().map(|d| d.as_vec3().to_array()).collect();
+        mesh.water = Some(WaterMesh { positions, normals });
     }
     mesh
 }
@@ -288,6 +315,25 @@ mod tests {
             let first = (p(idx[1]) - p(idx[0])).cross(p(idx[2]) - p(idx[0]));
             assert!(first.dot(up) > 0.0, "{key:?}: winding");
         }
+    }
+
+    #[test]
+    fn coastal_tiles_get_a_sea_surface() {
+        let (terrain, climate) = meridian();
+        // Find a root-level child with both land and sea.
+        let key = (0..6)
+            .flat_map(|f| TileKey::root(f).children())
+            .find(|&k| {
+                let m = build_tile(&terrain, Some(&climate), k, 0.0);
+                m.min_height < 0.0 && m.max_height > 0.0
+            })
+            .expect("a coastal tile");
+        let m = build_tile(&terrain, Some(&climate), key, 0.0);
+        let WaterMesh { positions, normals } = m.water.expect("water");
+        assert_eq!(positions.len(), VERTEX_COUNT);
+        assert_eq!(normals.len(), VERTEX_COUNT);
+        let p = m.origin + glam::Vec3::from(positions[0]).as_dvec3();
+        assert!((p.length() - terrain.radius).abs() < 1.0, "sea level");
     }
 
     #[test]

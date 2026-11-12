@@ -79,6 +79,10 @@ honestly with their output.
   Material bindings use `@group(constants::MATERIAL_BIND_GROUP)`; imports use
   `bevy_pbr::render::...`. `AlphaMode::Add` uses premultiplied blending: output alpha 0 for
   pure additive light.
+- **Chase camera angle:** `ULTRA_SPACE_CHASE_ORBIT=<yaw>,<pitch>` (degrees; e.g. `0,-70` looks
+  down at the ground below the ship) sets the starting chase-camera orbit, for captures.
+- **Start altitude:** `ULTRA_SPACE_START_ALTITUDE=<m>` starts the ship in a circular orbit at
+  that altitude (e.g. low over the terrain).
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.
