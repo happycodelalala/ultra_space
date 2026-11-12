@@ -28,6 +28,18 @@ decision, architecture, development batches) before starting non-trivial work.
   (development plan §7 and §7.1). Don't build infrastructure ahead of its first real use, and
   ask before expanding a task's scope.
 
+## Units and coordinates
+
+- **Meters, seconds, radians.** World and frame positions are `f64` (`DVec3`, `DQuat`).
+- **Right-handed, Y up**, same as Bevy and glam. A star system's reference plane is XZ; +Y is
+  its north. Prograde orbits have angular momentum along +Y.
+- **Gravity as `mu = G·M`** (m³/s²), not mass; `units::mu_from_surface_gravity` for
+  compressed planets.
+- Positions are always **relative to a frame** in the frame tree (`sim_core::frames`); a
+  celestial body has an inertial frame (orbit, no rotation) and a surface frame (spin).
+- Renderers get camera-relative `f32` only at the last step; never store `f32` world
+  positions.
+
 ## Bevy version
 
 - Bevy is pinned to `=0.20.1`, newer than most AI training data, and its APIs differ from
