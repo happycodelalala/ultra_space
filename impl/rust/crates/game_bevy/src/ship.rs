@@ -217,6 +217,19 @@ fn spawn_player_ship(
         .position(|b| b.id == START_BODY)
         .unwrap_or(0);
     let mut state = parking_orbit(system, index, 0.0);
+    // Debug: `ULTRA_SPACE_START_SUN_ANGLE=<deg>` moves the start along the orbit to that angle
+    // from the point under the star (0 noon, 90 the terminator, 180 midnight). The parking
+    // orbit starts 30° from it; rotating about the orbit normal keeps the orbit circular.
+    if let Some(angle) = std::env::var("ULTRA_SPACE_START_SUN_ANGLE")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+    {
+        let turn = DQuat::from_rotation_y(-(angle - 30.0).to_radians());
+        let s = &mut state.state;
+        s.position = turn * s.position;
+        s.velocity = turn * s.velocity;
+        s.rotation = (turn * s.rotation).normalize();
+    }
     // Debug: `ULTRA_SPACE_START_ALTITUDE=<m>` starts in a circular orbit at that altitude.
     if let Some(altitude) = std::env::var("ULTRA_SPACE_START_ALTITUDE")
         .ok()

@@ -88,6 +88,9 @@ honestly with their output.
   down at the ground below the ship) sets the starting chase-camera orbit, for captures.
 - **Start altitude:** `ULTRA_SPACE_START_ALTITUDE=<m>` starts the ship in a circular orbit at
   that altitude (e.g. low over the terrain).
+- **Start time of day:** `ULTRA_SPACE_START_SUN_ANGLE=<deg>` starts that far along the orbit
+  from the point under the star (0 noon, ~89 sunset ahead, 120 night side, 180 midnight); the
+  sun is ahead along the flight direction, so the default chase view looks towards it.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.
