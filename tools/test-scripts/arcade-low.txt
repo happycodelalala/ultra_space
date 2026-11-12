@@ -1,0 +1,12 @@
+# Low arcade flight over terrain (task 2.8). Run with ULTRA_SPACE_START_ALTITUDE=3000.
+# The ship must never go into hills or mountains (it keeps 8 m above the ground).
+1    press Z
+1.5  press N
+2    mouse 0 6 0.6           # nose slightly down
+3    hold W 2.5              # about 375 m/s
+6    shot 01-cruising.png
+8    mouse 0 -3 0.6          # level out
+12   shot 02-low.png
+18   shot 03-low-later.png
+24   shot 04-low-end.png
+25   quit

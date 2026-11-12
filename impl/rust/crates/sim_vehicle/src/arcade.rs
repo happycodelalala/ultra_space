@@ -13,7 +13,9 @@ use sim_core::ObjectState;
 use sim_core::objects::{RegionBody, SimClock, SystemRef};
 
 use crate::cruise::Cruise;
-use crate::flight::{BodyEnv, FlightControl, FlightTelemetry, OnRails, body_env};
+use crate::flight::{
+    BodyEnv, FlightControl, FlightTelemetry, OnRails, RegionTerrain, ground_altitude, region_env,
+};
 use crate::vehicle::{Vehicle, VehicleBody};
 
 /// How fast the held speed changes at full forward or back stick (m/s²).
@@ -25,8 +27,8 @@ const STRAFE_FRACTION: f64 = 0.3;
 const MIN_STRAFE_SPEED: f64 = 40.0;
 /// Turn rate at full stick (rad/s).
 pub const TURN_RATE: f64 = 1.2;
-/// Lowest height above the reference sphere (m), until terrain collision (task 2.8).
-const MIN_ALTITUDE: f64 = 2.0;
+/// Lowest height above the ground (m), keeping the hull clear of it.
+const MIN_ALTITUDE: f64 = 8.0;
 
 /// Arcade flight state: the speed held along the nose (m/s, relative to the reference).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
@@ -71,10 +73,12 @@ pub fn arcade_step(
     state.position += relative * dt;
     state.velocity = env.standing_still(state.position).1 + relative;
 
-    // Stay above the ground (sphere for now).
-    let floor = env.radius + MIN_ALTITUDE;
-    if env.solid && state.position.length() < floor {
-        state.position = state.position.normalize() * floor;
+    // Stay above the ground.
+    if env.solid && state.position.length() < env.radius + env.max_ground_height() + MIN_ALTITUDE {
+        let floor = env.radius + env.ground_height(state.position) + MIN_ALTITUDE;
+        if state.position.length() < floor {
+            state.position = state.position.normalize() * floor;
+        }
     }
     (reference, relative)
 }
@@ -87,6 +91,7 @@ pub fn arcade_system(
     region: Res<RegionBody>,
     system: Res<SystemRef>,
     clock: Res<SimClock>,
+    terrain: Option<Res<RegionTerrain>>,
     mut vehicles: Query<
         (
             Entity,
@@ -102,7 +107,7 @@ pub fn arcade_system(
 ) {
     let system = &system.0;
     let t = clock.time.as_secs_f64();
-    let env = body_env(system, region.0, t);
+    let env = region_env(system, region.0, t, terrain.as_deref());
     let frame = system.bodies[region.0].inertial_frame;
     for (entity, mut state, control, mut telemetry, mut arcade, cruise, rails) in &mut vehicles {
         if cruise.is_some_and(Cruise::is_cruising) {
@@ -118,6 +123,7 @@ pub fn arcade_system(
         telemetry.reference = reference;
         telemetry.relative_velocity = relative;
         telemetry.altitude = local.state.position.length() - env.radius;
+        telemetry.ground_altitude = ground_altitude(&env, local.state.position);
         telemetry.on_rails = false;
         telemetry.in_contact = false;
         telemetry.throttles.iter_mut().for_each(|u| *u = 0.0);
@@ -140,6 +146,9 @@ mod tests {
             spin: DVec3::Y * (std::f64::consts::TAU / 5_400.0),
             surface_rotation: DQuat::IDENTITY,
             solid: true,
+            terrain: None,
+            air_density: 0.0,
+            air_scale_height: 8_000.0,
         }
     }
 

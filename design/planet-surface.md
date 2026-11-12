@@ -68,10 +68,15 @@ Rules:
 ## 5. Landing and walking
 
 - **Ground contact** uses the terrain height and normal at the vehicle's position instead of a
-  sphere; landed vehicles rest on slopes.
-- **Atmospheric drag** for descent (simple; lift waits for wings in Batch 3).
-- **Things on the ground live in the surface frame** (objects-vehicles-physics §1.2): a landed
-  ship or a walking player turns with the planet without integration drift.
+  sphere (water counts as a floor for now). Friction is Coulomb (μ 0.8, scaled by how hard the
+  ground pushes back, including the impact) plus scraping drag for fast skids; a slow vehicle
+  on a slope under about 40° holds still.
+- **Atmospheric drag** for descent: density falls off exponentially from the atmosphere data
+  (1.225 kg/m³ at 1 atm), acting on velocity relative to the turning air; lift waits for wings
+  in Batch 3.
+- **Landed vehicles stay put:** friction holds them to the turning ground (tested over 20 s on
+  a slope). Moving things on the ground into the surface frame
+  (objects-vehicles-physics §1.2) is only needed if long stays show drift.
 - **Walking on foot:** a kinematic character controller (capsule against the terrain height
   field), gravity toward the planet's center, first-person camera; exit and enter the ship;
   low-gravity jumps on small bodies.

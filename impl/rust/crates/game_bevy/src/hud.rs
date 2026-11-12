@@ -321,7 +321,7 @@ fn update_hud(
         );
         text.0 = format!(
             "{} | {frame}\n\
-             SPEED {}   V/S {}   ALT {}\n\
+             SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
              T assist | X brake | Z stop | N arcade | J cruise | V view | O orbits | H HUD | F3 debug",
@@ -329,6 +329,11 @@ fn update_hud(
             speed(relative.length()),
             speed(relative.dot(up)),
             distance(local.position.length() - body.radius),
+            if telemetry.ground_altitude < 20_000.0 {
+                format!("   AGL {}", distance(telemetry.ground_altitude))
+            } else {
+                String::new()
+            },
             orbit_summary(
                 body.mu,
                 body.radius,

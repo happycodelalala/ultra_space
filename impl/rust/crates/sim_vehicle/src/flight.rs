@@ -14,7 +14,10 @@ use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
 use sim_core::frames::FrameState;
 use sim_core::objects::{RegionBody, RegionStage, SimClock, SystemRef};
+use std::sync::Arc;
+
 use sim_core::{KeplerOrbit, ObjectState};
+use sim_planet::Terrain;
 
 use crate::allocation::Wrench;
 use crate::arcade::{ArcadeFlight, arcade_system};
@@ -94,6 +97,8 @@ pub struct FlightTelemetry {
     /// Velocity relative to `reference`, in the body's inertial axes.
     pub relative_velocity: DVec3,
     pub altitude: f64,
+    /// Height above the ground below (m); equal to `altitude` far above the highest terrain.
+    pub ground_altitude: f64,
     pub on_rails: bool,
     pub in_contact: bool,
 }
@@ -104,7 +109,7 @@ pub struct FlightTelemetry {
 pub struct OnRails(pub KeplerOrbit);
 
 /// The body a vehicle is flying around, at one instant (all in the body's inertial frame).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct BodyEnv {
     pub mu: f64,
     pub radius: f64,
@@ -116,7 +121,30 @@ pub struct BodyEnv {
     pub surface_rotation: DQuat,
     /// No ground (the star): skip contact.
     pub solid: bool,
+    /// The body's terrain (heights in its surface frame); `None` means a smooth sphere at
+    /// `radius`.
+    pub terrain: Option<Arc<Terrain>>,
+    /// Air density at sea level (kg/m³); 0 without an atmosphere.
+    pub air_density: f64,
+    /// Height over which air density falls by a factor e (m).
+    pub air_scale_height: f64,
 }
+
+/// Air density at sea level for 1 atm (kg/m³).
+pub const SEA_LEVEL_AIR_DENSITY: f64 = 1.225;
+/// Air density scale height relative to the atmosphere's height (Earth: 8 km of an effective
+/// 70 km; same rule as the renderer's scattering).
+pub const AIR_SCALE: f64 = 8.0 / 70.0;
+/// Detail of the ground under a vehicle (m): the finest terrain wavelength.
+const GROUND_DETAIL: f64 = 1.0;
+/// Coulomb friction coefficient between hulls and ground.
+const GROUND_FRICTION_COEFFICIENT: f64 = 0.8;
+/// A grounded vehicle slower than this (m/s) relative to the ground, on a slope gentler than
+/// `MAX_STICK_SLOPE`, holds still (static friction).
+const STICK_SPEED: f64 = 0.5;
+const MAX_STICK_SLOPE: f64 = 0.7;
+/// Drag coefficient times reference area, as a fraction of the vehicle's bounding disc.
+const DRAG_AREA_FRACTION: f64 = 0.5;
 
 /// Center-of-mass state in the body's inertial frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -162,6 +190,45 @@ fn gravity(mu: f64, r: DVec3) -> DVec3 {
 }
 
 impl BodyEnv {
+    /// Height of the ground (m above `radius`) under `position` (inertial frame); the sea
+    /// surface where there is water. 0 for a smooth sphere.
+    pub fn ground_height(&self, position: DVec3) -> f64 {
+        let Some(terrain) = &self.terrain else {
+            return 0.0;
+        };
+        let dir = self.surface_rotation.inverse() * position.normalize();
+        let h = terrain.height(dir, GROUND_DETAIL);
+        if terrain.has_ocean() { h.max(0.0) } else { h }
+    }
+
+    /// Ground surface normal under `position` (inertial axes); straight up over water or on a
+    /// smooth sphere.
+    pub fn ground_normal(&self, position: DVec3) -> DVec3 {
+        let up = position.normalize();
+        let Some(terrain) = &self.terrain else {
+            return up;
+        };
+        let dir = self.surface_rotation.inverse() * up;
+        if terrain.has_ocean() && terrain.height(dir, GROUND_DETAIL) < 0.0 {
+            return up;
+        }
+        self.surface_rotation * sim_planet::mesh::terrain_normal(terrain, dir, 2.0, GROUND_DETAIL)
+    }
+
+    /// Highest the ground can be (m above `radius`), to skip terrain sampling far above it.
+    pub fn max_ground_height(&self) -> f64 {
+        self.terrain.as_ref().map_or(0.0, |t| 1.3 * t.params.relief)
+    }
+
+    /// Air density (kg/m³) at `position`.
+    pub fn air_density_at(&self, position: DVec3) -> f64 {
+        if self.air_density <= 0.0 {
+            return 0.0;
+        }
+        let altitude = (position.length() - self.radius).max(0.0);
+        self.air_density * (-altitude / self.air_scale_height).exp()
+    }
+
     /// Flight assist's reference at `position` (the body's inertial frame) and the velocity
     /// that counts as standing still there: co-rotating with the ground below the surface
     /// reference altitude, zero (in the body's inertial frame) above it.
@@ -294,10 +361,19 @@ pub fn integrate(
     let inertia = body.mass.inertia;
     let inv_inertia = inertia.inverse();
     let mut contact = false;
+    let drag_area = DRAG_AREA_FRACTION * std::f64::consts::PI * vehicle_radius(body).powi(2);
     for _ in 0..substeps {
         // Linear: kick then drift (symplectic Euler).
         let thrust = state.rotation * wrench.force / m;
-        state.velocity += (gravity(env.mu, state.position) + thrust) * h;
+        // Drag against the air, which turns with the ground.
+        let rho = env.air_density_at(state.position);
+        let drag = if rho > 0.0 {
+            let air = state.velocity - env.spin.cross(state.position);
+            -air * (0.5 * rho * drag_area * air.length() / m)
+        } else {
+            DVec3::ZERO
+        };
+        state.velocity += (gravity(env.mu, state.position) + thrust + drag) * h;
         state.position += state.velocity * h;
 
         // Angular: Euler's equations in body axes.
@@ -328,20 +404,40 @@ fn ground_contact(state: &mut RigidState, env: &BodyEnv, body: &VehicleBody, h: 
     if !env.solid {
         return false;
     }
-    let min = env.radius + vehicle_radius(body);
+    let clearance = vehicle_radius(body);
     let d = state.position.length();
+    // Far above the highest possible ground: no need to sample the terrain.
+    if d >= env.radius + env.max_ground_height() + clearance {
+        return false;
+    }
+    let min = env.radius + env.ground_height(state.position) + clearance;
     if d >= min {
         return false;
     }
     let up = state.position / d;
     state.position = up * min;
+    let normal = env.ground_normal(state.position);
     let ground = env.spin.cross(state.position);
     let mut relative = state.velocity - ground;
-    let radial = relative.dot(up);
-    if radial < 0.0 {
-        relative -= up * radial;
+    // The ground stops motion into it; that normal impulse (it includes this substep's gravity)
+    // sets how much sliding friction can remove (Coulomb friction).
+    let into = relative.dot(normal);
+    let normal_impulse = (-into).max(0.0);
+    if into < 0.0 {
+        relative -= normal * into;
     }
-    relative *= (1.0 - GROUND_FRICTION * h).max(0.0);
+    let tangential = relative - normal * relative.dot(normal);
+    let sliding = tangential.length();
+    let slope = normal.dot(up).clamp(-1.0, 1.0).acos();
+    let grip = GROUND_FRICTION_COEFFICIENT * normal_impulse;
+    if slope < MAX_STICK_SLOPE && sliding <= grip.max(STICK_SPEED) {
+        // Static friction: a slow vehicle on a gentle slope holds still.
+        relative -= tangential;
+    } else if sliding > 0.0 {
+        // Sliding: Coulomb friction plus scraping drag that grows with speed.
+        let slowed = (sliding - grip).max(0.0) * (1.0 - GROUND_FRICTION * h).max(0.0);
+        relative -= tangential * (1.0 - slowed / sliding);
+    }
     state.velocity = ground + relative;
     state.angular_velocity =
         env.spin + (state.angular_velocity - env.spin) * (1.0 - GROUND_FRICTION * h).max(0.0);
@@ -364,6 +460,7 @@ pub fn fly(
     let mut state = RigidState::from_origin(origin, com);
     let warping = dt > MAX_THRUST_DT;
     telemetry.altitude = state.position.length() - env.radius;
+    telemetry.ground_altitude = ground_altitude(env, state.position);
 
     if warping {
         // Coast on rails when possible.
@@ -403,6 +500,17 @@ pub fn fly(
     state.to_origin(com)
 }
 
+/// Height above the ground under `position` (m); sea-level altitude when far above the highest
+/// terrain (where sampling it would be wasted).
+pub fn ground_altitude(env: &BodyEnv, position: DVec3) -> f64 {
+    let altitude = position.length() - env.radius;
+    if altitude > env.max_ground_height() + 20_000.0 {
+        altitude
+    } else {
+        altitude - env.ground_height(position)
+    }
+}
+
 /// Builds the body environment for region body `index` at universe time `t`.
 pub fn body_env(system: &sim_core::StarSystem, index: usize, t: f64) -> BodyEnv {
     let body = &system.bodies[index];
@@ -419,7 +527,45 @@ pub fn body_env(system: &sim_core::StarSystem, index: usize, t: f64) -> BodyEnv 
         spin: surface.angular_velocity,
         surface_rotation: surface.rotation,
         solid: body.parent.is_some(),
+        terrain: None,
+        air_density: body
+            .atmosphere
+            .as_ref()
+            .map_or(0.0, |a| SEA_LEVEL_AIR_DENSITY * a.surface_pressure_atm),
+        air_scale_height: body
+            .atmosphere
+            .as_ref()
+            .map_or(1.0, |a| a.height * AIR_SCALE),
     }
+}
+
+/// A region's terrain, shared by the vehicles flying there (built once; see
+/// [`install_terrain`]).
+#[derive(Resource, Clone)]
+pub struct RegionTerrain(pub Option<Arc<Terrain>>);
+
+/// Gives every region of a star-system simulation its body's terrain, so vehicles land on the
+/// real ground. Regions without it fly over a smooth sphere.
+pub fn install_terrain(sim: &mut sim_core::Simulation) {
+    let Some(system) = sim.star_system().cloned() else {
+        return;
+    };
+    for (i, region) in sim.regions.iter_mut().enumerate() {
+        let terrain = system.bodies.get(i).and_then(Terrain::of).map(Arc::new);
+        region.world.insert_resource(RegionTerrain(terrain));
+    }
+}
+
+/// The environment for region body `index`, with the region's terrain if installed.
+pub fn region_env(
+    system: &sim_core::StarSystem,
+    index: usize,
+    t: f64,
+    terrain: Option<&RegionTerrain>,
+) -> BodyEnv {
+    let mut env = body_env(system, index, t);
+    env.terrain = terrain.and_then(|r| r.0.clone());
+    env
 }
 
 /// Flies every vehicle in a region for one tick. Add to each region's schedule in
@@ -430,6 +576,7 @@ pub fn flight_system(
     region: Res<RegionBody>,
     system: Res<SystemRef>,
     clock: Res<SimClock>,
+    terrain: Option<Res<RegionTerrain>>,
     mut vehicles: Query<
         (
             Entity,
@@ -445,7 +592,7 @@ pub fn flight_system(
 ) {
     let system = &system.0;
     let t = clock.time.as_secs_f64();
-    let env = body_env(system, region.0, t);
+    let env = region_env(system, region.0, t, terrain.as_deref());
     let inertial = system.bodies[region.0].inertial_frame;
     for (entity, mut state, body, mut control, mut telemetry, on_rails, cruise) in &mut vehicles {
         if cruise.is_some_and(Cruise::is_cruising) {
@@ -551,6 +698,9 @@ mod tests {
             spin: DVec3::Y * (std::f64::consts::TAU / 5_400.0),
             surface_rotation: DQuat::IDENTITY,
             solid: true,
+            terrain: None,
+            air_density: 0.0,
+            air_scale_height: 8_000.0,
         }
     }
 
@@ -820,6 +970,94 @@ mod tests {
         assert!((v - env.spin.cross(low)).length() < 1e-9);
         let high = DVec3::new(env.radius + 200_000.0, 0.0, 0.0);
         assert_eq!(env.standing_still(high), (Reference::Inertial, DVec3::ZERO));
+    }
+
+    fn halcyon() -> sim_core::StarSystem {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../content/data/star_systems/halcyon.json");
+        sim_core::StarSystem::from_path(path).unwrap()
+    }
+
+    /// Meridian's real environment at t = 0, with its terrain and air.
+    fn meridian_terrain() -> BodyEnv {
+        let sys = halcyon();
+        let i = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+        let terrain = Terrain::of(&sys.bodies[i]).map(Arc::new);
+        region_env(&sys, i, 0.0, Some(&RegionTerrain(terrain)))
+    }
+
+    /// A land spot (inertial direction) with a slope between `lo` and `hi` radians.
+    fn sloped_spot(env: &BodyEnv, lo: f64, hi: f64) -> DVec3 {
+        sim_planet::fibonacci_directions(20_000)
+            .map(|d| env.surface_rotation * d)
+            .find(|&d| {
+                let p = d * env.radius;
+                let slope = env.ground_normal(p).dot(d).acos();
+                env.ground_height(p) > 100.0 && (lo..hi).contains(&slope)
+            })
+            .expect("a sloped land spot")
+    }
+
+    #[test]
+    fn lands_on_a_slope_and_holds_still_with_the_ground() {
+        let body = kestrel();
+        let env = meridian_terrain();
+        let up = sloped_spot(&env, 0.25, 0.45);
+        let ground = env.radius + env.ground_height(up * env.radius);
+        let p = up * (ground + 30.0);
+        let mut s = RigidState {
+            position: p,
+            velocity: env.spin.cross(p),
+            rotation: DQuat::from_rotation_arc(DVec3::Y, up),
+            angular_velocity: env.spin,
+        };
+        let mut touched = false;
+        let ticks = 600;
+        for _ in 0..ticks {
+            touched |= integrate(&mut s, &body, Wrench::default(), &env, 1.0 / 30.0);
+        }
+        assert!(touched, "reached the ground");
+        // The landing spot has turned with the planet meanwhile.
+        let up = DQuat::from_scaled_axis(env.spin * (f64::from(ticks) / 30.0)) * up;
+        let height = s.position.length() - (env.radius + env.ground_height(s.position));
+        let clearance = vehicle_radius(&body);
+        assert!(
+            (height - clearance).abs() < 0.5,
+            "rests at its clearance: {height:.2} vs {clearance:.2}"
+        );
+        let rel_v = s.velocity - env.spin.cross(s.position);
+        let relative = rel_v.length();
+        assert!(
+            relative < 0.1,
+            "holds still on the slope: {relative:.3} m/s"
+        );
+        assert!(
+            (s.position.normalize() - up).length() * env.radius < 5.0,
+            "didn't slide away"
+        );
+    }
+
+    #[test]
+    fn air_drag_limits_falling_speed() {
+        let body = kestrel();
+        let env = meridian_terrain();
+        let up = sloped_spot(&env, 0.0, 0.2);
+        let p = up * (env.radius + 12_000.0);
+        let mut s = RigidState {
+            position: p,
+            velocity: env.spin.cross(p),
+            rotation: DQuat::IDENTITY,
+            angular_velocity: DVec3::ZERO,
+        };
+        // Fall for 60 s without thrust.
+        for _ in 0..1_800 {
+            integrate(&mut s, &body, Wrench::default(), &env, 1.0 / 30.0);
+        }
+        let speed = (s.velocity - env.spin.cross(s.position)).length();
+        assert!(
+            (60.0..250.0).contains(&speed),
+            "terminal speed near the ground {speed:.0} m/s"
+        );
     }
 
     #[test]
