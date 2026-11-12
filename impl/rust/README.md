@@ -68,6 +68,8 @@ Windows export copies `content/data` next to the `.exe`.
     pitch/yaw (cursor locked), Q/E roll, T cycles flight assist (Full / Rotation / Off), X brakes,
       **F** steps out when landed (or low and nearly still); on foot WASD walk, Shift run, Space
   jump, mouse look, and **F** within 12 m of the ship boards it again,
+    **K** flattens a 60 m landing pad under the ship or walker (debug, first terrain delta; not saved
+  yet),
   **N** arcade flight (debug; No Man's Sky style: no gravity, the ship flies where the nose
   points, W/S raise or lower the held speed up to 4 km/s, X stops),
   **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the

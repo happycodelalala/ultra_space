@@ -92,8 +92,14 @@ Rules:
 
 ## 6. Deltas and streaming (object system, development plan §7.1)
 
-- **Terrain deltas** keyed by tile key: Batch 2 implements the format and applies it (e.g. a
-  flattened landing pad); saving them to disk comes with the first save file in Batch 3.
+- **Terrain deltas:** player changes live in the terrain description itself (a list of edits
+  applied in order on top of the generated heights), so every user of heights (tile meshes,
+  normals, vehicle and walker physics) sees them and regeneration is identical. Adding one makes
+  a new terrain (copy-on-write); drawn tiles it touches are rebuilt in place (the old tile stays
+  until the new one is drawable), others are dropped, and the physics regions get the new
+  terrain at once. The first kind is a flattened landing pad (K, debug). Edits are found by the
+  tiles they touch; a spatial index by tile key comes when there are many. Saving them comes with
+  the first save file in Batch 3.
 - **Hitch-budget stress test:** a scripted orbit → surface descent measuring the worst frame;
   no frame over 50 ms on Windows.
 

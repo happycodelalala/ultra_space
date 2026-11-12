@@ -1,0 +1,13 @@
+# Terrain delta: flatten a landing pad (task 2.11). Run with ULTRA_SPACE_START_ALTITUDE=1500 (below
+# the start spot's ground, so the ship is placed on the surface at once). Look for: the ground
+# around the ship levels out, no hole or flash while tiles rebuild, the ship stays landed.
+2    shot 01-before.png
+2.5  hold MouseRight 1.5      # look down at the ground around the ship
+2.5  mouse 0 4 1.5
+4.5  shot 02-before-from-above.png
+5    press K                  # flatten a 60 m pad under the ship
+5.1  shot 03-rebuilding.png
+8    shot 04-flattened.png
+9    press F                  # step out onto the pad
+11   shot 05-on-the-pad.png
+12   quit

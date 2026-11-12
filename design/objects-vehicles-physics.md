@@ -299,6 +299,7 @@ from catalog parts:
 | T | Cycle flight-assist modes |
 | J | Engage / drop out of cruise drive |
 | F | Step out of a landed ship / board it again (within 12 m) |
+| K | Debug: flatten a 60 m landing pad under the player (first terrain delta) |
 | N | Debug arcade flight: no gravity, flies where the nose points, W/S set the held speed |
 | Z | Debug full stop: instantly "standing still" for assist (hover low, drop from orbit) |
 | Tab | Switch between flying the ship and the free debug camera |

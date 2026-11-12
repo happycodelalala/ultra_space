@@ -52,6 +52,35 @@ pub struct Terrain {
     /// Continent value at the coastline.
     coast: f64,
     seeds: [u64; 6],
+    /// Player-made changes (terrain deltas, planet-surface.md §6), applied in order on top of
+    /// the generated heights, so regeneration always gives the same result.
+    pads: Vec<Pad>,
+}
+
+/// A flattened area (task 2.11): inside `radius` the ground is at `height`; over the next
+/// `blend` metres it eases back to the natural terrain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pad {
+    /// Centre direction (unit, surface frame).
+    pub center: DVec3,
+    pub radius: f64,
+    pub blend: f64,
+    /// Ground height inside the pad (m above the reference radius).
+    pub height: f64,
+}
+
+impl Pad {
+    /// How much of the pad's height applies at `dir` (1 inside, easing to 0 at the edge of the
+    /// blend), on a body of `radius`.
+    fn weight(&self, dir: DVec3, radius: f64) -> f64 {
+        let distance = self.center.angle_between(dir) * radius;
+        1.0 - smoothstep(self.radius, self.radius + self.blend, distance)
+    }
+
+    /// Angular reach (radians) on a body of `radius`.
+    pub fn reach(&self, radius: f64) -> f64 {
+        (self.radius + self.blend) / radius
+    }
 }
 
 fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
@@ -85,9 +114,28 @@ impl Terrain {
             params,
             coast: 0.0,
             seeds,
+            pads: Vec::new(),
         };
         terrain.coast = terrain.coast_threshold();
         terrain
+    }
+
+    /// This terrain with one more pad (copy-on-write: the original stays valid for anything
+    /// still using it).
+    pub fn with_pad(&self, pad: Pad) -> Terrain {
+        let mut t = self.clone();
+        t.pads.push(pad);
+        t
+    }
+
+    pub fn pads(&self) -> &[Pad] {
+        &self.pads
+    }
+
+    /// Whether `pad` reaches any point within `spread` radians of the unit direction `center`
+    /// (e.g. a tile's centre and its corner spread).
+    pub fn pad_touches(&self, pad: &Pad, center: DVec3, spread: f64) -> bool {
+        pad.center.angle_between(center) <= spread + pad.reach(self.radius)
     }
 
     /// Whether the body has an ocean (sea level at height 0).
@@ -156,6 +204,12 @@ impl Terrain {
         if p.craters > 0.0 {
             // Overlapping craters add up; keep the total within the body's relief.
             height += self.craters(dir, shortest).clamp(-p.relief, 0.5 * p.relief);
+        }
+        for pad in &self.pads {
+            let w = pad.weight(dir, r);
+            if w > 0.0 {
+                height += (pad.height - height) * w;
+            }
         }
         Sample { height, land }
     }
@@ -363,6 +417,36 @@ mod tests {
         let share = bowls as f64 / n as f64;
         assert!((0.1..0.85).contains(&share), "bowls cover {share:.2}");
         assert!(rims > n / 50, "rims at {rims} samples");
+    }
+
+    #[test]
+    fn a_pad_flattens_the_ground_and_regenerates_identically() {
+        let t = terrain("hoarfell");
+        // A rough spot: the steepest of a few samples.
+        let center = fibonacci_directions(2_000)
+            .max_by(|a, b| t.slope(*a, 50.0, 1.0).total_cmp(&t.slope(*b, 50.0, 1.0)))
+            .unwrap();
+        let pad = Pad {
+            center,
+            radius: 30.0,
+            blend: 20.0,
+            height: t.height(center, 1.0),
+        };
+        let flat = t.with_pad(pad);
+        let side = center.any_orthonormal_vector();
+        let at = |m: f64| (center + side * (m / t.radius)).normalize();
+        // Inside the pad: level at the pad height.
+        for m in [0.0, 10.0, 25.0] {
+            assert!((flat.height(at(m), 1.0) - pad.height).abs() < 1e-6, "{m} m");
+        }
+        // Outside the blend: untouched.
+        assert_eq!(flat.height(at(60.0), 1.0), t.height(at(60.0), 1.0));
+        // The original terrain is unchanged, and the edit regenerates identically.
+        assert_ne!(t.height(at(10.0), 1.0), flat.height(at(10.0), 1.0));
+        let again = t.with_pad(pad);
+        assert_eq!(again.height(at(40.0), 1.0), flat.height(at(40.0), 1.0));
+        assert!(flat.pad_touches(&pad, at(45.0), 0.0));
+        assert!(!flat.pad_touches(&pad, at(500.0), 0.0));
     }
 
     #[test]

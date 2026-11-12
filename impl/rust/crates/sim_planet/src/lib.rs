@@ -13,4 +13,4 @@ pub mod terrain;
 pub use climate::{Biome, Climate, latitude, subsolar_latitude};
 pub use mesh::{TileMesh, build_tile, tile_indices};
 pub use quadtree::{Extent, TileKey, View, estimated_heights, select};
-pub use terrain::{Sample, Terrain, fibonacci_directions};
+pub use terrain::{Pad, Sample, Terrain, fibonacci_directions};

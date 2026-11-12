@@ -23,7 +23,7 @@ use bevy::window::PrimaryWindow;
 use glam::{DQuat, DVec3};
 use sim_planet::quadtree::DEFAULT_SPACING_PIXELS;
 use sim_planet::{
-    Biome, Climate, Extent, Terrain, TileKey, TileMesh, View, build_tile, estimated_heights,
+    Biome, Climate, Extent, Pad, Terrain, TileKey, TileMesh, View, build_tile, estimated_heights,
     select, subsolar_latitude, tile_indices,
 };
 
@@ -56,7 +56,8 @@ impl Plugin for TerrainPlugin {
                     .chain()
                     .after(CameraSet)
                     .in_set(InGame),
-            );
+            )
+            .add_systems(Update, pad_key.before(crate::sim::SimSet).in_set(InGame));
     }
 }
 
@@ -73,6 +74,10 @@ enum Tile {
     },
 }
 
+/// A rebuilt tile waiting to replace the drawn one: entities, height range, and the first frame
+/// it may be drawn.
+type Incoming = (Vec<Entity>, (f64, f64), u64);
+
 struct BodyTiles {
     body: usize,
     terrain: Arc<Terrain>,
@@ -83,6 +88,12 @@ struct BodyTiles {
     estimates: Mutex<HashMap<TileKey, (f64, f64)>>,
     finished: Vec<TileMesh>,
     in_flight: usize,
+    /// Drawn tiles out of date after a terrain edit, waiting to be rebuilt.
+    stale: HashSet<TileKey>,
+    /// Rebuilds in progress (the old tile stays drawn meanwhile).
+    rebuilding: HashMap<TileKey, Task<TileMesh>>,
+    /// Rebuilt tiles uploaded but not drawable yet.
+    incoming: HashMap<TileKey, Incoming>,
     /// Tiles drawn this frame.
     shown: HashSet<TileKey>,
     /// Tiles have covered the whole body since it became active. Sticky while active: the
@@ -164,6 +175,9 @@ fn setup_terrains(
                 estimates: Mutex::new(HashMap::new()),
                 finished: Vec::new(),
                 in_flight: 0,
+                stale: HashSet::new(),
+                rebuilding: HashMap::new(),
+                incoming: HashMap::new(),
                 shown: HashSet::new(),
                 covered: false,
             })
@@ -338,6 +352,46 @@ fn update_terrain(
             bt.in_flight -= 1;
             bt.finished.push(mesh);
         }
+        let rebuilt: Vec<TileKey> = bt
+            .rebuilding
+            .iter_mut()
+            .filter_map(|(key, task)| block_on(poll_once(task)).map(|m| (*key, m)))
+            .map(|(key, mesh)| {
+                bt.finished.push(mesh);
+                key
+            })
+            .collect();
+        for key in rebuilt {
+            bt.rebuilding.remove(&key);
+            bt.in_flight -= 1;
+        }
+        // Swap in rebuilt tiles once they are drawable; the old ones go only then.
+        let ready: Vec<TileKey> = bt
+            .incoming
+            .iter()
+            .filter(|(_, (_, _, from))| frame >= *from)
+            .map(|(k, _)| *k)
+            .collect();
+        for key in ready {
+            let (entities, heights, from) = bt.incoming.remove(&key).expect("listed");
+            if let Some(Tile::Ready {
+                entities: old,
+                heights: h,
+                drawable_from,
+                ..
+            }) = bt.tiles.get_mut(&key)
+            {
+                for e in std::mem::replace(old, entities) {
+                    commands.entity(e).despawn();
+                }
+                *h = heights;
+                *drawable_from = from;
+            } else {
+                for e in entities {
+                    commands.entity(e).despawn();
+                }
+            }
+        }
 
         let mut shown = Vec::new();
         let mut needed = HashSet::new();
@@ -386,6 +440,25 @@ fn update_terrain(
                 )
             });
             let season = subsolar_latitude(system, bt.body, t);
+            // Rebuild tiles changed by terrain edits first (they are on screen).
+            let stale: Vec<TileKey> = bt
+                .stale
+                .iter()
+                .filter(|k| matches!(bt.tiles.get(k), Some(Tile::Ready { .. })))
+                .copied()
+                .collect();
+            for key in stale {
+                if bt.in_flight >= MAX_IN_FLIGHT {
+                    break;
+                }
+                bt.stale.remove(&key);
+                let terrain = bt.terrain.clone();
+                let climate = bt.climate.clone();
+                let task = crate::workers::workers()
+                    .spawn(async move { build_tile(&terrain, climate.as_deref(), key, season) });
+                bt.rebuilding.insert(key, task);
+                bt.in_flight += 1;
+            }
             for key in missing {
                 if bt.in_flight >= MAX_IN_FLIGHT {
                     break;
@@ -433,15 +506,28 @@ fn update_terrain(
                             .id(),
                     );
                 }
-                bt.tiles.insert(
-                    m.key,
-                    Tile::Ready {
-                        entities,
-                        heights: (m.min_height, m.max_height),
-                        last_needed: frame,
-                        drawable_from: frame + DRAW_DELAY_FRAMES,
-                    },
-                );
+                let heights = (m.min_height, m.max_height);
+                if matches!(bt.tiles.get(&m.key), Some(Tile::Ready { .. })) {
+                    // A rebuild: keep the old tile drawn until this one is ready.
+                    if let Some((old, _, _)) = bt
+                        .incoming
+                        .insert(m.key, (entities, heights, frame + DRAW_DELAY_FRAMES))
+                    {
+                        for e in old {
+                            commands.entity(e).despawn();
+                        }
+                    }
+                } else {
+                    bt.tiles.insert(
+                        m.key,
+                        Tile::Ready {
+                            entities,
+                            heights,
+                            last_needed: frame,
+                            drawable_from: frame + DRAW_DELAY_FRAMES,
+                        },
+                    );
+                }
             }
 
             // What to draw: complete coverage of every face, or as much as is ready.
@@ -492,6 +578,12 @@ fn update_terrain(
                     commands.entity(e).despawn();
                 }
             }
+            if let Some((entities, _, _)) = bt.incoming.remove(&key) {
+                for e in entities {
+                    commands.entity(e).despawn();
+                }
+            }
+            bt.stale.remove(&key);
             bt.estimates.lock().expect("estimates").remove(&key);
         }
         bt.shown = shown_set;
@@ -575,6 +667,111 @@ fn place_tiles(
         transform.translation = (*position + *rotation * tile.origin).as_vec3();
         transform.rotation = rotation.as_quat().normalize();
     }
+}
+
+/// Landing pad size (m): flat radius and the blend back to natural terrain.
+const PAD_RADIUS: f64 = 30.0;
+const PAD_BLEND: f64 = 20.0;
+/// The ship must be this low (m above ground) to flatten a pad under it.
+const PAD_MAX_SHIP_HEIGHT: f64 = 50.0;
+
+/// K (debug, first terrain delta, task 2.11): flattens a landing pad under the player, on foot or
+/// in a ship near the ground, at the ground's current height there.
+#[allow(clippy::too_many_arguments)]
+fn pad_key(
+    mut commands: Commands,
+    keys: Res<ButtonInput<KeyCode>>,
+    universe: Res<Universe>,
+    ship: Option<Res<crate::ship::PlayerShip>>,
+    on_foot: Option<Res<crate::walk::OnFoot>>,
+    pilot: Res<crate::ship::PilotState>,
+    mut terrains: ResMut<Terrains>,
+    mut sim: ResMut<crate::sim::Sim>,
+) {
+    if !pilot.flying || !keys.just_pressed(KeyCode::KeyK) {
+        return;
+    }
+    let system = &universe.0;
+    let sim = &mut sim.0;
+    let t = sim.universe_time().as_secs_f64();
+    // Where the player is: the walker, or the ship if it's close to the ground.
+    let (region, state) = if let Some(f) = on_foot {
+        match crate::walk::walker_status(sim, f.id) {
+            Some((region, state, _)) => (region, state),
+            None => return,
+        }
+    } else {
+        let Some((region, state, telemetry, _)) =
+            ship.and_then(|s| crate::ship::player_ship_state(sim, &s))
+        else {
+            return;
+        };
+        if telemetry.ground_altitude > PAD_MAX_SHIP_HEIGHT {
+            info!(
+                "too high to flatten a pad ({:.0} m above ground)",
+                telemetry.ground_altitude
+            );
+            return;
+        }
+        (region, state)
+    };
+    let Some(bt) = terrains.bodies.iter_mut().find(|bt| bt.body == region) else {
+        return;
+    };
+    let body = &system.bodies[region];
+    let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
+    let center = system
+        .frames
+        .transform_point(body.surface_frame, body.inertial_frame, t, local.position)
+        .normalize();
+    let pad = Pad {
+        center,
+        radius: PAD_RADIUS,
+        blend: PAD_BLEND,
+        height: bt.terrain.height(center, 1.0),
+    };
+    let terrain = Arc::new(bt.terrain.with_pad(pad));
+    bt.terrain = terrain.clone();
+
+    // Tiles touching the pad: rebuild the drawn ones in place, drop the rest.
+    let touched: Vec<TileKey> = bt
+        .tiles
+        .keys()
+        .filter(|key| {
+            let c = key.center();
+            let spread = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)]
+                .iter()
+                .map(|&(s, u)| c.angle_between(key.direction(s, u)))
+                .fold(0.0, f64::max);
+            terrain.pad_touches(&pad, c, spread)
+        })
+        .copied()
+        .collect();
+    for key in touched {
+        bt.estimates.lock().expect("estimates").remove(&key);
+        if bt.shown.contains(&key) {
+            bt.stale.insert(key);
+        } else if let Some(Tile::Ready { entities, .. }) = bt.tiles.remove(&key) {
+            for e in entities {
+                commands.entity(e).despawn();
+            }
+        } else {
+            // Still being generated from the old terrain: rebuild once it arrives.
+            bt.stale.insert(key);
+        }
+    }
+
+    // Physics uses the same terrain at once.
+    if let Some(r) = sim.regions.get_mut(region) {
+        r.world
+            .insert_resource(sim_vehicle::flight::RegionTerrain(Some(terrain)));
+    }
+    info!(
+        "flattened a {:.0} m landing pad on {} at height {:.0} m",
+        2.0 * PAD_RADIUS,
+        body.name,
+        pad.height
+    );
 }
 
 #[cfg(test)]
