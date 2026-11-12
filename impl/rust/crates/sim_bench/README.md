@@ -74,13 +74,25 @@ median-of-batches) reached ~10× on the heavy workload, so results depend on mac
 | 16 | 0.63 | 7.5× | 0.77 | 6.1× |
 | 32 | 0.54 | 8.7× | 0.63 | 7.5× |
 
+**Heavy workload** (`--scale 8`: 512k ships, 3.3M belt slots):
+
+| Threads | regions ms/tick | speedup | systems ms/tick | speedup |
+|---:|---:|---:|---:|---:|
+| serial | 41.21 | 1.0× | 40.93 | 1.0× |
+| 2 | 20.67 | 2.0× | 40.76 | 1.0× |
+| 4 | 10.56 | 3.9× | 14.84 | 2.8× |
+| 8 | 5.87 | 7.0× | 8.11 | 5.0× |
+| 16 | 4.36 | 9.4× | 5.29 | 7.7× |
+| 32 | 2.68 | 15.4× | 3.04 | 13.4× |
+
 Native Windows scales about **2–2.5× better than WSL2** on the same workload. Most of the
 light-tick floor measured in WSL comes from the virtual machine's thread scheduling.
 
 ## Findings
 
-1. **The architecture scales:** natively on Windows, 8.7× on light ticks at 32 threads
-   (WSL2: 3–4× light, 5–6× heavy), with no locks and no data races (compiler-checked).
+1. **The architecture scales:** natively on Windows, **15.4× on heavy ticks** and 8.7× on
+   light ticks at 32 threads (WSL2: 5–6× heavy, 3–4× light), with no locks and no data races
+   (compiler-checked). Heavy ticks keep gaining past 16 threads, so SMT threads help.
 2. **Per-region worlds (`regions`) scale better** than one shared world, and they map directly
    onto the frame tree. They become the primary strategy. `par_iter_mut` stays available for
    hot systems inside one very large region (e.g. a huge battle).
@@ -89,13 +101,12 @@ light-tick floor measured in WSL comes from the virtual machine's thread schedul
    work per tick, where scaling is better.
 4. **Chunking regions into one task per worker** (fewer spawns) gave no improvement, so the
    simpler one-task-per-region form stays.
-5. **Gains flatten past 8 threads** on light ticks (natively 6.7× → 7.5× → 8.7×), where the
-   fixed per-tick cost dominates. Possible contributors, not yet tested: all-core clock drops
-   under the tablet's power limit, and crossing between the chip's two 8-core clusters.
+5. **Gains flatten past 8 threads only on light ticks** (natively 6.7× → 7.5× → 8.7×), where
+   the fixed per-tick cost dominates. Heavy ticks scale nearly linearly (7.0× → 9.4× → 15.4×),
+   so this is per-tick overhead, not a hardware limit.
 6. **Judge performance natively.** WSL2 numbers are useful for relative comparisons only;
    they understate parallel scaling.
 
 ## Follow-ups
 
-- Record the native Windows heavy workload (`--scale 8`) run.
 - Re-run as real simulation systems replace the synthetic ones.
