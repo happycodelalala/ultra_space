@@ -343,8 +343,10 @@ tests pass; sphere-of-influence transitions without visible jumps; CI passes.
 **Not in Batch 1:** planet surfaces, climate computation and landing (Batch 2); building
 vehicles (Batch 3).
 
-**Status:** 1.1–1.17 done; the 1.18 review on Windows is still open, to be done when a Windows
-session is available.
+**Status:** done. The 1.18 review on Windows (2026-11-12) passed: flight, cruise, transitions,
+time warp and steering feel good; no hitches in play. Startup still has two ~300 ms frames in
+the first second after launch (likely first-use shader compilation); pipeline warm-up moved to
+task 2.12.
 
 ### 7.3 Batch 2 tasks
 

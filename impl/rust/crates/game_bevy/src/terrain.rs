@@ -28,8 +28,10 @@ use sim_planet::{
 };
 
 use crate::camera::{CameraSet, SpaceCamera};
+use crate::planet_maps::BakedMapHandles;
 use crate::sim::RenderTime;
-use crate::space_render::{BodyVisual, Layer, MainCamera};
+use crate::space_render::{BodyVisual, Layer, MainCamera, STAR_LIGHT};
+use crate::terrain_material::{TerrainMaterial, TerrainUniform, WaterMaterial, WaterUniform};
 use crate::universe::{GameState, InGame, Universe};
 
 /// Terrain is streamed while the camera is closer to a body's centre than this many radii.
@@ -78,14 +80,14 @@ struct BodyTiles {
     /// Tiles drawn this frame.
     shown: HashSet<TileKey>,
     covered: bool,
+    ground: Handle<TerrainMaterial>,
+    water: Handle<WaterMaterial>,
 }
 
 #[derive(Resource)]
 struct Terrains {
     bodies: Vec<BodyTiles>,
     frame: u64,
-    ground: Handle<StandardMaterial>,
-    water: Handle<StandardMaterial>,
 }
 
 /// A drawn terrain or water tile.
@@ -95,10 +97,23 @@ struct TerrainTile {
     origin: DVec3,
 }
 
+/// Vertex colours blend into the baked map between these distances (m). Per-vertex biome
+/// colours step visibly once vertices are more than about half a map texel apart (vertex
+/// spacing ≈ distance × 12 px / 935 px per radian; a Meridian map texel is ≈ 3.7 km), and the
+/// smoothly filtered map looks better from there on.
+const MAP_BLEND: (f32, f32) = (40_000.0, 120_000.0);
+/// Fine ground detail fades out by this distance (m).
+const DETAIL_FADE: f32 = 3_000.0;
+
+fn linear(c: [f32; 3]) -> Vec4 {
+    Vec4::new(c[0].powf(2.2), c[1].powf(2.2), c[2].powf(2.2), 1.0)
+}
+
 fn setup_terrains(
     mut commands: Commands,
     universe: Res<Universe>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut ground_materials: ResMut<Assets<TerrainMaterial>>,
+    mut water_materials: ResMut<Assets<WaterMaterial>>,
 ) {
     let bodies = universe
         .0
@@ -113,7 +128,27 @@ fn setup_terrains(
                 min_height: -(p.ocean_depth + p.relief),
                 max_height: 1.25 * p.relief,
             };
+            let ground = ground_materials.add(TerrainMaterial {
+                data: TerrainUniform {
+                    params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, DETAIL_FADE),
+                    rock: linear(biome_srgb(Biome::Rock)),
+                    ..default()
+                },
+                color_map: None,
+            });
+            let sky = body.atmosphere.as_ref().map_or(Vec4::ZERO, |a| {
+                Vec4::new(a.color[0] as f32, a.color[1] as f32, a.color[2] as f32, 1.0) * 0.35
+            });
+            let water = water_materials.add(WaterMaterial {
+                data: WaterUniform {
+                    color: linear(biome_srgb(Biome::Ocean)).truncate().extend(0.0),
+                    sky,
+                    ..default()
+                },
+            });
             Some(BodyTiles {
+                ground,
+                water,
                 body: i,
                 climate: Climate::of(body).map(Arc::new),
                 terrain: Arc::new(terrain),
@@ -127,24 +162,7 @@ fn setup_terrains(
             })
         })
         .collect();
-    let ground = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 0.92,
-        reflectance: 0.2,
-        ..default()
-    });
-    let water = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.02, 0.09, 0.2),
-        perceptual_roughness: 0.08,
-        reflectance: 0.4,
-        ..default()
-    });
-    commands.insert_resource(Terrains {
-        bodies,
-        frame: 0,
-        ground,
-        water,
-    });
+    commands.insert_resource(Terrains { bodies, frame: 0 });
 }
 
 /// sRGB colour of a biome (placeholder palette until task 2.5). Shared by tiles and the baked
@@ -349,7 +367,7 @@ fn update_terrain(
                                 origin: m.origin,
                             },
                             Mesh3d(ground),
-                            MeshMaterial3d(terrains.ground.clone()),
+                            MeshMaterial3d(bt.ground.clone()),
                             Transform::IDENTITY,
                             Visibility::Hidden,
                         ))
@@ -365,7 +383,7 @@ fn update_terrain(
                                     origin: m.origin,
                                 },
                                 Mesh3d(water),
-                                MeshMaterial3d(terrains.water.clone()),
+                                MeshMaterial3d(bt.water.clone()),
                                 Transform::IDENTITY,
                                 Visibility::Hidden,
                             ))
@@ -452,26 +470,57 @@ fn update_terrain(
 
 /// Places drawn tiles camera-relative: tile origin in the body's surface frame, moved into the
 /// camera anchor's frame at the render time.
+#[allow(clippy::too_many_arguments)]
 fn place_tiles(
     terrains: Res<Terrains>,
     universe: Res<Universe>,
     render: Res<RenderTime>,
+    real: Res<Time<Real>>,
     camera: Res<SpaceCamera>,
+    maps: Res<BakedMapHandles>,
+    mut ground_materials: ResMut<Assets<TerrainMaterial>>,
+    mut water_materials: ResMut<Assets<WaterMaterial>>,
     mut tiles: Query<(&TerrainTile, &Visibility, &mut Transform)>,
 ) {
     let system = &universe.0;
     let anchor = system.bodies[camera.anchor].inertial_frame;
-    let poses: HashMap<usize, (DVec3, DQuat)> = terrains
-        .bodies
-        .iter()
-        .filter(|bt| !bt.shown.is_empty())
-        .map(|bt| {
-            let s = system
-                .frames
-                .state_in(anchor, system.bodies[bt.body].surface_frame, render.0);
-            (bt.body, (s.position - camera.offset, s.rotation))
-        })
-        .collect();
+    let star = (system.frames.transform_point(
+        anchor,
+        system.star().inertial_frame,
+        render.0,
+        DVec3::ZERO,
+    ) - camera.offset)
+        .as_vec3()
+        .extend(STAR_LIGHT);
+    let mut poses: HashMap<usize, (DVec3, DQuat)> = HashMap::new();
+    for bt in terrains.bodies.iter().filter(|bt| !bt.shown.is_empty()) {
+        let s = system
+            .frames
+            .state_in(anchor, system.bodies[bt.body].surface_frame, render.0);
+        let (position, rotation) = (s.position - camera.offset, s.rotation);
+        poses.insert(bt.body, (position, rotation));
+        // Per-body lighting uniforms, shared formula with the distant planet shader.
+        let center = position.as_vec3().extend(bt.extent.radius as f32);
+        let q = rotation.as_quat().normalize();
+        let q = Vec4::new(q.x, q.y, q.z, q.w);
+        if let Some(mut m) = ground_materials.get_mut(&bt.ground) {
+            m.data.star = star;
+            m.data.center = center;
+            m.data.rotation = q;
+            if m.color_map.is_none()
+                && let Some(map) = maps.color.get(&bt.body)
+            {
+                m.color_map = Some(map.clone());
+                m.data.params.x = 1.0;
+            }
+        }
+        if let Some(mut m) = water_materials.get_mut(&bt.water) {
+            m.data.star = star;
+            m.data.center = center;
+            m.data.rotation = q;
+            m.data.color.w = real.elapsed_secs_wrapped();
+        }
+    }
     for (tile, visibility, mut transform) in &mut tiles {
         if *visibility == Visibility::Hidden {
             continue;

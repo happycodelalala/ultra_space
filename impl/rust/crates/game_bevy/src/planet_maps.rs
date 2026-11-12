@@ -30,9 +30,16 @@ pub struct PlanetMapsPlugin;
 
 impl Plugin for PlanetMapsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Running), start_baking)
+        app.init_resource::<BakedMapHandles>()
+            .add_systems(OnEnter(GameState::Running), start_baking)
             .add_systems(Update, attach_maps.in_set(InGame));
     }
+}
+
+/// Baked colour maps by body index, for other materials (terrain tiles) to share.
+#[derive(Resource, Default)]
+pub struct BakedMapHandles {
+    pub color: std::collections::HashMap<usize, Handle<Image>>,
 }
 
 /// Baked maps for one body: RGBA8 sRGB colour and RGBA8 normal, six faces each.
@@ -132,6 +139,7 @@ fn cube_image(bytes: Vec<u8>, format: TextureFormat) -> Image {
 }
 
 fn attach_maps(
+    mut handles: ResMut<BakedMapHandles>,
     mut tasks: Option<ResMut<BakeTasks>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<PlanetMaterial>>,
@@ -148,6 +156,7 @@ fn attach_maps(
         info!("planet maps: attaching maps for body {}", maps.body);
         let color = images.add(cube_image(maps.color, TextureFormat::Rgba8UnormSrgb));
         let normal = images.add(cube_image(maps.normal, TextureFormat::Rgba8Unorm));
+        handles.color.insert(maps.body, color.clone());
         for (visual, handle) in &visuals {
             if visual.body == maps.body
                 && visual.layer == Layer::Surface

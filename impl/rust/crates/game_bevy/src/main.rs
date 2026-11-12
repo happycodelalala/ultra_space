@@ -14,6 +14,7 @@ mod sim;
 mod sky;
 mod space_render;
 mod terrain;
+mod terrain_material;
 mod universe;
 mod workers;
 
@@ -50,6 +51,7 @@ fn main() {
             camera::SpaceCameraPlugin,
             space_render::SpaceRenderPlugin,
             terrain::TerrainPlugin,
+            terrain_material::TerrainMaterialPlugin,
             planet_maps::PlanetMapsPlugin,
             sky::SkyPlugin,
             ship::ShipPlugin,
