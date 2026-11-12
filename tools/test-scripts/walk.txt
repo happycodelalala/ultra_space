@@ -3,8 +3,9 @@
 # surface at once; Z first cancels its orbital speed so it rests instead of skidding and is landed.
 # Step out, look around, run, jump, walk back and board.
 0.5  press Z                # stop relative to the ground (the start keeps orbital speed)
-3    press F                 # step out
-5    shot 01-stepped-out.png
+1    wait landed 20          # the clock stops until the ship rests on the ground
+2    press F                 # step out
+4    shot 01-stepped-out.png
 6    mouse 8 0 1             # turn right
 8    shot 02-looking-around.png
 9    mouse 0 -4 0.5          # look up a little

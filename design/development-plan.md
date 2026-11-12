@@ -372,9 +372,11 @@ Decisions behind these tasks: [planet-surface.md](planet-surface.md).
 **Exit criteria:** land anywhere on Meridian from orbit and walk around with no loading screen
 and no frame over 50 ms; terrain matches from orbit to the ground; CI passes.
 
-**Status (2026-11-12):** 2.1–2.7 done on branch `batch2/terrain` (not merged yet); next is 2.8
-(landing). Debug aids added along the way: full stop (Z), arcade flight (N), start position and
-time of day by environment variables (`AGENTS.md`).
+**Status (2026-11-12):** 2.1–2.12 done on branch `batch2/terrain` (not merged yet); 2.13 has
+its tool (`ULTRA_SPACE_BODY_RADIUS`) and waits for the developer's comparison on Windows; then
+the 2.14 review. Debug aids added along the way: full stop (Z), arcade flight (N), flattened
+pad (K), start position, time of day and camera angle by environment variables, scripted test
+rounds on Windows (`AGENTS.md`).
 
 ### 7.1 When the object system is built
 

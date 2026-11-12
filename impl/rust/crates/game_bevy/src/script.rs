@@ -11,6 +11,7 @@
 //! 3.0  mouse 0 8 2        # move the mouse by (0, 8) px every frame for 2 s
 //! 9.0  shot descent.png   # screenshot, relative to the script's folder
 //! 9.5  log reached cloud deck
+//! 10   wait landed 20     # pause the script clock until the ship is landed and still (max 20 s)
 //! 12   quit               # exit (after pending screenshots), logging a frame summary
 //! ```
 //!
@@ -26,6 +27,10 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+use sim_vehicle::FlightTelemetry;
+
+use crate::ship::PlayerShip;
+use crate::sim::Sim;
 use crate::universe::GameState;
 
 /// Hitch budget for the summary (overview §14.6).
@@ -46,8 +51,21 @@ pub enum Action {
     Mouse(Vec2, f64),
     Shot(String),
     Log(String),
+    /// Pause the script clock until a condition holds (at most this many seconds).
+    Wait(Condition, f64),
     Quit,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Condition {
+    /// The player's ship touches the ground and is (nearly) still relative to it.
+    Landed,
+}
+
+/// Default limit for `wait` (s).
+const WAIT_TIMEOUT: f64 = 20.0;
+/// "Still" for `wait landed` (m/s relative to the ground).
+const LANDED_SPEED: f64 = 0.5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Step {
@@ -70,6 +88,8 @@ struct Script {
     moves: Vec<(Vec2, f64)>,
     shots: Vec<PathBuf>,
     quit_at: Option<Duration>,
+    /// An active `wait`: condition, real time it started, limit (s).
+    waiting: Option<(Condition, Duration, f64)>,
     frames: u64,
     worst: Duration,
     over_budget: u64,
@@ -203,6 +223,18 @@ pub fn parse(text: &str) -> Result<Vec<Step>, String> {
                     .to_string(),
             ),
             "log" => Action::Log(rest.join(" ")),
+            "wait" => {
+                let condition = match rest.first().map(|w| w.to_ascii_lowercase()).as_deref() {
+                    Some("landed") => Condition::Landed,
+                    _ => return Err(err("unknown condition (expected: landed)")),
+                };
+                let limit = if rest.len() > 1 {
+                    number(1)?
+                } else {
+                    WAIT_TIMEOUT
+                };
+                Action::Wait(condition, limit)
+            }
             "quit" => Action::Quit,
             _ => return Err(err("unknown action")),
         };
@@ -234,6 +266,7 @@ impl Plugin for ScriptPlugin {
                 moves: Vec::new(),
                 shots: Vec::new(),
                 quit_at: None,
+                waiting: None,
                 frames: 0,
                 worst: Duration::ZERO,
                 over_budget: 0,
@@ -263,8 +296,29 @@ fn set(
     }
 }
 
+/// Whether a `wait` condition holds now.
+fn holds(condition: Condition, sim: &Sim, ship: Option<&PlayerShip>) -> bool {
+    match condition {
+        Condition::Landed => {
+            let sim = &sim.0;
+            ship.and_then(|ship| sim.objects.location(ship.id))
+                .and_then(|loc| {
+                    sim.regions
+                        .get(loc.region)?
+                        .world
+                        .get::<FlightTelemetry>(loc.entity)
+                        .map(|t| t.in_contact && t.relative_velocity.length() < LANDED_SPEED)
+                })
+                .unwrap_or(false)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_script(
     mut commands: Commands,
+    sim: Res<Sim>,
+    ship: Option<Res<PlayerShip>>,
     mut script: ResMut<Script>,
     real: Res<Time<Real>>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -274,6 +328,22 @@ fn run_script(
     let script = &mut *script;
     let now = real.elapsed();
     let started = *script.started.get_or_insert(now);
+
+    // While waiting, the script clock stands still (holds and moves keep their timing).
+    if let Some((condition, since, limit)) = script.waiting {
+        let waited = (now - since).as_secs_f64();
+        let met = holds(condition, &sim, ship.as_deref());
+        if met || waited > limit {
+            if met {
+                info!("script: waited {waited:.1} s for {condition:?}");
+            } else {
+                error!("script: gave up waiting for {condition:?} after {limit:.0} s");
+            }
+            script.waiting = None;
+        }
+        script.started = Some(started + real.delta());
+    }
+    let started = script.started.unwrap_or(started);
     let t = (now - started).as_secs_f64();
 
     // Frame statistics while the script runs.
@@ -288,7 +358,10 @@ fn run_script(
         set(&input, false, &mut keys, &mut buttons);
     }
 
-    while script.next < script.steps.len() && script.steps[script.next].at <= t {
+    while script.waiting.is_none()
+        && script.next < script.steps.len()
+        && script.steps[script.next].at <= t
+    {
         let step = script.steps[script.next].clone();
         script.next += 1;
         match step.action {
@@ -308,6 +381,7 @@ fn run_script(
                 script.shots.push(path);
             }
             Action::Log(text) => info!("script: {text}"),
+            Action::Wait(condition, limit) => script.waiting = Some((condition, now, limit)),
             Action::Quit => script.quit_at = Some(now),
         }
     }
@@ -367,10 +441,11 @@ mod tests {
              3 mouse 0 -8 2\n\
              9 shot out.png\n\
              9.5 log hello world\n\
+             10 wait landed 15\n\
              12 quit\n",
         )
         .unwrap();
-        assert_eq!(steps.len(), 6);
+        assert_eq!(steps.len(), 7);
         assert_eq!(steps[0].action, Action::Press(Input::Key(KeyCode::KeyN)));
         assert_eq!(
             steps[1].action,
@@ -379,7 +454,13 @@ mod tests {
         assert_eq!(steps[2].action, Action::Mouse(Vec2::new(0.0, -8.0), 2.0));
         assert_eq!(steps[3].action, Action::Shot("out.png".into()));
         assert_eq!(steps[4].action, Action::Log("hello world".into()));
-        assert_eq!(steps[5].action, Action::Quit);
+        assert_eq!(steps[5].action, Action::Wait(Condition::Landed, 15.0));
+        assert_eq!(steps[6].action, Action::Quit);
+        assert_eq!(
+            parse("1 wait landed").unwrap()[0].action,
+            Action::Wait(Condition::Landed, WAIT_TIMEOUT)
+        );
+        assert!(parse("1 wait docked").is_err());
     }
 
     #[test]

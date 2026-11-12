@@ -3,6 +3,7 @@
 # surface at once; Z first cancels its orbital speed so it rests instead of skidding). Look for: the ground
 # around the ship levels out, no hole or flash while tiles rebuild, the ship stays landed.
 0.5  press Z                # stop relative to the ground (the start keeps orbital speed)
+1    wait landed 20          # the clock stops until the ship rests on the ground
 2    shot 01-before.png
 2.5  hold MouseRight 1.5      # look down at the ground around the ship
 2.5  mouse 0 4 1.5
@@ -10,6 +11,7 @@
 5    press K                  # flatten a 60 m pad under the ship
 5.1  shot 03-rebuilding.png
 8    shot 04-flattened.png
+8.5  wait landed 10           # still resting on the flattened ground
 9    press F                  # step out onto the pad
 11   shot 05-on-the-pad.png
 12   quit
