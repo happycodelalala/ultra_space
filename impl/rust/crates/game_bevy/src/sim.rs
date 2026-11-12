@@ -1,15 +1,14 @@
 //! Runs the engine-independent `sim_core::Simulation` from the Bevy app.
 //!
 //! The simulation advances on its own fixed tick (30 Hz by default), decoupled from the render
-//! frame rate. Regions are placeholders until Batch 1 adds real content.
+//! frame rate. There is one region per celestial body.
 
 use std::time::Duration;
 
 use bevy::prelude::*;
-use sim_core::{Region, RegionSet, Simulation};
+use sim_core::Simulation;
 
-/// Placeholder region count until real star systems exist (Batch 1).
-const PLACEHOLDER_REGIONS: usize = 8;
+use crate::universe::Universe;
 
 /// Minimum time between "over budget" warnings, so a slow stretch doesn't flood the log.
 const BUDGET_WARNING_INTERVAL: Duration = Duration::from_secs(5);
@@ -25,13 +24,11 @@ pub struct SimPlugin;
 
 impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
-        let mut regions = RegionSet::new();
-        for i in 0..PLACEHOLDER_REGIONS {
-            regions.push(Region::empty(format!("region-{i}")));
-        }
-        let sim = Simulation::new(regions);
+        let system = app.world().resource::<Universe>().0.clone();
+        // One region per body; physics systems are added per region in later tasks.
+        let sim = Simulation::for_star_system(system, |_, _| {});
         info!(
-            "simulation: {} regions at {:.0} Hz",
+            "simulation: {} regions (one per body) at {:.0} Hz",
             sim.regions.len(),
             sim.clock().tick_hz()
         );

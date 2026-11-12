@@ -1,8 +1,20 @@
 //! The simulation: regions driven by a fixed-rate clock, with tick timing statistics.
 //! Front ends call [`Simulation::advance`] once per frame and read the stats for debug UI.
+//!
+//! [`Simulation::for_star_system`] creates one region per celestial body with the object
+//! registry: each tick sets every region's [`SimClock`], ticks all regions in parallel, then
+//! applies object transfers at the tick boundary.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bevy_ecs::prelude::*;
+
+use crate::objects::{
+    Objects, RegionBody, RegionStage, SimClock, SystemRef, TransferRequests, soi_transfer_system,
+};
+use crate::region::Region;
+use crate::system::StarSystem;
 use crate::time::UniverseTime;
 use crate::{FixedClock, RegionSet, RollingStats};
 
@@ -23,9 +35,43 @@ pub struct Simulation {
     ticks_total: u64,
     universe_time: UniverseTime,
     time_warp: u32,
+    /// The star system, when regions are its bodies (see [`Self::for_star_system`]).
+    system: Option<Arc<StarSystem>>,
+    pub objects: Objects,
 }
 
 impl Simulation {
+    /// One region per body of `system` (region index = body index), each with the shared
+    /// system data, the tick clock and the sphere-of-influence transfer check. `configure`
+    /// adds per-region systems (physics and so on) to each region's schedule, normally in
+    /// [`RegionStage::Simulate`].
+    pub fn for_star_system(
+        system: Arc<StarSystem>,
+        configure: impl Fn(usize, &mut Schedule),
+    ) -> Self {
+        let mut regions = RegionSet::new();
+        for (i, body) in system.bodies.iter().enumerate() {
+            let mut world = World::new();
+            world.insert_resource(RegionBody(i));
+            world.insert_resource(SystemRef(system.clone()));
+            world.init_resource::<SimClock>();
+            world.init_resource::<TransferRequests>();
+            let mut schedule = Schedule::default();
+            schedule.configure_sets((RegionStage::Simulate, RegionStage::Transfers).chain());
+            schedule.add_systems(soi_transfer_system.in_set(RegionStage::Transfers));
+            configure(i, &mut schedule);
+            regions.push(Region::new(body.id.clone(), world, schedule));
+        }
+        let mut sim = Self::new(regions);
+        sim.system = Some(system);
+        sim
+    }
+
+    /// The star system whose bodies the regions are, if any.
+    pub fn star_system(&self) -> Option<&Arc<StarSystem>> {
+        self.system.as_ref()
+    }
+
     pub fn new(regions: RegionSet) -> Self {
         Self::with_rate(regions, DEFAULT_TICK_HZ)
     }
@@ -39,6 +85,8 @@ impl Simulation {
             ticks_total: 0,
             universe_time: UniverseTime::EPOCH,
             time_warp: 1,
+            system: None,
+            objects: Objects::new(),
         }
     }
 
@@ -48,11 +96,24 @@ impl Simulation {
         let ticks = self.clock.advance(elapsed);
         for _ in 0..ticks {
             let start = Instant::now();
+            let step = self.clock.tick_duration() * self.time_warp;
+            let clock = SimClock {
+                time: self.universe_time,
+                dt: step.as_secs_f64(),
+            };
+            for region in self.regions.iter_mut() {
+                if let Some(mut c) = region.world.get_resource_mut::<SimClock>() {
+                    *c = clock;
+                }
+            }
             self.regions.tick();
+            self.universe_time.advance(step);
+            if let Some(system) = &self.system {
+                let t = self.universe_time.as_secs_f64();
+                self.objects.apply_transfers(&mut self.regions, system, t);
+            }
             self.tick_stats.push(start.elapsed());
             self.ticks_total += 1;
-            self.universe_time
-                .advance(self.clock.tick_duration() * self.time_warp);
         }
         ticks
     }
@@ -134,6 +195,50 @@ mod tests {
             sim.universe_time().as_nanos(),
             400_000_000 + 100_000_000_000
         );
+    }
+
+    #[test]
+    fn star_system_regions_tick_and_transfer_objects() {
+        use std::path::PathBuf;
+
+        use glam::{DQuat, DVec3};
+
+        use crate::objects::{ObjectState, SimClock};
+
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../content/data/star_systems/halcyon.json");
+        let system = Arc::new(StarSystem::from_path(path).unwrap());
+        let mut sim = Simulation::for_star_system(system.clone(), |_, _| {});
+        assert_eq!(sim.regions.len(), system.bodies.len());
+
+        // An object placed inside Lantern's sphere but registered in Meridian's region moves
+        // to Lantern's region at the first tick boundary.
+        let (m, l) = (2, 3);
+        assert_eq!(
+            (system.bodies[m].id.as_str(), system.bodies[l].id.as_str()),
+            ("meridian", "lantern")
+        );
+        let p = system.frames.transform_point(
+            system.bodies[m].inertial_frame,
+            system.bodies[l].inertial_frame,
+            0.0,
+            DVec3::new(400_000.0, 0.0, 0.0),
+        );
+        let id = sim
+            .objects
+            .spawn(
+                &mut sim.regions,
+                m,
+                ObjectState::at_rest(system.bodies[m].inertial_frame, p, DQuat::IDENTITY),
+                (),
+            )
+            .unwrap();
+        sim.advance(Duration::from_millis(40));
+        assert_eq!(sim.objects.location(id).unwrap().region, l);
+        // Every region saw this tick's clock.
+        let clock = *sim.regions.get(0).unwrap().world.resource::<SimClock>();
+        assert_eq!(clock.time, UniverseTime::EPOCH);
+        assert!((clock.dt - 1.0 / 30.0).abs() < 1e-6);
     }
 
     #[test]

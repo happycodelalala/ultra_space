@@ -6,6 +6,7 @@
 
 pub mod clock;
 pub mod frames;
+pub mod objects;
 pub mod orbit;
 pub mod region;
 pub mod simulation;
@@ -16,6 +17,7 @@ pub mod units;
 
 pub use clock::FixedClock;
 pub use frames::{Frame, FrameError, FrameId, FrameMotion, FrameState, FrameTree, Spin};
+pub use objects::{Object, ObjectId, ObjectState, Objects};
 pub use orbit::{KeplerOrbit, OrbitError};
 pub use region::{Region, RegionSet};
 pub use simulation::Simulation;
