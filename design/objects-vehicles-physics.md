@@ -161,7 +161,8 @@ for it:
 | Save a ship | Object record with `ObjectId` and the instance part list (Batch 3 save format) |
 
 Added in Batch 3: attachment graph (which part connects to which), symmetry tools, structural
-joints, part templates in the UI.
+joints, part templates in the UI. Section kits, connectors, slots, interiors and design
+compilation: [ships-stations-interiors.md](ships-stations-interiors.md).
 
 ## 7. Invariants and tests
 
