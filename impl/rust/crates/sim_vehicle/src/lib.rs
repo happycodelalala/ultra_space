@@ -22,6 +22,6 @@ pub use cruise::{Cruise, CruiseBlocked, CruisePhase};
 pub use design::{Attach, VehicleDesign, VehiclePart};
 pub use flight::{AssistMode, FlightControl, FlightTelemetry, OnRails, Reference};
 pub use mass::MassProperties;
-pub use physics::{PhysicsScene, RegionPhysics};
+pub use physics::{PhysicsScene, PhysicsStats, RegionPhysics};
 pub use vehicle::{PartCollider, Performance, Vehicle, VehicleBody};
 pub use walker::{Walker, WalkerControl};

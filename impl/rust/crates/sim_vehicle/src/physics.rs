@@ -94,6 +94,21 @@ pub struct PhysicsScene {
     time: f64,
     /// The ground's angular velocity in the last step.
     ground_spin: DVec3,
+    stats: PhysicsStats,
+}
+
+/// What the last step cost and held (diagnostics: logged when a tick runs over budget).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PhysicsStats {
+    pub bodies: usize,
+    pub patches: usize,
+    pub patches_pending: usize,
+    /// Times the ground was rebuilt from a different terrain.
+    pub ground_rebuilds: u64,
+    pub substeps: u32,
+    pub step_ms: f64,
+    pub ground_ms: f64,
+    pub world_ms: f64,
 }
 
 impl Default for PhysicsScene {
@@ -114,6 +129,7 @@ impl Default for PhysicsScene {
             inline_patches: false,
             time: 0.0,
             ground_spin: DVec3::ZERO,
+            stats: PhysicsStats::default(),
         }
     }
 }
@@ -253,6 +269,11 @@ impl PhysicsScene {
         }
     }
 
+    /// What the last step cost and held.
+    pub fn stats(&self) -> PhysicsStats {
+        self.stats
+    }
+
     /// Number of built collision patches.
     pub fn patch_count(&self) -> usize {
         self.ground.as_ref().map_or(0, Ground::len)
@@ -371,8 +392,11 @@ impl PhysicsScene {
         if self.bodies.is_empty() || dt <= 0.0 {
             return;
         }
+        let started = std::time::Instant::now();
         self.ground_spin = env.spin;
         self.update_ground(env);
+        let ground_ms = started.elapsed().as_secs_f64() * 1e3;
+        let mut world_ms = 0.0;
         self.update_rest(env);
         // Rapier splits each step into solver iterations that share one force: in free flight
         // one iteration per step keeps gravity re-evaluated every step (symplectic orbits);
@@ -422,7 +446,9 @@ impl PhysicsScene {
                 );
                 rb.add_torque(rotation * e.wrench.torque, false);
             }
+            let world_started = std::time::Instant::now();
             self.world.step();
+            world_ms += world_started.elapsed().as_secs_f64() * 1e3;
             let ground = self.ground.as_ref().map(|g| g.body);
             for e in self.bodies.values_mut() {
                 if e.motion != Motion::Dynamic {
@@ -447,6 +473,16 @@ impl PhysicsScene {
         }
         self.time += dt;
         self.settle(env, dt);
+        self.stats = PhysicsStats {
+            bodies: self.bodies.len(),
+            patches: self.patch_count(),
+            patches_pending: self.ground.as_ref().map_or(0, Ground::pending),
+            ground_rebuilds: self.stats.ground_rebuilds,
+            substeps,
+            step_ms: started.elapsed().as_secs_f64() * 1e3,
+            ground_ms,
+            world_ms,
+        };
         for e in self.bodies.values_mut() {
             e.placed = false;
         }
@@ -530,6 +566,7 @@ impl PhysicsScene {
             }
         }
         if !same && !extended {
+            self.stats.ground_rebuilds += 1;
             // A different terrain: rebuild every patch from it.
             if let Some(old) = self.ground.take() {
                 old.remove(&mut self.world);

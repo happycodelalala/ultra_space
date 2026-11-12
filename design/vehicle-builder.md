@@ -150,6 +150,12 @@ ships-stations-interiors §6, first real use:
   them (arcade flight and cruise follow the ground their own way). An earlier version streamed
   patches for every fast mover and built their trees on the simulation thread: multi-second
   frames on Windows.
+- Patches live 2 s after their last use and at most 64 are kept: they all hang on the turning
+  ground body, so rapier moves every one each step (200 patches cost 35–60 ms per tick).
+- When a simulation tick runs over budget, the game logs each region's physics breakdown
+  (ground update, world step, bodies, patches); `sim_vehicle/tests/ground_tick_cost.rs`
+  measures whole-region ticks near the ground (and runs natively on Windows with
+  `ULTRA_SPACE_CONTENT` set).
 
 ## 5. Builder
 

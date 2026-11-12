@@ -32,7 +32,10 @@ const PATCH_DETAIL: f64 = 1.0;
 /// Ground friction coefficient (combined with the other collider's by averaging).
 const GROUND_FRICTION: f64 = 0.8;
 /// Patches no body has wanted for this long are dropped (s).
-const PATCH_LIFETIME: f64 = 10.0;
+const PATCH_LIFETIME: f64 = 2.0;
+/// Most patches kept: they all turn with the ground body, so rapier moves every one of them
+/// every step (dozens cost milliseconds); the least recently wanted go first.
+const MAX_PATCHES: usize = 64;
 /// Background threads building patches.
 const WORKERS: usize = 2;
 /// Most finished patches added to the physics world per tick.
@@ -259,17 +262,29 @@ impl Ground {
                 },
             );
         }
-        let stale: Vec<TileKey> = self
+        let mut by_age: Vec<(f64, TileKey)> = self
             .patches
             .iter()
-            .filter(|(_, p)| now - p.wanted_at > PATCH_LIFETIME)
-            .map(|(k, _)| *k)
+            .map(|(k, p)| (p.wanted_at, *k))
+            .collect();
+        by_age.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let excess = by_age.len().saturating_sub(MAX_PATCHES);
+        let stale: Vec<TileKey> = by_age
+            .iter()
+            .enumerate()
+            .filter(|(i, (wanted_at, _))| *i < excess || now - wanted_at > PATCH_LIFETIME)
+            .map(|(_, (_, k))| *k)
             .collect();
         for key in stale {
             if let Some(p) = self.patches.remove(&key) {
                 world.remove_collider(p.collider);
             }
         }
+    }
+
+    /// Number of patches being built.
+    pub(crate) fn pending(&self) -> usize {
+        self.pending.len()
     }
 
     /// Number of built patches (stats and tests).
