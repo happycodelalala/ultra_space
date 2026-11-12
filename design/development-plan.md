@@ -366,15 +366,15 @@ Decisions behind these tasks: [planet-surface.md](planet-surface.md).
 | 2.10 | **Gravity transitions:** camera and controls follow local up from orbit to ground | No snap during descent |
 | 2.11 | **Terrain deltas:** keyed by tile; a flattened landing pad as the first use | Delta applies identically on regeneration |
 | 2.12 | **Hitch stress test:** scripted orbit → surface descent with frame-time report | Report on Windows |
-| 2.13 | **Planet size comparison:** 300 / 600 / 1,000 km on foot (universe design §1) | Developer decides on Windows |
+| 2.13 | **Planet size comparison:** 300 / 600 / 1,000 km on foot (universe design §1) | Tool done (`ULTRA_SPACE_BODY_RADIUS`); decision **deferred** to when there is content to judge by (universe design §1) |
 | 2.14 | **Batch review** | Exit criteria met |
 
 **Exit criteria:** land anywhere on Meridian from orbit and walk around with no loading screen
 and no frame over 50 ms; terrain matches from orbit to the ground; CI passes.
 
-**Status (2026-11-12):** 2.1–2.12 done on branch `batch2/terrain` (not merged yet); 2.13 has
-its tool (`ULTRA_SPACE_BODY_RADIUS`) and waits for the developer's comparison on Windows; then
-the 2.14 review. Debug aids added along the way: full stop (Z), arcade flight (N), flattened
+**Status (2026-11-12):** 2.1–2.12 done on branch `batch2/terrain` (not merged yet); 2.13's tool
+(`ULTRA_SPACE_BODY_RADIUS`) is done and the size decision deferred (universe design §1); next
+is the 2.14 review. Debug aids added along the way: full stop (Z), arcade flight (N), flattened
 pad (K), start position, time of day and camera angle by environment variables, scripted test
 rounds on Windows (`AGENTS.md`).
 
