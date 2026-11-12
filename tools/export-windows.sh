@@ -3,6 +3,9 @@
 # Requires: mingw-w64 (sudo apt install mingw-w64) and the x86_64-pc-windows-gnu Rust target.
 set -euo pipefail
 
+# Make cargo available when run from a fresh shell.
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
 ROOT="$(git rev-parse --show-toplevel)"
 DEST="${ULTRA_SPACE_EXPORT_DIR:-/mnt/c/Users/yangc/Apps/ultra_space}"
 TARGET=x86_64-pc-windows-gnu

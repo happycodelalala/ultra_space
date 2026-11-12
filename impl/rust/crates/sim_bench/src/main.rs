@@ -20,8 +20,9 @@ use std::time::{Duration, Instant};
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{MultiThreadedExecutor, SingleThreadedExecutor};
-use bevy_tasks::{ComputeTaskPool, TaskPool, TaskPoolBuilder};
+use bevy_tasks::{ComputeTaskPool, TaskPoolBuilder};
 use glam::DVec3;
+use sim_core::{Region, RegionSet};
 
 // ---------------------------------------------------------------------------------------------
 // Workload configuration
@@ -296,17 +297,6 @@ fn region_hazards(cfg: &Config, global_region: usize) -> Vec<DVec3> {
         .collect()
 }
 
-struct Region {
-    world: World,
-    schedule: Schedule,
-}
-
-impl Region {
-    fn tick(&mut self) {
-        self.schedule.run(&mut self.world);
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // Benchmark runs
 // ---------------------------------------------------------------------------------------------
@@ -343,31 +333,31 @@ fn measure(cfg: &Config, mut tick: impl FnMut()) -> Duration {
 /// waits on a scope, so up to `threads + 1` threads do work.
 fn run(mode: Mode, threads: usize, cfg: Config) -> Duration {
     let serial = threads == 0;
-    let pool =
-        ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(threads.max(1)).build());
+    // Sized once per process; `RegionSet::tick` uses this same global pool.
+    ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(threads.max(1)).build());
 
     match mode {
         Mode::Regions => {
-            let mut regions: Vec<Region> = (0..cfg.regions)
-                .map(|r| {
-                    let mut world = World::new();
-                    world.insert_resource(Parallel(false));
-                    world.insert_resource(Hazards(vec![region_hazards(&cfg, r)]));
-                    world.insert_resource(Markets(vec![Market {
-                        supply: 0,
-                        price: 100.0,
-                    }]));
-                    populate_region(&mut world, &cfg, r, 0);
-                    Region {
-                        world,
-                        schedule: build_schedule(false),
-                    }
-                })
-                .collect();
+            let mut regions = RegionSet::new();
+            for r in 0..cfg.regions {
+                let mut world = World::new();
+                world.insert_resource(Parallel(false));
+                world.insert_resource(Hazards(vec![region_hazards(&cfg, r)]));
+                world.insert_resource(Markets(vec![Market {
+                    supply: 0,
+                    price: 100.0,
+                }]));
+                populate_region(&mut world, &cfg, r, 0);
+                regions.push(Region::new(
+                    format!("region-{r}"),
+                    world,
+                    build_schedule(false),
+                ));
+            }
             if serial {
-                measure(&cfg, || regions.iter_mut().for_each(Region::tick))
+                measure(&cfg, || regions.tick_serial())
             } else {
-                measure(&cfg, || tick_regions(pool, &mut regions))
+                measure(&cfg, || regions.tick())
             }
         }
         Mode::Systems => {
@@ -390,16 +380,6 @@ fn run(mode: Mode, threads: usize, cfg: Config) -> Duration {
             measure(&cfg, || schedule.run(&mut world))
         }
     }
-}
-
-/// One task per region. (Chunking regions into one task per worker was measured and gave no
-/// improvement, so the simpler form stays.)
-fn tick_regions(pool: &TaskPool, regions: &mut [Region]) {
-    pool.scope(|scope| {
-        for region in regions.iter_mut() {
-            scope.spawn(async move { region.tick() });
-        }
-    });
 }
 
 // ---------------------------------------------------------------------------------------------
