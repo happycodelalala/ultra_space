@@ -18,8 +18,8 @@ use glam::{DQuat, DVec3};
 use sim_core::{BodyKind, StarSystem};
 
 use crate::camera::SpaceCamera;
-use crate::sim::Sim;
-use crate::universe::Universe;
+use crate::sim::RenderTime;
+use crate::universe::{GameState, InGame, Universe};
 
 const PLANET_SHADER: &str = "embedded://ultra_space/shaders/planet.wesl";
 const ATMOSPHERE_SHADER: &str = "embedded://ultra_space/shaders/atmosphere.wesl";
@@ -39,8 +39,11 @@ impl Plugin for SpaceRenderPlugin {
             MaterialPlugin::<PlanetMaterial>::default(),
             MaterialPlugin::<AtmosphereMaterial>::default(),
         ))
-        .add_systems(Startup, (spawn_camera, spawn_bodies))
-        .add_systems(Update, place_bodies.after(crate::camera::CameraSet));
+        .add_systems(OnEnter(GameState::Running), (spawn_camera, spawn_bodies))
+        .add_systems(
+            Update,
+            place_bodies.after(crate::camera::CameraSet).in_set(InGame),
+        );
     }
 }
 
@@ -257,7 +260,7 @@ type VisualQuery = (
 #[allow(clippy::too_many_arguments)]
 fn place_bodies(
     universe: Res<Universe>,
-    sim: Res<Sim>,
+    render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
     mut cameras: Query<&mut Transform, (With<MainCamera>, Without<BodyVisual>)>,
     mut visuals: Query<VisualQuery>,
@@ -265,7 +268,7 @@ fn place_bodies(
     mut atmospheres: ResMut<Assets<AtmosphereMaterial>>,
 ) {
     let system = &universe.0;
-    let t = sim.0.universe_time().as_secs_f64();
+    let t = render.0;
     let poses = body_poses(system, &camera, t);
     let star_position = to_render(poses[0].0);
 

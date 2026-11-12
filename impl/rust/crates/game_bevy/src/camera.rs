@@ -17,8 +17,8 @@ use glam::{DMat3, DQuat, DVec3};
 use sim_core::StarSystem;
 
 use crate::ship::PilotState;
-use crate::sim::Sim;
-use crate::universe::Universe;
+use crate::sim::{RenderTime, Sim};
+use crate::universe::{GameState, InGame, Universe};
 
 /// Camera pose in `f64`, relative to the anchor body's inertial frame. All inertial frames share
 /// the same axes (orbits don't rotate), so `rotation` stays valid across anchor switches.
@@ -40,6 +40,18 @@ const MAX_SPEED: f64 = 1.0e10;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CameraSet;
 
+/// Initial camera: looking at `ULTRA_SPACE_VIEW` (a body id; default Meridian).
+fn init_camera(mut commands: Commands, universe: Res<Universe>) {
+    let start = std::env::var("ULTRA_SPACE_VIEW").unwrap_or_else(|_| "meridian".into());
+    let index = universe
+        .0
+        .bodies
+        .iter()
+        .position(|b| b.id == start)
+        .unwrap_or(0);
+    commands.insert_resource(view_of_body(&universe.0, index, 0.0));
+}
+
 /// Order within [`CameraSet`]: free-camera controls (only when not flying), following the
 /// ship (when flying), then the anchor update.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -53,16 +65,7 @@ pub struct SpaceCameraPlugin;
 
 impl Plugin for SpaceCameraPlugin {
     fn build(&self, app: &mut App) {
-        let universe = app.world().resource::<Universe>();
-        let start = std::env::var("ULTRA_SPACE_VIEW").unwrap_or_else(|_| "meridian".into());
-        let index = universe
-            .0
-            .bodies
-            .iter()
-            .position(|b| b.id == start)
-            .unwrap_or(0);
-        let camera = view_of_body(&universe.0, index, 0.0);
-        app.insert_resource(camera)
+        app.add_systems(OnEnter(GameState::Running), init_camera)
             .configure_sets(
                 Update,
                 (
@@ -73,6 +76,7 @@ impl Plugin for SpaceCameraPlugin {
                     .chain()
                     .in_set(CameraSet),
             )
+            .configure_sets(Update, CameraSet.in_set(InGame))
             .configure_sets(Update, CameraSet.after(crate::sim::SimSet))
             .add_systems(
                 Update,
@@ -210,8 +214,12 @@ fn jump_to_body(
     }
 }
 
-fn update_anchor(universe: Res<Universe>, sim: Res<Sim>, mut camera: ResMut<SpaceCamera>) {
-    let t = sim.0.universe_time().as_secs_f64();
+fn update_anchor(
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    mut camera: ResMut<SpaceCamera>,
+) {
+    let t = render.0;
     let (anchor, offset) = anchor_for(&universe.0, camera.anchor, camera.offset, t);
     if anchor != camera.anchor {
         info!("camera: now near {}", universe.0.bodies[anchor].name);

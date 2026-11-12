@@ -77,8 +77,19 @@ Windows export copies `content/data` next to the `.exe`.
   mouse wheel changes speed, **1–8** jump to Halcyon, Cinder, Meridian, Lantern, Hoarfell,
   Leviathan, Forge, Rime. `ULTRA_SPACE_VIEW=<body id>` picks the starting view.
 - **, / .** change time warp.
-- **F3** toggles the debug overlay: FPS and frame time, simulation tick time and budget use,
+- **HUD** (H toggles): reference body and frame, speed, vertical speed, altitude, apoapsis,
+  periapsis and period, assist and cruise status (bottom); Galactic Standard Time, local solar
+  time under the ship and time warp (top right). **O** cycles orbit lines: the ship's predicted
+  path, plus the other bodies' orbits, or none.
+- **F4** toggles the inspector (hidden at start; `ULTRA_SPACE_INSPECTOR=1` shows it): regions
+  in use, the frame tree, and the selected object's `ObjectId`, region, frame, position and
+  velocity (also in the star's frame), rails, cruise and assist state. `[` / `]` select objects.
+- **F3** toggles the debug overlay (hidden at start): FPS and frame time, simulation tick time and budget use,
   regions, entities, total and dropped ticks.
+- **Loading:** the star system, starting ship and simulation are built on a worker thread
+  while the window shows "Loading"; game systems run once loading finishes. Frames over the
+  50 ms hitch budget are logged as warnings, and a "startup frames" summary is logged after
+  the first 10 s of play (meaningful only in the native Windows build).
 - The simulation (`sim_core::Simulation`) runs at a fixed 30 Hz, decoupled from the frame
   rate. It runs at most 4 ticks per frame; time beyond that is dropped and shown as "dropped".
 - An over-budget tick logs a warning (at most every 5 s).

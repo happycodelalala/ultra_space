@@ -3,12 +3,13 @@
 //! The simulation advances on its own fixed tick (30 Hz by default), decoupled from the render
 //! frame rate. There is one region per celestial body.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use bevy::prelude::*;
-use sim_core::Simulation;
+use sim_core::{Simulation, StarSystem};
 
-use crate::universe::Universe;
+use crate::universe::InGame;
 
 /// Minimum time between "over budget" warnings, so a slow stretch doesn't flood the log.
 const BUDGET_WARNING_INTERVAL: Duration = Duration::from_secs(5);
@@ -22,32 +23,45 @@ pub struct SimSet;
 
 pub struct SimPlugin;
 
+/// Builds the simulation for a star system: one region per body, each running vehicle flight.
+/// Runs on the loading worker (`universe`), not the main thread.
+pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
+    let mut sim = Simulation::for_star_system(system, |_, schedule| {
+        sim_vehicle::flight::add_flight_systems(schedule);
+    });
+    // Components that travel with objects between regions.
+    sim.objects.register_transferable::<sim_vehicle::Vehicle>();
+    sim.objects
+        .register_transferable::<sim_vehicle::VehicleBody>();
+    sim.objects
+        .register_transferable::<sim_vehicle::FlightControl>();
+    sim.objects
+        .register_transferable::<sim_vehicle::FlightTelemetry>();
+    sim.objects.register_transferable::<sim_vehicle::Cruise>();
+    sim
+}
+
+/// Universe time (s) shown this frame: between the last two ticks (see
+/// `Simulation::render_time`). Everything drawn uses it instead of the simulation's own time,
+/// so motion is smooth at any frame rate.
+#[derive(Resource, Default, Clone, Copy, Debug)]
+pub struct RenderTime(pub f64);
+
 impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
-        let system = app.world().resource::<Universe>().0.clone();
-        // One region per body, each running vehicle flight.
-        let mut sim = Simulation::for_star_system(system, |_, schedule| {
-            sim_vehicle::flight::add_flight_systems(schedule);
-        });
-        // Components that travel with objects between regions.
-        sim.objects.register_transferable::<sim_vehicle::Vehicle>();
-        sim.objects
-            .register_transferable::<sim_vehicle::VehicleBody>();
-        sim.objects
-            .register_transferable::<sim_vehicle::FlightControl>();
-        sim.objects
-            .register_transferable::<sim_vehicle::FlightTelemetry>();
-        sim.objects.register_transferable::<sim_vehicle::Cruise>();
-        info!(
-            "simulation: {} regions (one per body) at {:.0} Hz",
-            sim.regions.len(),
-            sim.clock().tick_hz()
-        );
-        app.insert_resource(Sim(sim)).add_systems(
-            Update,
-            (time_warp_keys, advance_simulation).chain().in_set(SimSet),
-        );
+        app.init_resource::<RenderTime>()
+            .configure_sets(Update, SimSet.in_set(InGame))
+            .add_systems(
+                Update,
+                (time_warp_keys, advance_simulation, update_render_time)
+                    .chain()
+                    .in_set(SimSet),
+            );
     }
+}
+
+fn update_render_time(sim: Res<Sim>, mut render: ResMut<RenderTime>) {
+    render.0 = sim.0.render_time();
 }
 
 fn advance_simulation(

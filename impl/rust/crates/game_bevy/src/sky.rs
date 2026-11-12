@@ -15,6 +15,7 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, poll_once};
 use glam::DVec3;
 
 use crate::space_render::MainCamera;
+use crate::universe::InGame;
 
 /// Cubemap face size in pixels.
 const FACE_SIZE: usize = 1024;
@@ -26,7 +27,7 @@ pub struct SkyPlugin;
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, start_sky_generation)
-            .add_systems(Update, attach_sky_when_ready);
+            .add_systems(Update, attach_sky_when_ready.in_set(InGame));
     }
 }
 

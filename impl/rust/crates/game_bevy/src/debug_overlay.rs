@@ -1,4 +1,8 @@
-//! Debug overlay: frame time, simulation tick time and counts. Toggle with F3.
+//! Debug overlay: frame time, simulation tick time and counts. Hidden at start; F3 toggles.
+//!
+//! Also watches for **hitches** (frames over the 50 ms budget, overview §14.6) in every state:
+//! each one is logged (rate-limited), and a startup summary is logged after the first seconds
+//! of play.
 
 use std::time::Duration;
 
@@ -8,7 +12,7 @@ use sim_core::RollingStats;
 use crate::camera::SpaceCamera;
 use crate::ship::{PilotState, PlayerShip, player_cruise_status, player_ship_state};
 use crate::sim::Sim;
-use crate::universe::Universe;
+use crate::universe::{GameState, InGame, Universe};
 
 /// How often the overlay text is rebuilt (formatting every frame is wasted work).
 const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
@@ -24,10 +28,14 @@ impl Plugin for DebugOverlayPlugin {
             frames: RollingStats::new(FRAME_WINDOW),
             since_refresh: REFRESH_INTERVAL,
         })
+        .init_resource::<Hitches>()
         .add_systems(Startup, spawn_overlay)
+        .add_systems(Update, watch_hitches)
         .add_systems(
             Update,
-            (record_frame, toggle_overlay, update_overlay).chain(),
+            (record_frame, toggle_overlay, update_overlay)
+                .chain()
+                .in_set(InGame),
         );
     }
 }
@@ -51,6 +59,8 @@ fn spawn_overlay(mut commands: Commands) {
         },
         TextColor(Color::WHITE),
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)),
+        // Hidden by default now that the HUD shows flight data; F3 shows it.
+        Visibility::Hidden,
         Node {
             position_type: PositionType::Absolute,
             top: px(8),
@@ -59,6 +69,61 @@ fn spawn_overlay(mut commands: Commands) {
             ..default()
         },
     ));
+}
+
+/// Hitch budget: no frame should take longer (overview §14.6).
+const HITCH_BUDGET: Duration = Duration::from_millis(50);
+/// The startup summary covers this much play after loading.
+const STARTUP_WINDOW: Duration = Duration::from_secs(10);
+const HITCH_WARNING_INTERVAL: Duration = Duration::from_secs(2);
+
+#[derive(Resource, Default)]
+struct Hitches {
+    loading_worst: Duration,
+    loading_frames: u32,
+    running_since: Option<Duration>,
+    startup_worst: Duration,
+    startup_over: u32,
+    reported: bool,
+    last_warning: Option<Duration>,
+}
+
+fn watch_hitches(real: Res<Time<Real>>, state: Res<State<GameState>>, mut h: ResMut<Hitches>) {
+    let dt = real.delta();
+    let now = real.elapsed();
+    match state.get() {
+        GameState::Loading => {
+            h.loading_worst = h.loading_worst.max(dt);
+            h.loading_frames += 1;
+        }
+        GameState::Running => {
+            let since = *h.running_since.get_or_insert(now);
+            if !h.reported {
+                h.startup_worst = h.startup_worst.max(dt);
+                h.startup_over += u32::from(dt > HITCH_BUDGET);
+                if now - since >= STARTUP_WINDOW {
+                    h.reported = true;
+                    info!(
+                        "startup frames: worst {:.1} ms over {} loading frames, worst {:.1} ms \
+                         in the first {} s of play, {} frames over the {} ms budget",
+                        ms(h.loading_worst),
+                        h.loading_frames,
+                        ms(h.startup_worst),
+                        STARTUP_WINDOW.as_secs(),
+                        h.startup_over,
+                        HITCH_BUDGET.as_millis()
+                    );
+                }
+            }
+        }
+    }
+    if dt > HITCH_BUDGET
+        && h.last_warning
+            .is_none_or(|t| now - t >= HITCH_WARNING_INTERVAL)
+    {
+        h.last_warning = Some(now);
+        warn!("hitch: frame took {:.1} ms ({:?})", ms(dt), state.get());
+    }
 }
 
 fn record_frame(real: Res<Time<Real>>, mut stats: ResMut<FrameStats>) {

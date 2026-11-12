@@ -6,6 +6,8 @@
 mod camera;
 mod capture;
 mod debug_overlay;
+mod hud;
+mod inspector;
 mod ship;
 mod sim;
 mod sky;
@@ -34,7 +36,7 @@ fn main() {
                     ..default()
                 }),
         )
-        // The universe must load before the camera and renderer, which read it while building.
+        // Loads the universe on a worker and owns the Loading -> Running game state.
         .add_plugins(universe::UniversePlugin)
         .add_plugins((
             sim::SimPlugin,
@@ -43,6 +45,8 @@ fn main() {
             sky::SkyPlugin,
             ship::ShipPlugin,
             debug_overlay::DebugOverlayPlugin,
+            hud::HudPlugin,
+            inspector::InspectorPlugin,
             capture::CapturePlugin,
         ))
         .add_systems(Startup, log_startup)

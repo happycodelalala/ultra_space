@@ -123,6 +123,14 @@ impl Simulation {
         self.universe_time
     }
 
+    /// Universe time (s) to render at: one tick behind the simulation, plus the fraction of the
+    /// next tick that real time has already covered. Always between the last two ticks, so
+    /// rendering can interpolate object states and stays smooth at any frame rate.
+    pub fn render_time(&self) -> f64 {
+        let step = self.clock.tick_duration().as_secs_f64() * f64::from(self.time_warp);
+        self.universe_time.as_secs_f64() - step * (1.0 - self.clock.alpha())
+    }
+
     pub fn time_warp(&self) -> u32 {
         self.time_warp
     }
@@ -181,6 +189,21 @@ mod tests {
         assert_eq!(sim.ticks_total(), 2);
         assert_eq!(sim.tick_stats().len(), 2);
         assert!(sim.budget_used().unwrap() < 1.0);
+    }
+
+    #[test]
+    fn render_time_lies_between_the_last_two_ticks() {
+        let mut sim = Simulation::with_rate(RegionSet::new(), 10);
+        sim.set_time_warp(10);
+        sim.advance(Duration::from_millis(230));
+        // Two ticks of 1 s (warp 10) done, 30 ms of real time (0.3 of a tick) into the next.
+        let now = sim.universe_time().as_secs_f64();
+        assert!((now - 2.0).abs() < 1e-9);
+        assert!(
+            (sim.render_time() - 1.3).abs() < 1e-6,
+            "{}",
+            sim.render_time()
+        );
     }
 
     #[test]

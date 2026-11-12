@@ -14,17 +14,16 @@ use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
-    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartCatalog,
-    PartKind, Shape, Vehicle, VehicleBody, VehicleDesign,
+    AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartKind,
+    Shape, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
-use crate::sim::{Sim, SimSet};
+use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
-use crate::universe::{Universe, content_dir};
+use crate::universe::{GameState, InGame, StartingVehicle, Universe};
 
 const START_BODY: &str = "meridian";
-const START_DESIGN: &str = "kestrel";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
@@ -37,7 +36,11 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PilotState>()
-            .add_systems(Startup, (spawn_player_ship, spawn_starlight))
+            .init_resource::<ShipRenderState>()
+            .add_systems(
+                OnEnter(GameState::Running),
+                (spawn_player_ship, spawn_starlight),
+            )
             .add_systems(
                 Update,
                 (
@@ -46,12 +49,85 @@ impl Plugin for ShipPlugin {
                         .chain()
                         .after(pilot_mode_keys)
                         .before(SimSet),
+                    track_ship.after(SimSet).before(CameraSet),
                     follow_ship.in_set(CameraStage::Follow),
                     (place_ship_visual, update_plumes, aim_starlight).after(CameraSet),
                     cursor_lock,
-                ),
+                )
+                    .in_set(InGame),
             );
     }
+}
+
+/// The player ship's state for rendering: interpolated between its last two ticks at the
+/// render time, in its region body's inertial frame.
+#[derive(Resource, Default)]
+pub struct ShipRenderState {
+    previous: Option<(f64, ObjectState)>,
+    current: Option<(f64, ObjectState)>,
+    pub state: Option<ObjectState>,
+}
+
+/// Interpolates between two ticks' states at universe time `t` with a cubic Hermite curve
+/// through both positions and velocities (exact enough for orbits even under time warp).
+/// Snaps to `current` after a teleport (a jump much larger than the velocities explain).
+pub fn interpolate_state(
+    system: &StarSystem,
+    previous: (f64, ObjectState),
+    current: (f64, ObjectState),
+    t: f64,
+) -> ObjectState {
+    let (t0, t1) = (previous.0, current.0);
+    let dt = t1 - t0;
+    if dt <= 0.0 {
+        return current.1;
+    }
+    let a = previous
+        .1
+        .in_frame(&system.frames, current.1.frame, t0)
+        .state;
+    let b = current.1.state;
+    let travel = a.velocity.length().max(b.velocity.length()) * dt;
+    if (b.position - a.position).length() > 2.0 * travel + 1_000.0 {
+        return current.1;
+    }
+    let f = ((t - t0) / dt).clamp(0.0, 1.0);
+    let (f2, f3) = (f * f, f * f * f);
+    let position = a.position * (2.0 * f3 - 3.0 * f2 + 1.0)
+        + a.velocity * (dt * (f3 - 2.0 * f2 + f))
+        + b.position * (-2.0 * f3 + 3.0 * f2)
+        + b.velocity * (dt * (f3 - f2));
+    let mut out = current.1;
+    out.state.position = position;
+    out.state.velocity = a.velocity.lerp(b.velocity, f);
+    out.state.rotation = a.rotation.slerp(b.rotation, f).normalize();
+    out
+}
+
+/// Records the player ship's state after each simulation advance and interpolates it at the
+/// render time.
+fn track_ship(
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    ship: Option<Res<PlayerShip>>,
+    mut tracked: ResMut<ShipRenderState>,
+) {
+    let Some((region, state, _, _)) = ship.and_then(|s| player_ship_state(&sim.0, &s)) else {
+        tracked.state = None;
+        return;
+    };
+    let system = &universe.0;
+    let t = sim.0.universe_time().as_secs_f64();
+    let state = state.in_frame(&system.frames, system.bodies[region].inertial_frame, t);
+    if tracked.current.is_none_or(|(tc, _)| tc != t) {
+        tracked.previous = tracked.current;
+        tracked.current = Some((t, state));
+    }
+    tracked.state = Some(match (tracked.previous, tracked.current) {
+        (Some(p), Some(c)) => interpolate_state(system, p, c, render.0),
+        _ => state,
+    });
 }
 
 /// The ship the player flies.
@@ -92,23 +168,16 @@ impl Default for PilotState {
 fn spawn_player_ship(
     mut commands: Commands,
     universe: Res<Universe>,
+    start: Res<StartingVehicle>,
     mut sim: ResMut<Sim>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let content = content_dir().expect("content folder");
-    let catalog =
-        PartCatalog::load_dir(content.join("data/parts")).unwrap_or_else(|e| panic!("{e}"));
-    let design = VehicleDesign::from_path(
-        content.join(format!("data/vehicles/{START_DESIGN}.json")),
-        &catalog,
-    )
-    .unwrap_or_else(|e| panic!("{e}"));
-    let vehicle = Vehicle::from_design(&design);
+    let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
     info!(
         "spawning {}: {:.1} t, forward {:.1} m/s², {} thrusters",
-        design.name,
+        vehicle.name,
         body.mass.mass / 1_000.0,
         body.performance.forward_acceleration(),
         body.allocator.thrusters().len()
@@ -424,27 +493,24 @@ pub fn player_ship_state(
 
 fn follow_ship(
     pilot: Res<PilotState>,
-    ship: Option<Res<PlayerShip>>,
-    sim: Res<Sim>,
+    tracked: Res<ShipRenderState>,
     universe: Res<Universe>,
     mut camera: ResMut<SpaceCamera>,
 ) {
     if !pilot.flying {
         return;
     }
-    let Some(ship) = ship else { return };
-    let Some((region, state, _, _)) = player_ship_state(&sim.0, &ship) else {
+    let Some(object) = tracked.state else { return };
+    // The render state is in the region body's inertial frame.
+    let Some(region) = universe
+        .0
+        .bodies
+        .iter()
+        .position(|b| b.inertial_frame == object.frame)
+    else {
         return;
     };
-    // Flight states live in the region body's inertial frame.
-    let t = sim.0.universe_time().as_secs_f64();
-    let state = state
-        .in_frame(
-            &universe.0.frames,
-            universe.0.bodies[region].inertial_frame,
-            t,
-        )
-        .state;
+    let state = object.state;
     let (offset, rotation) = match pilot.view {
         ShipView::Chase => {
             let orbit =
@@ -578,18 +644,15 @@ fn spawn_ship_visual(
 }
 
 fn place_ship_visual(
-    ship: Option<Res<PlayerShip>>,
-    sim: Res<Sim>,
+    tracked: Res<ShipRenderState>,
+    render: Res<RenderTime>,
     universe: Res<Universe>,
     camera: Res<SpaceCamera>,
     mut visuals: Query<&mut Transform, With<ShipVisual>>,
 ) {
-    let Some(ship) = ship else { return };
-    let Some((_, state, _, _)) = player_ship_state(&sim.0, &ship) else {
-        return;
-    };
+    let Some(state) = tracked.state else { return };
     let system = &universe.0;
-    let t = sim.0.universe_time().as_secs_f64();
+    let t = render.0;
     let anchor = system.bodies[camera.anchor].inertial_frame;
     let s = state.in_frame(&system.frames, anchor, t).state;
     for mut transform in &mut visuals {
@@ -641,12 +704,12 @@ fn spawn_starlight(mut commands: Commands) {
 
 fn aim_starlight(
     universe: Res<Universe>,
-    sim: Res<Sim>,
+    render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
     mut lights: Query<&mut Transform, (With<Starlight>, Without<MainCamera>)>,
 ) {
     let system = &universe.0;
-    let t = sim.0.universe_time().as_secs_f64();
+    let t = render.0;
     let star = system.frames.transform_point(
         system.bodies[camera.anchor].inertial_frame,
         system.star().inertial_frame,
@@ -665,6 +728,8 @@ fn aim_starlight(
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    use sim_core::KeplerOrbit;
 
     use super::*;
 
@@ -698,5 +763,40 @@ mod tests {
             (altitude - 150_000.0).abs() < 1.0,
             "Meridian start altitude"
         );
+    }
+
+    #[test]
+    fn interpolation_follows_the_orbit_between_warped_ticks() {
+        let sys = halcyon();
+        let m = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+        let start = parking_orbit(&sys, m, 0.0).state;
+        let orbit =
+            KeplerOrbit::from_state(sys.bodies[m].mu, start.position, start.velocity, 0.0).unwrap();
+        let at = |t: f64| {
+            let (p, v) = orbit.state_at(t);
+            let mut s = ObjectState::at_rest(sys.bodies[m].inertial_frame, p, DQuat::IDENTITY);
+            s.state.velocity = v;
+            (t, s)
+        };
+        // Ticks 33 s apart (x1,000 warp).
+        let (a, b) = (at(100.0), at(133.3));
+        for k in 0..=10 {
+            let t = 100.0 + 33.3 * f64::from(k) / 10.0;
+            let s = interpolate_state(&sys, a, b, t);
+            let error = (s.state.position - orbit.state_at(t).0).length();
+            assert!(error < 5.0, "t {t}: off by {error:.1} m");
+        }
+    }
+
+    #[test]
+    fn interpolation_snaps_after_a_teleport() {
+        let sys = halcyon();
+        let m = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+        let a = (0.0, parking_orbit(&sys, m, 0.0));
+        let mut far = parking_orbit(&sys, m, 0.0);
+        far.state.position *= 10.0;
+        let b = (1.0 / 30.0, far);
+        let s = interpolate_state(&sys, a, b, 0.5 / 30.0);
+        assert_eq!(s.state.position, far.state.position);
     }
 }
