@@ -18,6 +18,7 @@ mod terrain;
 mod terrain_material;
 mod universe;
 mod walk;
+mod warmup;
 mod workers;
 
 use bevy::log::{BoxedLayer, LogPlugin};
@@ -63,6 +64,7 @@ fn main() {
             capture::CapturePlugin,
             script::ScriptPlugin,
             walk::WalkPlugin,
+            warmup::WarmupPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

@@ -44,7 +44,16 @@ struct CaptureTarget {
     requested_at: Option<Duration>,
 }
 
-fn capture(mut commands: Commands, mut target: ResMut<CaptureTarget>, real: Res<Time<Real>>) {
+fn capture(
+    mut commands: Commands,
+    mut target: ResMut<CaptureTarget>,
+    real: Res<Time<Real>>,
+    shown: Option<Res<crate::warmup::WarmupDone>>,
+) {
+    // Only count once the world is shown (after the warm-up).
+    if shown.is_none() {
+        return;
+    }
     target.frames += 1;
     let now = real.elapsed();
     match target.requested_at {

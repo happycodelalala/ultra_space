@@ -9,3 +9,4 @@ walk       | walk.txt       | ULTRA_SPACE_START_ALTITUDE=1500 | visual | steps o
 level      | level.txt      | ULTRA_SPACE_START_ALTITUDE=8000 | visual | horizon tilted after the roll, then levels within a few seconds
 pad        | pad.txt        | ULTRA_SPACE_START_ALTITUDE=1500 | visual | K flattens the ground around the ship (log), no hole or flash while tiles rebuild, ship stays landed, walker stands on the pad
 sunset     | landing.txt    | ULTRA_SPACE_START_ALTITUDE=3000 ULTRA_SPACE_START_SUN_ANGLE=89 | visual | same landing near sunset: warm horizon, lit clouds, dim ground, nothing black or broken
+descent    | descent.txt    |                                | perf   | orbit to ground at up to 3 km/s: no frame over 50 ms after the world is shown (script summary: frames over 50 ms, worst frame); end shot shows the ship skimming terrain

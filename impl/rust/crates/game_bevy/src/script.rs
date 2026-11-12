@@ -3,7 +3,7 @@
 //! A script is a text file of timed actions, replayed like a recording so a test flight can be
 //! repeated exactly (typically on the native Windows build, launched from WSL by
 //! `tools/run-windows.sh`). One action per line; `#` starts a comment; times are seconds after
-//! the game starts running (after loading):
+//! the world is shown (after loading and the warm-up):
 //!
 //! ```text
 //! 1.0  press N            # tap a key for one frame
@@ -243,7 +243,8 @@ impl Plugin for ScriptPlugin {
                 PreUpdate,
                 run_script
                     .after(InputSystems)
-                    .run_if(in_state(GameState::Running)),
+                    .run_if(in_state(GameState::Running))
+                    .run_if(resource_exists::<crate::warmup::WarmupDone>),
             );
     }
 }

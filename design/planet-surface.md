@@ -100,8 +100,12 @@ Rules:
   terrain at once. The first kind is a flattened landing pad (K, debug). Edits are found by the
   tiles they touch; a spatial index by tile key comes when there are many. Saving them comes with
   the first save file in Batch 3.
-- **Hitch-budget stress test:** a scripted orbit → surface descent measuring the worst frame;
-  no frame over 50 ms on Windows.
+- **Hitch-budget stress test:** a scripted orbit → surface descent (`descent` in the test list,
+  a performance test run alone) measuring the worst frame; no frame over 50 ms on Windows.
+- **Start-up warm-up:** shader pipelines compile and the terrain near the camera streams in
+  behind a "Loading" overlay; the world is shown once no pipelines are waiting and the terrain
+  is on screen for 20 frames in a row (30 s limit). The start-up hitch summary, test scripts and
+  captures count from that moment.
 
 ## 7. Deferred
 

@@ -100,12 +100,19 @@ struct BodyTiles {
     /// distant sphere must never reappear under drawn tiles (both sit at sea level and would
     /// z-fight), and coarse parents always remain to fall back on.
     covered: bool,
+    /// The camera is close enough for tiles (set every frame).
+    active: bool,
     ground: Handle<TerrainMaterial>,
     water: Handle<WaterMaterial>,
 }
 
+/// Whether every body near the camera has its terrain on screen (for the start-up warm-up).
+pub fn terrain_ready(terrains: Option<&Terrains>) -> bool {
+    terrains.is_some_and(|t| t.bodies.iter().all(|bt| !bt.active || bt.covered))
+}
+
 #[derive(Resource)]
-struct Terrains {
+pub struct Terrains {
     bodies: Vec<BodyTiles>,
     frame: u64,
 }
@@ -180,6 +187,7 @@ fn setup_terrains(
                 incoming: HashMap::new(),
                 shown: HashSet::new(),
                 covered: false,
+                active: false,
             })
         })
         .collect();
@@ -337,6 +345,7 @@ fn update_terrain(
             .frames
             .transform_point(body.surface_frame, anchor, t, camera.offset);
         let active = cam.length() < ACTIVE_DISTANCE * bt.extent.radius;
+        bt.active = active;
 
         // Collect finished generation tasks.
         let mut done = Vec::new();
