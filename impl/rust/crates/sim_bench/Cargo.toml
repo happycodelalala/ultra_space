@@ -1,0 +1,16 @@
+[package]
+name = "sim_bench"
+description = "Parallel-scaling benchmark for the simulation architecture (Batch 0)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Engine-independent: standalone ECS only, no rendering.
+[dependencies]
+bevy_ecs = { workspace = true }
+bevy_tasks = { workspace = true }
+glam = { workspace = true }
+
+[lints]
+workspace = true

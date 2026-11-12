@@ -19,6 +19,10 @@ ai_gateway = { path = "crates/ai_gateway" }
 
 # Engine (pinned; upgrade deliberately between batches, never mid-batch)
 bevy = "=0.20.1"
+# Standalone ECS for engine-independent sim crates (same version as bevy)
+bevy_ecs = { version = "=0.20.1", features = ["multi_threaded"] }
+bevy_tasks = { version = "=0.20.1", features = ["multi_threaded"] }
+glam = "0.33"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
