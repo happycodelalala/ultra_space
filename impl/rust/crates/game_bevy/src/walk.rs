@@ -140,9 +140,10 @@ fn exit_or_board(
     else {
         return;
     };
-    let settled = telemetry.in_contact
-        || (telemetry.ground_altitude < EXIT_MAX_ALTITUDE
-            && telemetry.relative_velocity.length() < EXIT_MAX_SPEED);
+    // Low (or touching the ground) and nearly still: a ship skidding along the ground counts as
+    // touching it, but isn't safe to leave.
+    let settled = (telemetry.in_contact || telemetry.ground_altitude < EXIT_MAX_ALTITUDE)
+        && telemetry.relative_velocity.length() < EXIT_MAX_SPEED;
     if !settled {
         info!(
             "can't leave the ship: land first ({:.0} m above ground, {:.1} m/s)",

@@ -660,6 +660,8 @@ fn follow_ship(
     pilot: Res<PilotState>,
     tracked: Res<ShipRenderState>,
     universe: Res<Universe>,
+    sim: Res<Sim>,
+    render: Res<RenderTime>,
     mut camera: ResMut<SpaceCamera>,
 ) {
     if !pilot.flying || pilot.on_foot {
@@ -689,8 +691,56 @@ fn follow_ship(
         ShipView::Cockpit => (state.rotation * COCKPIT_EYE, state.rotation),
     };
     camera.anchor = region;
-    camera.offset = state.position + offset;
+    camera.offset = keep_above_ground(
+        &sim.0,
+        &universe.0,
+        region,
+        render.0,
+        state.position + offset,
+    );
     camera.rotation = rotation;
+}
+
+/// Lowest a camera may go above the ground (m).
+const CAMERA_CLEARANCE: f64 = 2.0;
+
+/// `point` (region body's inertial frame) raised to at least `CAMERA_CLEARANCE` above the
+/// terrain, so an orbiting chase camera never ends up inside the ground.
+pub fn keep_above_ground(
+    sim: &Simulation,
+    system: &StarSystem,
+    region: usize,
+    t: f64,
+    point: DVec3,
+) -> DVec3 {
+    let Some(terrain) = sim
+        .regions
+        .get(region)
+        .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>())
+        .and_then(|r| r.0.clone())
+    else {
+        return point;
+    };
+    let body = &system.bodies[region];
+    let r = point.length();
+    if r > body.radius + 1.3 * terrain.params.relief + CAMERA_CLEARANCE {
+        return point;
+    }
+    let surface = system
+        .frames
+        .state_in(body.inertial_frame, body.surface_frame, t)
+        .rotation;
+    let dir = surface.inverse() * point.normalize();
+    let mut ground = terrain.height(dir, 2.0);
+    if terrain.has_ocean() {
+        ground = ground.max(0.0);
+    }
+    let floor = body.radius + ground + CAMERA_CLEARANCE;
+    if r < floor {
+        point * (floor / r)
+    } else {
+        point
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

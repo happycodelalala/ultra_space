@@ -9,6 +9,10 @@
 #               tools/test-scripts/); copied next to the game, where its screenshots land
 # NAME=value    extra environment variables for the game, e.g. ULTRA_SPACE_START_ALTITUDE=3000
 #
+# RUN_NAME=<name> in the environment names the run folder (default: the script's name), so the
+# same script can run with different settings, or several runs at once (tools/run-tests.sh).
+# Each run writes its own log (game.log) into its folder.
+#
 # Waits for the game to exit, then prints the important log lines and the screenshot paths.
 set -euo pipefail
 
@@ -22,16 +26,18 @@ fi
 SCRIPT="${1:?usage: tools/run-windows.sh [--export] <script.txt> [NAME=value ...]}"
 shift
 
-NAME="$(basename "$SCRIPT" .txt)"
+NAME="${RUN_NAME:-$(basename "$SCRIPT" .txt)}"
 RUN_DIR="$DEST/runs/$NAME"
 mkdir -p "$RUN_DIR"
-find "$RUN_DIR" -maxdepth 1 -name '*.png' -delete
+find "$RUN_DIR" -maxdepth 1 \( -name '*.png' -o -name 'game.log' \) -delete
 cp "$SCRIPT" "$RUN_DIR/script.txt"
 
 # Pass variables to the Windows process through WSLENV.
 export ULTRA_SPACE_SCRIPT
 ULTRA_SPACE_SCRIPT="$(wslpath -w "$RUN_DIR/script.txt")"
-WSLENV_LIST="ULTRA_SPACE_SCRIPT"
+export ULTRA_SPACE_LOG
+ULTRA_SPACE_LOG="$(wslpath -w "$RUN_DIR")\\game.log"
+WSLENV_LIST="ULTRA_SPACE_SCRIPT:ULTRA_SPACE_LOG"
 for pair in "$@"; do
     var="${pair%%=*}"
     export "$var"="${pair#*=}"
@@ -43,7 +49,7 @@ echo "Running $NAME on Windows (watch the game window)..."
 # Start from the game folder (cmd can't use a WSL path as its working directory).
 (cd "$DEST" && ./ultra_space.exe > /dev/null 2>&1) || echo "game exited with status $?"
 
-LOG="$DEST/ultra_space.log"
+LOG="$RUN_DIR/game.log"
 echo "--- log ($LOG) ---"
 grep -E "AdapterInfo|script:|hitch|startup frames|ERROR|panicked" "$LOG" | cut -c 1-240 || true
 echo "--- screenshots ---"

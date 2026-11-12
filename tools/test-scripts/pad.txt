@@ -1,6 +1,8 @@
 # Terrain delta: flatten a landing pad (task 2.11). Run with ULTRA_SPACE_START_ALTITUDE=1500 (below
-# the start spot's ground, so the ship is placed on the surface at once). Look for: the ground
+# the start spot's ground, so the ship is placed on the
+# surface at once; Z first cancels its orbital speed so it rests instead of skidding). Look for: the ground
 # around the ship levels out, no hole or flash while tiles rebuild, the ship stays landed.
+0.5  press Z                # stop relative to the ground (the start keeps orbital speed)
 2    shot 01-before.png
 2.5  hold MouseRight 1.5      # look down at the ground around the ship
 2.5  mouse 0 4 1.5

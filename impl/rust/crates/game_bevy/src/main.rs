@@ -76,7 +76,8 @@ fn log_file_layer(_app: &mut App) -> Option<BoxedLayer> {
         .ok()
         .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| std::path::PathBuf::from("."));
-    let path = dir.join(LOG_FILE);
+    // `ULTRA_SPACE_LOG` names another log file (parallel test runs share one folder).
+    let path = std::env::var_os("ULTRA_SPACE_LOG").map_or_else(|| dir.join(LOG_FILE), Into::into);
     let file = std::fs::File::create(&path).ok()?;
     Some(
         fmt::layer()

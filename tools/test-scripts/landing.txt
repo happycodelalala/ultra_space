@@ -9,7 +9,7 @@
 20   shot 02-near-ground.png
 35   shot 03-landed.png
 36   hold MouseRight 1.5      # swing back to a low side view
-36   mouse 0 -6 1.5
+36   mouse 0 -5 1.5          # undo the earlier downward swing exactly
 36   mouse 6 0 1.5
 40   shot 04-side-view.png
 50   shot 05-still-landed.png

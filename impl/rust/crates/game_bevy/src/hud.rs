@@ -346,7 +346,7 @@ fn update_hud(
              SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | Z stop | N arcade | J cruise | F exit (landed) | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | N arcade | J cruise{} | V view | O orbits | H HUD | F3 debug",
             body.name.to_uppercase(),
             speed(relative.length()),
             speed(relative.dot(up)),
@@ -368,6 +368,11 @@ fn update_hud(
                 )
             },
             assist,
+            if telemetry.ground_altitude < 30.0 && relative.length() < 2.0 {
+                " | F exit"
+            } else {
+                ""
+            },
         );
     }
 }

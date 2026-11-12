@@ -77,16 +77,21 @@ pub fn arcade_step(
         state.position = turn * state.position;
         state.rotation = (turn * state.rotation).normalize();
     }
+    let radius_before = state.position.length();
     state.position += relative * dt;
-    state.velocity = env.standing_still(state.position).1 + relative;
+    let mut relative = relative;
 
-    // Stay above the ground.
+    // Stay above the ground; the velocity then follows the ground, not the commanded dive.
     if env.solid && state.position.length() < env.radius + env.max_ground_height() + MIN_ALTITUDE {
         let floor = env.radius + env.ground_height(state.position) + MIN_ALTITUDE;
         if state.position.length() < floor {
             state.position = state.position.normalize() * floor;
+            let up = state.position.normalize();
+            let climb = (floor - radius_before) / dt;
+            relative = relative - up * relative.dot(up) + up * climb;
         }
     }
+    state.velocity = env.standing_still(state.position).1 + relative;
     (reference, relative)
 }
 

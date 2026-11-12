@@ -1,6 +1,8 @@
 # Walking on foot (task 2.9). Run with ULTRA_SPACE_START_ALTITUDE=1500: that is below the start
-# spot's ground (~1920 m), so the ship is placed on the surface at once and is landed.
+# spot's ground (~1920 m), so the ship is placed on the
+# surface at once; Z first cancels its orbital speed so it rests instead of skidding and is landed.
 # Step out, look around, run, jump, walk back and board.
+0.5  press Z                # stop relative to the ground (the start keeps orbital speed)
 3    press F                 # step out
 5    shot 01-stepped-out.png
 6    mouse 8 0 1             # turn right

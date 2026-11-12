@@ -1,0 +1,11 @@
+# Test list for tools/run-tests.sh. One test per line, fields separated by "|":
+#   name | script | settings (NAME=value, space-separated) | kind | what to check
+# kind: "visual" tests run several at once; "perf" tests run alone on a quiet machine (their
+# frame times count). Start heights are above sea level; the start spot's ground is ~1920 m.
+smoke      | smoke.txt      |                                | visual | orbit view, chase camera swing, arcade dive and pull-up; terrain, clouds and atmosphere look right
+landing    | landing.txt    | ULTRA_SPACE_START_ALTITUDE=3000 | visual | falls ~1 km, lands (LANDED, AGL ~5 m, speed 0), stays put; side view shows the hull on the ground, not sunk or floating
+arcade-low | arcade-low.txt | ULTRA_SPACE_START_ALTITUDE=2300 | visual | dives and skims the ground; AGL never below ~8 m; never inside hills
+walk       | walk.txt       | ULTRA_SPACE_START_ALTITUDE=1500 | visual | steps out (log), first-person on the ground, runs ~12 m/s, jump visible, boards again (log) or says too far
+level      | level.txt      | ULTRA_SPACE_START_ALTITUDE=8000 | visual | horizon tilted after the roll, then levels within a few seconds
+pad        | pad.txt        | ULTRA_SPACE_START_ALTITUDE=1500 | visual | K flattens the ground around the ship (log), no hole or flash while tiles rebuild, ship stays landed, walker stands on the pad
+sunset     | landing.txt    | ULTRA_SPACE_START_ALTITUDE=3000 ULTRA_SPACE_START_SUN_ANGLE=89 | visual | same landing near sunset: warm horizon, lit clouds, dim ground, nothing black or broken

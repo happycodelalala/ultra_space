@@ -97,7 +97,12 @@ honestly with their output.
   `game_bevy/src/script.rs`, examples in `tools/test-scripts/`). A window opens on the
   developer's desktop (tell them before launching); it doesn't grab the mouse. The script logs a
   frame-time summary; screenshots land in `C:\Users\yangc\Apps\ultra_space\runs\<script>\`.
-    Background test agents build in their own worktree with a shared build cache
+      **Test rounds:** `tools/run-tests.sh [--no-export] [--parallel N] [name ...]` runs the test list
+  `tools/test-scripts/tests.txt` (name, script, settings, kind, what to check): one build and
+  export, visual tests several at a time (own window, folder and `game.log` each, via
+  `ULTRA_SPACE_LOG`), performance tests alone afterwards, and a `runs/summary.txt`. Reviewing
+  the screenshots can then be split across several test agents, a few tests each.
+  Background test agents build in their own worktree with a shared build cache
   (`CARGO_TARGET_DIR=$HOME/.cache/ultra_space/test-target`) and export to
   `ULTRA_SPACE_EXPORT_DIR=/mnt/c/Users/yangc/Apps/ultra_space-test`, never the developer's build.
   WSL itself can only render in software (OpenGL on Mesa's D3D12 driver can't present to a
