@@ -14,6 +14,6 @@ mkdir -p "$DEST"
 cp "target/$TARGET/release/ultra_space.exe" "$DEST/"
 if [[ -d "$ROOT/assets/export" ]]; then
     mkdir -p "$DEST/assets"
-    cp -r "$ROOT/assets/export/." "$DEST/assets/"
+    rsync -a --exclude .gitkeep "$ROOT/assets/export/" "$DEST/assets/"
 fi
 echo "Exported to $DEST"
