@@ -9,6 +9,6 @@
 3    shot 01-beside-ship.png
 3.5  hold A 3                # strafe left, into the ship
 6.8  shot 02-at-the-hull.png
-7    mouse -10 0 0.5         # look left at the hull
+7    mouse -45 0 0.5         # look left at the hull (about 90° at 30 fps)
 8    shot 03-looking-at-hull.png
 9    quit
