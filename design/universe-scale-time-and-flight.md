@@ -118,11 +118,22 @@ The game clock is a **scaled view of universe time**. It doesn't change physics.
 
 ### 4.3 Seasons and years
 
-- Seasons come from **physics**: axial tilt plus the orbit.
-- **Years are tuned short:** star masses and orbital distances are set so a habitable planet's
-  year lasts about **20–60 real hours of play**, so seasons (about 5–15 hours each) change within
-  a long session. Trade-off: planets move noticeably faster along their orbits; the cruise
-  drive handles it.
+*Revised 2026-11-12 during Batch 1.* The original plan (years of 20–60 real hours) needed stars
+thousands of times heavier, which shrinks every planet's sphere of influence to a few planet
+radii: moons couldn't exist and rockets couldn't travel between planets. **A self-consistent
+solar system takes priority over short years.**
+
+- Stars are light (KSP-like), so spheres of influence are realistic, moons sit where intended,
+  and rocket transfers between planets stay possible.
+- **Years come from the real orbit** and are long: a habitable world's year lasts weeks to
+  months of real time at 1:1 (hundreds to thousands of galactic days).
+- **Seasons still come from physics** (axial tilt plus orbit). Within one session a planet's
+  season is roughly fixed; seasons change over long play and **time skips**.
+- **Time skips** (sleeping, idling, hibernation or similar) are how players see seasons change.
+  How they work is not designed yet; distant areas run in the cheap simulation tiers during
+  any skip.
+- Every latitude still has its own climate from axial tilt, so a planet always has hot and cold
+  regions.
 - Calendars, month names and festivals are built by cultures on top of the real day and year.
 
 ## 5. Planet climate and types
@@ -148,7 +159,7 @@ outsiders use; each culture may name its own world differently.
 
 | Body | Type | Radius | Tests |
 |---|---|---|---|
-| **Halcyon** (star) | Yellow-white main-sequence | ~300,000 km | Lighting, glare; mass tuned for 20–60 hour years |
+| **Halcyon** (star) | Yellow-white main-sequence | ~300,000 km | Lighting, glare; light (KSP-like) mass for realistic spheres of influence |
 | **Cinder** | Hot airless rock close to the star | ~200 km | Bare ground, extreme day/night temperatures, low gravity |
 | **Meridian** (home world) | Temperate, atmosphere and oceans, 23° axial tilt | **600 km** | Baseline planet: seasons, climate zones, atmosphere; future home for cultures |
 | ↳ **Lantern** | Airless moon, tidally locked | ~150 km | Moving between spheres of influence; a moon that always shows one face |
@@ -166,3 +177,4 @@ outsiders use; each culture may name its own world differently.
 | Interstellar jump duration and escape rules | Batch 6 (living galaxy) and combat design |
 | Combat flight behavior and balance | Batch 5 (combat core) |
 | Shared time warp in multiplayer | If multiplayer is pursued |
+| Time skips: sleeping, idling, hibernation | Survival and NPC design (Batches 4 and 8) |

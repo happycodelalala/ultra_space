@@ -1,0 +1,145 @@
+{
+  "id": "halcyon",
+  "name": "Halcyon",
+  "description": "Hand-made test system: one body per Batch 1 feature. Names are what outsiders call these worlds; each culture may name its own differently.",
+  "bodies": [
+    {
+      "id": "halcyon",
+      "name": "Halcyon",
+      "kind": "star",
+      "radius_km": 300000,
+      "surface_gravity_ms2": 16.7,
+      "rotation": { "period_hours": 600, "axial_tilt_deg": 7 },
+      "description": "Yellow-white main-sequence star. Light enough (KSP-like) that every planet keeps a realistic sphere of influence."
+    },
+    {
+      "id": "cinder",
+      "name": "Cinder",
+      "kind": "rocky",
+      "parent": "halcyon",
+      "radius_km": 200,
+      "surface_gravity_ms2": 2.7,
+      "orbit": {
+        "semi_major_axis_km": 5200000,
+        "eccentricity": 0.2,
+        "inclination_deg": 7,
+        "ascending_node_deg": 70,
+        "arg_periapsis_deg": 15,
+        "mean_anomaly_deg": 0
+      },
+      "rotation": { "period_hours": 40, "axial_tilt_deg": 0.5 },
+      "description": "Hot, airless rock close to the star, with long, scorching days and freezing nights."
+    },
+    {
+      "id": "meridian",
+      "name": "Meridian",
+      "kind": "rocky",
+      "parent": "halcyon",
+      "radius_km": 600,
+      "surface_gravity_ms2": 9.81,
+      "orbit": {
+        "semi_major_axis_km": 14000000,
+        "eccentricity": 0.01,
+        "inclination_deg": 0,
+        "ascending_node_deg": 0,
+        "arg_periapsis_deg": 0,
+        "mean_anomaly_deg": 40
+      },
+      "rotation": { "period_hours": 1.5, "axial_tilt_deg": 23 },
+      "atmosphere": { "height_km": 70, "surface_pressure_atm": 1.0, "color_rgb": [0.45, 0.65, 1.0] },
+      "description": "Temperate home world with oceans and seasons: the baseline planet and future home of many cultures."
+    },
+    {
+      "id": "lantern",
+      "name": "Lantern",
+      "kind": "rocky",
+      "parent": "meridian",
+      "radius_km": 150,
+      "surface_gravity_ms2": 1.4,
+      "orbit": {
+        "semi_major_axis_km": 12000,
+        "eccentricity": 0.0,
+        "inclination_deg": 5,
+        "ascending_node_deg": 30,
+        "arg_periapsis_deg": 0,
+        "mean_anomaly_deg": 120
+      },
+      "rotation": { "tidally_locked": true },
+      "description": "Airless moon that always shows Meridian the same pale face."
+    },
+    {
+      "id": "hoarfell",
+      "name": "Hoarfell",
+      "kind": "rocky",
+      "parent": "halcyon",
+      "radius_km": 400,
+      "surface_gravity_ms2": 4.2,
+      "orbit": {
+        "semi_major_axis_km": 22000000,
+        "eccentricity": 0.05,
+        "inclination_deg": 1.5,
+        "ascending_node_deg": 135,
+        "arg_periapsis_deg": 90,
+        "mean_anomaly_deg": 200
+      },
+      "rotation": { "period_hours": 2, "axial_tilt_deg": 35 },
+      "atmosphere": { "height_km": 40, "surface_pressure_atm": 0.1, "color_rgb": [0.85, 0.6, 0.45] },
+      "description": "Cold desert world with a thin atmosphere, a strong axial tilt and ice caps."
+    },
+    {
+      "id": "leviathan",
+      "name": "Leviathan",
+      "kind": "gas_giant",
+      "parent": "halcyon",
+      "radius_km": 8000,
+      "surface_gravity_ms2": 15,
+      "orbit": {
+        "semi_major_axis_km": 45000000,
+        "eccentricity": 0.03,
+        "inclination_deg": 1.3,
+        "ascending_node_deg": 50,
+        "arg_periapsis_deg": 60,
+        "mean_anomaly_deg": 300
+      },
+      "rotation": { "period_hours": 4, "axial_tilt_deg": 3 },
+      "atmosphere": { "height_km": 600, "surface_pressure_atm": 1.0, "color_rgb": [0.8, 0.7, 0.55] },
+      "description": "Banded gas giant with no surface. Radius and gravity are measured at the cloud tops."
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "kind": "rocky",
+      "parent": "leviathan",
+      "radius_km": 180,
+      "surface_gravity_ms2": 1.8,
+      "orbit": {
+        "semi_major_axis_km": 50000,
+        "eccentricity": 0.0,
+        "inclination_deg": 0.5,
+        "ascending_node_deg": 0,
+        "arg_periapsis_deg": 0,
+        "mean_anomaly_deg": 0
+      },
+      "rotation": { "tidally_locked": true },
+      "description": "Volcanic inner moon, kneaded by Leviathan's tides."
+    },
+    {
+      "id": "rime",
+      "name": "Rime",
+      "kind": "rocky",
+      "parent": "leviathan",
+      "radius_km": 250,
+      "surface_gravity_ms2": 1.3,
+      "orbit": {
+        "semi_major_axis_km": 120000,
+        "eccentricity": 0.0,
+        "inclination_deg": 1,
+        "ascending_node_deg": 100,
+        "arg_periapsis_deg": 0,
+        "mean_anomaly_deg": 90
+      },
+      "rotation": { "tidally_locked": true },
+      "description": "Icy outer moon with a cracked shell over a dark ocean."
+    }
+  ]
+}

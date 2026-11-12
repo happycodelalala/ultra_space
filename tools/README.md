@@ -4,7 +4,8 @@ Repo-wide scripts. Run from anywhere inside the repo.
 
 | Script | Purpose |
 |---|---|
-| `ci.sh` | Runs every check: secrets, engine boundary, format, Clippy (warnings as errors), tests. `--windows` adds a Windows type-check |
+| `ci.sh` | Runs every check: secrets, engine boundary, content schemas, format, Clippy (warnings as errors), tests. `--windows` adds a Windows type-check |
+| `check-content.py` | Validates `content/data/<kind>s/*.json` against `content/schemas/<kind>.schema.json` (needs Python `jsonschema`) |
 | `check-boundaries.py` | Fails if a non-`game_*` crate depends on Bevy, a renderer, windowing or GPU crates (only `bevy_ecs` and `bevy_tasks` allowed) |
 | `setup.sh` | One-time setup: enables the git hooks in `git-hooks/` |
 | `check-secrets.sh` | Blocks commits containing API keys (`--all` scans all tracked files) |

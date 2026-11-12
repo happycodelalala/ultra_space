@@ -32,7 +32,7 @@ impl Plugin for SimPlugin {
             sim.clock().tick_hz()
         );
         app.insert_resource(Sim(sim))
-            .add_systems(Update, advance_simulation);
+            .add_systems(Update, (time_warp_keys, advance_simulation).chain());
     }
 }
 
@@ -59,5 +59,19 @@ fn advance_simulation(
                 budget.as_secs_f64() * 1e3
             );
         }
+    }
+}
+
+/// `.` speeds up time warp, `,` slows it down (debug; KSP-style keys).
+fn time_warp_keys(keys: Res<ButtonInput<KeyCode>>, mut sim: ResMut<Sim>) {
+    let before = sim.0.time_warp();
+    if keys.just_pressed(KeyCode::Period) {
+        sim.0.step_time_warp(true);
+    }
+    if keys.just_pressed(KeyCode::Comma) {
+        sim.0.step_time_warp(false);
+    }
+    if sim.0.time_warp() != before {
+        info!("time warp ×{}", sim.0.time_warp());
     }
 }

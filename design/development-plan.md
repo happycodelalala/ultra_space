@@ -322,7 +322,7 @@ Decisions behind these tasks: [universe-scale-time-and-flight.md](universe-scale
 | 1.2 | **Frame tree:** frames with parents; relative position and rotation between any two frames in `f64` | Correct relative transforms; under 1 mm error at 10¹² m |
 | 1.3 | **Orbits on rails:** Kepler orbits at time *t*, planet spin and axial tilt | Periods, energy conservation and reference values tested |
 | 1.4 | **Clocks:** integer universe tick counter; Galactic Standard Time (16×); local planet time; debug time warp | Clock conversions tested; orbits visibly advance under warp |
-| 1.5 | **Star system data:** engine-neutral JSON schema and the hand-made Halcyon system, with star mass tuned for 20–60 hour years | Halcyon loads into the frame tree; invalid data gives clear errors |
+| 1.5 | **Star system data:** engine-neutral JSON schema and the hand-made Halcyon system with a light, KSP-like star (self-consistent spheres of influence) | Halcyon loads into the frame tree; invalid data gives clear errors |
 | 1.6 | **Floating origin rendering:** camera = frame + `f64` offset; camera-relative `f32` transforms for Bevy | No visible jitter 10⁹ m from the star |
 | 1.7 | **Distant planets via shaders:** raymarched spheres with lighting and atmosphere rims; placeholder meshes up close | Planets look right from 1,000 km to the whole system; no depth glitches |
 | 1.8 | **Star and lighting:** glare, light from the star's real direction, HDR and bloom | Correct day and night sides on every body |
