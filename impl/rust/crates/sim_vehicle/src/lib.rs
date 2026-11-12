@@ -9,6 +9,7 @@ pub mod catalog;
 pub mod cruise;
 pub mod design;
 pub mod flight;
+pub mod ground;
 pub mod mass;
 pub mod physics;
 pub mod vehicle;

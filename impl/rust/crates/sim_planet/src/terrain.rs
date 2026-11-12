@@ -143,6 +143,13 @@ impl Terrain {
         self.params.ocean_coverage > 0.0
     }
 
+    /// Height of what vehicles and walkers stand on at `dir` (m): the ground, or the sea surface
+    /// where there is water (a floor until swimming and floating exist).
+    pub fn surface_height(&self, dir: DVec3, min_wavelength: f64) -> f64 {
+        let h = self.height(dir, min_wavelength);
+        if self.has_ocean() { h.max(0.0) } else { h }
+    }
+
     fn continent(&self, dir: DVec3) -> f64 {
         fbm(
             dir * CONTINENT_FREQUENCY,

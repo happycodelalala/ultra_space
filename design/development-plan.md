@@ -398,8 +398,8 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 | # | Task | Done when |
 |---|---|---|
 | 3.1 | **Rapier core:** rapier3d-f64 in the simulation crates, one world per region, per-body gravity, the Kestrel as one rigid body with a compound collider flown by the existing assist and allocator | Orbit-stability and region-transfer tests pass; flight feels unchanged |
-| 3.2 | **Terrain collision:** collision patches from the terrain function on a body turning with the planet; landing legs; rapier contacts replace the Batch 2 ground contact | Landing test (stays put on a slope) passes; landing, pad and descent tests pass on Windows |
-| 3.3 | **Data format additions:** attach nodes, attachment graph, connectors, sections, slots, form, interior placeholder, collider, new part kinds; design hash; schemas; Kestrel converted | Schema checks; graph and hash tests |
+| 3.2 | **Terrain collision:** collision patches from the terrain function on a body turning with the planet; rapier contacts replace the Batch 2 ground contact (kept as a fallback while patches build) | Landing test (stays put on a slope) passes; landing, pad and descent tests pass on Windows |
+| 3.3 | **Data format additions:** attach nodes, attachment graph, connectors, sections, slots, form, interior placeholder, collider, new part kinds (landing legs, wheels, batteries); design hash; schemas; Kestrel converted, with landing legs | Schema checks; graph and hash tests |
 | 3.4 | **Design compilation:** compiled form (mass, allocation, compound collider, wheel set, merged meshes per material) on workers, cached by hash | No hitch when a design changes; 300-part benchmark ≈ the Kestrel per tick |
 | 3.5 | **Wheels and a rover:** wheel parts, raycast vehicle controller, a rover design, drive controls, boarding any vehicle | Drive over hills and back without tipping or sinking |
 | 3.6 | **Walker on the character controller:** collides with and stands on vehicles; slope limit and steps | Walk around and onto the rover; tests |

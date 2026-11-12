@@ -199,8 +199,7 @@ impl BodyEnv {
             return 0.0;
         };
         let dir = self.surface_rotation.inverse() * position.normalize();
-        let h = terrain.height(dir, GROUND_DETAIL);
-        if terrain.has_ocean() { h.max(0.0) } else { h }
+        terrain.surface_height(dir, GROUND_DETAIL)
     }
 
     /// Ground surface normal under `position` (inertial axes); straight up over water or on a
@@ -392,7 +391,7 @@ pub fn integrate(
     env: &BodyEnv,
     dt: f64,
 ) -> bool {
-    let mut scene = PhysicsScene::default();
+    let mut scene = PhysicsScene::without_patches();
     let id = ObjectId(0);
     scene.place_dynamic(id, body, state, wrench);
     scene.step(env, dt);

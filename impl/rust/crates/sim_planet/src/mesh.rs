@@ -220,6 +220,42 @@ pub fn build_tile(
     mesh
 }
 
+/// A collision patch: the tile's `GRID × GRID` lattice on the walkable surface (sea surface
+/// over water), as triangles. Vertices are in the surface frame relative to the planet's
+/// centre (m, `f64`); neighbouring patches at the same level share vertices exactly.
+#[derive(Clone, Debug)]
+pub struct CollisionPatch {
+    pub key: TileKey,
+    pub vertices: Vec<DVec3>,
+    pub triangles: Vec<[u32; 3]>,
+}
+
+/// Builds the collision patch for `key` with terrain detail down to `min_wavelength` (m).
+pub fn collision_patch(terrain: &Terrain, key: TileKey, min_wavelength: f64) -> CollisionPatch {
+    let mut vertices = Vec::with_capacity((GRID * GRID) as usize);
+    for j in 0..GRID {
+        for i in 0..GRID {
+            let dir = vertex_direction(key, i, j);
+            vertices.push(dir * (terrain.radius + terrain.surface_height(dir, min_wavelength)));
+        }
+    }
+    let mut triangles = Vec::with_capacity(((GRID - 1) * (GRID - 1) * 2) as usize);
+    for j in 0..GRID - 1 {
+        for i in 0..GRID - 1 {
+            let a = j * GRID + i;
+            let (b, c, d) = (a + 1, a + GRID, a + GRID + 1);
+            // Counter-clockwise seen from outside (u × v points outward).
+            triangles.push([a, b, d]);
+            triangles.push([a, d, c]);
+        }
+    }
+    CollisionPatch {
+        key,
+        vertices,
+        triangles,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -367,5 +403,32 @@ mod tests {
         assert!(m.max_height >= m.min_height);
         // Generous bound for debug builds on slow CI; release is far faster.
         assert!(elapsed.as_secs_f64() < 2.0, "one tile took {elapsed:?}");
+    }
+
+    #[test]
+    fn collision_patches_follow_the_surface_and_share_edges() {
+        let (terrain, _) = meridian();
+        let key = crate::locate(DVec3::new(0.3, 0.5, 0.8).normalize(), 14);
+        let patch = collision_patch(&terrain, key, 1.0);
+        assert_eq!(patch.vertices.len(), (GRID * GRID) as usize);
+        for v in &patch.vertices {
+            let dir = v.normalize();
+            let expected = terrain.radius + terrain.surface_height(dir, 1.0);
+            assert!((v.length() - expected).abs() < 1e-6);
+        }
+        // The right neighbour's left column is this patch's right column.
+        let right = TileKey {
+            x: key.x + 1,
+            ..key
+        };
+        let other = collision_patch(&terrain, right, 1.0);
+        for j in 0..GRID {
+            let a = patch.vertices[(j * GRID + GRID - 1) as usize];
+            let b = other.vertices[(j * GRID) as usize];
+            assert_eq!(a, b);
+        }
+        // Triangles face outward.
+        let [a, b, c] = patch.triangles[0].map(|i| patch.vertices[i as usize]);
+        assert!((b - a).cross(c - a).dot(a) > 0.0);
     }
 }

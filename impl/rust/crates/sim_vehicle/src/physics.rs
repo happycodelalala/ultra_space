@@ -7,26 +7,34 @@
 //! so region transfers, teleports and other movers need no extra bookkeeping: a body whose object
 //! wasn't placed this tick is removed.
 //!
-//! Until terrain colliders exist (task 3.2), ground contact is applied after each substep with
-//! the Batch 2 contact model.
+//! The ground is made of terrain collision patches on a body turning with the planet
+//! ([`crate::ground`], task 3.2). Where a body's patches aren't built yet, the Batch 2 contact
+//! model against the terrain height keeps it above the ground.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use glam::DVec3;
+use glam::{DQuat, DVec3};
 use rapier3d_f64::prelude::{
-    ColliderBuilder, MassProperties as RapierMass, PhysicsWorld, Pose, RigidBodyBuilder,
-    RigidBodyHandle, RigidBodyType,
+    ColliderBuilder, ColliderHandle, MassProperties as RapierMass, PhysicsWorld, Pose,
+    RigidBodyBuilder, RigidBodyHandle, RigidBodyType,
 };
 use sim_core::ObjectId;
 
 use crate::allocation::Wrench;
 use crate::catalog::Shape;
 use crate::flight::{BodyEnv, MAX_SUBSTEP, MAX_SUBSTEPS, RigidState, ground_contact};
+use crate::ground::Ground;
 use crate::vehicle::{PartCollider, VehicleBody};
 
-/// Hull friction against other colliders (ground friction is the contact model's until 3.2).
+/// Hull friction (combined with the other collider's by averaging).
 const HULL_FRICTION: f64 = 0.8;
+/// Bodies closer to the ground than their radius plus this (m), plus a few seconds of travel,
+/// get collision patches.
+const PATCH_ALTITUDE: f64 = 50.0;
+/// Patches are built this far around a body (m), plus a second and a half of travel.
+const PATCH_MARGIN: f64 = 20.0;
 /// Drag coefficient times reference area, as a fraction of the vehicle's bounding disc.
 const DRAG_AREA_FRACTION: f64 = 0.5;
 
@@ -41,6 +49,7 @@ enum Motion {
 
 struct Entry {
     handle: RigidBodyHandle,
+    collider_handles: Vec<ColliderHandle>,
     /// What the body was built from, to rebuild when the vehicle's parts change.
     mass: crate::mass::MassProperties,
     colliders: Vec<PartCollider>,
@@ -50,12 +59,21 @@ struct Entry {
     motion: Motion,
     placed: bool,
     contact: bool,
+    /// The ground under it has collision patches (otherwise the Batch 2 contact model applies).
+    on_patches: bool,
 }
 
 /// A region's rapier world and its vehicles' bodies.
 pub struct PhysicsScene {
     world: PhysicsWorld,
     bodies: HashMap<ObjectId, Entry>,
+    ground: Option<Ground>,
+    /// Whether terrain gets collision patches (single-vehicle helpers use the contact model).
+    patches: bool,
+    /// Build patches on the calling thread (tests).
+    inline_patches: bool,
+    /// Time stepped so far (s), for patch lifetimes.
+    time: f64,
 }
 
 impl Default for PhysicsScene {
@@ -71,6 +89,10 @@ impl Default for PhysicsScene {
         Self {
             world,
             bodies: HashMap::new(),
+            ground: None,
+            patches: true,
+            inline_patches: false,
+            time: 0.0,
         }
     }
 }
@@ -115,6 +137,28 @@ fn gravity(mu: f64, r: DVec3) -> DVec3 {
 }
 
 impl PhysicsScene {
+    /// A scene whose ground is only the Batch 2 contact model (no collision patches): for
+    /// single-vehicle helpers that make a new scene every step.
+    pub fn without_patches() -> Self {
+        Self {
+            patches: false,
+            ..Self::default()
+        }
+    }
+
+    /// A scene that builds collision patches immediately instead of in the background (tests).
+    pub fn with_inline_patches() -> Self {
+        Self {
+            inline_patches: true,
+            ..Self::default()
+        }
+    }
+
+    /// Number of built collision patches.
+    pub fn patch_count(&self) -> usize {
+        self.ground.as_ref().map_or(0, Ground::len)
+    }
+
     /// Number of bodies (for stats and tests).
     pub fn len(&self) -> usize {
         self.bodies.len()
@@ -168,11 +212,14 @@ impl PhysicsScene {
                 ))
                 .build();
             let handle = world.insert_body(rigid);
-            for part in &body.colliders {
-                world.insert_collider(collider_for(part), Some(handle));
-            }
+            let collider_handles = body
+                .colliders
+                .iter()
+                .map(|part| world.insert_collider(collider_for(part), Some(handle)))
+                .collect();
             Entry {
                 handle,
+                collider_handles,
                 mass: body.mass,
                 colliders: body.colliders.clone(),
                 radius: vehicle_radius(body),
@@ -180,6 +227,7 @@ impl PhysicsScene {
                 motion,
                 placed: true,
                 contact: false,
+                on_patches: false,
             }
         });
         entry.wrench = wrench;
@@ -219,12 +267,17 @@ impl PhysicsScene {
         if self.bodies.is_empty() || dt <= 0.0 {
             return;
         }
+        self.update_ground(env);
         let substeps = (dt / MAX_SUBSTEP)
             .ceil()
             .clamp(1.0, f64::from(MAX_SUBSTEPS)) as u32;
         let h = dt / f64::from(substeps);
         self.world.integration_parameters.dt = h;
-        for _ in 0..substeps {
+        for k in 0..substeps {
+            if let Some(ground) = &self.ground {
+                let turned = DQuat::from_scaled_axis(env.spin * (h * f64::from(k + 1)));
+                ground.turn_to(&mut self.world, (turned * env.surface_rotation).normalize());
+            }
             for e in self.bodies.values() {
                 if e.motion != Motion::Dynamic {
                     continue;
@@ -250,8 +303,15 @@ impl PhysicsScene {
                 rb.add_torque(rotation * e.wrench.torque, false);
             }
             self.world.step();
+            let ground = self.ground.as_ref().map(|g| g.body);
             for e in self.bodies.values_mut() {
                 if e.motion != Motion::Dynamic {
+                    continue;
+                }
+                if e.on_patches {
+                    if let Some(ground) = ground {
+                        e.contact |= touching(&self.world, e, ground);
+                    }
                     continue;
                 }
                 let mut state = read(&self.world, e);
@@ -261,9 +321,71 @@ impl PhysicsScene {
                 }
             }
         }
+        self.time += dt;
         for e in self.bodies.values_mut() {
             e.placed = false;
         }
+    }
+
+    /// Keeps the ground body and its patches in step with the region's terrain, and asks for
+    /// the patches every body near the ground needs.
+    fn update_ground(&mut self, env: &BodyEnv) {
+        let terrain = env.terrain.as_ref().filter(|_| self.patches && env.solid);
+        let current = self.ground.as_ref().map(|g| Arc::clone(g.terrain()));
+        let same = match (&current, terrain) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        let extended = !same
+            && match (&mut self.ground, terrain) {
+                (Some(g), Some(t)) => g.extend_terrain(Arc::clone(t)),
+                _ => false,
+            };
+        if !same && !extended {
+            // A different terrain: rebuild every patch from it.
+            if let Some(old) = self.ground.take() {
+                old.remove(&mut self.world);
+            }
+            self.ground =
+                terrain.map(|t| Ground::new(&mut self.world, Arc::clone(t), self.inline_patches));
+        }
+        let Some(ground) = &mut self.ground else {
+            for e in self.bodies.values_mut() {
+                e.on_patches = false;
+            }
+            return;
+        };
+        ground.place(&mut self.world, env.surface_rotation);
+        let now = self.time;
+        let to_surface = env.surface_rotation.inverse();
+        let highest = env.radius + env.max_ground_height();
+        for e in self.bodies.values_mut() {
+            let rb = &self.world.bodies[e.handle];
+            let p = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
+            let speed = (rb.linvel() - env.spin.cross(p)).length();
+            let reach = e.radius + PATCH_ALTITUDE + speed * 3.0;
+            if p.length() > highest + reach
+                || p.length() - env.radius - env.ground_height(p) > reach
+            {
+                e.on_patches = false;
+                continue;
+            }
+            let dir = to_surface * p.normalize();
+            e.on_patches = ground.want(
+                dir,
+                e.radius + PATCH_MARGIN + speed * 1.5,
+                e.radius + 2.0,
+                now,
+            );
+        }
+        ground.update(&mut self.world, now);
+    }
+
+    /// Whether a body stood on collision patches in the last step (rather than the fallback
+    /// contact model).
+    pub fn on_patches(&self, id: ObjectId) -> bool {
+        self.bodies.get(&id).is_some_and(|e| e.on_patches)
     }
 
     /// A body's centre-of-mass state after the last step, and whether it touched the ground.
@@ -271,6 +393,21 @@ impl PhysicsScene {
         let e = self.bodies.get(&id)?;
         Some((read(&self.world, e), e.contact))
     }
+}
+
+/// Whether any of a body's colliders touches the ground body's patches.
+fn touching(world: &PhysicsWorld, e: &Entry, ground: RigidBodyHandle) -> bool {
+    e.collider_handles.iter().any(|&c| {
+        world.narrow_phase.contact_pairs_with(c).any(|pair| {
+            let other = if pair.collider1 == c {
+                pair.collider2
+            } else {
+                pair.collider1
+            };
+            pair.has_any_active_contact()
+                && world.colliders.get(other).and_then(|o| o.parent()) == Some(ground)
+        })
+    })
 }
 
 fn read(world: &PhysicsWorld, e: &Entry) -> RigidState {
@@ -296,8 +433,6 @@ fn write(world: &mut PhysicsWorld, e: &Entry, state: &RigidState) {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-
-    use glam::DQuat;
 
     use super::*;
     use crate::catalog::PartCatalog;
@@ -404,5 +539,97 @@ mod tests {
         assert_eq!(scene.len(), 1);
         scene.step(&space(), 0.1);
         assert!(scene.is_empty());
+    }
+
+    fn meridian(t: f64) -> BodyEnv {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data");
+        let sys = sim_core::StarSystem::from_path(root.join("star_systems/halcyon.json")).unwrap();
+        let i = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+        let terrain = sim_planet::Terrain::of(&sys.bodies[i]).map(Arc::new);
+        crate::flight::region_env(&sys, i, t, Some(&crate::flight::RegionTerrain(terrain)))
+    }
+
+    #[test]
+    fn lands_on_terrain_patches_and_turns_with_the_planet() {
+        let body = kestrel();
+        let mut env = meridian(0.0);
+        let rotation0 = env.surface_rotation;
+        // A gently sloped land spot.
+        let up = sim_planet::fibonacci_directions(20_000)
+            .map(|d| env.surface_rotation * d)
+            .find(|&d| {
+                let p = d * env.radius;
+                let slope = env.ground_normal(p).dot(d).acos();
+                env.ground_height(p) > 100.0 && (0.15..0.3).contains(&slope)
+            })
+            .unwrap();
+        let ground = env.radius + env.ground_height(up * env.radius);
+        let p = up * (ground + 15.0);
+        let mut s = RigidState {
+            position: p,
+            velocity: env.spin.cross(p),
+            rotation: DQuat::from_rotation_arc(DVec3::Y, up),
+            angular_velocity: env.spin,
+        };
+        let mut scene = PhysicsScene::with_inline_patches();
+        let id = ObjectId(1);
+        let dt = 1.0 / 30.0;
+        let ticks = 30 * 20;
+        let mut touched = false;
+        for tick in 0..ticks {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_dynamic(id, &body, &s, Wrench::default());
+            scene.step(&env, dt);
+            let (next, contact) = scene.state(id).unwrap();
+            s = next;
+            touched |= contact;
+        }
+        assert!(touched, "touched the ground");
+        assert!(
+            scene.on_patches(id),
+            "stands on collision patches, not the fallback"
+        );
+        assert!(scene.patch_count() > 0);
+        // The spot has turned with the planet.
+        let turned = DQuat::from_scaled_axis(env.spin * (f64::from(ticks) * dt)) * up;
+        let relative = (s.velocity - env.spin.cross(s.position)).length();
+        assert!(
+            relative < 0.05,
+            "holds still on the slope: {relative:.3} m/s"
+        );
+        let drift = (s.position.normalize() - turned).length() * env.radius;
+        assert!(drift < 2.0, "stayed where it landed: {drift:.2} m");
+        // Resting on its hull: the centre of mass is a little above the ground, not sunk.
+        let height = s.position.length() - (env.radius + env.ground_height(s.position));
+        assert!(
+            (0.3..5.0).contains(&height),
+            "centre of mass {height:.2} m above ground"
+        );
+
+        // Flatten a pad under it, 2 m below the ground there: it keeps standing on patches
+        // while the touched ones rebuild, then settles onto the pad.
+        let terrain = env.terrain.clone().unwrap();
+        let under = env.surface_rotation.inverse() * s.position.normalize();
+        let pad_height = terrain.surface_height(under, 1.0) - 2.0;
+        env.terrain = Some(Arc::new(terrain.with_pad(sim_planet::Pad {
+            center: under,
+            radius: 30.0,
+            blend: 20.0,
+            height: pad_height,
+        })));
+        for tick in ticks..ticks + 30 * 5 {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_dynamic(id, &body, &s, Wrench::default());
+            scene.step(&env, dt);
+            s = scene.state(id).unwrap().0;
+            assert!(scene.on_patches(id), "on patches through the change");
+        }
+        let after = s.position.length() - (env.radius + pad_height);
+        assert!(
+            (after - height).abs() < 0.3,
+            "rests on the pad as before: {after:.2} vs {height:.2} m"
+        );
     }
 }

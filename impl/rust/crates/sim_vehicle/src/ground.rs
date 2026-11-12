@@ -1,0 +1,262 @@
+//! Terrain collision for physics (Batch 3, task 3.2; design: vehicle-builder.md §2.2).
+//!
+//! The ground near physics bodies is a set of **collision patches**: triangle meshes built from
+//! the terrain function (deltas included) on the fixed-level cube-sphere lattice, so physics
+//! stands on exactly the heights the renderer draws and neighbouring patches share vertices.
+//! The patches hang on one kinematic body that turns with the planet, so a contact's ground
+//! velocity is `spin × r` and landed vehicles ride along through friction.
+//!
+//! Patches are built in the background (a few milliseconds each), around every body near the
+//! ground and ahead along its motion. Where a body's patches aren't ready yet, the physics scene
+//! falls back to the Batch 2 contact model, so nothing falls through.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use glam::{DQuat, DVec3};
+use rapier3d_f64::prelude::{
+    ColliderBuilder, ColliderHandle, PhysicsWorld, Pose, RigidBodyBuilder, RigidBodyHandle,
+};
+use sim_planet::quadtree::level_for_spacing;
+use sim_planet::{CollisionPatch, Terrain, TileKey, collision_patch, locate};
+
+/// Target vertex spacing of collision patches (m).
+const PATCH_SPACING: f64 = 2.0;
+/// Finest terrain wavelength in patches (m), as for the Batch 2 ground contact.
+const PATCH_DETAIL: f64 = 1.0;
+/// Ground friction coefficient (combined with the other collider's by averaging).
+const GROUND_FRICTION: f64 = 0.8;
+/// Patches no body has wanted for this long are dropped (s).
+const PATCH_LIFETIME: f64 = 10.0;
+/// Background threads building patches.
+const WORKERS: usize = 2;
+
+type Job = Box<dyn FnOnce() + Send>;
+
+/// The shared pool that builds patches.
+fn workers() -> &'static Mutex<Sender<Job>> {
+    static POOL: OnceLock<Mutex<Sender<Job>>> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let (tx, rx) = channel::<Job>();
+        let rx = Arc::new(Mutex::new(rx));
+        for i in 0..WORKERS {
+            let rx = Arc::clone(&rx);
+            std::thread::Builder::new()
+                .name(format!("collision-patches-{i}"))
+                .spawn(move || {
+                    loop {
+                        let job = match rx.lock() {
+                            Ok(rx) => rx.recv(),
+                            Err(_) => return,
+                        };
+                        match job {
+                            Ok(job) => job(),
+                            Err(_) => return,
+                        }
+                    }
+                })
+                .expect("spawn collision patch worker");
+        }
+        Mutex::new(tx)
+    })
+}
+
+struct Patch {
+    collider: ColliderHandle,
+    wanted_at: f64,
+}
+
+/// A region's ground: the kinematic body turning with the planet and its collision patches.
+pub(crate) struct Ground {
+    terrain: Arc<Terrain>,
+    level: u8,
+    /// Edge length of a patch (m).
+    patch_size: f64,
+    pub(crate) body: RigidBodyHandle,
+    patches: HashMap<TileKey, Patch>,
+    pending: HashSet<TileKey>,
+    /// Patches finished by the workers (with the terrain generation they were built from),
+    /// waiting to be added.
+    done: Arc<Mutex<Vec<(u64, CollisionPatch)>>>,
+    /// Bumped whenever the terrain changes; older results are dropped.
+    generation: u64,
+    /// Build patches on the calling thread (tests).
+    inline: bool,
+}
+
+impl Ground {
+    pub(crate) fn new(world: &mut PhysicsWorld, terrain: Arc<Terrain>, inline: bool) -> Self {
+        let level = level_for_spacing(terrain.radius, PATCH_SPACING);
+        let key = locate(DVec3::X, level);
+        let patch_size = key.edge_length(terrain.radius);
+        let body = world.insert_body(RigidBodyBuilder::kinematic_position_based().build());
+        Self {
+            terrain,
+            level,
+            patch_size,
+            body,
+            patches: HashMap::new(),
+            pending: HashSet::new(),
+            done: Arc::default(),
+            generation: 0,
+            inline,
+        }
+    }
+
+    pub(crate) fn terrain(&self) -> &Arc<Terrain> {
+        &self.terrain
+    }
+
+    /// Switches to `terrain`, the same planet with more deltas (pads) added: only the patches the
+    /// new deltas touch are rebuilt, and each old patch stays until its replacement is ready, so
+    /// bodies standing on it don't notice. Returns `false` (nothing changed) when `terrain` isn't
+    /// an extension of the current one.
+    pub(crate) fn extend_terrain(&mut self, terrain: Arc<Terrain>) -> bool {
+        let old = self.terrain.pads();
+        let new = terrain.pads();
+        if terrain.radius != self.terrain.radius
+            || new.len() <= old.len()
+            || new[..old.len()] != *old
+        {
+            return false;
+        }
+        let added: Vec<_> = new[old.len()..].to_vec();
+        self.terrain = terrain;
+        self.generation += 1;
+        self.pending.clear();
+        let spread = self.patch_size / self.terrain.radius;
+        let touched: Vec<TileKey> = self
+            .patches
+            .keys()
+            .filter(|k| {
+                added
+                    .iter()
+                    .any(|p| self.terrain.pad_touches(p, k.center(), spread))
+            })
+            .copied()
+            .collect();
+        for key in touched {
+            self.request(key);
+        }
+        true
+    }
+
+    fn request(&mut self, key: TileKey) {
+        if !self.pending.insert(key) {
+            return;
+        }
+        let terrain = Arc::clone(&self.terrain);
+        let done = Arc::clone(&self.done);
+        let generation = self.generation;
+        let job = move || {
+            let patch = collision_patch(&terrain, key, PATCH_DETAIL);
+            if let Ok(mut done) = done.lock() {
+                done.push((generation, patch));
+            }
+        };
+        if self.inline {
+            job();
+        } else if let Ok(pool) = workers().lock() {
+            let _ = pool.send(Box::new(job));
+        }
+    }
+
+    /// Removes the ground body and all patches.
+    pub(crate) fn remove(self, world: &mut PhysicsWorld) {
+        world.remove_body(self.body);
+    }
+
+    /// Points the ground body along the planet's surface rotation (inertial frame).
+    pub(crate) fn place(&self, world: &mut PhysicsWorld, rotation: DQuat) {
+        world.bodies[self.body].set_position(Pose::from_rotation(rotation), false);
+    }
+
+    /// Sets where the ground body turns to by the end of the next physics step.
+    pub(crate) fn turn_to(&self, world: &mut PhysicsWorld, rotation: DQuat) {
+        world.bodies[self.body].set_next_kinematic_position(Pose::from_rotation(rotation));
+    }
+
+    /// Patch keys covering a disc of `radius` (m) around unit direction `dir` (surface frame).
+    fn keys_around(&self, dir: DVec3, radius: f64) -> HashSet<TileKey> {
+        let mut keys = HashSet::new();
+        keys.insert(locate(dir, self.level));
+        let east = DVec3::Y.cross(dir).normalize_or(DVec3::X);
+        let north = dir.cross(east);
+        let step = self.patch_size * 0.5;
+        let n = (radius / step).ceil() as i32;
+        for i in -n..=n {
+            for j in -n..=n {
+                let (x, y) = (f64::from(i) * step, f64::from(j) * step);
+                if x * x + y * y > (radius + step) * (radius + step) {
+                    continue;
+                }
+                let d = (dir * self.terrain.radius + east * x + north * y).normalize();
+                keys.insert(locate(d, self.level));
+            }
+        }
+        keys
+    }
+
+    /// Asks for the patches around unit direction `dir` (surface frame): marks them wanted at
+    /// time `now` and starts building the missing ones. Returns whether every patch within
+    /// `cover` (m) of `dir` is ready.
+    pub(crate) fn want(&mut self, dir: DVec3, radius: f64, cover: f64, now: f64) -> bool {
+        for key in self.keys_around(dir, radius) {
+            if let Some(p) = self.patches.get_mut(&key) {
+                p.wanted_at = now;
+            } else {
+                self.request(key);
+            }
+        }
+        self.keys_around(dir, cover)
+            .iter()
+            .all(|k| self.patches.contains_key(k))
+    }
+
+    /// Adds finished patches to the world and drops ones nobody wants any more.
+    pub(crate) fn update(&mut self, world: &mut PhysicsWorld, now: f64) {
+        let finished = self
+            .done
+            .lock()
+            .map(|mut d| std::mem::take(&mut *d))
+            .unwrap_or_default();
+        for (generation, patch) in finished {
+            if generation != self.generation || !self.pending.remove(&patch.key) {
+                continue; // built from an older terrain
+            }
+            // Replace the old patch (kept until now so nothing stood on a hole).
+            if let Some(old) = self.patches.remove(&patch.key) {
+                world.remove_collider(old.collider);
+            }
+            let Ok(builder) = ColliderBuilder::trimesh(patch.vertices, patch.triangles) else {
+                continue;
+            };
+            let collider =
+                world.insert_collider(builder.friction(GROUND_FRICTION), Some(self.body));
+            self.patches.insert(
+                patch.key,
+                Patch {
+                    collider,
+                    wanted_at: now,
+                },
+            );
+        }
+        let stale: Vec<TileKey> = self
+            .patches
+            .iter()
+            .filter(|(_, p)| now - p.wanted_at > PATCH_LIFETIME)
+            .map(|(k, _)| *k)
+            .collect();
+        for key in stale {
+            if let Some(p) = self.patches.remove(&key) {
+                world.remove_collider(p.collider);
+            }
+        }
+    }
+
+    /// Number of built patches (stats and tests).
+    pub(crate) fn len(&self) -> usize {
+        self.patches.len()
+    }
+}
