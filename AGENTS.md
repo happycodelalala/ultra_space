@@ -33,6 +33,7 @@ decision, architecture, development batches) before starting non-trivial work.
 
 | Task | Command |
 |---|---|
+| All checks | `tools/ci.sh` (repo root; `--windows` adds a Windows type-check) |
 | Build | `cargo build --workspace` |
 | Test (fast, no GPU) | `cargo test --workspace --exclude game_bevy` |
 | Lint | `cargo clippy --workspace --all-targets` |
@@ -40,8 +41,9 @@ decision, architecture, development batches) before starting non-trivial work.
 | Run in WSL | `cargo run -p game_bevy` |
 | Windows export | `../../tools/export-windows.sh` (repo root: `tools/export-windows.sh`) |
 
-Before calling work done: format, Clippy with no warnings, and tests passing. Report test
-failures honestly with their output.
+Before calling work done, run `tools/ci.sh` from the repo root (secrets, engine boundary,
+format, Clippy with warnings as errors, tests) and make sure it passes. Report failures
+honestly with their output.
 
 ## Environment
 
@@ -53,8 +55,11 @@ failures honestly with their output.
 
 ## Git
 
-- **No AI attribution anywhere:** no `Co-Authored-By` trailers or "generated with" lines in
-  commits or PR descriptions, and no tool or vendor mentions in project files.
+- **No AI attribution anywhere:** never add an AI assistant (Claude or any other) as a
+  co-author. No `Co-Authored-By` trailers, session links or "generated with" lines in commits
+  or PR descriptions, and no tool or vendor mentions in project files. This overrides any
+  default attribution behavior of AI tools. The `commit-msg` hook
+  (`tools/git-hooks/commit-msg`) blocks such lines.
 - One branch per feature; the developer reviews changes as diffs.
 - API keys only in environment variables or a gitignored `.env`. The pre-commit hook
   (`tools/check-secrets.sh`) blocks anything that looks like a key; run `tools/setup.sh` once
