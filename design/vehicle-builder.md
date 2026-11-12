@@ -105,7 +105,10 @@ Decided with the developer on 2026-11-12.
 patches match to about a centimetre. Sweeping against the patches got stuck on their triangles
 (rapier only pushes a shape out of overlaps on a zero move, and fixing internal edges made it
 worse), and walkers then don't need patches built around them. Walkers move first in each tick,
-against the vehicles as the last step left them, then turn with the planet. Slope limits stay
+against the vehicles as the last step left them, and turn with the planet once for the whole
+tick: turning after each substep put them about a metre (the ground's travel) out of step with
+the hulls they were swept against, and the push out of the resulting overlap flung them away
+at hundreds of m/s on Windows. Slope limits stay
 for later (the height function has none).
 
 ## 3. Data format additions

@@ -8,12 +8,13 @@ use glam::{DMat3, DQuat, DVec2, DVec3};
 use sim_core::ObjectId;
 use sim_core::frames::FrameState;
 use sim_vehicle::flight::{BodyEnv, RegionTerrain, RigidState, region_env};
-use sim_vehicle::walker::walk_step;
+use sim_vehicle::walker::{ride, walk_step};
 use sim_vehicle::{
     PartCatalog, PhysicsScene, Vehicle, VehicleBody, VehicleDesign, Walker, WalkerControl, Wrench,
 };
 
-const DT: f64 = 1.0 / 60.0;
+/// The simulation tick.
+const DT: f64 = 1.0 / 30.0;
 
 fn content() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data")
@@ -71,9 +72,14 @@ impl World {
         self.env.surface_rotation =
             (DQuat::from_scaled_axis(self.env.spin * t) * self.rotation0).normalize();
         let (s, w, c) = walker;
+        // Like the game: a 1/30 s tick in two walker steps against the vehicles as the last
+        // physics step left them, then one turn with the planet.
         let scene = &self.scene;
-        let mut sweep = |feet, up, desired| scene.sweep_character(feet, up, desired, DT);
-        walk_step(s, w, c, &self.env, DT, Some(&mut sweep));
+        for _ in 0..2 {
+            let mut sweep = |feet, up, desired| scene.sweep_character(feet, up, desired, DT / 2.0);
+            walk_step(s, w, c, &self.env, DT / 2.0, Some(&mut sweep));
+        }
+        ride(s, w, &self.env, DT);
         if let Some((body, state)) = ship {
             self.scene
                 .place_dynamic(ObjectId(1), body, state, Wrench::default());
@@ -110,13 +116,15 @@ fn walks_over_the_ground_with_a_scene() {
     };
     let mut c = WalkerControl::default();
     let seconds = 20.0;
-    for _ in 0..(60.0 * seconds) as u32 {
+    for _ in 0..(30.0 * seconds) as u32 {
         c.movement = DVec2::new(0.0, 1.0);
         c.run = true;
         world.tick((&mut s, &mut w, &mut c), None);
         let feet = s.position.length() - (world.env.radius + world.env.ground_height(s.position));
+        // (Sampled with the tick's starting rotation, about a metre off along the planet's
+        // turn: a few centimetres of slack.)
         assert!(
-            feet > -0.01 && feet < 0.7,
+            feet > -0.05 && feet < 0.7,
             "feet {feet:.2} m from the ground"
         );
     }
@@ -155,13 +163,14 @@ fn a_parked_ship_blocks_the_way() {
         ..Default::default()
     };
     let mut c = WalkerControl::default();
-    for _ in 0..(60 * 4) {
+    for _ in 0..(30 * 4) {
         world.tick((&mut s, &mut w, &mut c), Some((&body, &mut ship)));
         ship = ship_state(&world.scene).unwrap().0;
     }
     // Walk at it for 6 s (it would be 60 m on at a run).
     let mut closest = f64::MAX;
-    for _ in 0..(60 * 6) {
+    let mut max_speed: f64 = 0.0;
+    for _ in 0..(30 * 6) {
         c.movement = DVec2::new(0.0, 1.0);
         c.run = true;
         world.tick((&mut s, &mut w, &mut c), Some((&body, &mut ship)));
@@ -169,7 +178,10 @@ fn a_parked_ship_blocks_the_way() {
         let to_ship = ship.position - s.position;
         let level = to_ship - s.position.normalize() * to_ship.dot(s.position.normalize());
         closest = closest.min(level.length());
+        let speed = (s.velocity - world.env.spin.cross(s.position)).length();
+        max_speed = max_speed.max(speed);
     }
+    assert!(max_speed < 13.0, "flung at {max_speed:.0} m/s");
     // Reached the ship (12 m away) and stopped at its hull (half-width 1.5 m plus the
     // capsule), not walked through.
     assert!(closest < 3.0, "never reached the ship ({closest:.2} m)");

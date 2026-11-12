@@ -625,15 +625,15 @@ impl PhysicsScene {
 
     /// Moves a walker's capsule (feet at `feet`, standing along `up`) by `desired`, against the
     /// vehicles as the last step left them (not the ground: walkers stand on the terrain height,
-    /// which the patches match). Returns the movement actually made and whether it stands on
-    /// a vehicle.
+    /// which the patches match). Returns the push out of any overlap, the movement actually made
+    /// after it, and whether it stands on a vehicle.
     pub fn sweep_character(
         &self,
         feet: DVec3,
         up: DVec3,
         desired: DVec3,
         dt: f64,
-    ) -> (DVec3, bool) {
+    ) -> (DVec3, DVec3, bool) {
         let controller = KinematicCharacterController {
             up,
             offset: CharacterLength::Absolute(CHARACTER_GAP),
@@ -664,7 +664,7 @@ impl PhysicsScene {
         let out = controller.move_shape(dt, &queries, &shape, &pose, DVec3::ZERO, |_| {});
         let pose = Pose::from_parts(pose.translation + out.translation, pose.rotation);
         let moved = controller.move_shape(dt, &queries, &shape, &pose, desired, |_| {});
-        (out.translation + moved.translation, moved.grounded)
+        (out.translation, moved.translation, moved.grounded)
     }
 
     /// Distance along a ray to the first collider it hits (ground patches and vehicles, as the

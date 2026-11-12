@@ -6,7 +6,7 @@
 #   tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]
 #
 # --no-export   use the build already in the export folder
-# --parallel N  visual tests at once (default 3)
+# --parallel N  visual tests at once (default 2; 3 overloads the machine)
 # --visual      only visual tests (fine while other work goes on)
 # --perf        only performance tests (needs a quiet machine)
 # name ...      only these tests (default: all)
@@ -24,7 +24,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 TOOLS="$(cd "$(dirname "$0")" && pwd)"
 DEST="${ULTRA_SPACE_EXPORT_DIR:-/mnt/c/Users/yangc/Apps/ultra_space}"
 LIST="$ROOT/tools/test-scripts/tests.txt"
-PARALLEL=3
+PARALLEL=2
 EXPORT=1
 KINDS="visual perf"
 ONLY=()

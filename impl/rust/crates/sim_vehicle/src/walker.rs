@@ -58,15 +58,27 @@ fn upright(forward: DVec3, up: DVec3) -> DQuat {
 }
 
 /// Moves a walker's feet from a position along `up` by a desired displacement against the
-/// world's colliders: returns the displacement made and whether it stands on something
-/// ([`crate::PhysicsScene::sweep_character`]).
-pub type Mover<'a> = &'a mut dyn FnMut(DVec3, DVec3, DVec3) -> (DVec3, bool);
+/// world's colliders: returns the push out of any overlap, the displacement made, and whether
+/// it stands on something ([`crate::PhysicsScene::sweep_character`]).
+pub type Mover<'a> = &'a mut dyn FnMut(DVec3, DVec3, DVec3) -> (DVec3, DVec3, bool);
 
 /// Advances a walker by `dt` (state in the body's inertial frame; `position` is the feet).
 ///
 /// It walks on the terrain height. With a `mover` it also moves against the region's vehicles
-/// (as they were at the start of the step: blocked by hulls, standing on decks), then turns with
-/// the planet.
+/// (as they were at the start of the tick: blocked by hulls, standing on decks) and does *not*
+/// turn with the planet here: all of a tick's steps happen in the frame of the tick's start, and
+/// the caller turns it once for the whole tick ([`ride`]), so it never moves relative to the
+/// vehicles it is swept against.
+/// Turns a walker with the planet for `dt` (after its steps against the vehicles).
+pub fn ride(state: &mut FrameState, walker: &mut Walker, env: &BodyEnv, dt: f64) {
+    let spin = DQuat::from_scaled_axis(env.spin * dt);
+    state.position = spin * state.position;
+    state.rotation = (spin * state.rotation).normalize();
+    walker.velocity = spin * walker.velocity;
+    state.velocity = env.spin.cross(state.position) + walker.velocity;
+    state.angular_velocity = env.spin;
+}
+
 pub fn walk_step(
     state: &mut FrameState,
     walker: &mut Walker,
@@ -116,8 +128,9 @@ pub fn walk_step(
     walker.velocity -= up * (env.mu / (r * r)) * dt;
     if let Some(mover) = mover {
         // Vehicles: blocked by hulls, standing on decks.
-        let (moved, on_vehicle) = mover(state.position, up, walker.velocity * dt);
-        state.position += moved;
+        let (out, moved, on_vehicle) = mover(state.position, up, walker.velocity * dt);
+        // The push out of an overlap moves the walker but isn't its own speed.
+        state.position += out + moved;
         let vertical = walker.velocity.dot(up);
         let tangential = (moved - up * moved.dot(up)) / dt;
         walker.velocity = tangential + up * vertical;
@@ -136,13 +149,7 @@ pub fn walk_step(
             }
         }
         walker.grounded = on_ground || on_vehicle;
-        // Then ride with the turning ground.
-        state.position = spin * state.position;
-        state.rotation = (spin * state.rotation).normalize();
-        walker.velocity = spin * walker.velocity;
         walker.ground_altitude = (state.position.length() - ground).max(0.0);
-        state.velocity = env.spin.cross(state.position) + walker.velocity;
-        state.angular_velocity = env.spin;
         return;
     }
     state.position += walker.velocity * dt;
@@ -202,6 +209,10 @@ pub fn walker_system(
                 }
                 None => walk_step(&mut local.state, &mut walker, &mut control, &env, h, None),
             }
+        }
+        if scene.is_some() {
+            // Turned with the planet once for the whole tick.
+            ride(&mut local.state, &mut walker, &env, clock.dt);
         }
         walker.ground_altitude = ground_altitude(&env, local.state.position).max(0.0);
         *state = local;
