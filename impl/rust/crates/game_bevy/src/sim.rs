@@ -37,6 +37,7 @@ impl Plugin for SimPlugin {
             .register_transferable::<sim_vehicle::FlightControl>();
         sim.objects
             .register_transferable::<sim_vehicle::FlightTelemetry>();
+        sim.objects.register_transferable::<sim_vehicle::Cruise>();
         info!(
             "simulation: {} regions (one per body) at {:.0} Hz",
             sim.regions.len(),

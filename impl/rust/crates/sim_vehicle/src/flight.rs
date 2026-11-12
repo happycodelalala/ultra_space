@@ -17,6 +17,7 @@ use sim_core::objects::{RegionBody, RegionStage, SimClock, SystemRef};
 use sim_core::{KeplerOrbit, ObjectState};
 
 use crate::allocation::Wrench;
+use crate::cruise::{Cruise, cruise_system};
 use crate::vehicle::{AXIS_DIRECTIONS, Vehicle, VehicleBody};
 
 /// Longest physics substep (s).
@@ -79,6 +80,9 @@ pub struct FlightControl {
     pub brake: bool,
     /// Desired velocity relative to `reference`, in that frame's axes.
     pub desired_velocity: Option<(Reference, DVec3)>,
+    /// Region body that `desired_velocity` is relative to. When the vehicle moves to another
+    /// body's region, [`flight_system`] converts the desired velocity so assist doesn't react.
+    pub desired_body: Option<usize>,
 }
 
 /// Results of the last tick, for HUD and visuals.
@@ -425,6 +429,7 @@ pub fn flight_system(
             &mut FlightControl,
             &mut FlightTelemetry,
             Option<&OnRails>,
+            Option<&Cruise>,
         ),
         With<Vehicle>,
     >,
@@ -433,7 +438,13 @@ pub fn flight_system(
     let t = clock.time.as_secs_f64();
     let env = body_env(system, region.0, t);
     let inertial = system.bodies[region.0].inertial_frame;
-    for (entity, mut state, body, mut control, mut telemetry, on_rails) in &mut vehicles {
+    for (entity, mut state, body, mut control, mut telemetry, on_rails, cruise) in &mut vehicles {
+        if cruise.is_some_and(Cruise::is_cruising) {
+            continue; // moved by the cruise drive
+        }
+        if control.desired_body != Some(region.0) {
+            rebase_desired_velocity(system, &mut control, region.0, t);
+        }
         // Flight works in the body's inertial frame.
         let local = state.in_frame(&system.frames, inertial, t);
         let mut rails = on_rails.map(|r| r.0);
@@ -464,9 +475,42 @@ pub fn flight_system(
     }
 }
 
+/// Re-expresses the held desired velocity relative to body `to` after a region transfer, so
+/// flight assist keeps holding the same motion. Inertial frames share axes, so this only adds
+/// the old frame's velocity relative to the new one. A surface reference never crosses a
+/// sphere of influence (it ends at the atmosphere top or close to the ground), so it is dropped.
+fn rebase_desired_velocity(
+    system: &sim_core::StarSystem,
+    control: &mut FlightControl,
+    to: usize,
+    t: f64,
+) {
+    if let (Some(from), Some((reference, v))) = (control.desired_body, control.desired_velocity) {
+        control.desired_velocity = match reference {
+            Reference::Inertial => {
+                let shift = system
+                    .frames
+                    .state_in(
+                        system.bodies[to].inertial_frame,
+                        system.bodies[from].inertial_frame,
+                        t,
+                    )
+                    .velocity;
+                Some((Reference::Inertial, v + shift))
+            }
+            Reference::Surface => None,
+        };
+    }
+    control.desired_body = Some(to);
+}
+
 /// Adds flight to a region schedule (used with `Simulation::for_star_system`).
 pub fn add_flight_systems(schedule: &mut Schedule) {
-    schedule.add_systems(flight_system.in_set(RegionStage::Simulate));
+    schedule.add_systems(
+        (flight_system, cruise_system)
+            .chain()
+            .in_set(RegionStage::Simulate),
+    );
 }
 
 /// Directions matching the performance summary, re-exported for HUDs.
