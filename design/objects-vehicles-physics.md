@@ -187,3 +187,96 @@ joints, part templates in the UI.
 | Streaming regions in and out | 2 |
 | Damage, parts breaking off | 5 |
 | Atmospheric lift and drag | 2–3 |
+
+## 9. Many ships and stations
+
+The game will have whole fleets and many stations outside planets (X4-style). Every ship and
+station uses the same object and vehicle model as the player's ship; what makes thousands of
+them affordable is **simulation level of detail** (technical overview §3).
+
+### 9.1 Simulation tiers for vehicles
+
+| Tier | Which vehicles | Simulation | Cost |
+|---|---|---|---|
+| **Full** | Near the player, in combat, being watched | Rigid body, per-thruster allocation, collisions, `f64` | Highest |
+| **Reduced** | Same star system, far from the player | Point mass following simple autopilot maneuvers (burn, coast on rails, arrive) using the vehicle's **performance summary** | Tiny |
+| **Abstract** | Other star systems | Fleets as data: route, cargo, arrival time; no positions per tick | Almost none |
+
+- **Performance summary:** computed with the mass properties (§2.3): maximum acceleration
+  per axis, turn rates, cruise capability. Full tier uses per-thruster allocation; the other
+  tiers use the summary, so a weak hauler is slow in every tier.
+- **Changing tier** adds or removes physics components on the same object. On-rails coasting
+  under time warp (§4) is the first use of this. Approaching the player promotes vehicles;
+  arriving in an abstract system places its vehicles from their records (overview §3).
+
+### 9.2 Stations
+
+- Stations are vehicles: objects made of parts (often thousands); mass properties are computed
+  once since they rarely change.
+- **Most stations are on rails** (orbiting a body or fixed in a frame), so like planets their
+  position is a formula of time and costs almost nothing per tick.
+- **Large stations and capital ships get their own frame** (overview §12): docking moves a ship
+  into the station's frame; interiors live there (Batch 11).
+
+### 9.3 Fleets
+
+- A fleet is an object: an `ObjectId` with member ships, orders and a formation.
+- Formation members store their offset in the leader's frame.
+- In the Abstract tier a fleet is one entry: strength, cargo, route.
+
+### 9.4 Crowded regions
+
+- Vehicles spread across body regions, which run on different cores (Batch 0 benchmark: 512,000
+  simple ships in 2.7 ms per tick natively on the development machine).
+- A single crowded place (a large battle, a busy hub) gets its own region frame (overview §11.3,
+  §12), and heavy systems inside one region use parallel iteration.
+- Each region keeps a **spatial index** (grid rebuilt in parallel each tick) for sensors,
+  targeting and collision checks.
+
+### 9.5 Rendering many vehicles
+
+Only nearby Full-tier vehicles are drawn in detail; distant ones use simpler models, then
+sprites, with identical models batched (overview §12.4). Floating origin keeps all of them
+precise.
+
+### 9.6 Built now so nothing blocks later
+
+| Shaped now | Why |
+|---|---|
+| Physics state as components that can be added or removed | Tier changes; on-rails coasting is the first use |
+| Performance summary computed with mass properties | Lower tiers and AI need it; cheap and testable |
+| Regions hold any number of objects; no single-player-ship assumptions | Fleets and stations use the same paths |
+
+Reduced and Abstract tiers, fleets, stations and spatial indexes are implemented in Batch 6
+(living galaxy), when there are other ships.
+
+## 10. Batch 1 defaults: starting ship, controls, camera
+
+Decided 2026-11-12.
+
+**Starting ship: Kestrel**, a small shuttle of about 20 tonnes, defined as a vehicle design
+from catalog parts:
+
+| Parts | Purpose |
+|---|---|
+| Cockpit, hull sections, fuel tank | Structure and mass (fuel not simulated yet) |
+| 1 main engine at the rear, ~600 kN | Lift-off from Meridian at about 3× its weight |
+| 16 small thrusters in 4 clusters, ~4 kN each | Strafing and fine control |
+| Reaction wheel | Rotation without fuel |
+| Cruise drive | Travel between planets |
+
+**Controls** (keyboard and mouse):
+
+| Input | Action |
+|---|---|
+| W / S | Thrust forward / back |
+| A / D | Strafe left / right |
+| Space / Ctrl | Thrust up / down |
+| Mouse | Pitch and yaw (cursor locked while flying) |
+| Q / E | Roll |
+| T | Cycle flight-assist modes |
+| J | Engage / drop out of cruise drive |
+| Tab | Switch between flying the ship and the free debug camera |
+
+**Camera:** chase camera behind and above the ship, orbited by holding the right mouse button;
+**V** toggles a cockpit view.
