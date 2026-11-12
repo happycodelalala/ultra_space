@@ -27,9 +27,8 @@
 7.5  press PageUp            # select the last part (the copy)
 8    press S                 # save it as a section
 8.5  press Enter             # place the section
-9    press PageUp            # the section's leg is last
-9.2  press PageUp            # the mirror copy
-9.5  press Delete            # removes the leg pair
+9    press PageUp            # from the copy (28) back to the first placed leg (27)
+9.5  press Delete            # removes the leg pair (its symmetry group)
 10.5 shot 04-after-remove.png
 11   press B
 13   shot 05-after.png
