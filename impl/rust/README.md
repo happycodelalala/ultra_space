@@ -13,6 +13,7 @@ Cargo workspace: engine-independent simulation crates plus a Bevy front end.
 | `sim_combat` | Damage events, morale, combat AI | `sim_core` |
 | `ai_gateway` | LLM providers (Anthropic, OpenAI, replay), caching, validation | `sim_core` |
 | `game_bevy` | Bevy app: rendering, input, UI, audio (binary: `ultra_space`) | everything above + `bevy` |
+| `sim_bench` | Parallel-scaling benchmark (see its README) | `bevy_ecs`, `bevy_tasks`, `glam` |
 
 **Boundary rule:** only `game_bevy` may depend on `bevy` or any rendering crate. The `sim_*`
 crates may use standalone `bevy_ecs` for parallel scheduling, which works with any renderer.

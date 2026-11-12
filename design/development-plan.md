@@ -117,7 +117,12 @@ Applies to every simulation crate.
 **Target hardware:** 16 cores / 32 threads (development machine). A parallel design should get
 up to ~10× more simulation per frame than a single-threaded one.
 
-**Validation:** a parallel-scaling benchmark in Batch 0 (Section 7).
+**Validation (Batch 0, 2026-11-12):** a synthetic benchmark (factory belts, 64k–512k ships,
+per-region markets) scaled **5–6× on heavy ticks** (up to ~10× in one run) and 3–4× on light
+ticks on the 16-core development machine. **One world per region, ticked in parallel** scaled
+better than one shared world, and is the primary strategy. Parallel iteration inside systems
+is reserved for very large single regions. Light ticks have a ~1 ms fixed per-tick cost.
+Details and raw numbers: `impl/rust/crates/sim_bench/README.md`.
 
 ---
 
