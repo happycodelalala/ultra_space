@@ -61,23 +61,41 @@ median-of-batches) reached ~10× on the heavy workload, so results depend on mac
 | 16 | 8.7 | 4.6–4.7× | 9.4–10.4 | 3.8–4.2× |
 | 32 | 6.8–6.9 | 5.8–6.0× | 7.8–7.9 | 5.0× |
 
+## Results: 2026-11-12, same machine, native Windows, Turbo mode
+
+**Normal workload** (64 regions, 64k ships, 410k belt slots):
+
+| Threads | regions ms/tick | speedup | systems ms/tick | speedup |
+|---:|---:|---:|---:|---:|
+| serial | 4.72 | 1.0× | 4.75 | 1.0× |
+| 2 | 2.40 | 2.0× | 4.78 | 1.0× |
+| 4 | 1.24 | 3.8× | 1.69 | 2.8× |
+| 8 | 0.70 | 6.7× | 0.87 | 5.4× |
+| 16 | 0.63 | 7.5× | 0.77 | 6.1× |
+| 32 | 0.54 | 8.7× | 0.63 | 7.5× |
+
+Native Windows scales about **2–2.5× better than WSL2** on the same workload. Most of the
+light-tick floor measured in WSL comes from the virtual machine's thread scheduling.
+
 ## Findings
 
-1. **The architecture scales:** 5–6× on heavy ticks (up to ~10× in one earlier run),
-   3–4× on light ticks, with no locks and no data races (compiler-checked).
+1. **The architecture scales:** natively on Windows, 8.7× on light ticks at 32 threads
+   (WSL2: 3–4× light, 5–6× heavy), with no locks and no data races (compiler-checked).
 2. **Per-region worlds (`regions`) scale better** than one shared world, and they map directly
    onto the frame tree. They become the primary strategy. `par_iter_mut` stays available for
    hot systems inside one very large region (e.g. a huge battle).
-3. **Light ticks hit a floor of ~1 ms**, a fixed per-tick cost (scheduling and thread
-   wake-ups, likely higher inside the WSL2 VM). That's acceptable against a 33 ms budget at
-   30 Hz; real game ticks carry more work per tick, where scaling is better.
+3. **Light ticks have a fixed per-tick cost:** ~0.5 ms natively, ~1 ms in WSL2 (VM thread
+   scheduling). That's small against a 33 ms budget at 30 Hz, and real game ticks carry more
+   work per tick, where scaling is better.
 4. **Chunking regions into one task per worker** (fewer spawns) gave no improvement, so the
    simpler one-task-per-region form stays.
-5. **8 → 16 threads gains little.** Hypotheses, not yet tested: all-core clock drops under the
-   tablet's power limit, and crossing between the chip's two 8-core clusters (CCDs).
+5. **Gains flatten past 8 threads** on light ticks (natively 6.7× → 7.5× → 8.7×), where the
+   fixed per-tick cost dominates. Possible contributors, not yet tested: all-core clock drops
+   under the tablet's power limit, and crossing between the chip's two 8-core clusters.
+6. **Judge performance natively.** WSL2 numbers are useful for relative comparisons only;
+   they understate parallel scaling.
 
 ## Follow-ups
 
-- Run the Windows build of `sim_bench` natively to separate WSL2 overhead from hardware limits.
-- Re-run in a fixed power mode (Performance, plugged in) and record it with the results.
+- Record the native Windows heavy workload (`--scale 8`) run.
 - Re-run as real simulation systems replace the synthetic ones.
