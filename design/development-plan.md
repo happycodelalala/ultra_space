@@ -327,9 +327,9 @@ Decisions behind these tasks: [universe-scale-time-and-flight.md](universe-scale
 | 1.7 | **Distant planets via shaders:** raymarched spheres with lighting and atmosphere rims; placeholder meshes up close | Planets look right from 1,000 km to the whole system; no depth glitches |
 | 1.8 | **Star and lighting:** glare, light from the star's real direction, HDR and bloom | Correct day and night sides on every body |
 | 1.9 | **Sky:** procedural star field and nebula, fixed to the galaxy | Stable while flying |
-| 1.10 | **First persistent objects:** `ObjectId`, frame-referenced locations; ship and player as objects (7.1) | Tested |
-| 1.11 | **Ship flight:** `f64` rigid body, 6 degrees of freedom, thrust limits, gravity from the current sphere of influence, sphere collision with planets; flight assist modes with automatic "standing still" reference | Physics and energy tests; assist holds speed and hovers correctly |
-| 1.12 | **Moving between frames:** crossing spheres of influence moves the ship to the new frame and region at a tick boundary | Position and velocity preserved; no visible jump |
+| 1.10 | **Objects and vehicles core:** `ObjectId`, frame-relative state, object registry, one region per body; part catalog and vehicle designs (data + schemas), vehicle instances, mass properties, thrust allocation ([objects-vehicles-physics.md](objects-vehicles-physics.md) §1–3) | Invariant tests in §7 of that doc |
+| 1.11 | **Ship flight:** symplectic `f64` rigid-body integration, gravity from the region's body, on-rails coasting under time warp, flight assist modes with automatic "standing still" reference, sphere collision with planets | Orbit-stability and on-rails tests; assist holds speed and hovers correctly |
+| 1.12 | **Moving between regions:** transfers at tick boundaries with hysteresis | Position and velocity preserved; no flicker; no visible jump |
 | 1.13 | **Placeholder cruise drive:** speed scaled by distance to the nearest body, auto-slowdown, drop to normal flight | Neighbouring planets reached in 1–3 minutes |
 | 1.14 | **Controls and camera:** keyboard and mouse, chase camera, assist toggle | Developer judges the feel on Windows |
 | 1.15 | **HUD:** speed, reference body, altitude, galactic and local time, time warp; orbit lines | Readable at a glance |
@@ -352,9 +352,9 @@ guesses.
 
 | Batch | Object-system parts implemented | Why then |
 |---|---|---|
-| **1** Space-scale core | `ObjectId` separate from ECS entity IDs; locations that reference frames in the frame tree; moving the player and ship between frames; background region building; in-game inspector for frames and objects | The frame tree defines what an object's location is; the ship and player are the first persistent objects |
+| **1** Space-scale core | `ObjectId` and the object registry (objects moving between region worlds keep their identity); frame-relative state; one region per body with transfers at tick boundaries; **vehicles made of parts** (part catalog, designs, instances), mass properties and thrust allocation; background region building; in-game inspector | Moving the ship between regions needs a stable identity; a ship built from parts from day one means the Batch 3 builder extends the flight model instead of replacing it. Design: [objects-vehicles-physics.md](objects-vehicles-physics.md) |
 | **2** Seamless planet | Procedural keys and terrain deltas; streaming rules (gradual spawning, prefetch from travel); **hitch-budget stress test** (orbit → surface, no frame over 50 ms) | Terrain is the first procedural content and the first big streaming load |
-| **3** Vehicle builder | Built structures as one persistent object holding a part graph; **first versioned save file** with a format version and migration hook | The first thing worth saving is a vehicle the player built |
+| **3** Vehicle builder | Builder UI editing a vehicle instance's parts; attachment graph; object records and the **first versioned save file** with a format version and migration hook | The first thing worth saving is a vehicle the player built |
 | **4** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
 | ⭐ **Checkpoint A** | **Save format frozen:** golden save files and strict migrations start with the first public build | Before this, no player has a save, so the format may be reset freely |
 | **5+** | Quest references by `ObjectId`, NPC ownership, unique items with generated histories | Combat, factions, quests and LLM content need them |
