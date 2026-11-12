@@ -10,6 +10,7 @@ pub mod orbit;
 pub mod region;
 pub mod simulation;
 pub mod stats;
+pub mod system;
 pub mod time;
 pub mod units;
 
@@ -19,4 +20,5 @@ pub use orbit::{KeplerOrbit, OrbitError};
 pub use region::{Region, RegionSet};
 pub use simulation::Simulation;
 pub use stats::RollingStats;
+pub use system::{Body, BodyKind, StarSystem, SystemError};
 pub use time::{GAME_TIME_SCALE, GameDateTime, UniverseTime};

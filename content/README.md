@@ -10,4 +10,10 @@ Schema) or TOML. No engine-specific formats here.
 | `prompts/` | LLM prompt templates for the AI gateway (moddable) |
 | `lore/` | World bible: hand-written lore and fixed facts generated content must respect |
 
-All data files are validated against their schemas by tooling in the implementation.
+Files in `data/<kind>s/` are validated against `schemas/<kind>.schema.json` by
+`tools/check-content.py` (part of `tools/ci.sh`). Cross-field rules (parents exist, moons fit
+inside their parent's sphere of influence, ...) are checked by the game's loaders.
+
+| Data | Schema | Loader |
+|---|---|---|
+| `data/star_systems/*.json` | `schemas/star_system.schema.json` | `sim_core::system` |

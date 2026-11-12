@@ -4923,6 +4923,8 @@ dependencies = [
  "bevy_ecs",
  "bevy_tasks",
  "glam",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

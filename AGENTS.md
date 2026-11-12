@@ -61,7 +61,7 @@ decision, architecture, development batches) before starting non-trivial work.
 | Windows export | `../../tools/export-windows.sh` (repo root: `tools/export-windows.sh`) |
 
 Before calling work done, run `tools/ci.sh` from the repo root (secrets, engine boundary,
-format, Clippy with warnings as errors, tests) and make sure it passes. Report failures
+content schemas, format, Clippy with warnings as errors, tests) and make sure it passes. Report failures
 honestly with their output.
 
 ## Debugging and visual checks
