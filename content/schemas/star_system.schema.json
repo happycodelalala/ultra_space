@@ -2,51 +2,115 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "star_system.schema.json",
   "title": "Star system",
-  "description": "A star system: one star plus planets and moons on Kepler orbits. Units are in field names (km, deg, hours, m/s²). Loaded by sim_core::system, which also checks cross-field rules (unique ids, parents exist, moons inside their parent's sphere of influence, orbits clear of their parent).",
+  "description": "A star system: one star plus planets and moons on Kepler orbits. Units are in field names (km, deg, hours, m/s\u00b2). Loaded by sim_core::system, which also checks cross-field rules (unique ids, parents exist, moons inside their parent's sphere of influence, orbits clear of their parent).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "bodies"],
+  "required": [
+    "id",
+    "name",
+    "bodies"
+  ],
   "properties": {
-    "id": { "$ref": "#/$defs/id" },
-    "name": { "type": "string", "minLength": 1 },
-    "description": { "type": "string" },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
     "bodies": {
       "description": "The star first, then every other body. Exactly one body (the star) has no parent.",
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/body" }
+      "items": {
+        "$ref": "#/$defs/body"
+      }
     }
   },
   "$defs": {
-    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
     "body": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "kind", "radius_km", "surface_gravity_ms2", "rotation"],
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "radius_km",
+        "surface_gravity_ms2",
+        "rotation"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "name": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["star", "rocky", "gas_giant"] },
-        "parent": { "$ref": "#/$defs/id" },
-        "radius_km": { "type": "number", "exclusiveMinimum": 0, "description": "Mean radius; cloud-top radius for gas giants." },
-        "surface_gravity_ms2": { "type": "number", "exclusiveMinimum": 0, "description": "Gravity at radius_km; defines the body's gravitational parameter." },
-        "orbit": { "$ref": "#/$defs/orbit" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "star",
+            "rocky",
+            "gas_giant"
+          ]
+        },
+        "parent": {
+          "$ref": "#/$defs/id"
+        },
+        "radius_km": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Mean radius; cloud-top radius for gas giants."
+        },
+        "surface_gravity_ms2": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Gravity at radius_km; defines the body's gravitational parameter."
+        },
+        "orbit": {
+          "$ref": "#/$defs/orbit"
+        },
         "rotation": {
           "oneOf": [
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["tidally_locked"],
-              "properties": { "tidally_locked": { "const": true } }
+              "required": [
+                "tidally_locked"
+              ],
+              "properties": {
+                "tidally_locked": {
+                  "const": true
+                }
+              }
             },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["period_hours"],
+              "required": [
+                "period_hours"
+              ],
               "properties": {
-                "period_hours": { "type": "number", "not": { "const": 0 }, "description": "Sidereal rotation period in real hours; negative for retrograde." },
-                "axial_tilt_deg": { "type": "number" },
-                "phase_deg": { "type": "number" }
+                "period_hours": {
+                  "type": "number",
+                  "not": {
+                    "const": 0
+                  },
+                  "description": "Sidereal rotation period in real hours; negative for retrograde."
+                },
+                "axial_tilt_deg": {
+                  "type": "number"
+                },
+                "phase_deg": {
+                  "type": "number"
+                }
               }
             }
           ]
@@ -54,33 +118,108 @@
         "atmosphere": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["height_km", "surface_pressure_atm", "color_rgb"],
+          "required": [
+            "height_km",
+            "surface_pressure_atm",
+            "color_rgb"
+          ],
           "properties": {
-            "height_km": { "type": "number", "exclusiveMinimum": 0 },
-            "surface_pressure_atm": { "type": "number", "minimum": 0 },
+            "height_km": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "surface_pressure_atm": {
+              "type": "number",
+              "minimum": 0
+            },
             "color_rgb": {
-              "type": "array",
-              "items": { "type": "number", "minimum": 0, "maximum": 1 },
-              "minItems": 3,
-              "maxItems": 3
+              "$ref": "#/$defs/rgb"
             }
           }
         },
-        "description": { "type": "string" }
+        "appearance": {
+          "description": "How the body looks from a distance; engine-neutral parameters a renderer interprets.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "colors"
+          ],
+          "properties": {
+            "colors": {
+              "description": "Low and high terrain colors (rocky) or band colors (gas giant), linear RGB.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/rgb"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "ocean_coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "ocean_color": {
+              "$ref": "#/$defs/rgb"
+            },
+            "polar_ice": {
+              "description": "Fraction of the pole-to-equator range covered by ice caps.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "glow_color": {
+              "description": "Self-emitted light: the star's color, or glowing lava.",
+              "$ref": "#/$defs/rgb"
+            }
+          }
+        },
+        "description": {
+          "type": "string"
+        }
       }
     },
     "orbit": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["semi_major_axis_km", "eccentricity"],
+      "required": [
+        "semi_major_axis_km",
+        "eccentricity"
+      ],
       "properties": {
-        "semi_major_axis_km": { "type": "number", "exclusiveMinimum": 0 },
-        "eccentricity": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
-        "inclination_deg": { "type": "number" },
-        "ascending_node_deg": { "type": "number" },
-        "arg_periapsis_deg": { "type": "number" },
-        "mean_anomaly_deg": { "type": "number", "description": "Position along the orbit at universe time 0." }
+        "semi_major_axis_km": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "eccentricity": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "inclination_deg": {
+          "type": "number"
+        },
+        "ascending_node_deg": {
+          "type": "number"
+        },
+        "arg_periapsis_deg": {
+          "type": "number"
+        },
+        "mean_anomaly_deg": {
+          "type": "number",
+          "description": "Position along the orbit at universe time 0."
+        }
       }
+    },
+    "rgb": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 3,
+      "maxItems": 3
     }
   }
 }

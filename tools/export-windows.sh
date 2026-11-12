@@ -19,4 +19,7 @@ if [[ -d "$ROOT/assets/export" ]]; then
     mkdir -p "$DEST/assets"
     rsync -a --exclude .gitkeep "$ROOT/assets/export/" "$DEST/assets/"
 fi
+# Game data the executable loads at runtime (found next to the .exe).
+mkdir -p "$DEST/content"
+rsync -a --delete --exclude .gitkeep "$ROOT/content/data" "$DEST/content/"
 echo "Exported to $DEST"

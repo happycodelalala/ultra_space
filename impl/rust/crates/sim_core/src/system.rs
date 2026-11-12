@@ -48,7 +48,23 @@ struct BodyFile {
     #[serde(default)]
     atmosphere: Option<AtmosphereFile>,
     #[serde(default)]
+    appearance: Option<AppearanceFile>,
+    #[serde(default)]
     description: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AppearanceFile {
+    colors: [[f64; 3]; 2],
+    #[serde(default)]
+    ocean_coverage: f64,
+    #[serde(default)]
+    ocean_color: Option<[f64; 3]>,
+    #[serde(default)]
+    polar_ice: f64,
+    #[serde(default)]
+    glow_color: Option<[f64; 3]>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,6 +135,34 @@ pub struct Atmosphere {
     pub color: [f64; 3],
 }
 
+/// How a body looks from a distance. Engine-neutral parameters a renderer interprets.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Appearance {
+    /// Low and high terrain colors (rocky) or band colors (gas giant), linear RGB 0–1.
+    pub colors: [[f64; 3]; 2],
+    /// Fraction of the surface covered by ocean, 0–1.
+    pub ocean_coverage: f64,
+    pub ocean_color: [f64; 3],
+    /// Fraction of the pole-to-equator range covered by ice caps, 0–1.
+    pub polar_ice: f64,
+    /// Self-emitted light: the star's color, or glowing lava on a volcanic world.
+    pub glow_color: Option<[f64; 3]>,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            colors: [[0.35, 0.35, 0.35], [0.6, 0.6, 0.6]],
+            ocean_coverage: 0.0,
+            ocean_color: DEFAULT_OCEAN_COLOR,
+            polar_ice: 0.0,
+            glow_color: None,
+        }
+    }
+}
+
+const DEFAULT_OCEAN_COLOR: [f64; 3] = [0.03, 0.12, 0.3];
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Body {
     pub id: String,
@@ -134,6 +178,7 @@ pub struct Body {
     pub orbit: Option<KeplerOrbit>,
     pub spin: Spin,
     pub atmosphere: Option<Atmosphere>,
+    pub appearance: Appearance,
     pub description: String,
     /// Non-rotating frame following the orbit.
     pub inertial_frame: FrameId,
@@ -266,6 +311,18 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
             if a.color_rgb.iter().any(|c| !(0.0..=1.0).contains(c)) {
                 problems.push(format!(
                     "{}: atmosphere color_rgb values must be in [0, 1]",
+                    b.id
+                ));
+            }
+        }
+        if let Some(a) = &b.appearance {
+            let colors = a.colors.iter().chain(&a.ocean_color).chain(&a.glow_color);
+            if colors.flatten().any(|c| !(0.0..=1.0).contains(c)) {
+                problems.push(format!("{}: appearance colors must be in [0, 1]", b.id));
+            }
+            if !(0.0..=1.0).contains(&a.ocean_coverage) || !(0.0..=1.0).contains(&a.polar_ice) {
+                problems.push(format!(
+                    "{}: ocean_coverage and polar_ice must be in [0, 1]",
                     b.id
                 ));
             }
@@ -447,6 +504,16 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                 surface_pressure_atm: a.surface_pressure_atm,
                 color: a.color_rgb,
             }),
+            appearance: b
+                .appearance
+                .as_ref()
+                .map_or_else(Appearance::default, |a| Appearance {
+                    colors: a.colors,
+                    ocean_coverage: a.ocean_coverage,
+                    ocean_color: a.ocean_color.unwrap_or(DEFAULT_OCEAN_COLOR),
+                    polar_ice: a.polar_ice,
+                    glow_color: a.glow_color,
+                }),
             description: b.description.clone(),
             inertial_frame,
             surface_frame,

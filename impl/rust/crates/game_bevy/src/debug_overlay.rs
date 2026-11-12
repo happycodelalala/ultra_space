@@ -5,7 +5,9 @@ use std::time::Duration;
 use bevy::prelude::*;
 use sim_core::RollingStats;
 
+use crate::camera::SpaceCamera;
 use crate::sim::Sim;
+use crate::universe::Universe;
 
 /// How often the overlay text is rebuilt (formatting every frame is wasted work).
 const REFRESH_INTERVAL: Duration = Duration::from_millis(250);
@@ -78,6 +80,20 @@ fn toggle_overlay(
     }
 }
 
+/// Distance in m, km or Mm/Gm, whichever reads best.
+fn distance(m: f64) -> String {
+    let a = m.abs();
+    if a < 10_000.0 {
+        format!("{m:.0} m")
+    } else if a < 1.0e7 {
+        format!("{:.0} km", m / 1_000.0)
+    } else if a < 1.0e10 {
+        format!("{:.1} Mm", m / 1.0e6)
+    } else {
+        format!("{:.2} Gm", m / 1.0e9)
+    }
+}
+
 fn ms(d: Duration) -> f64 {
     d.as_secs_f64() * 1e3
 }
@@ -85,6 +101,8 @@ fn ms(d: Duration) -> f64 {
 fn update_overlay(
     mut stats: ResMut<FrameStats>,
     mut sim: ResMut<Sim>,
+    camera: Res<SpaceCamera>,
+    universe: Res<Universe>,
     mut overlay: Query<(&mut Text, &Visibility), With<OverlayText>>,
 ) {
     if stats.since_refresh < REFRESH_INTERVAL {
@@ -113,6 +131,14 @@ fn update_overlay(
     let hz = sim.clock().tick_hz();
     let dropped = sim.clock().dropped().as_secs_f64();
     let total = sim.ticks_total();
+    let near = &universe.0.bodies[camera.anchor];
+    let altitude = camera.offset.length() - near.radius;
+    let camera_line = format!(
+        "Camera near {}  altitude {}  speed {}/s  (1-8: jump to body)",
+        near.name,
+        distance(altitude),
+        distance(camera.speed)
+    );
     let galactic = sim.universe_time().galactic_standard();
     let warp = sim.time_warp();
     let regions = sim.regions.len();
@@ -123,6 +149,7 @@ fn update_overlay(
          Sim {hz:.0} Hz  tick {:.3} ms (max {:.3})  budget {budget:.1}%\n\
          regions {regions}  entities {entities}  ticks {total}  dropped {dropped:.2} s\n\
          GST {galactic}  warp x{warp}  (, / . to change)\n\
+         {camera_line}\n\
          F3: toggle overlay",
         ms(frame_avg),
         ms(frame_max),

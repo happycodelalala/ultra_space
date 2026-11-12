@@ -17,6 +17,10 @@ const BUDGET_WARNING_INTERVAL: Duration = Duration::from_secs(5);
 #[derive(Resource)]
 pub struct Sim(pub Simulation);
 
+/// Simulation time advance; camera and rendering read the updated universe time after it.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SimSet;
+
 pub struct SimPlugin;
 
 impl Plugin for SimPlugin {
@@ -31,8 +35,10 @@ impl Plugin for SimPlugin {
             sim.regions.len(),
             sim.clock().tick_hz()
         );
-        app.insert_resource(Sim(sim))
-            .add_systems(Update, (time_warp_keys, advance_simulation).chain());
+        app.insert_resource(Sim(sim)).add_systems(
+            Update,
+            (time_warp_keys, advance_simulation).chain().in_set(SimSet),
+        );
     }
 }
 
