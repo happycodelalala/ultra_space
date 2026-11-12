@@ -3,11 +3,16 @@
 # exports once, runs the visual tests several at a time (each in its own window, folder and
 # log), then the performance tests one at a time, and writes a summary.
 #
-#   tools/run-tests.sh [--no-export] [--parallel N] [name ...]
+#   tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]
 #
 # --no-export   use the build already in the export folder
 # --parallel N  visual tests at once (default 3)
+# --visual      only visual tests (fine while other work goes on)
+# --perf        only performance tests (needs a quiet machine)
 # name ...      only these tests (default: all)
+#
+# Each test writes <export>/runs/<name>/done when it finishes, so its screenshots can be
+# reviewed before the whole round is over.
 #
 # Respects ULTRA_SPACE_EXPORT_DIR and CARGO_TARGET_DIR like tools/export-windows.sh.
 # Results: <export>/runs/<name>/ (screenshots, game.log, output.txt) and <export>/runs/summary.txt.
@@ -18,11 +23,14 @@ DEST="${ULTRA_SPACE_EXPORT_DIR:-/mnt/c/Users/yangc/Apps/ultra_space}"
 LIST="$ROOT/tools/test-scripts/tests.txt"
 PARALLEL=3
 EXPORT=1
+KINDS="visual perf"
 ONLY=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-export) EXPORT=0 ;;
         --parallel) PARALLEL="$2"; shift ;;
+        --visual) KINDS="visual" ;;
+        --perf) KINDS="perf" ;;
         *) ONLY+=("$1") ;;
     esac
     shift
@@ -41,22 +49,26 @@ while IFS='|' read -r name script settings kind _checks; do
     [[ -z "$name" || "$name" == \#* ]] && continue
     if [[ ${#ONLY[@]} -gt 0 && ! " ${ONLY[*]} " == *" $name "* ]]; then continue; fi
     entry="$name|$(trim "$script")|$(trim "$settings")"
-    if [[ "$(trim "$kind")" == perf ]]; then PERF+=("$entry"); else VISUAL+=("$entry"); fi
+    kind="$(trim "$kind")"
+    [[ " $KINDS " == *" $kind "* ]] || continue
+    if [[ "$kind" == perf ]]; then PERF+=("$entry"); else VISUAL+=("$entry"); fi
 done < "$LIST"
 
 run_one() {
     local name script settings
     IFS='|' read -r name script settings <<< "$1"
     mkdir -p "$DEST/runs/$name"
+    rm -f "$DEST/runs/$name/done"
     # shellcheck disable=SC2086
     RUN_NAME="$name" "$ROOT/tools/run-windows.sh" "$ROOT/tools/test-scripts/$script" $settings \
         > "$DEST/runs/$name/output.txt" 2>&1
+    touch "$DEST/runs/$name/done"
     echo "finished $name"
 }
 
 echo "Visual tests (${#VISUAL[@]}, $PARALLEL at a time)..."
 running=0
-for entry in "${VISUAL[@]}"; do
+for entry in "${VISUAL[@]+"${VISUAL[@]}"}"; do
     run_one "$entry" &
     running=$((running + 1))
     if [[ $running -ge $PARALLEL ]]; then wait -n; running=$((running - 1)); fi
@@ -72,7 +84,7 @@ fi
 SUMMARY="$DEST/runs/summary.txt"
 {
     echo "Test run $(date -Is), commit $(git -C "$ROOT" rev-parse --short HEAD)"
-    for entry in "${VISUAL[@]}" "${PERF[@]}"; do
+    for entry in "${VISUAL[@]+"${VISUAL[@]}"}" "${PERF[@]+"${PERF[@]}"}"; do
         name="${entry%%|*}"
         dir="$DEST/runs/$name"
         echo

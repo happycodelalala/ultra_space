@@ -16,6 +16,7 @@ glam.workspace = true
 sim_core.workspace = true
 sim_planet.workspace = true
 sim_vehicle.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

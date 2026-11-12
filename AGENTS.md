@@ -88,6 +88,8 @@ honestly with their output.
   down at the ground below the ship) sets the starting chase-camera orbit, for captures.
 - **Start altitude:** `ULTRA_SPACE_START_ALTITUDE=<m>` starts the ship in a circular orbit at
   that altitude (e.g. low over the terrain).
+- **Planet size comparison:** `ULTRA_SPACE_BODY_RADIUS=<body id>:<km>` (e.g. `meridian:300`)
+  changes one body's radius at load, keeping its surface gravity (task 2.13).
 - **Start time of day:** `ULTRA_SPACE_START_SUN_ANGLE=<deg>` starts that far along the orbit
   from the point under the star (0 noon, ~89 sunset ahead, 120 night side, 180 midnight); the
   sun is ahead along the flight direction, so the default chase view looks towards it.
@@ -97,10 +99,12 @@ honestly with their output.
   `game_bevy/src/script.rs`, examples in `tools/test-scripts/`). A window opens on the
   developer's desktop (tell them before launching); it doesn't grab the mouse. The script logs a
   frame-time summary; screenshots land in `C:\Users\yangc\Apps\ultra_space\runs\<script>\`.
-      **Test rounds:** `tools/run-tests.sh [--no-export] [--parallel N] [name ...]` runs the test list
+      **Test rounds:** `tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]` runs the test list
   `tools/test-scripts/tests.txt` (name, script, settings, kind, what to check): one build and
   export, visual tests several at a time (own window, folder and `game.log` each, via
-  `ULTRA_SPACE_LOG`), performance tests alone afterwards, and a `runs/summary.txt`. Reviewing
+  `ULTRA_SPACE_LOG`), performance tests alone afterwards, a `runs/<name>/done` marker per finished test (review can start per test), and a
+  `runs/summary.txt`. Visual rounds can run while building at low priority (`nice`); `--perf`
+  rounds need a quiet machine. Reviewing
   the screenshots can then be split across several test agents, a few tests each.
   Background test agents build in their own worktree with a shared build cache
   (`CARGO_TARGET_DIR=$HOME/.cache/ultra_space/test-target`) and export to

@@ -70,7 +70,12 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     let dir = content_dir()
         .ok_or("content folder not found; set ULTRA_SPACE_CONTENT to the repo's content/ folder")?;
     let path = dir.join(STAR_SYSTEM_FILE);
-    let system = Arc::new(StarSystem::from_path(&path).map_err(|e| e.to_string())?);
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = match std::env::var("ULTRA_SPACE_BODY_RADIUS") {
+        Ok(spec) => with_radius_override(&text, &spec)?,
+        Err(_) => text,
+    };
+    let system = Arc::new(StarSystem::from_json_str(&text).map_err(|e| e.to_string())?);
     let catalog = PartCatalog::load_dir(dir.join("data/parts")).map_err(|e| e.to_string())?;
     let design = VehicleDesign::from_path(
         dir.join(format!("data/vehicles/{START_DESIGN}.json")),
@@ -146,6 +151,27 @@ fn finish_loading(
     }
 }
 
+/// Debug (task 2.13, comparing planet sizes on foot): `ULTRA_SPACE_BODY_RADIUS=<body id>:<km>`
+/// changes one body's radius before the star system is built. Surface gravity stays as in the
+/// data, so only the size changes.
+pub fn with_radius_override(json: &str, spec: &str) -> Result<String, String> {
+    let (id, km) = spec
+        .split_once(':')
+        .ok_or("ULTRA_SPACE_BODY_RADIUS must look like meridian:300")?;
+    let km: f64 = km
+        .trim()
+        .parse()
+        .map_err(|_| format!("bad radius in ULTRA_SPACE_BODY_RADIUS: {km}"))?;
+    let mut value: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let body = value["bodies"]
+        .as_array_mut()
+        .and_then(|bodies| bodies.iter_mut().find(|b| b["id"] == id.trim()))
+        .ok_or_else(|| format!("ULTRA_SPACE_BODY_RADIUS: no body {id:?}"))?;
+    body["radius_km"] = serde_json::json!(km);
+    info!("debug: {} radius set to {km} km", id.trim());
+    Ok(value.to_string())
+}
+
 /// Finds the `content/` folder: `ULTRA_SPACE_CONTENT`, or a `content/` folder next to the
 /// executable or in any parent of it or of the working directory (repo checkout).
 pub fn content_dir() -> Option<PathBuf> {
@@ -168,6 +194,27 @@ fn is_content_dir(dir: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn radius_override_changes_only_that_body() {
+        let dir = content_dir().unwrap();
+        let text = std::fs::read_to_string(dir.join(STAR_SYSTEM_FILE)).unwrap();
+        let changed = with_radius_override(&text, "meridian:300").unwrap();
+        let sys = StarSystem::from_json_str(&changed).unwrap();
+        let original = StarSystem::from_json_str(&text).unwrap();
+        let m = sys.body("meridian").unwrap();
+        assert!((m.radius - 300_000.0).abs() < 1e-6);
+        assert!(
+            (m.surface_gravity() - original.body("meridian").unwrap().surface_gravity()).abs()
+                < 1e-9
+        );
+        assert_eq!(
+            sys.body("lantern").unwrap().radius,
+            original.body("lantern").unwrap().radius
+        );
+        assert!(with_radius_override(&text, "nowhere:300").is_err());
+        assert!(with_radius_override(&text, "meridian").is_err());
+    }
 
     #[test]
     fn loads_halcyon_and_the_starting_ship() {
