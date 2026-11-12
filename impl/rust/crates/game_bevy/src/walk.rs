@@ -8,12 +8,15 @@
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use glam::{DQuat, DVec2, DVec3};
+use sim_core::objects::Object;
 use sim_core::{ObjectId, ObjectState, Simulation};
 use sim_vehicle::walker::EYE_HEIGHT;
-use sim_vehicle::{FlightTelemetry, Walker, WalkerControl};
+use sim_vehicle::{
+    Cruise, FlightControl, FlightTelemetry, Vehicle, VehicleBody, Walker, WalkerControl,
+};
 
 use crate::camera::{CameraBlend, CameraSet, CameraStage, SpaceCamera};
-use crate::ship::{PilotState, PlayerShip, interpolate_state};
+use crate::ship::{PilotState, PlayerShip, ShipRenderState, interpolate_state};
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::universe::{InGame, Universe};
 
@@ -24,6 +27,8 @@ const EXIT_MAX_SPEED: f64 = 2.0;
 const EXIT_OFFSET: f64 = 6.0;
 /// Boarding reach from the ship's centre (m).
 const BOARD_REACH: f64 = 12.0;
+/// Where G puts a rover: this far ahead of the walker (m).
+const ROVER_DISTANCE: f64 = 8.0;
 /// Mouse look sensitivity (radians per pixel).
 const LOOK_SENSITIVITY: f64 = 0.0025;
 
@@ -34,7 +39,9 @@ impl Plugin for WalkPlugin {
         app.init_resource::<WalkerRenderState>().add_systems(
             Update,
             (
-                (exit_or_board, walker_input).chain().before(SimSet),
+                (exit_or_board, spawn_rover_key, walker_input)
+                    .chain()
+                    .before(SimSet),
                 track_walker.after(SimSet).before(CameraSet),
                 follow_walker.in_set(CameraStage::Follow),
             )
@@ -89,6 +96,7 @@ fn exit_or_board(
     camera: Res<SpaceCamera>,
     real: Res<Time<Real>>,
     mut sim: ResMut<Sim>,
+    mut tracked: ResMut<ShipRenderState>,
 ) {
     if !pilot.flying || !keys.just_pressed(KeyCode::KeyF) {
         return;
@@ -111,23 +119,39 @@ fn exit_or_board(
     };
 
     if let Some(on_foot) = on_foot {
-        // Board: close enough to the ship?
+        // Board the nearest vehicle within reach (it becomes the one the player controls).
         let Some((region, state, _)) = walker_status(sim, on_foot.id) else {
             return;
         };
-        let here = state
-            .in_frame(&system.frames, system.bodies[region].inertial_frame, t)
-            .in_frame(&system.frames, ship_frame, t);
-        let distance = (here.state.position - ship_state.state.position).length();
+        let frame = system.bodies[region].inertial_frame;
+        let here = state.in_frame(&system.frames, frame, t).state.position;
+        let nearest = sim.regions.get_mut(region).and_then(|r| {
+            let mut query = r.world.query::<(&Object, &ObjectState, &Vehicle)>();
+            query
+                .iter(&r.world)
+                .map(|(o, s, v)| {
+                    let p = s.in_frame(&system.frames, frame, t).state.position;
+                    (o.id, v.name.clone(), (p - here).length())
+                })
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+        });
+        let Some((id, name, distance)) = nearest else {
+            info!("no vehicle here to board");
+            return;
+        };
         if distance > BOARD_REACH {
-            info!("too far from the ship to board ({distance:.0} m)");
+            info!("too far from the {name} to board ({distance:.0} m)");
             return;
         }
         let _ = sim.objects.despawn(&mut sim.regions, on_foot.id);
         blend.start(&camera, now);
         commands.remove_resource::<OnFoot>();
+        if id != ship.id {
+            commands.insert_resource(PlayerShip { id });
+            *tracked = ShipRenderState::default();
+        }
         pilot.on_foot = false;
-        info!("boarded the ship");
+        info!("boarded the {name}");
         return;
     }
 
@@ -175,6 +199,68 @@ fn exit_or_board(
     commands.insert_resource(OnFoot { id, pitch: 0.0 });
     pilot.on_foot = true;
     info!("stepped out of the ship");
+}
+
+/// Debug (G, on foot): a rover appears a few metres ahead (task 3.5).
+fn spawn_rover_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    universe: Res<Universe>,
+    designs: Res<crate::universe::Designs>,
+    on_foot: Option<Res<OnFoot>>,
+    mut sim: ResMut<Sim>,
+) {
+    if !keys.just_pressed(KeyCode::KeyG) {
+        return;
+    }
+    let Some(on_foot) = on_foot else {
+        info!("G spawns a rover when you're on foot");
+        return;
+    };
+    let Some(design) = designs.0.get("rover") else {
+        warn!("no rover design");
+        return;
+    };
+    let system = &universe.0;
+    let sim = &mut sim.0;
+    let t = sim.universe_time().as_secs_f64();
+    let Some((region, state, _)) = walker_status(sim, on_foot.id) else {
+        return;
+    };
+    let frame = system.bodies[region].inertial_frame;
+    let s = state.in_frame(&system.frames, frame, t).state;
+    let forward = s.rotation * DVec3::NEG_Z;
+    let env = sim_vehicle::flight::region_env(
+        system,
+        region,
+        t,
+        sim.regions
+            .get(region)
+            .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>()),
+    );
+    let spot = (s.position + forward * ROVER_DISTANCE).normalize();
+    let position = spot * (env.radius + env.ground_height(spot * env.radius) + 1.5);
+    let mut rover = ObjectState::at_rest(frame, position, upright(forward, spot));
+    rover.state.velocity = env.spin.cross(position);
+    rover.state.angular_velocity = env.spin;
+    let vehicle = Vehicle::from_design(design);
+    let Some(body) = VehicleBody::of(&vehicle) else {
+        return;
+    };
+    let spawned = sim.objects.spawn(
+        &mut sim.regions,
+        region,
+        rover,
+        (
+            vehicle,
+            body,
+            FlightControl::default(),
+            FlightTelemetry::default(),
+            Cruise::default(),
+        ),
+    );
+    if spawned.is_ok() {
+        info!("a rover appeared {ROVER_DISTANCE:.0} m ahead (F to board it)");
+    }
 }
 
 fn walker_input(

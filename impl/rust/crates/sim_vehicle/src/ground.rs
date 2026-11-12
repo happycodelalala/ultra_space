@@ -99,7 +99,9 @@ impl Ground {
         let level = level_for_spacing(terrain.radius, PATCH_SPACING);
         let key = locate(DVec3::X, level);
         let patch_size = key.edge_length(terrain.radius);
-        let body = world.insert_body(RigidBodyBuilder::kinematic_position_based().build());
+        // Velocity-based: it turns at the planet's spin (and its velocity can be read and set
+        // like any body's; position-based kinematic bodies ignore velocity setters).
+        let body = world.insert_body(RigidBodyBuilder::kinematic_velocity_based().build());
         Self {
             terrain,
             level,
@@ -181,14 +183,15 @@ impl Ground {
         world.remove_body(self.body);
     }
 
-    /// Points the ground body along the planet's surface rotation (inertial frame).
-    pub(crate) fn place(&self, world: &mut PhysicsWorld, rotation: DQuat) {
-        world.bodies[self.body].set_position(Pose::from_rotation(rotation), false);
-    }
-
-    /// Sets where the ground body turns to by the end of the next physics step.
-    pub(crate) fn turn_to(&self, world: &mut PhysicsWorld, rotation: DQuat) {
-        world.bodies[self.body].set_next_kinematic_position(Pose::from_rotation(rotation));
+    /// Points the ground body along the planet's surface rotation (inertial frame), turning at
+    /// `spin` (it is re-placed every tick, so it never drifts from the planet).
+    pub(crate) fn place(&self, world: &mut PhysicsWorld, rotation: DQuat, spin: DVec3) {
+        let body = &mut world.bodies[self.body];
+        body.set_position(Pose::from_rotation(rotation), false);
+        // Rapier's linear velocity is that of the centre of mass.
+        let com = body.center_of_mass();
+        body.set_linvel(spin.cross(com), false);
+        body.set_angvel(spin, false);
     }
 
     /// Patch keys covering a disc of `radius` (m) around unit direction `dir` (surface frame).
@@ -247,6 +250,9 @@ impl Ground {
                 world.remove_collider(old.collider);
             }
             let builder = ColliderBuilder::new(shape)
+                // Massless, so the ground body's centre of mass stays at the planet's centre and
+                // its velocity at any point is spin × r.
+                .density(0.0)
                 .friction(GROUND_FRICTION)
                 .collision_groups(InteractionGroups::new(
                     GROUND_GROUP,

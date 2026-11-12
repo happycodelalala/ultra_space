@@ -312,6 +312,151 @@
         ],
         "style": "civilian"
       }
+    },
+    {
+      "id": "rover.chassis",
+      "name": "Rover Chassis",
+      "kind": "structure",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          3.2,
+          0.6,
+          5.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.3,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "Flat frame for a small rover: wheels attach to its sides, a cab on top.",
+      "form": {
+        "model": "rover.chassis",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
+    },
+    {
+      "id": "rover.cab",
+      "name": "Rover Cab",
+      "kind": "cockpit",
+      "mass_kg": 600,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.0,
+          1.4,
+          2.2
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -0.7,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "interior": {
+        "spaces": [
+          {
+            "id": "cab",
+            "kind": "cockpit",
+            "size_m": [
+              1.8,
+              1.2,
+              2.0
+            ]
+          }
+        ]
+      },
+      "description": "A two-seat cab: the rover's control source.",
+      "form": {
+        "model": "rover.cab",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
+    },
+    {
+      "id": "wheel.medium",
+      "name": "Medium Wheel",
+      "kind": "wheel",
+      "mass_kg": 90,
+      "shape": {
+        "type": "cylinder",
+        "radius_m": 0.6,
+        "length_m": 0.4
+      },
+      "wheel": {
+        "radius_m": 0.6,
+        "width_m": 0.4,
+        "suspension_m": 0.4,
+        "stiffness_n_per_m": 42000,
+        "damping_n_s_per_m": 9000,
+        "max_motor_torque_nm": 1200,
+        "max_steer_deg": 30,
+        "max_brake_torque_nm": 3000,
+        "friction": 1.0
+      },
+      "surface_attach": true,
+      "description": "Driven, steerable wheel on 0.4 m of suspension. The suspension runs along the part's -Y, the axle along its +X; the tyre is drawn on that axle.",
+      "form": {
+        "model": "wheel.medium",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
+    },
+    {
+      "id": "battery.small",
+      "name": "Small Battery",
+      "kind": "battery",
+      "mass_kg": 150,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.8,
+          0.3,
+          0.6
+        ]
+      },
+      "battery": {
+        "capacity_wh": 40000
+      },
+      "description": "40 kWh. Drains from Batch 4.",
+      "form": {
+        "model": "battery.small",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "civilian"
+      }
     }
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "id": "rover",
+  "name": "Rover",
+  "description": "A small four-wheeled rover, about 2.3 tonnes: a flat chassis, a two-seat cab and a battery. Forward is -Z. All four wheels drive; the front ones steer.",
+  "parts": [
+    {"id": "chassis", "part": "rover.chassis", "position_m": [0, 0, 0]},
+    {"id": "cab", "part": "rover.cab", "position_m": [0, 1.0, 0], "parent": "chassis", "attach": {"node": "bottom", "to": "top"}},
+    {"id": "battery", "part": "battery.small", "position_m": [0, 0, 1.6], "parent": "chassis", "attach": "surface"},
+    {"id": "wheel_left_front", "part": "wheel.medium", "position_m": [-1.85, -0.2, -1.8], "parent": "chassis", "attach": "surface", "symmetry": "wheels"},
+    {"id": "wheel_left_rear", "part": "wheel.medium", "position_m": [-1.85, -0.2, 1.8], "parent": "chassis", "attach": "surface", "symmetry": "wheels"},
+    {"id": "wheel_right_front", "part": "wheel.medium", "position_m": [1.85, -0.2, -1.8], "parent": "chassis", "attach": "surface", "symmetry": "wheels"},
+    {"id": "wheel_right_rear", "part": "wheel.medium", "position_m": [1.85, -0.2, 1.8], "parent": "chassis", "attach": "surface", "symmetry": "wheels"}
+  ]
+}

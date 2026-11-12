@@ -14,6 +14,7 @@ pub mod mass;
 pub mod physics;
 pub mod vehicle;
 pub mod walker;
+pub mod wheels;
 
 pub use allocation::{Allocation, Allocator, Thruster, Wrench};
 pub use arcade::ArcadeFlight;
@@ -25,3 +26,4 @@ pub use mass::MassProperties;
 pub use physics::{PhysicsScene, PhysicsStats, RegionPhysics};
 pub use vehicle::{PartCollider, Performance, Vehicle, VehicleBody};
 pub use walker::{Walker, WalkerControl};
+pub use wheels::{Drive, WheelMount};

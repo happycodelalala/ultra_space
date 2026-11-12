@@ -54,6 +54,8 @@ pub struct VehicleBody {
     pub performance: Performance,
     /// One collision shape per part, in vehicle axes (the compound collider).
     pub colliders: Vec<PartCollider>,
+    /// Wheels, driven by the raycast vehicle controller (not part of the collider).
+    pub wheels: Vec<crate::wheels::WheelMount>,
     /// [`Vehicle::design_hash`] of the parts this was compiled from: identical designs share
     /// compiled data (colliders, meshes), and a changed hash means the vehicle was rebuilt.
     pub hash: u64,
@@ -65,8 +67,8 @@ pub struct PartCollider {
     pub shape: Shape,
     pub position: DVec3,
     pub rotation: DQuat,
-    /// Keep this exact shape in the compiled collider (feet and wheels); other parts are merged
-    /// into a few boxes.
+    /// Keep this exact shape in the compiled collider (feet); other parts are merged into a few
+    /// boxes.
     pub exact: bool,
 }
 
@@ -164,14 +166,20 @@ impl VehicleBody {
         let allocator = Allocator::new(thrusters, wheel, size);
         let cruise = vehicle.parts.iter().find_map(|p| p.def.cruise_drive);
         let performance = performance(&allocator, &mass, cruise);
+        let wheels = vehicle
+            .parts
+            .iter()
+            .filter_map(crate::wheels::WheelMount::of)
+            .collect();
         let colliders = vehicle
             .parts
             .iter()
+            .filter(|p| p.def.wheel.is_none())
             .map(|p| PartCollider {
                 shape: p.def.collision_shape(),
                 position: p.position,
                 rotation: p.rotation,
-                exact: matches!(p.def.kind, PartKind::LandingLeg | PartKind::Wheel),
+                exact: p.def.kind == PartKind::LandingLeg,
             })
             .collect();
         Some(Self {
@@ -179,6 +187,7 @@ impl VehicleBody {
             allocator,
             performance,
             colliders,
+            wheels,
             hash: vehicle.design_hash(),
         })
     }

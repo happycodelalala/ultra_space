@@ -16,10 +16,11 @@ use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
+use rapier3d_f64::control::DynamicRayCastVehicleController;
 use rapier3d_f64::prelude::{
     ColliderBuilder, ColliderHandle, Group, InteractionGroups, InteractionTestMode,
-    MassProperties as RapierMass, PhysicsWorld, Pose, RigidBodyBuilder, RigidBodyHandle,
-    RigidBodyType, SharedShape,
+    MassProperties as RapierMass, PhysicsWorld, Pose, QueryFilter, RigidBodyBuilder,
+    RigidBodyHandle, RigidBodyType, SharedShape,
 };
 use sim_core::ObjectId;
 
@@ -28,6 +29,7 @@ use crate::catalog::Shape;
 use crate::flight::{BodyEnv, MAX_SUBSTEP, MAX_SUBSTEPS, RigidState, ground_contact};
 use crate::ground::{GROUND_GROUP, Ground};
 use crate::vehicle::{PartCollider, VehicleBody};
+use crate::wheels::{Drive, WheelMount};
 
 /// Hull friction (combined with the other collider's by averaging).
 const HULL_FRICTION: f64 = 0.8;
@@ -75,6 +77,10 @@ struct Entry {
     on_patches: bool,
     /// How long it has been still on the ground (s).
     still: f64,
+    /// Wheels and the controller driving them.
+    wheels: Vec<WheelMount>,
+    controller: Option<DynamicRayCastVehicleController>,
+    drive: Drive,
     /// At rest: its pose in the ground's (surface) frame.
     rest: Option<Pose>,
 }
@@ -300,6 +306,22 @@ impl PhysicsScene {
         self.place(id, body, state, wrench, Motion::Dynamic);
     }
 
+    /// Like [`Self::place_dynamic`], for a vehicle that may have wheels: `drive` is what the
+    /// driver asks of them.
+    pub fn place_driven(
+        &mut self,
+        id: ObjectId,
+        body: &VehicleBody,
+        state: &RigidState,
+        wrench: Wrench,
+        drive: Drive,
+    ) {
+        self.place(id, body, state, wrench, Motion::Dynamic);
+        if let Some(e) = self.bodies.get_mut(&id) {
+            e.drive = drive;
+        }
+    }
+
     /// Places a vehicle moved by other code this tick (it still collides with others).
     pub fn place_kinematic(&mut self, id: ObjectId, body: &VehicleBody, state: &RigidState) {
         self.place(id, body, state, Wrench::default(), Motion::Kinematic);
@@ -340,9 +362,15 @@ impl PhysicsScene {
                 .friction(HULL_FRICTION)
                 .collision_groups(vehicle_groups(true));
             let collider_handles = vec![world.insert_collider(collider, Some(handle))];
+            let wheels = body.wheels.clone();
+            let controller =
+                (!wheels.is_empty()).then(|| crate::wheels::controller(handle, &wheels, m.mass));
             Entry {
                 handle,
                 collider_handles,
+                wheels,
+                controller,
+                drive: Drive::default(),
                 hash: body.hash,
                 mass: body.mass,
                 radius: vehicle_radius(body),
@@ -356,6 +384,7 @@ impl PhysicsScene {
             }
         });
         entry.wrench = wrench;
+        entry.drive = Drive::default();
         entry.motion = motion;
         entry.placed = true;
         entry.contact = false;
@@ -410,11 +439,10 @@ impl PhysicsScene {
         let h = dt / f64::from(substeps);
         self.world.integration_parameters.dt = h;
         for k in 0..substeps {
-            if let Some(ground) = &self.ground {
+            if self.ground.is_some() {
                 let turned = DQuat::from_scaled_axis(env.spin * (h * f64::from(k + 1)));
                 let rotation = (turned * env.surface_rotation).normalize();
-                ground.turn_to(&mut self.world, rotation);
-                // Resting bodies turn with it.
+                // Resting bodies turn with the ground.
                 for e in self.bodies.values() {
                     if let Some(local) = e.rest {
                         let world = Pose::from_rotation(rotation) * local;
@@ -445,6 +473,50 @@ impl PhysicsScene {
                     false,
                 );
                 rb.add_torque(rotation * e.wrench.torque, false);
+            }
+            // Wheels: suspension, drive and tyre forces for this step. Rapier's controller damps
+            // the suspension with the chassis's absolute velocity, so on a turning planet it runs
+            // in the ground's frame: the ground's motion is taken out of the chassis (and the
+            // ground body stopped) for the call, then put back. Impulses add, so this is exact
+            // but for the tiny rotating-frame terms.
+            let world = &mut self.world;
+            let ground_body = self.ground.as_ref().map(|g| g.body);
+            let ground_vels = ground_body.map(|g| {
+                let b = &mut world.bodies[g];
+                let v = (b.linvel(), b.angvel());
+                b.set_linvel(DVec3::ZERO, false);
+                b.set_angvel(DVec3::ZERO, false);
+                v
+            });
+            for e in self.bodies.values_mut() {
+                let Some(c) = &mut e.controller else { continue };
+                if e.motion != Motion::Dynamic || e.rest.is_some() {
+                    continue;
+                }
+                crate::wheels::apply(c, &e.wheels, e.drive, h);
+                let chassis = &mut world.bodies[e.handle];
+                let frame_velocity = env.spin.cross(chassis.center_of_mass());
+                chassis.set_linvel(chassis.linvel() - frame_velocity, false);
+                chassis.set_angvel(chassis.angvel() - env.spin, false);
+                let filter = QueryFilter::default().exclude_rigid_body(e.handle);
+                let queries = world.broad_phase.as_query_pipeline_mut(
+                    world.narrow_phase.query_dispatcher(),
+                    &mut world.bodies,
+                    &mut world.colliders,
+                    filter,
+                );
+                c.update_vehicle(h, queries);
+                let chassis = &mut world.bodies[e.handle];
+                chassis.set_linvel(chassis.linvel() + frame_velocity, false);
+                chassis.set_angvel(chassis.angvel() + env.spin, false);
+                if c.wheels().iter().any(|w| w.raycast_info().is_in_contact) {
+                    e.contact = true;
+                }
+            }
+            if let (Some(g), Some((v, w))) = (ground_body, ground_vels) {
+                let b = &mut world.bodies[g];
+                b.set_linvel(v, false);
+                b.set_angvel(w, false);
             }
             let world_started = std::time::Instant::now();
             self.world.step();
@@ -494,7 +566,9 @@ impl PhysicsScene {
         let ground = self.ground.as_ref().map(|g| g.body);
         for e in self.bodies.values_mut() {
             let Some(local) = e.rest else { continue };
-            let thrusting = e.wrench.force != DVec3::ZERO || e.wrench.torque != DVec3::ZERO;
+            let thrusting = e.wrench.force != DVec3::ZERO
+                || e.wrench.torque != DVec3::ZERO
+                || !e.drive.is_idle();
             let hit = ground.is_some_and(|g| touched_by_other(&self.world, e, g));
             if thrusting || e.motion != Motion::Dynamic || !e.on_patches || hit {
                 wake(&mut self.world, e, env.spin);
@@ -519,7 +593,9 @@ impl PhysicsScene {
             if e.motion != Motion::Dynamic || e.rest.is_some() {
                 continue;
             }
-            let idle = e.wrench.force == DVec3::ZERO && e.wrench.torque == DVec3::ZERO;
+            let idle = e.wrench.force == DVec3::ZERO
+                && e.wrench.torque == DVec3::ZERO
+                && e.drive.is_idle();
             let s = read(&self.world, e);
             let speed = (s.velocity - env.spin.cross(s.position)).length();
             let spin = (s.angular_velocity - env.spin).length();
@@ -537,6 +613,19 @@ impl PhysicsScene {
                 set_ground_collisions(&mut self.world, e, false);
             }
         }
+    }
+
+    /// How many of a vehicle's wheels touch something.
+    pub fn wheels_on_ground(&self, id: ObjectId) -> usize {
+        self.bodies
+            .get(&id)
+            .and_then(|e| e.controller.as_ref())
+            .map_or(0, |c| {
+                c.wheels()
+                    .iter()
+                    .filter(|w| w.raycast_info().is_in_contact)
+                    .count()
+            })
     }
 
     /// Whether a body is resting on the ground (pinned to it until woken).
@@ -580,7 +669,7 @@ impl PhysicsScene {
             }
             return;
         };
-        ground.place(&mut self.world, env.surface_rotation);
+        ground.place(&mut self.world, env.surface_rotation, env.spin);
         let now = self.time;
         let to_surface = env.surface_rotation.inverse();
         let highest = env.radius + env.max_ground_height();

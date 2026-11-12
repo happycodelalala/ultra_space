@@ -698,7 +698,8 @@ pub fn flight_system(
                 state: start,
                 wrench,
             } => {
-                scene.place_dynamic(object.id, body, &start, wrench);
+                let drive = crate::wheels::Drive::from_control(&control);
+                scene.place_driven(object.id, body, &start, wrench, drive);
                 integrating.push(entity);
             }
         }

@@ -16,7 +16,7 @@ use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
-    OnRails, Shape, Vehicle, VehicleBody,
+    OnRails, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -24,7 +24,6 @@ use crate::script::ScriptRunning;
 use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{GameState, InGame, StartingVehicle, Universe};
-use crate::vehicle_visual::{VehicleMesh, VehicleMeshes};
 
 const START_BODY: &str = "meridian";
 
@@ -60,7 +59,7 @@ impl Plugin for ShipPlugin {
                         .before(SimSet),
                     track_ship.after(SimSet).before(CameraSet),
                     follow_ship.in_set(CameraStage::Follow),
-                    (place_ship_visual, update_plumes, aim_starlight).after(CameraSet),
+                    aim_starlight.after(CameraSet),
                     cursor_lock,
                 )
                     .in_set(InGame),
@@ -202,9 +201,6 @@ fn spawn_player_ship(
     universe: Res<Universe>,
     start: Res<StartingVehicle>,
     mut sim: ResMut<Sim>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut vehicle_meshes: ResMut<VehicleMeshes>,
 ) {
     let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
@@ -248,13 +244,6 @@ fn spawn_player_ship(
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
 
-    spawn_ship_visual(
-        &mut commands,
-        &vehicle,
-        &mut vehicle_meshes,
-        &mut meshes,
-        &mut materials,
-    );
     let sim = &mut sim.0;
     let id = sim
         .objects
@@ -754,123 +743,6 @@ pub fn keep_above_ground(
 // ---------------------------------------------------------------------------------------------
 // Visuals
 // ---------------------------------------------------------------------------------------------
-
-#[derive(Component)]
-struct ShipVisual;
-
-/// Exhaust plume for thruster `index` (in allocator order), scaled by its throttle.
-#[derive(Component)]
-struct Plume {
-    index: usize,
-    /// Full-throttle length (m).
-    length: f32,
-    /// Where the nozzle is along the part's Y axis.
-    nozzle_y: f32,
-}
-
-/// Spawns the player ship's visual: its merged meshes (built in the background, see
-/// [`crate::vehicle_visual`]) and a mount with an exhaust plume per thruster.
-fn spawn_ship_visual(
-    commands: &mut Commands,
-    vehicle: &Vehicle,
-    vehicle_meshes: &mut VehicleMeshes,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
-    let flame = materials.add(StandardMaterial {
-        base_color: Color::BLACK,
-        emissive: LinearRgba::rgb(9.0, 5.0, 2.0),
-        unlit: true,
-        ..default()
-    });
-    let plume_mesh = meshes.add(Cone::new(1.0, 1.0));
-    vehicle_meshes.request(vehicle);
-
-    let mut thruster_index = 0;
-    commands
-        .spawn((
-            Name::new(vehicle.name.clone()),
-            ShipVisual,
-            VehicleMesh::new(vehicle.design_hash()),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .with_children(|ship| {
-            for part in vehicle.parts.iter().filter(|p| p.def.thruster.is_some()) {
-                let transform = Transform::from_translation(part.position.as_vec3())
-                    .with_rotation(part.rotation.as_quat());
-                // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
-                let (radius, length) = match part.def.shape {
-                    Shape::Cylinder { radius_m, length_m } => {
-                        (radius_m as f32 * 0.8, length_m as f32)
-                    }
-                    Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
-                    Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
-                };
-                let plume_length = radius * 8.0;
-                let nozzle_y = -length / 2.0;
-                ship.spawn((transform, Visibility::default()))
-                    .with_children(|p| {
-                        p.spawn((
-                            Plume {
-                                index: thruster_index,
-                                length: plume_length,
-                                nozzle_y,
-                            },
-                            Mesh3d(plume_mesh.clone()),
-                            MeshMaterial3d(flame.clone()),
-                            Transform::from_xyz(0.0, nozzle_y, 0.0)
-                                .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
-                                .with_scale(Vec3::new(radius, 0.0, radius)),
-                            Visibility::Hidden,
-                        ));
-                    });
-                thruster_index += 1;
-            }
-        });
-}
-
-fn place_ship_visual(
-    tracked: Res<ShipRenderState>,
-    render: Res<RenderTime>,
-    universe: Res<Universe>,
-    camera: Res<SpaceCamera>,
-    mut visuals: Query<&mut Transform, With<ShipVisual>>,
-) {
-    let Some(state) = tracked.state else { return };
-    let system = &universe.0;
-    let t = render.0;
-    let anchor = system.bodies[camera.anchor].inertial_frame;
-    let s = state.in_frame(&system.frames, anchor, t).state;
-    for mut transform in &mut visuals {
-        transform.translation = (s.position - camera.offset).as_vec3();
-        transform.rotation = s.rotation.as_quat().normalize();
-    }
-}
-
-fn update_plumes(
-    ship: Option<Res<PlayerShip>>,
-    sim: Res<Sim>,
-    mut plumes: Query<(&Plume, &mut Transform, &mut Visibility)>,
-) {
-    let Some(ship) = ship else { return };
-    let Some((_, _, telemetry, _)) = player_ship_state(&sim.0, &ship) else {
-        return;
-    };
-    for (plume, mut transform, mut visibility) in &mut plumes {
-        let throttle = telemetry.throttles.get(plume.index).copied().unwrap_or(0.0) as f32;
-        if throttle < 0.02 {
-            *visibility = Visibility::Hidden;
-            continue;
-        }
-        *visibility = Visibility::Inherited;
-        let length = plume.length * throttle.sqrt();
-        // The cone is centered on its origin with its apex flipped to point away from the
-        // nozzle: put its base at the nozzle and let it extend outward along -Y.
-        transform.scale.y = length;
-        transform.translation.y = plume.nozzle_y - length / 2.0;
-    }
-}
 
 /// Light from the star for ordinary (PBR) meshes such as ships, matching the planets' brightness.
 #[derive(Component)]
