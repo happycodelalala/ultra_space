@@ -1,0 +1,38 @@
+# Builder (task 3.7). Run with ULTRA_SPACE_START_ALTITUDE=1500. Land (Z), press B in the ship:
+# build mode around it (orbit camera, panel top left, free nodes cyan, the chosen one yellow, a
+# green ghost of the chosen part). Put a hull section on top of the front hull, a landing leg on
+# its side, remove the leg, undo, redo, then leave (B) and see the ship settle. Look for: the
+# panel and markers; the log lines "builder: placed", "removed", "undone", "redone"; the ship
+# standing on its legs again after leaving.
+0.5  press Z
+1    wait landed 20
+2    press B                 # build mode
+4    shot 01-builder.png
+4.5  press Down              # palette: cockpit, rover cab, hull section
+5    press Down
+5.5  shot 02-hull-ghost.png
+6    press Enter             # on the front hull's top node
+7.5  shot 03-placed-hull.png
+8    press Down              # rover chassis, tank, main engine, maneuvering thruster, reaction
+8.2  press Down              #   wheel, cruise drive, landing leg
+8.4  press Down
+8.6  press Down
+8.8  press Down
+9    press Down
+9.2  press Down
+9.4  press Right             # next free node
+9.6  shot 04-leg-ghost.png
+10   press Enter
+11   press PageUp            # select the last part (the leg)
+11.5 shot 05-selected.png
+12   press Delete
+13   hold Ctrl 0.5
+13.1 press Z                 # undo
+14   hold Ctrl 0.5
+14.1 press Y                 # redo
+15   hold MouseRight 1       # orbit for a side view
+15   mouse 6 0 1
+16.5 shot 06-orbit.png
+17   press B                 # leave: the ship settles
+20   shot 07-after.png
+21   quit

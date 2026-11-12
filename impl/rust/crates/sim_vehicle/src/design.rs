@@ -330,7 +330,7 @@ mod tests {
         assert!(p.is_empty(), "{p:?}");
         // Missing node.
         let p = problems(&two(
-            r#"{"id": "b", "part": "hull.section.medium", "position_m": [0, 0, 3], "parent": "a", "attach": {"node": "top", "to": "rear"}}"#,
+            r#"{"id": "b", "part": "hull.section.medium", "position_m": [0, 0, 3], "parent": "a", "attach": {"node": "nose", "to": "rear"}}"#,
         ));
         assert!(p.iter().any(|e| e.contains("doesn't exist")), "{p:?}");
     }

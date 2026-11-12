@@ -3,6 +3,7 @@
 //! Game logic lives in the engine-independent `sim_*` crates; this crate only renders, handles
 //! input and wires plugins together.
 
+mod builder;
 mod camera;
 mod capture;
 mod debug_overlay;
@@ -67,7 +68,7 @@ fn main() {
             walk::WalkPlugin,
             warmup::WarmupPlugin,
         ))
-        .add_plugins(vehicle_visual::VehicleVisualPlugin)
+        .add_plugins((vehicle_visual::VehicleVisualPlugin, builder::BuilderPlugin))
         .add_systems(Startup, log_startup)
         .run();
 }

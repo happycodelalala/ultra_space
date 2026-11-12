@@ -100,7 +100,7 @@ fn exit_or_board(
     mut sim: ResMut<Sim>,
     mut tracked: ResMut<ShipRenderState>,
 ) {
-    if !pilot.flying || !keys.just_pressed(KeyCode::KeyF) {
+    if !pilot.flying || pilot.building || !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
     let now = real.elapsed_secs_f64();
@@ -294,6 +294,11 @@ fn walker_input(
     else {
         return;
     };
+    if pilot.building {
+        // Standing still while the builder has the keys.
+        *control = WalkerControl::default();
+        return;
+    }
     let axis =
         |pos: KeyCode, neg: KeyCode| f64::from(keys.pressed(pos)) - f64::from(keys.pressed(neg));
     control.movement = DVec2::new(
@@ -344,7 +349,7 @@ fn follow_walker(
     let (Some(on_foot), Some(object)) = (on_foot, tracked.state) else {
         return;
     };
-    if !pilot.flying {
+    if !pilot.flying || pilot.building {
         return;
     }
     let Some(region) = universe

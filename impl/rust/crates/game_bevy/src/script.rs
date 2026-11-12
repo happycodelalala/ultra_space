@@ -97,8 +97,8 @@ struct Script {
 }
 
 /// Parses a key or mouse button name: letters, digits, `Space`, `Ctrl`, `Shift`, `Tab`, `Esc`,
-/// `F1`–`F12`, `Comma`, `Period`, `BracketLeft`, `BracketRight`, `Enter`, `MouseLeft`,
-/// `MouseRight`.
+/// `F1`–`F12`, `Comma`, `Period`, `BracketLeft`, `BracketRight`, `Enter`, `Up`, `Down`,
+/// `Left`, `Right`, `PageUp`, `PageDown`, `Delete`, `MouseLeft`, `MouseRight`.
 pub fn parse_input(name: &str) -> Option<Input> {
     let key = |k| Some(Input::Key(k));
     let upper = name.to_ascii_uppercase();
@@ -181,6 +181,13 @@ pub fn parse_input(name: &str) -> Option<Input> {
         "PERIOD" => key(KeyCode::Period),
         "BRACKETLEFT" => key(KeyCode::BracketLeft),
         "BRACKETRIGHT" => key(KeyCode::BracketRight),
+        "UP" => key(KeyCode::ArrowUp),
+        "DOWN" => key(KeyCode::ArrowDown),
+        "LEFT" => key(KeyCode::ArrowLeft),
+        "RIGHT" => key(KeyCode::ArrowRight),
+        "PAGEUP" => key(KeyCode::PageUp),
+        "PAGEDOWN" => key(KeyCode::PageDown),
+        "DELETE" => key(KeyCode::Delete),
         "MOUSELEFT" => Some(Input::Mouse(MouseButton::Left)),
         "MOUSERIGHT" => Some(Input::Mouse(MouseButton::Right)),
         _ => None,

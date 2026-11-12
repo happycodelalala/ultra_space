@@ -5,6 +5,7 @@
 
 pub mod allocation;
 pub mod arcade;
+pub mod builder;
 pub mod catalog;
 pub mod cruise;
 pub mod design;
@@ -21,7 +22,7 @@ pub use arcade::ArcadeFlight;
 pub use catalog::{PartCatalog, PartDef, PartKind, Shape};
 pub use cruise::{Cruise, CruiseBlocked, CruisePhase};
 pub use design::{Attach, VehicleDesign, VehiclePart};
-pub use flight::{AssistMode, FlightControl, FlightTelemetry, OnRails, Reference};
+pub use flight::{AssistMode, FlightControl, FlightTelemetry, Frozen, OnRails, Reference};
 pub use mass::MassProperties;
 pub use physics::{PhysicsScene, PhysicsStats, RegionPhysics};
 pub use vehicle::{PartCollider, Performance, Vehicle, VehicleBody};

@@ -338,6 +338,11 @@ impl PartCatalog {
         self.parts.len()
     }
 
+    /// All parts, in id order.
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<PartDef>> {
+        self.parts.values()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.parts.is_empty()
     }

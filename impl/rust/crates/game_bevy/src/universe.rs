@@ -30,6 +30,10 @@ pub struct StartingVehicle(pub Vehicle);
 #[derive(Resource, Default)]
 pub struct Designs(pub std::collections::BTreeMap<String, VehicleDesign>);
 
+/// The part catalog (the builder's palette).
+#[derive(Resource)]
+pub struct Catalog(pub PartCatalog);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -61,6 +65,7 @@ struct Loaded {
     sim: Simulation,
     vehicle: Vehicle,
     designs: Designs,
+    catalog: PartCatalog,
     seconds: f64,
 }
 
@@ -103,6 +108,7 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         sim,
         vehicle: Vehicle::from_design(design),
         designs,
+        catalog,
         seconds: start.elapsed().as_secs_f64(),
     })
 }
@@ -154,6 +160,7 @@ fn finish_loading(
             commands.insert_resource(crate::sim::Sim(loaded.sim));
             commands.insert_resource(StartingVehicle(loaded.vehicle));
             commands.insert_resource(loaded.designs);
+            commands.insert_resource(Catalog(loaded.catalog));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }

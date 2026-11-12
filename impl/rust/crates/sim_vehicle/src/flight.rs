@@ -96,6 +96,11 @@ pub struct FlightControl {
     pub desired_body: Option<usize>,
 }
 
+/// A vehicle held where it is (being edited in the builder): physics places it each tick without
+/// moving it, and it still turns with the planet like the ground under it.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Frozen;
+
 /// Results of the last tick, for HUD and visuals.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct FlightTelemetry {
@@ -646,6 +651,7 @@ pub fn flight_system(
             Option<&OnRails>,
             Option<&Cruise>,
             Has<ArcadeFlight>,
+            Has<Frozen>,
         ),
         With<Vehicle>,
     >,
@@ -661,11 +667,38 @@ pub fn flight_system(
     };
 
     let mut integrating = Vec::new();
-    for (entity, object, mut state, body, mut control, mut telemetry, on_rails, cruise, arcade) in
-        &mut vehicles
+    for (
+        entity,
+        object,
+        mut state,
+        body,
+        mut control,
+        mut telemetry,
+        on_rails,
+        cruise,
+        arcade,
+        frozen,
+    ) in &mut vehicles
     {
         // Flight works in the body's inertial frame.
         let local = state.in_frame(&system.frames, inertial, t);
+        if frozen {
+            // Held in place on the turning ground (it rides with the planet's spin).
+            let com = body.mass.center_of_mass;
+            let mut held = RigidState::from_origin(&local.state, com);
+            let spin = DQuat::from_scaled_axis(env.spin * clock.dt);
+            held.position = spin * held.position;
+            held.rotation = (spin * held.rotation).normalize();
+            held.velocity = env.spin.cross(held.position);
+            held.angular_velocity = env.spin;
+            scene.place_kinematic(object.id, body, &held);
+            *state = ObjectState {
+                frame: inertial,
+                state: held.to_origin(com),
+            };
+            telemetry.in_contact = true;
+            continue;
+        }
         if arcade || cruise.is_some_and(Cruise::is_cruising) {
             // Moved by arcade flight or the cruise drive; still there for others to hit.
             let com = body.mass.center_of_mass;

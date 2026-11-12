@@ -228,6 +228,23 @@ pub struct VehicleVisual {
     current: Option<(f64, ObjectState)>,
 }
 
+impl VehicleVisual {
+    /// The state it is drawn at: interpolated to universe time `t` (render time).
+    pub fn shown(&self, system: &sim_core::StarSystem, t: f64) -> Option<ObjectState> {
+        match (self.previous, self.current) {
+            (Some(p), Some(c)) if p.1.frame == c.1.frame => {
+                Some(interpolate_state(system, p, c, t))
+            }
+            (_, Some(c)) => Some(c.1),
+            _ => None,
+        }
+    }
+}
+
+/// A thruster's mount on a vehicle visual (holds its plume).
+#[derive(Component)]
+struct PlumeMount;
+
 /// Exhaust plume for thruster `index` (allocator order) of vehicle `vehicle`.
 #[derive(Component)]
 struct Plume {
@@ -249,8 +266,7 @@ fn spawn_vehicle_visual(
     plume_assets: &(Handle<Mesh>, Handle<StandardMaterial>),
 ) {
     cache.request(vehicle);
-    let mut thruster_index = 0;
-    commands
+    let entity = commands
         .spawn((
             Name::new(vehicle.name.clone()),
             VehicleVisual {
@@ -262,44 +278,55 @@ fn spawn_vehicle_visual(
             Transform::default(),
             Visibility::Hidden,
         ))
-        .with_children(|v| {
-            for part in vehicle.parts.iter().filter(|p| p.def.thruster.is_some()) {
-                let transform = Transform::from_translation(part.position.as_vec3())
-                    .with_rotation(part.rotation.as_quat());
-                // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
-                let (radius, length) = match part.def.shape {
-                    Shape::Cylinder { radius_m, length_m } => {
-                        (radius_m as f32 * 0.8, length_m as f32)
-                    }
-                    Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
-                    Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
-                };
-                let nozzle_y = -length / 2.0;
-                v.spawn((transform, Visibility::default()))
-                    .with_children(|p| {
-                        p.spawn((
-                            Plume {
-                                vehicle: id,
-                                index: thruster_index,
-                                length: radius * 8.0,
-                                nozzle_y,
-                            },
-                            Mesh3d(plume_assets.0.clone()),
-                            MeshMaterial3d(plume_assets.1.clone()),
-                            Transform::from_xyz(0.0, nozzle_y, 0.0)
-                                .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
-                                .with_scale(Vec3::new(radius, 0.0, radius)),
-                            Visibility::Hidden,
-                        ));
-                    });
-                thruster_index += 1;
-            }
-        });
+        .id();
+    spawn_plumes(commands, entity, id, vehicle, plume_assets);
+}
+
+/// A mount with an exhaust plume for each of the vehicle's thrusters, under its visual.
+fn spawn_plumes(
+    commands: &mut Commands,
+    visual: Entity,
+    id: ObjectId,
+    vehicle: &Vehicle,
+    plume_assets: &(Handle<Mesh>, Handle<StandardMaterial>),
+) {
+    let mut thruster_index = 0;
+    commands.entity(visual).with_children(|v| {
+        for part in vehicle.parts.iter().filter(|p| p.def.thruster.is_some()) {
+            let transform = Transform::from_translation(part.position.as_vec3())
+                .with_rotation(part.rotation.as_quat());
+            // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
+            let (radius, length) = match part.def.shape {
+                Shape::Cylinder { radius_m, length_m } => (radius_m as f32 * 0.8, length_m as f32),
+                Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
+                Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
+            };
+            let nozzle_y = -length / 2.0;
+            v.spawn((PlumeMount, transform, Visibility::default()))
+                .with_children(|p| {
+                    p.spawn((
+                        Plume {
+                            vehicle: id,
+                            index: thruster_index,
+                            length: radius * 8.0,
+                            nozzle_y,
+                        },
+                        Mesh3d(plume_assets.0.clone()),
+                        MeshMaterial3d(plume_assets.1.clone()),
+                        Transform::from_xyz(0.0, nozzle_y, 0.0)
+                            .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
+                            .with_scale(Vec3::new(radius, 0.0, radius)),
+                        Visibility::Hidden,
+                    ));
+                });
+            thruster_index += 1;
+        }
+    });
 }
 
 /// Keeps one visual per simulated vehicle and places each at its state interpolated to the
 /// render time, relative to the camera.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn sync_vehicle_visuals(
     mut commands: Commands,
     mut sim: ResMut<Sim>,
@@ -316,7 +343,9 @@ fn sync_vehicle_visuals(
         &mut VehicleMesh,
         &mut Transform,
         &mut Visibility,
+        Option<&Children>,
     )>,
+    mounts: Query<(), With<PlumeMount>>,
 ) {
     let system = &universe.0;
     let sim = &mut sim.0;
@@ -352,7 +381,7 @@ fn sync_vehicle_visuals(
     }
 
     let anchor = system.bodies[camera.anchor].inertial_frame;
-    for (entity, mut visual, mut mesh, mut transform, mut visibility) in &mut visuals {
+    for (entity, mut visual, mut mesh, mut transform, mut visibility, children) in &mut visuals {
         let Some((state, hash, vehicle)) = vehicles.get_mut(&visual.id) else {
             commands.entity(entity).despawn();
             continue;
@@ -361,19 +390,21 @@ fn sync_vehicle_visuals(
         if mesh.hash != *hash
             && let Some(v) = vehicles_vehicle(&*sim, visual.id)
         {
+            // Rebuilt (the builder): new meshes (shown once ready) and new plumes.
             cache.request(&v);
             mesh.hash = *hash;
+            for child in children.into_iter().flatten() {
+                if mounts.contains(*child) {
+                    commands.entity(*child).despawn();
+                }
+            }
+            spawn_plumes(&mut commands, entity, visual.id, &v, plume_assets);
         }
         if visual.current.is_none_or(|(tc, _)| tc != t) {
             visual.previous = visual.current;
             visual.current = Some((t, *state));
         }
-        let shown = match (visual.previous, visual.current) {
-            (Some(p), Some(c)) if p.1.frame == c.1.frame => {
-                interpolate_state(system, p, c, render.0)
-            }
-            _ => *state,
-        };
+        let shown = visual.shown(system, render.0).unwrap_or(*state);
         let s = shown.in_frame(&system.frames, anchor, render.0).state;
         transform.translation = (s.position - camera.offset).as_vec3();
         transform.rotation = s.rotation.as_quat().normalize();

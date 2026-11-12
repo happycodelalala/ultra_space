@@ -162,6 +162,15 @@ pub struct PilotState {
     pub mouse_free: bool,
     /// Walking on foot (see `walk`): ship controls and the ship camera stand down.
     pub on_foot: bool,
+    /// In build mode (see `builder`): flying and walking controls and their cameras stand down.
+    pub building: bool,
+}
+
+impl PilotState {
+    /// Whether the ship's controls and chase camera are in use.
+    pub fn controls_ship(&self) -> bool {
+        self.flying && !self.on_foot && !self.building
+    }
 }
 
 /// Initial chase-camera orbit from `ULTRA_SPACE_CHASE_ORBIT=<yaw>,<pitch>` (degrees; negative
@@ -191,6 +200,7 @@ impl Default for PilotState {
             view: ShipView::Chase,
             orbit: start_orbit(),
             mouse_free: false,
+            building: false,
             on_foot: false,
         }
     }
@@ -356,7 +366,7 @@ fn teleport_keys(
     mut sim: ResMut<Sim>,
 ) {
     let Some(ship) = ship else { return };
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         return; // the free camera uses 1–8 to jump the camera instead
     }
     let system = &universe.0;
@@ -415,7 +425,7 @@ fn full_stop_key(
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyZ) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyZ) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -464,7 +474,7 @@ fn arcade_key(
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyN) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyN) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -521,7 +531,7 @@ fn cruise_keys(
     else {
         return;
     };
-    if pilot.flying && !pilot.on_foot && keys.just_pressed(KeyCode::KeyJ) {
+    if pilot.controls_ship() && keys.just_pressed(KeyCode::KeyJ) {
         cruise.toggle = true;
         *notice = 0.0;
     } else if cruise.blocked.is_some() {
@@ -552,7 +562,7 @@ fn pilot_input(
         return;
     };
 
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         // Let go of the controls; assist keeps the ship steady.
         control.translate = DVec3::ZERO;
         control.rotate = DVec3::ZERO;
@@ -597,7 +607,7 @@ fn cursor_lock(
         return;
     }
     for mut cursor in &mut windows {
-        if pilot.flying && !pilot.mouse_free {
+        if pilot.flying && !pilot.mouse_free && !pilot.building {
             cursor.grab_mode = CursorGrabMode::Locked;
             cursor.visible = false;
         } else {
@@ -661,7 +671,7 @@ fn follow_ship(
     render: Res<RenderTime>,
     mut camera: ResMut<SpaceCamera>,
 ) {
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         return;
     }
     let Some(object) = tracked.state else { return };

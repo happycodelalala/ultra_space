@@ -92,6 +92,62 @@
             1
           ],
           "size": "medium"
+        },
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.2,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.2,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "left",
+          "position_m": [
+            -1.5,
+            0,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "right",
+          "position_m": [
+            1.5,
+            0,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "medium"
         }
       ],
       "form": {
