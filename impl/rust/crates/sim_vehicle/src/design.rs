@@ -254,6 +254,83 @@ impl VehicleDesign {
     }
 }
 
+/// Degrees about the fixed X, then Y, then Z axes (the inverse of [`rotation_from_degrees`]).
+pub fn rotation_to_degrees(rotation: DQuat) -> [f64; 3] {
+    let (z, y, x) = rotation.to_euler(glam::EulerRot::ZYX);
+    [x, y, z].map(|a| {
+        let d = a.to_degrees();
+        // Tidy: whole degrees when within a millionth, no negative zero.
+        let r = d.round();
+        (if (d - r).abs() < 1e-6 { r } else { d }) + 0.0
+    })
+}
+
+/// A vehicle's parts as a design file (`content/data/vehicles/*.json` format), one part per
+/// line.
+pub fn design_json(
+    vehicle: &crate::vehicle::Vehicle,
+    id: &str,
+    name: &str,
+    description: &str,
+) -> String {
+    let tidy = |v: f64| {
+        let r = (v * 1e6).round() / 1e6;
+        r + 0.0
+    };
+    let mut lines = vec![
+        "{".to_string(),
+        format!("  \"id\": {},", serde_json::to_string(id).expect("string")),
+        format!(
+            "  \"name\": {},",
+            serde_json::to_string(name).expect("string")
+        ),
+        format!(
+            "  \"description\": {},",
+            serde_json::to_string(description).expect("string")
+        ),
+        "  \"parts\": [".to_string(),
+    ];
+    let n = vehicle.parts.len();
+    let quoted = |text: &str| serde_json::to_string(text).expect("string");
+    let numbers = |v: [f64; 3]| {
+        let v = v.map(tidy);
+        format!("[{}, {}, {}]", v[0], v[1], v[2])
+    };
+    for (i, p) in vehicle.parts.iter().enumerate() {
+        let mut fields = vec![
+            format!("\"id\": {}", quoted(&p.name)),
+            format!("\"part\": {}", quoted(&p.def.id)),
+            format!("\"position_m\": {}", numbers(p.position.to_array())),
+        ];
+        let rot = rotation_to_degrees(p.rotation);
+        if rot != [0.0; 3] {
+            fields.push(format!("\"rotation_deg\": {}", numbers(rot)));
+        }
+        if let Some(parent) = p.parent {
+            fields.push(format!(
+                "\"parent\": {}",
+                quoted(&vehicle.parts[parent].name)
+            ));
+            fields.push(match &p.attach {
+                Attach::Node { node, to } => format!(
+                    "\"attach\": {{\"node\": {}, \"to\": {}}}",
+                    quoted(node),
+                    quoted(to)
+                ),
+                _ => "\"attach\": \"surface\"".into(),
+            });
+        }
+        if let Some(group) = &p.symmetry {
+            fields.push(format!("\"symmetry\": {}", quoted(group)));
+        }
+        let comma = if i + 1 < n { "," } else { "" };
+        lines.push(format!("    {{{}}}{comma}", fields.join(", ")));
+    }
+    lines.push("  ]".into());
+    lines.push("}".into());
+    lines.join("\n") + "\n"
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -333,5 +410,22 @@ mod tests {
             r#"{"id": "b", "part": "hull.section.medium", "position_m": [0, 0, 3], "parent": "a", "attach": {"node": "nose", "to": "rear"}}"#,
         ));
         assert!(p.iter().any(|e| e.contains("doesn't exist")), "{p:?}");
+    }
+
+    #[test]
+    fn designs_export_and_load_back_the_same() {
+        let design = VehicleDesign::from_json_str(&kestrel_json(), &catalog()).unwrap();
+        let v = crate::vehicle::Vehicle::from_design(&design);
+        let json = design_json(&v, "kestrel_copy", "Kestrel copy", "");
+        let back = VehicleDesign::from_json_str(&json, &catalog()).unwrap();
+        let w = crate::vehicle::Vehicle::from_design(&back);
+        assert_eq!(v.parts.len(), w.parts.len());
+        for (a, b) in v.parts.iter().zip(&w.parts) {
+            assert_eq!(a.name, b.name);
+            assert_eq!(a.parent, b.parent);
+            assert_eq!(a.attach, b.attach);
+            assert!(a.position.distance(b.position) < 1e-6);
+            assert!(a.rotation.dot(b.rotation).abs() > 1.0 - 1e-12, "{}", a.name);
+        }
     }
 }

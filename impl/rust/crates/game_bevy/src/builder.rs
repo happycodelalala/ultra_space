@@ -39,7 +39,7 @@ use crate::universe::{Catalog, InGame, Universe};
 use crate::vehicle_visual::{VehicleVisual, merged_meshes, shape_mesh};
 use crate::walk::{OnFoot, spot_ahead, walker_status};
 
-/// A vehicle can be edited from this close on foot (m from its centre).
+/// A vehicle can be edited from this close on foot (m from its nearest part).
 const REACH: f64 = 15.0;
 /// ...if it stands still on the ground (m/s relative to it).
 const STILL: f64 = 1.0;
@@ -297,9 +297,9 @@ fn enter_or_leave(
             let mut query = r.world.query::<(&Object, &ObjectState, &Vehicle)>();
             query
                 .iter(&r.world)
-                .map(|(o, s, _)| {
-                    let p = s.in_frame(&system.frames, frame, t).state.position;
-                    (o.id, (p - here).length())
+                .map(|(o, s, v)| {
+                    let s = s.in_frame(&system.frames, frame, t).state;
+                    (o.id, crate::walk::nearest_part(&s, v, here))
                 })
                 .filter(|(_, d)| *d <= REACH)
                 .min_by(|a, b| a.1.total_cmp(&b.1))

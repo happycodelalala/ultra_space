@@ -25,7 +25,7 @@ const EXIT_MAX_ALTITUDE: f64 = 30.0;
 const EXIT_MAX_SPEED: f64 = 2.0;
 /// Where the walker appears: this far to the ship's right (m).
 const EXIT_OFFSET: f64 = 6.0;
-/// Boarding reach from a vehicle's centre (m).
+/// Boarding reach from the nearest of a vehicle's parts (m).
 const BOARD_REACH: f64 = 12.0;
 /// A vehicle counts as ahead when it is within about 60° of where the walker faces.
 const BOARD_FACING: f64 = 0.5;
@@ -137,9 +137,10 @@ fn exit_or_board(
                 query
                     .iter(&r.world)
                     .map(|(o, s, v)| {
-                        let to = s.in_frame(&system.frames, frame, t).state.position - here;
+                        let s = s.in_frame(&system.frames, frame, t).state;
+                        let to = s.position - here;
                         let facing = to.normalize_or_zero().dot(look);
-                        (o.id, v.name.clone(), to.length(), facing)
+                        (o.id, v.name.clone(), nearest_part(&s, v, here), facing)
                     })
                     .collect()
             })
@@ -244,38 +245,60 @@ pub fn spot_ahead(
     Some((region, placed))
 }
 
-/// Debug (G, on foot): a rover appears a few metres ahead (task 3.5).
+/// Debug (G, on foot): a vehicle appears ahead, standing on the ground (task 3.5). Shift+G
+/// chooses which design (the rover first, then every other design in turn).
 fn spawn_rover_key(
     keys: Res<ButtonInput<KeyCode>>,
     universe: Res<Universe>,
     designs: Res<crate::universe::Designs>,
     on_foot: Option<Res<OnFoot>>,
     mut sim: ResMut<Sim>,
+    mut chosen: Local<Option<String>>,
 ) {
     if !keys.just_pressed(KeyCode::KeyG) {
         return;
     }
+    let ids: Vec<&String> = designs.0.keys().collect();
+    let current = chosen
+        .clone()
+        .filter(|c| designs.0.contains_key(c))
+        .unwrap_or_else(|| "rover".into());
+    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+        let i = ids.iter().position(|d| **d == current).unwrap_or(0);
+        let next = ids[(i + 1) % ids.len()].clone();
+        info!("G now spawns: {}", designs.0[&next].name);
+        *chosen = Some(next);
+        return;
+    }
     let Some(on_foot) = on_foot else {
-        info!("G spawns a rover when you're on foot");
+        info!("G spawns a vehicle when you're on foot");
         return;
     };
-    let Some(design) = designs.0.get("rover") else {
-        warn!("no rover design");
-        return;
-    };
-    let system = &universe.0;
-    let sim = &mut sim.0;
-    let Some((region, rover)) = spot_ahead(sim, system, on_foot.id, ROVER_DISTANCE, 1.5) else {
+    let Some(design) = designs.0.get(&current) else {
         return;
     };
     let vehicle = Vehicle::from_design(design);
     let Some(body) = VehicleBody::of(&vehicle) else {
         return;
     };
+    // Far enough ahead for its size, its lowest part just above the ground.
+    let (lowest, reach) = vehicle.parts.iter().fold((0.0f64, 0.0f64), |(lo, r), p| {
+        let size = shape_size(p.def.shape);
+        (
+            lo.min(p.position.y - size),
+            r.max(p.position.length() + size),
+        )
+    });
+    let distance = ROVER_DISTANCE.max(reach + 4.0);
+    let system = &universe.0;
+    let sim = &mut sim.0;
+    let Some((region, state)) = spot_ahead(sim, system, on_foot.id, distance, 0.5 - lowest) else {
+        return;
+    };
     let spawned = sim.objects.spawn(
         &mut sim.regions,
         region,
-        rover,
+        state,
         (
             vehicle,
             body,
@@ -285,7 +308,29 @@ fn spawn_rover_key(
         ),
     );
     if spawned.is_ok() {
-        info!("a rover appeared {ROVER_DISTANCE:.0} m ahead (F to board it)");
+        info!(
+            "a {} appeared {distance:.0} m ahead (F to board it)",
+            design.name
+        );
+    }
+}
+
+/// Distance from `here` to the nearest of a vehicle's parts (m), so big vehicles can be reached
+/// from the ground (a frame's torso is 13 m up).
+pub fn nearest_part(state: &sim_core::frames::FrameState, vehicle: &Vehicle, here: DVec3) -> f64 {
+    vehicle
+        .parts
+        .iter()
+        .map(|p| (state.position + state.rotation * p.position - here).length())
+        .fold(f64::MAX, f64::min)
+}
+
+/// Half the largest dimension of a part shape (m).
+fn shape_size(shape: sim_vehicle::Shape) -> f64 {
+    match shape {
+        sim_vehicle::Shape::Box { size_m } => size_m.iter().cloned().fold(0.0, f64::max) / 2.0,
+        sim_vehicle::Shape::Cylinder { radius_m, length_m } => radius_m.max(length_m / 2.0),
+        sim_vehicle::Shape::Sphere { radius_m } => radius_m,
     }
 }
 

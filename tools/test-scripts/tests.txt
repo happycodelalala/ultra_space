@@ -15,4 +15,5 @@ build      | build.txt      | ULTRA_SPACE_START_ALTITUDE=1500 | visual | B opens
 build-tools | build-tools.txt | ULTRA_SPACE_START_ALTITUDE=1500 | visual | builder stats panel and mirror symmetry: a leg pair placed (29 parts), a section saved and placed, the pair removed (log: placed / saved section / removed 2 parts)
 new-rover  | new-rover.txt  | ULTRA_SPACE_START_ALTITUDE=1500 | visual | a rover built from scratch (chassis root, cab, 4 mirrored wheels) stands on its wheels, is boarded and driven
 new-lander | new-lander.txt | ULTRA_SPACE_START_ALTITUDE=1500 | visual | a lander built from scratch (cockpit, hull, downward engine, reaction wheel, legs) can hover and lifts off with Space
+heavy-frame | heavy-frame.txt | ULTRA_SPACE_START_ALTITUDE=1500 | visual | the heavy frame (35 parts) spawns standing on its feet, four binders in an X on its back; boarded; builder panel shows no balance problems
 descent    | descent.txt    |                                | perf   | orbit to ground at up to 3 km/s: no frame over 50 ms after the world is shown (script summary: frames over 50 ms, worst frame); end shot shows the ship skimming terrain
