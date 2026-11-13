@@ -86,11 +86,12 @@ def skin(m, rows, d0, d1, inner, outer, mat, bevel=0.012, step_deg=1.5, angle=35
 
 @builder("bastion.shell_quarter")
 def shell_quarter(m, h, part):
-    """A quarter of the cocoon, faceted like a cut stone. A dark structural skin carries
-    ceramic armour plates in bands that overlap like scales, with energy seams glowing between
-    the columns and a graphite band with a glowing line at the shoulder; a graphite keel runs
-    down the middle and rises to a point above the top, and the hem is cut into points.
-    Inside, ribs down the curve and two ring frames across it (lit by strips) carry the lift
+    """A quarter of the cocoon, faceted like a cut stone. A dark structural skin carries thick
+    ceramic armour plates in bands that overlap like scales (each band sheds hits onto the
+    one below), a graphite band at the shoulder line where the upper and lower plate sets
+    meet; a graphite keel runs down the middle (it deflects hits and stiffens the quarter)
+    and rises to a point above the top; the hem is cut into points, with a marker lamp on
+    the outer ones. Inside, ribs down the curve and two ring frames across it carry the lift
     engines and the folded leg; a mounting pad takes the carrier."""
     shape = part["shape"]
     P = shape["profile_m"]
@@ -106,7 +107,7 @@ def shell_quarter(m, h, part):
     hem.append(skin(m, resample(prof, top, bottom, 1.0), a0, a1, -t / 2, t / 2 - 0.05, "dark",
                     facets=(a0, fdeg), angle=sharp))
     # Armour plates: bands down the curve (raised bands overlap their neighbours), three
-    # columns of two facets each; the shoulder band is graphite with a glowing line.
+    # columns of two facets each; the shoulder band is graphite.
     bands = [top, 4.6, 2.75, 2.45, -1.5, -6.0, -10.5, bottom]
     gap_deg = 0.45
     cols = [(a0 + 2 * fdeg * k, a0 + 2 * fdeg * (k + 1)) for k in range(3)]
@@ -117,13 +118,10 @@ def shell_quarter(m, h, part):
         hi = min(top, y_hi + lap) - (0.03 if y_hi < top and not raised else 0)
         lo = max(bottom, y_lo - lap) + (0.03 if y_lo > bottom and not raised else 0)
         rows = resample(prof, hi, lo, 0.8)
-        out = t / 2 + (0.16 if raised else 0.04)
+        out = t / 2 + (0.2 if raised else 0.06)
         if shoulder:
-            for yy0, yy1 in ((hi, 2.64), (2.56, lo)):
-                skin(m, resample(prof, yy0, yy1, 0.5), a0, a1, t / 2 - 0.06, t / 2 + 0.03, "armor2",
-                     facets=(a0, fdeg), angle=sharp, bevel=0.008)
-            skin(m, resample(prof, 2.65, 2.55, 0.5), a0, a1, t / 2 - 0.06, t / 2 + 0.0, "light",
-                 facets=(a0, fdeg), angle=sharp, bevel=0.0)
+            skin(m, resample(prof, hi, lo, 0.5), a0, a1, t / 2 - 0.06, t / 2 + 0.06, "armor2",
+                 facets=(a0, fdeg), angle=sharp, bevel=0.008)
             continue
         for c0, c1 in cols:
             g0 = gap_deg if c0 > a0 + 1e-6 else 0.1
@@ -151,10 +149,6 @@ def shell_quarter(m, h, part):
                 for sx in (-1, 1):
                     tri = [(sx * 1.6 * w, 1.6 * hg), (-sx * 0.2 * w, -0.2 * hg), (sx * 1.6 * w, -hg)]
                     m.cut(plate, m.extrude(tri, 1.0, pl, bevel=0, cutter=True))
-        # Energy seams under the column gaps.
-        for c in (cols[0][1], cols[1][1]):
-            skin(m, rows, c - 0.2, c + 0.2, t / 2 - 0.08, t / 2 - 0.03, "light", step_deg=0.4,
-                 angle=sharp, bevel=0.0)
     # Keel: a blade down the middle, rising to a point above the top.
     mid = (a0 + a1) / 2
     krows = resample(prof, top, bottom + 0.9, 0.9)
@@ -177,6 +171,11 @@ def shell_quarter(m, h, part):
         cutter = m.extrude([(-half, -0.5), (half, -0.5), (0, 1.3)], 3.0, pl, bevel=0, cutter=True)
         for ob in hem:
             m.cut(ob, cutter)
+    for c0, c1 in (cols[0], cols[2]):
+        d = (c0 + c1) / 2
+        y = bottom + 0.5
+        r = resample(prof, y + 0.01, y - 0.01)[0][1]
+        m.lamp(point(d, y, r + t / 2 + 0.2), point(d, 0, 1), 0.07)
     # Ribs inside: I-sections down the curve.
     inner = [(y, r) for y, r in resample(prof, top - 0.3, bottom + 1.5, 0.6)]
     for frac in (0.1, 0.5, 0.9):
@@ -189,7 +188,7 @@ def shell_quarter(m, h, part):
             ln = (pb - pa).length
             m.box((0.04, ln + 0.01, 0.2), place=pl @ frame((0, ln / 2, 0)), mat="dark", bevel=0)
             m.box((0.16, ln + 0.01, 0.03), place=pl @ frame((0, ln / 2, 0.09)), mat="dark", bevel=0)
-    # Ring frames across, at the engine rows and the leg cradle, each with a light strip.
+    # Ring frames across, at the engine rows and the leg cradle.
     for y in (1.5, -6.0):
         r = resample(prof, y + 0.01, y - 0.01)[0][1] - t / 2 - 0.12
         pts = [point(a0 + 1 + (a1 - a0 - 2) * k / 16, y, r) for k in range(17)]
@@ -198,7 +197,6 @@ def shell_quarter(m, h, part):
             ln = (pb - pa).length
             m.box((0.22, ln + 0.01, 0.05), place=pl @ frame((0, ln / 2, 0)), mat="dark", bevel=0)
             m.box((0.03, ln + 0.01, 0.24), place=pl @ frame((0, ln / 2, 0)), mat="dark", bevel=0)
-            m.box((0.05, ln + 0.01, 0.02), place=pl @ frame((0, ln / 2, -0.13)), mat="light", bevel=0)
     # Carrier pad.
     for node in part.get("attach_nodes", []):
         p, d = V(node["position_m"]), V(node["direction"]).normalized()
@@ -211,9 +209,9 @@ def shell_quarter(m, h, part):
 @builder("bastion.lift_engine", "thruster.main.medium")
 def engine(m, h, part):
     """A gimballed engine: a faceted mounting plate on the structure, a thrust frame of four
-    struts down to the gimbal ring on its trunnions, the octagonal combustion chamber glowing
-    at its seam, two sealed gimbal actuators, and a faceted bell nozzle (-Y) with cooling
-    bands, its throat glowing."""
+    struts down to the gimbal ring on its trunnions, the octagonal combustion chamber, two
+    sealed gimbal actuators, and a faceted bell nozzle (-Y) with cooling bands round the
+    injector plate (the game draws the exhaust when it fires)."""
     r, hl, _ = h
     top = hl
     k = r * 0.4
@@ -233,7 +231,6 @@ def engine(m, h, part):
     rc = r * 0.3
     m.lathe([(0, top - 0.06), (rc * 0.6, top - 0.06), (rc * 0.9, top - 0.12), (rc, top - 0.2),
              (rc, hl * 0.0), (rc * 0.62, -hl * 0.12), (rc * 0.55, -hl * 0.16)], place, "metal", 8, angle=20.0)
-    m.ring_glow((0, hl * 0.35, 0), Y, rc * 0.9, rc * 1.02, 0.03)
     for u in (X, Z):
         m.piston(u * r * 0.62 + Y * (top - 0.08), u * rc * 1.15 + Y * hl * 0.05, 0.03, extension=0.3,
                  hint=Y.cross(u))
@@ -243,7 +240,7 @@ def engine(m, h, part):
     wall = 0.02
     prof = outer + [(x - wall, y) for x, y in reversed(outer)]
     m.lathe(prof, place, "dark", 12, angle=20.0, closed=True)
-    m.lathe([(0, ys[0] + 0.01), (rt * 0.95, ys[0] + 0.01), (rt * 1.3, ys[2]), (0, ys[2])], place, "light", 12)
+    m.lathe([(0, ys[0] + 0.01), (rt * 0.95, ys[0] + 0.01), (rt * 1.3, ys[2]), (0, ys[2])], place, "metal", 12)
     for k in (4, 8):
         x, y = outer[k]
         m.lathe([(x - 0.005, y + 0.03), (x + 0.02, y + 0.02), (x + 0.02, y - 0.02), (x - 0.005, y - 0.03)],

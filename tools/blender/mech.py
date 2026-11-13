@@ -4,8 +4,9 @@ Models are built in part axes (metres, Y up, as the game and the glTF file use t
 own Z-up convention plays no part). Every object carries one material, named by its slot in
 `content/data/part_materials.json`. The visual language (design/vehicle-builder.md §7.3): a
 dark skeletal frame under sharp, faceted armour plates (hulls, chamfered plates), sealed
-octagonal actuators, and energy that glows in seams, joint gaps and ribbed conduits; no
-bolts, hoses or stencils. Cuts (grooves, slits) are booleans. A finished model is frozen,
+octagonal actuators, armour bulked where it protects something; every detail does a job
+(plate edges, hatches, vents, pin retainers, cables across joints), and only optics and
+marker lamps glow. Cuts (grooves, slits) are booleans. A finished model is frozen,
 its ambient occlusion baked into vertex colours (Cycles, with every piece of the part
 shadowing the others) and written as a single-mesh glTF binary, one primitive per material:
 the layout `game_bevy/src/part_models.rs` and the design viewer read.
@@ -236,34 +237,20 @@ class Model:
         ob = self.hull(base + mid + top, mat, bevel=bevel)
         return ob, c + n * thickness, n
 
-    def ring_glow(self, centre, axis, r_in, r_out, width, sides=8):
-        """An emissive ring (a joint's energy gap) about `axis` through `centre`."""
-        c = vec(centre)
-        place = along(c, c + vec(axis))
-        return self.lathe([(r_in, -width / 2), (r_out, -width / 2), (r_out, width / 2),
-                           (r_in, width / 2)], place, "light", sides, closed=True)
-
-    def drum(self, a, b, r, mat="dark", sides=8, glow=True, hint=None):
-        """An enclosed rotary actuator from `a` to `b`: a faceted housing with chamfered
-        ends, split round its middle by a glowing energy gap."""
+    def drum(self, a, b, r, mat="dark", sides=8, hint=None):
+        """A rotary housing (a joint's actuator or hub) from `a` to `b`: faceted, its ends
+        chamfered."""
         a, b = vec(a), vec(b)
         place = along(a, b, hint)
         length = (b - a).length
-        ch = min(r * 0.2, length * 0.18)
-        g = min(r * 0.18, length * 0.12) if glow else 0.0
-        half = (length - g) / 2
-        self.lathe([(0, 0), (r - ch, 0), (r, ch), (r, half), (0, half)], place, mat, sides,
-                   angle=20.0)
-        self.lathe([(0, length - half), (r, length - half), (r, length - ch), (r - ch, length),
-                    (0, length)], place, mat, sides, angle=20.0)
-        if glow:
-            self.lathe([(0, half - 0.001), (r * 0.9, half - 0.001), (r * 0.9, length - half + 0.001),
-                        (0, length - half + 0.001)], place, "light", sides)
+        ch = min(r * 0.2, length * 0.3)
+        self.lathe([(0, 0), (r - ch, 0), (r, ch), (r, length - ch), (r - ch, length), (0, length)],
+                   place, mat, sides, angle=20.0)
         return place
 
     def piston(self, a, b, r, extension=0.4, hint=None):
         """A sealed linear actuator from `a` (sleeve) to `b` (rod): a hexagonal sleeve with
-        chamfered ends, a glowing gland, the polished rod, faceted eyes on their pins."""
+        chamfered ends, the gland collar, the polished rod, faceted eyes on their pins."""
         a, b = vec(a), vec(b)
         place = along(a, b, hint)
         length = (b - a).length
@@ -272,8 +259,8 @@ class Model:
         y1 = y0 + (length - 2 * eye) * (1 - extension * 0.5)
         self.lathe([(0, y0), (r * 0.6, y0), (r, y0 + r * 0.6), (r, y1 - r * 0.5), (r * 0.72, y1),
                     (0, y1)], place, "metal", 6, angle=20.0)
-        self.lathe([(r * 0.42, y1), (r * 0.66, y1), (r * 0.66, y1 + r * 0.25), (r * 0.42, y1 + r * 0.25)],
-                   place, "light", 6, closed=True)
+        self.lathe([(r * 0.42, y1), (r * 0.7, y1), (r * 0.7, y1 + r * 0.3), (r * 0.42, y1 + r * 0.3)],
+                   place, "metal", 6, closed=True, angle=20.0)
         self.cyl(place @ V((0, y1, 0)), place @ V((0, length - eye * 0.7, 0)), r * 0.38, "chrome", 12)
         u = (place.to_3x3() @ X).normalized()
         for y in (0.0, length):
@@ -282,26 +269,46 @@ class Model:
                      segments=1)
         return place
 
-    def conduit(self, points, r, spacing=None):
-        """A ribbed power conduit through `points`: a glowing core sheathed in dark rings."""
+    def cap(self, centre, axis, r):
+        """A pin retainer on a joint's outer face: a faceted plate holding the pin, and the
+        pin's end."""
+        c, ax = vec(centre), vec(axis).normalized()
+        self.cyl(c, c + ax * 0.03, r, "metal", 8, bevel=0.006, segments=1)
+        self.cyl(c + ax * 0.03, c + ax * 0.06, r * 0.45, "dark", 6, bevel=0.004, segments=1)
+
+    def cable(self, points, r):
+        """An armoured cable (power and hydraulic lines) through `points`: a flexible sleeve
+        with ferrules, where a line has to cross a joint."""
         pts = [vec(p) for p in points]
-        spacing = spacing or r * 1.7
         for p, q in zip(pts, pts[1:]):
             d = q - p
-            n = max(1, int(d.length / spacing))
-            self.cyl(p, q, r * 0.42, "light", 6)
-            for k in range(n):
-                c = p + d * ((k + 0.5) / n)
-                self.cyl(c - d.normalized() * r * 0.32, c + d.normalized() * r * 0.32, r, "dark", 6,
-                         bevel=r * 0.15, segments=1)
+            self.cyl(p, q, r * 0.7, "rubber", 8)
+            n = max(1, int(d.length / (r * 4)))
+            for k in range(n + 1):
+                c = p + d * (k / n)
+                self.cyl(c - d.normalized() * r * 0.4, c + d.normalized() * r * 0.4, r, "dark", 8,
+                         bevel=r * 0.1, segments=1)
 
-    def slit(self, target, a, b, normal, width=0.03, depth=0.04):
-        """A glowing seam: a groove from `a` to `b` with an emissive strip down in it."""
-        a, b, n = vec(a), vec(b), vec(normal).normalized()
-        d = b - a
-        self.groove(target, a, b, n, width, depth)
-        self.box((d.length - width * 0.5, width * 0.55, depth * 0.5),
-                 place=frame((a + b) / 2 - n * depth * 0.7, u=d, w=n), mat="light", bevel=0)
+    def vent(self, target, centre, normal, up, width, height, fins=5, depth=0.12):
+        """A heat vent cut into `target`: a recess with angled fins that shed heat outward
+        and downward (so rain and debris don't fall in)."""
+        c, n = vec(centre), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        self.cut_box(target, (width, height, depth * 2), place=frame(c, u=a, v=u))
+        for k in range(fins):
+            y = -height / 2 + (k + 0.5) * height / fins
+            tilt = (u + n * 0.8).normalized()
+            self.box((width * 0.98, height / fins * 0.95, 0.02),
+                     place=frame(c + u * y - n * depth * 0.5, u=a, v=tilt), mat="dark", bevel=0.003,
+                     segments=1)
+
+    def lamp(self, p, normal, r=0.06):
+        """A marker lamp (shows the machine's extent to others): a housing and its lens."""
+        p, n = vec(p), vec(normal).normalized()
+        self.cyl(p, p + n * 0.04, r * 1.4, "dark", 8, bevel=0.005, segments=1)
+        self.cyl(p + n * 0.04, p + n * 0.07, r, "light", 8)
 
     def sensor(self, centre, normal, up, count=3, r=0.05, mat="armor2"):
         """A sensor cluster: lenses in a row on a faceted mount, each with a glowing iris."""

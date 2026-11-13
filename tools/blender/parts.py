@@ -49,10 +49,10 @@ def extent(h, d):
          "bastion.elbow_front_left", "bastion.elbow_front_right", "bastion.elbow_back_left",
          "bastion.elbow_back_right")
 def hinge(m, h, part):
-    """A heavy hinge. A faceted mount plate on the parent; two blade cheeks come down past
-    the pivot (the end node, where the joint turns) to a spur; the child's knuckle, an
-    octagonal drum, turns between them, its energy gap glowing. Outside one cheek the sealed
-    rotary actuator drives it; outside the other a sensor cap reads its angle."""
+    """A heavy hinge. A faceted mount plate on the parent; two armoured cheeks carry the pin
+    down past the pivot (the end node, where the joint turns) to a spur that covers the
+    bend; the child's knuckle, an octagonal hub, turns between them. Outside one cheek the
+    sealed rotary actuator drives the pin; outside the other the angle encoder reads it."""
     a = V(part["joint"]["axis"]).normalized()
     ns = nodes(part)
     pb, db = ns["base"]
@@ -86,19 +86,15 @@ def hinge(m, h, part):
         else:
             pl = J @ frame((x, 0, 0), u=(0, 0, 1), v=(0, 1, 0))
             pts = side
-        cheek = m.plate(pts, t, pl, "armor", chamfer=min(0.05, t * 0.4))
-        m.slit(cheek, p(s * xo, H * 0.75, -R * 0.55), p(s * xo, R * 0.55, -R * 0.55), a * s,
-               0.025, 0.03)
-    # Knuckle and the energy gaps at the cheeks.
+        m.plate(pts, t, pl, "armor", chamfer=min(0.05, t * 0.4))
+    # Knuckle.
     g = xo - t - 0.02
-    m.drum(p(-g, 0, 0), p(g, 0, 0), R * 0.82, "dark", 8, glow=True, hint=v)
-    for s in (-1, 1):
-        m.ring_glow(p(s * (g + 0.01), 0, 0), a, R * 0.45, R * 0.62, 0.02)
-    # Actuator and sensor cap.
-    m.drum(p(L, 0, 0), p(L + 0.26, 0, 0), R * 0.78, "metal", 8, glow=True, hint=v)
-    m.cyl(p(L + 0.26, 0, 0), p(L + 0.31, 0, 0), R * 0.42, "dark", 6, bevel=0.01, segments=1)
-    m.cyl(p(-L, 0, 0), p(-L - 0.07, 0, 0), R * 0.5, "dark", 8, bevel=0.01, segments=1)
-    m.cyl(p(-L - 0.07, 0, 0), p(-L - 0.09, 0, 0), R * 0.18, "light", 8)
+    m.drum(p(-g, 0, 0), p(g, 0, 0), R * 0.82, "dark", 8, hint=v)
+    # Actuator (its output shaft is the pin) and the encoder.
+    m.drum(p(L, 0, 0), p(L + 0.26, 0, 0), R * 0.78, "metal", 8, hint=v)
+    m.cap(p(L + 0.26, 0, 0), a, R * 0.42)
+    m.drum(p(-L, 0, 0), p(-L - 0.09, 0, 0), R * 0.45, "dark", 8, hint=v)
+    m.cable([p(-L - 0.05, R * 0.4, 0), p(-L - 0.05, H - 0.15, 0)], 0.025)
 
 
 # --- Arm segments -----------------------------------------------------------------------------
@@ -107,10 +103,11 @@ def hinge(m, h, part):
 @builder("bastion.link_front", "bastion.link_back", "bastion.forearm_front",
          "bastion.forearm_back", "bastion.drop_front", "bastion.drop_back")
 def beam(m, h, part):
-    """An arm segment: a hexagonal spine of dark frame metal between octagonal pin bosses,
-    sheathed in armour. A keeled fairing with chevron ends covers the front, graphite side
-    plates carry glowing cooling seams, and along the back a sealed actuator (it works the
-    next joint through a crank) runs between two blade fins."""
+    """An arm segment: a hexagonal spine of dark frame metal between octagonal pin bosses
+    (their pins held by retainers), sheathed in armour: two overlapping chevron-ended plates
+    over the front with a keel to deflect hits, graphite side plates; along the back a sealed
+    actuator (it works the next joint through a crank) runs between two guard blades, fed by
+    a cable from the spine."""
     hx, hy, hz = h
     R = min(hz * 0.62, hy * 0.25)
     end = hy - R
@@ -121,40 +118,31 @@ def beam(m, h, part):
     # Pin bosses.
     for s in (-1, 1):
         y = s * end
-        m.drum((-hx * 0.98, y, 0), (hx * 0.98, y, 0), R, "dark", 8, glow=False, hint=(0, 0, 1))
+        m.drum((-hx * 0.98, y, 0), (hx * 0.98, y, 0), R, "dark", 8, hint=(0, 0, 1))
         for sx in (-1, 1):
-            m.ring_glow((sx * hx * 0.985, y, 0), X, R * 0.42, R * 0.6, 0.02)
-            m.cyl((sx * hx * 0.98, y, 0), (sx * hx * 1.02, y, 0), R * 0.38, "metal", 6)
+            m.cap((sx * hx * 0.98, y, 0), X * sx, R * 0.55)
     # Front fairing: two overlapping chevron-ended plates (the upper one over the lower),
-    # a keel down the upper one, glowing seams in the lower.
+    # a keel down the upper one.
     tip = end - R * 1.05
     shoulder = end - R * 1.7
     zf = -hz * 0.62
     split = shoulder * 0.1
     low = [(-hx * 0.8, -shoulder), (0, -tip), (hx * 0.8, -shoulder), (hx * 0.8, split + 0.2),
            (0, split + 0.35), (-hx * 0.8, split + 0.2)]
-    lower = m.plate(low, 0.1, frame((0, 0, zf), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.04)
+    m.plate(low, 0.14, frame((0, 0, zf), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.05)
     up = [(-hx * 0.88, split - 0.05), (0, split - 0.3), (hx * 0.88, split - 0.05), (hx * 0.88, shoulder),
           (0, tip), (-hx * 0.88, shoulder)]
-    m.plate(up, 0.1, frame((0, 0, zf - 0.08), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.04)
-    m.hull([(sx * 0.06, y, zf - 0.18) for sx in (-1, 1) for y in (split + 0.1, shoulder * 0.9)]
-           + [(0, y, zf - 0.32) for y in (split + 0.25, shoulder * 0.75)], "armor2", bevel=0.004)
-    for sx in (-1, 1):
-        m.slit(lower, (sx * hx * 0.42, -shoulder * 0.8, zf - 0.1), (sx * hx * 0.42, split - 0.1, zf - 0.1),
-               -Z, 0.025, 0.035)
-    # Side plates with cooling seams.
+    m.plate(up, 0.14, frame((0, 0, zf - 0.1), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.05)
+    m.hull([(sx * 0.06, y, zf - 0.24) for sx in (-1, 1) for y in (split + 0.1, shoulder * 0.9)]
+           + [(0, y, zf - 0.38) for y in (split + 0.25, shoulder * 0.75)], "armor2", bevel=0.004)
+    # Side plates.
     for sx in (-1, 1):
         x = sx * hx * 0.6
         out = [(-hz * 0.55, -shoulder * 0.95), (hz * 0.45, -shoulder * 0.8), (hz * 0.45, shoulder * 0.8),
                (-hz * 0.55, shoulder * 0.95)]
         pl = frame((x, 0, 0), u=(0, 0, -sx), v=(0, 1, 0))
-        side = m.plate([(-z, y) for z, y in out] if sx > 0 else out, hx * 0.28, pl, "armor2",
-                       chamfer=0.03)
-        xs = x + sx * hx * 0.28
-        for k in range(3):
-            y0 = -shoulder * 0.7 + k * shoulder * 0.55
-            m.slit(side, (xs, y0, -hz * 0.3), (xs, y0 + shoulder * 0.35, hz * 0.2), X * sx, 0.02, 0.03)
-    # Actuator between blade fins on the back (+Z).
+        m.plate([(-z, y) for z, y in out] if sx > 0 else out, hx * 0.28, pl, "armor2", chamfer=0.03)
+    # Actuator between guard blades on the back (+Z), and its cable.
     rr = max(0.06, hx * 0.15)
     zr = cz + rr * 1.2
     ya, yb = end * 0.8, -end * 0.78
@@ -164,6 +152,7 @@ def beam(m, h, part):
         m.hull([(x + dx, y, cz) for dx in (-0.03, 0.03) for y in (-shoulder, shoulder)]
                + [(x, y, zr + rr * 0.9) for y in (-shoulder * 0.85, shoulder * 0.85)], "armor2",
                bevel=0.004)
+    m.cable([(0, shoulder * 0.5, cz), (rr * 0.6, ya - rr * 2.0, zr - rr * 0.9)], 0.025)
 
 
 # The other builders register themselves on import.
