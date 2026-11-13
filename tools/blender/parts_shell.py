@@ -98,7 +98,7 @@ QUARTER = next(p for p in json.loads((Path(__file__).resolve().parents[2] / "con
 # lift engines' sockets in its inner skin (rows of height and azimuths; the design's layout).
 BAY_DEG, BAY_TOP, BAY_BOTTOM = 24.0, 5.0, -10.0
 # The blister door: how far it rises out of the outer face at its middle (m).
-BLISTER = 1.2
+BLISTER = 2.0
 # The bulge keeps its full depth this far either side of the middle (degrees).
 LENS_FLAT = 28.0
 ENGINE_SOCKETS = [(-0.3, (-31.0, 31.0)), (1.9, (-31.0, 31.0))]

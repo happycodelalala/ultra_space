@@ -2522,11 +2522,11 @@
           ],
           [
             0.5,
-            8.705
+            9.394
           ],
           [
             -5.5,
-            8.049
+            8.738
           ],
           [
             -10.0,
@@ -2555,7 +2555,7 @@
           "size": "medium"
         }
       ],
-      "description": "The door of a quarter's drone bay: a faceted blister rising up to 1.2 m out of the middle of the quarter's outer face (a bay up to about 2 m deep under it), hinged along its top edge; open, it pivots up and out to expose the bay.",
+      "description": "The door of a quarter's drone bay: a faceted blister rising up to 2 m out of the middle of the quarter's outer face (a bay up to about 2.9 m deep under it), hinged along its top edge; open, it pivots up and out to expose the bay.",
       "form": {
         "model": "bastion.bay_cover",
         "material_slots": [
