@@ -334,8 +334,10 @@ pub fn walking_system(
         if let Some(mut tel) = telemetry {
             tel.in_contact = ok;
             tel.relative_velocity = local.state.velocity - env.spin.cross(local.state.position);
-            tel.altitude = local.state.position.length() - env.radius;
-            tel.ground_altitude = crate::flight::ground_altitude(&env, local.state.position);
+            // Heights of the centre of mass, as in flight.
+            let com = local.state.position + local.state.rotation * body.mass.center_of_mass;
+            tel.altitude = com.length() - env.radius;
+            tel.ground_altitude = crate::flight::ground_altitude(&env, com);
         }
         if !ok {
             commands.entity(entity).remove::<Walking>();

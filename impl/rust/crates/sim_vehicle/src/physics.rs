@@ -75,6 +75,8 @@ struct Entry {
     /// The rigid group of each collider, and the joint poses they were last placed at.
     collider_groups: Vec<usize>,
     pose_generation: u64,
+    /// The joint poses changed since the last step (a resting body wakes to settle again).
+    reposed: bool,
     /// The design hash it was built from; a different hash means the parts changed.
     hash: u64,
     mass: crate::mass::MassProperties,
@@ -344,6 +346,7 @@ impl PhysicsScene {
             return;
         }
         e.pose_generation = generation;
+        e.reposed = true;
         for (&h, &g) in e.collider_handles.iter().zip(&e.collider_groups) {
             let pose = poses
                 .get(g)
@@ -420,6 +423,7 @@ impl PhysicsScene {
                 collider_handles,
                 collider_groups,
                 pose_generation: 0,
+                reposed: false,
                 wheels,
                 controller,
                 drive: Drive::default(),
@@ -617,12 +621,16 @@ impl PhysicsScene {
     fn update_rest(&mut self, env: &BodyEnv) {
         let ground = self.ground.as_ref().map(|g| g.body);
         for e in self.bodies.values_mut() {
+            let reposed = std::mem::take(&mut e.reposed);
+            if reposed {
+                e.still = 0.0;
+            }
             let Some(local) = e.rest else { continue };
             let thrusting = e.wrench.force != DVec3::ZERO
                 || e.wrench.torque != DVec3::ZERO
                 || !e.drive.is_idle();
             let hit = ground.is_some_and(|g| touched_by_other(&self.world, e, g));
-            if thrusting || e.motion != Motion::Dynamic || !e.on_patches || hit {
+            if thrusting || reposed || e.motion != Motion::Dynamic || !e.on_patches || hit {
                 wake(&mut self.world, e, env.spin);
                 continue;
             }
@@ -1133,5 +1141,21 @@ mod tests {
             (after - height).abs() < 0.3,
             "rests on the pad as before: {after:.2} vs {height:.2} m"
         );
+
+        // Resting again, then its joint poses change: it wakes to settle on them.
+        let mut tick = ticks + 30 * 5;
+        while !scene.at_rest(id) && tick < ticks + 30 * 20 {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_dynamic(id, &body, &s, Wrench::default());
+            scene.step(&env, dt);
+            s = scene.state(id).unwrap().0;
+            tick += 1;
+        }
+        assert!(scene.at_rest(id), "rests on the pad");
+        scene.set_poses(id, &[crate::joints::Pose::IDENTITY], 1);
+        scene.place_dynamic(id, &body, &s, Wrench::default());
+        scene.step(&env, dt);
+        assert!(!scene.at_rest(id), "woken by the pose change");
     }
 }
