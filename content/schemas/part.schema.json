@@ -364,15 +364,15 @@
           "required": [
             "type",
             "axis",
-            "speed_deg_s",
             "max_torque_nm"
           ],
-          "description": "A hinge or rotor: parts attached beyond its \"end\" node turn about the axis (part axes) through that node. Joint parts need \"base\" and \"end\" nodes.",
+          "description": "A hinge, rotor or slider: parts attached beyond its \"end\" node turn about the axis (part axes) through that node, or (a slider) slide along it. Joint parts need \"base\" and \"end\" nodes. Hinges and rotors need speed_deg_s; sliders need limits_m and speed_m_s.",
           "properties": {
             "type": {
               "enum": [
                 "hinge",
-                "rotor"
+                "rotor",
+                "slider"
               ]
             },
             "axis": {
@@ -392,6 +392,20 @@
               "exclusiveMinimum": 0
             },
             "max_torque_nm": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Strongest torque (N m); for a slider, its strongest force (N)."
+            },
+            "limits_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Slider limits (metres)."
+            },
+            "speed_m_s": {
               "type": "number",
               "exclusiveMinimum": 0
             }

@@ -148,8 +148,14 @@ export function posesOf(articulation, angles) {
       poses.push({ rotation: quat.identity(), translation: [0, 0, 0] });
       return;
     }
-    const turn = quat.axisAngle(g.axis, angles[i] ?? 0);
-    const local = { rotation: turn, translation: v3.sub(g.pivot, quat.rotate(turn, g.pivot)) };
+    const value = angles[i] ?? 0;
+    let local;
+    if (g.joint?.type === "slider") {
+      local = { rotation: quat.identity(), translation: v3.scale(g.axis, value) };
+    } else {
+      const turn = quat.axisAngle(g.axis, value);
+      local = { rotation: turn, translation: v3.sub(g.pivot, quat.rotate(turn, g.pivot)) };
+    }
     const parent = poses[g.parent];
     poses.push({
       rotation: quat.normalize(quat.mul(parent.rotation, local.rotation)),
@@ -163,8 +169,17 @@ export function applyPose(pose, x) {
   return v3.add(quat.rotate(pose.rotation, x), pose.translation);
 }
 
-/// A joint's angle clamped to its limits (radians; rotors turn freely).
+/// Radians (or metres, for a slider) per joint value in data (degrees, or metres).
+export function jointUnit(joint) {
+  return joint?.type === "slider" ? 1 : DEG;
+}
+
+/// A joint's angle clamped to its limits (radians, or metres for a slider; rotors turn freely).
 export function clampJoint(joint, angle) {
+  if (joint?.type === "slider") {
+    const [lo, hi] = joint.limits_m ?? [-Infinity, Infinity];
+    return Math.min(hi, Math.max(lo, angle));
+  }
   if (!joint || joint.type !== "hinge" || !joint.limits_deg) return angle;
   const [lo, hi] = joint.limits_deg.map((d) => d * DEG);
   return Math.min(hi, Math.max(lo, angle));
@@ -176,22 +191,24 @@ export function poseAngles(design, parts, articulation, name) {
   const pose = design.poses?.[name];
   if (!pose) return null;
   const angles = new Array(articulation.groups.length).fill(0);
-  for (const [joint, deg] of Object.entries(pose)) {
-    const part = parts.findIndex((p) => p.name === joint);
+  for (const [name, value] of Object.entries(pose)) {
+    const part = parts.findIndex((p) => p.name === name);
     const g = articulation.groups.findIndex((gr) => gr.jointPart === part);
-    if (g > 0) angles[g] = clampJoint(articulation.groups[g].joint, deg * DEG);
+    const joint = articulation.groups[g]?.joint;
+    if (g > 0) angles[g] = clampJoint(joint, value * jointUnit(joint));
   }
   return angles;
 }
 
-/// A named pose from joint angles, in the design file's format (joint part name -> whole
-/// degrees; joints at rest left out).
+/// A named pose from joint angles, in the design file's format (joint part name -> degrees to
+/// a tenth, or metres to a centimetre for a slider; joints at rest left out).
 export function poseFromAngles(parts, articulation, angles) {
   const pose = {};
   articulation.groups.forEach((g, i) => {
     if (g.jointPart == null) return;
-    const deg = Math.round((angles[i] / DEG) * 10) / 10;
-    if (deg !== 0) pose[parts[g.jointPart].name] = deg;
+    const slides = g.joint?.type === "slider";
+    const value = slides ? Math.round(angles[i] * 100) / 100 : Math.round((angles[i] / DEG) * 10) / 10;
+    if (value !== 0) pose[parts[g.jointPart].name] = value;
   });
   return pose;
 }
@@ -213,7 +230,7 @@ export function massOf(parts, articulation, poses) {
 // --- Procedural shells (catalog.rs Shape::Shell) ------------------------------------------
 
 export const SHELL_PROFILE_STEPS = 6; // catalog.rs
-export const SHELL_ARC_STEP_DEG = 15;
+export const SHELL_ARC_STEP_DEG = 7.5;
 
 /// A shell's side profile sampled top to bottom: [height, radius] on the Catmull-Rom curve
 /// through its four points (catalog.rs shell_profile).

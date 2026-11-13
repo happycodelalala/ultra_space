@@ -504,7 +504,9 @@ fn pose_key(
         .iter()
         .filter_map(|(joint, deg)| {
             let part = vehicle.parts.iter().position(|p| &p.name == joint)?;
-            Some((body.articulation.group_of_joint(part)?, deg.to_radians()))
+            let g = body.articulation.group_of_joint(part)?;
+            let joint = body.articulation.groups[g].joint?;
+            Some((g, joint.from_data(*deg)))
         })
         .collect();
     let groups = body.articulation.groups.len();

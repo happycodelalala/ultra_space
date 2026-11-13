@@ -15,6 +15,7 @@ import {
   articulationOf,
   catalogOf,
   clampJoint,
+  jointUnit,
   halfExtents,
   lowestPoint,
   shapeBoxes,
@@ -367,17 +368,20 @@ function buildPanel() {
     if (g.jointPart == null) return;
     count++;
     const name = state.parts[g.jointPart].name;
-    const limits = g.joint.type === "hinge" && g.joint.limits_deg ? g.joint.limits_deg : [-180, 180];
+    const slides = g.joint.type === "slider";
+    const limits = slides
+      ? g.joint.limits_m ?? [0, 1]
+      : g.joint.type === "hinge" && g.joint.limits_deg ? g.joint.limits_deg : [-180, 180];
     const row = document.createElement("div");
     row.className = "joint";
     row.dataset.name = name;
     row.innerHTML = `<span title="${name}">${name}</span><span class="val"></span>
-      <input type="range" min="${limits[0]}" max="${limits[1]}" step="1">`;
+      <input type="range" min="${limits[0]}" max="${limits[1]}" step="${slides ? 0.05 : 1}">`;
     const slider = row.querySelector("input");
     slider.dataset.group = i;
     slider.oninput = () => {
-      state.angles[i] = clampJoint(g.joint, Number(slider.value) * DEG);
-      row.querySelector(".val").textContent = `${Math.round(slider.value)}°`;
+      state.angles[i] = clampJoint(g.joint, Number(slider.value) * jointUnit(g.joint));
+      row.querySelector(".val").textContent = jointLabel(g.joint, Number(slider.value));
       applyPoses();
     };
     joints.append(row);
@@ -387,11 +391,17 @@ function buildPanel() {
   filterJoints();
 }
 
+/// A joint's value as shown: whole degrees, or metres for a slider.
+function jointLabel(joint, value) {
+  return joint?.type === "slider" ? `${value.toFixed(2)} m` : `${Math.round(value)}°`;
+}
+
 function syncSliders() {
   for (const slider of document.querySelectorAll("#joints input[type=range]")) {
-    const deg = state.angles[Number(slider.dataset.group)] / DEG;
-    slider.value = deg;
-    slider.parentElement.querySelector(".val").textContent = `${Math.round(deg)}°`;
+    const g = state.articulation.groups[Number(slider.dataset.group)];
+    const value = state.angles[Number(slider.dataset.group)] / jointUnit(g.joint);
+    slider.value = value;
+    slider.parentElement.querySelector(".val").textContent = jointLabel(g.joint, value);
   }
 }
 

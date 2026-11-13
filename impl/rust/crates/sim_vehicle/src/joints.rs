@@ -1,8 +1,8 @@
 //! Jointed parts (Batch 3, task 3.10; design: vehicle-builder.md §7.1).
 //!
-//! A joint part (a hinge or rotor) splits a vehicle into **rigid groups**: the parts attached
-//! beyond a joint's `end` node (and everything below them) turn about the joint's axis through
-//! that node. Articulation is kinematic: each joint has an angle that moves toward a target at the
+//! A joint part (a hinge, rotor or slider) splits a vehicle into **rigid groups**: the parts
+//! attached beyond a joint's `end` node (and everything below them) turn about the joint's
+//! axis through that node, or slide along it. Articulation is kinematic: each joint has an angle that moves toward a target at the
 //! joint's speed, and each group's pose follows from the angles by forward kinematics down the
 //! attachment tree. The vehicle stays one rigid body; its groups' colliders and meshes move.
 
@@ -91,10 +91,20 @@ impl Articulation {
                 None => Pose::IDENTITY,
                 Some(parent) => {
                     let angle = angles.get(g).copied().unwrap_or(0.0);
-                    let turn = DQuat::from_axis_angle(group.axis, angle);
-                    let local = Pose {
-                        rotation: turn,
-                        translation: group.pivot - turn * group.pivot,
+                    let slides = group
+                        .joint
+                        .is_some_and(|j| j.joint_type == crate::catalog::JointType::Slider);
+                    let local = if slides {
+                        Pose {
+                            rotation: DQuat::IDENTITY,
+                            translation: group.axis * angle,
+                        }
+                    } else {
+                        let turn = DQuat::from_axis_angle(group.axis, angle);
+                        Pose {
+                            rotation: turn,
+                            translation: group.pivot - turn * group.pivot,
+                        }
                     };
                     poses[parent].then(local)
                 }
@@ -164,7 +174,7 @@ impl JointState {
         for (g, group) in articulation.groups.iter().enumerate() {
             let Some(joint) = group.joint else { continue };
             let target = joint.clamp(self.targets[g]);
-            let step = joint.speed_deg_s.to_radians() * dt;
+            let step = joint.speed() * dt;
             let delta = (target - self.angles[g]).clamp(-step, step);
             if delta != 0.0 {
                 self.angles[g] += delta;
@@ -179,8 +189,9 @@ impl JointState {
     }
 }
 
-/// The joint angles (radians, one per group) of `vehicle`'s pose `name`: its named joints at
-/// their angles (within limits), every other joint at rest. `None` without such a pose.
+/// The joint angles (radians, or metres for sliders; one per group) of `vehicle`'s pose
+/// `name`: its named joints at their values (within limits), every other joint at rest.
+/// `None` without such a pose.
 pub fn pose_angles(
     vehicle: &crate::vehicle::Vehicle,
     articulation: &Articulation,
@@ -193,10 +204,9 @@ pub fn pose_angles(
             continue;
         };
         if let Some(g) = articulation.group_of_joint(part) {
-            let angle = deg.to_radians();
             angles[g] = articulation.groups[g]
                 .joint
-                .map_or(angle, |j| j.clamp(angle));
+                .map_or(deg.to_radians(), |j| j.clamp(j.from_data(*deg)));
         }
     }
     Some(angles)
@@ -278,7 +288,9 @@ mod tests {
                 joint_type: JointType::Hinge,
                 axis: [1.0, 0.0, 0.0],
                 limits_deg: Some([-90.0, 90.0]),
+                limits_m: None,
                 speed_deg_s: 90.0,
+                speed_m_s: 0.0,
                 max_torque_nm: 1000.0,
             }),
             ..Default::default()

@@ -1,8 +1,8 @@
 # Review shots of the Bastion from around it (for design review). Run with
 # ULTRA_SPACE_START_ALTITUDE=1500. Spawn and board it, hide the HUD, then photograph it from
 # eight directions around (yaw 0 = behind, 180 = front) at a slight downward angle, from above
-# and from low; then closed into its cocoon, in its flying pose (shells turned up into four
-# platforms) and standing again. Look for: proportions, silhouette, how the part models and
+# and from low; then with its drone bays open, closed into its cocoon, in its flying pose
+# (shells pushed out into four platforms) and standing again. Look for: proportions, silhouette, how the part models and
 # materials read (bevels, panel lines, occlusion, shadows, reflections), gaps or overlaps.
 0.5  press Z
 1    wait landed 40
@@ -33,17 +33,20 @@
 29   shot 09-above.png
 29.5 orbit 200 15
 31   shot 10-low-front.png
-31.5 press P                 # cocoon (shells closed)
-32   orbit 150 -10
-37   shot 11-cocoon.png
-37.5 orbit 330 -10
-39   shot 12-cocoon-back.png
-39.5 press P                 # fly: shells turned up into four platforms
-40   orbit 160 -10
-46   shot 13-fly.png
-46.5 orbit 200 25
-48   shot 14-fly-below.png
-48.5 press P                 # stand
-49   orbit 120 -15
-54   shot 15-stand-again.png
-54.5 quit
+31.5 press P                 # bays: drone bay covers open
+32   orbit 210 -15
+38   shot 11-bays.png
+39.5 press P                 # cocoon (shells closed)
+40   orbit 150 -10
+45   shot 12-cocoon.png
+45.5 orbit 330 -10
+47   shot 13-cocoon-back.png
+47.5 press P                 # fly: shells pushed out into four platforms
+48   orbit 160 -10
+54   shot 14-fly.png
+54.5 orbit 200 25
+56   shot 15-fly-below.png
+56.5 press P                 # stand
+57   orbit 120 -15
+62   shot 16-stand-again.png
+62.5 quit

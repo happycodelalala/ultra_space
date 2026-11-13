@@ -337,6 +337,9 @@ class Model:
     def cut_box(self, target, size, at=(0, 0, 0), place=None):
         return self.cut(target, self.box(size, at, place=place, bevel=0, cutter=True))
 
+    def hole(self, target, a, b, r, sides=24):
+        return self.cut(target, self.cyl(a, b, r, sides=sides, cutter=True))
+
     def groove(self, target, a, b, normal, width=0.025, depth=0.025):
         """A panel line from `a` to `b` on a face with outward `normal`."""
         a, b, n = vec(a), vec(b), vec(normal).normalized()

@@ -41,8 +41,8 @@ test("the Bastion splits into the same rigid groups as in the game", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  // 54 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
-  assert.equal(a.groups.length - 1, 54);
+  // 94 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
+  assert.equal(a.groups.length - 1, 94);
 });
 
 test("poses put the shells where the game does", () => {
@@ -56,12 +56,12 @@ test("poses put the shells where the game does", () => {
     const at = applyPose(posesOf(a, angles)[a.partGroup[i]], [0, 0, 0].map((_, k) => p.position[k] + quat.rotate(p.rotation, shapeCentroid(p.def.shape))[k]));
     return Math.hypot(at[0], at[2] - 0.3);
   };
-  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 5.1 m
-  // (front) and 5.2 m (back); held out in stand 10.4 m (front) and 9.1 m (back).
+  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 5.5 m;
+  // held out in stand (forearms telescoped) 12.6 m (front) and 10.4 m (back).
   const close = (x, want, what) => assert.ok(Math.abs(x - want) < 0.1, `${what}: ${x} vs ${want}`);
-  close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 5.1, "cocoon");
-  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 10.4, "stand front");
-  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 9.1, "stand back");
+  close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 5.5, "cocoon");
+  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 12.6, "stand front");
+  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 10.4, "stand back");
 });
 
 test("a pose read and written back is the same pose", () => {
@@ -84,9 +84,9 @@ test("the heavy frame stands on its soles", () => {
 test("shells tile like the game's", () => {
   const shell = catalog.get("bastion.shell_quarter_front_left").shape;
   const tiles = shapeTiles(shell);
-  // 87° arc in 15° steps: 6 columns; 3 spans x 6 steps: 18 rows.
-  assert.equal(tiles.length, 6 * 18);
-  for (const t of tiles) assert.ok(t.half[0] > 0 && t.half[1] > 0 && Math.abs(t.half[2] - 0.2) < 1e-12);
+  // 87° arc in 7.5° steps: 12 columns; 3 spans x 6 steps: 18 rows; 1.2 m thick.
+  assert.equal(tiles.length, 12 * 18);
+  for (const t of tiles) assert.ok(t.half[0] > 0 && t.half[1] > 0 && Math.abs(t.half[2] - 0.6) < 1e-12);
   // Symmetric arc: the centroid lies on the part's +Z side, in its middle plane.
   const c = shapeCentroid(shell);
   assert.ok(Math.abs(c[0]) < 1e-9 && c[2] > 3);

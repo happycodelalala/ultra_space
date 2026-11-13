@@ -138,31 +138,104 @@ def carrier(m, h, part):
 
 @builder("bastion.saddle_left", "bastion.saddle_right")
 def saddle(m, h, part):
-    """A shoulder saddle: a faceted graphite base on the shoulder block; for each shell arm
-    a tapered octagonal pedestal with four blade gussets up to the arm's shoulder hinge,
-    its flange carrying the hinge; a power junction between them feeding both arms through
-    armoured cables."""
+    """A shoulder housing: a heavy faceted bulge on the shoulder block, armoured over its top,
+    in which the root hinges of a front and a back shell arm sit recessed:
+    each in a deep socket ringed by a reinforcing collar, braced by ribs that carry its loads
+    down into the shoulder; a power junction between the sockets feeds both arms."""
     hx, hy, hz = h
     ns = nodes(part)
-    m.plate(octagon(2 * hx, 2 * hz, hx * 0.4), hy * 0.5, frame((0, -hy, 0), u=X, w=Y), "armor2",
-            chamfer=0.05)
+    # The housing: wider at its base, faceted, the dark core under armour.
+    body = m.hull([(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
+                   for y, wx, wz in ((-hy, hx * 1.05, hz * 1.02), (hy * 0.2, hx * 1.08, hz * 1.04),
+                                     (hy * 0.95, hx * 0.8, hz * 0.85))], "dark", bevel=0.02)
+    # Armour over the top.
+    cap = m.hull([(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
+            for y, wx, wz in ((hy * 0.7, hx * 0.95, hz * 0.95), (hy * 1.05, hx * 0.72, hz * 0.8))], "armor",
+           bevel=0.01)
     for name, (p, d) in ns.items():
-        foot = V((p.x, -hy * 0.5, p.z))
-        top = p - d * 0.12
-        m.cyl(foot, top, 0.38, "armor", 8, r2=0.3, bevel=0.01, segments=1)
-        m.drum(top, p, 0.5, "metal", 8, hint=X)
+        # Socket: cut deep into the housing, a reinforcing collar at its mouth.
+        mouth = p - d * 0.05
+        for ob in (body, cap):
+            m.hole(ob, mouth - d * 0.9, mouth + d * 0.6, 0.62, 8)
+        m.lathe([(0.62, -0.06), (0.82, -0.06), (0.82, 0.08), (0.62, 0.08)], along(mouth, mouth + d), "metal", 8,
+                closed=True, angle=20.0)
+        m.drum(mouth - d * 0.9, mouth - d * 0.75, 0.62, "metal", 8, hint=X)
+        # Ribs from the collar down the housing's flanks.
         for k in range(4):
             t = math.pi / 4 + math.pi / 2 * k
             u = V((math.cos(t), 0, math.sin(t)))
-            w = u.cross(Y)
-            m.hull([foot + u * 0.28 + w * s * 0.02 for s in (-1, 1)] + [foot + u * 0.7 + w * s * 0.02 for s in (-1, 1)]
-                   + [foot + u * 0.28 + Y * 0.5], "armor2", bevel=0.003)
-    mv = V((0, -hy * 0.2, 0))
-    m.hull([mv + V((sx * hx * 0.4, sy * hy * 0.28, sz * 0.25)) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
-           + [mv + V((0, hy * 0.4, 0))], "dark", bevel=0.01)
-    for name, (p, d) in ns.items():
-        sz = 1 if p.z > 0 else -1
-        m.cable([mv + V((0, 0.05, sz * 0.25)), V((0, hy * 0.3, p.z * 0.6)), p + V((0.45, -0.3, 0))], 0.04)
+            w = u.cross(Y).normalized()
+            top = mouth + u * 0.82
+            m.hull([top + w * s * 0.05 for s in (-1, 1)] + [top - Y * 0.15 + w * s * 0.05 for s in (-1, 1)]
+                   + [V((top.x + u.x * 0.35, -hy * 0.9, top.z + u.z * 0.35)) + w * s * 0.06 for s in (-1, 1)],
+                   "armor2", bevel=0.004)
+    m.cable([V((0, hy * 0.6, -hz * 0.25)), V((0, hy * 0.75, 0)), V((0, hy * 0.6, hz * 0.25))], 0.05)
+
+
+@builder("bastion.forearm_front", "bastion.forearm_back")
+def sleeve(m, h, part):
+    """A telescoping forearm's outer sleeve: an octagonal tube, its mouth at the bottom
+    where the slide collar sits and the inner beam runs out; the elbow's pin boss at the
+    top; armour plates over the front and the sides."""
+    hx, hy, hz = h
+    R = min(hz * 0.62, hy * 0.25)
+    end = hy - R
+    rt = hx * 0.55
+    m.lathe([(rt * 0.75, -hy), (rt, -hy), (rt, end), (rt * 0.75, end)], frame(), "dark", 8, closed=True,
+            angle=20.0)
+    m.drum((-hx * 0.98, end, 0), (hx * 0.98, end, 0), R, "dark", 8, hint=(0, 0, 1))
+    for sx in (-1, 1):
+        m.cap((sx * hx * 0.98, end, 0), X * sx, R * 0.55)
+    m.lathe([(rt * 0.75, -hy), (rt * 1.15, -hy), (rt * 1.15, -hy + 0.12), (rt * 0.75, -hy + 0.12)], frame(),
+            "metal", 8, closed=True, angle=20.0)
+    span = end - R * 1.2 + hy - 0.15
+    yc = (end - R * 1.2 - hy + 0.15) / 2
+    tip = span / 2
+    out = [(-hx * 0.86, -tip + 0.3), (0, -tip), (hx * 0.86, -tip + 0.3), (hx * 0.86, tip - 0.3), (0, tip),
+           (-hx * 0.86, tip - 0.3)]
+    zf = -rt
+    m.plate(out, 0.14, frame((0, yc, zf), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.05)
+    m.hull([(sx * 0.06, yc + y, zf - 0.14) for sx in (-1, 1) for y in (-tip * 0.8, tip * 0.8)]
+           + [(0, yc + y, zf - 0.28) for y in (-tip * 0.65, tip * 0.65)], "armor2", bevel=0.004)
+    for sx in (-1, 1):
+        side = [(-hz * 0.5, yc - tip * 0.9), (hz * 0.45, yc - tip * 0.8), (hz * 0.45, yc + tip * 0.8),
+                (-hz * 0.5, yc + tip * 0.9)]
+        pl = frame((sx * rt * 0.95, 0, 0), u=(0, 0, -sx), v=(0, 1, 0))
+        m.plate([(-z, y) for z, y in side] if sx > 0 else side, hx * 0.25, pl, "armor2", chamfer=0.03)
+
+
+@builder("bastion.arm_slide")
+def arm_slide(m, h, part):
+    """The slide collar on a forearm sleeve's mouth: an octagonal collar round the inner beam,
+    with two pinion motors either side that drive the beam's rack, and wiper seals at the
+    mouth."""
+    hx, hy, hz = h
+    r = min(hx, hz)
+    m.lathe([(0.38, -hy), (r * 0.82, -hy), (r * 0.95, -hy * 0.6), (r * 0.95, hy * 0.6), (r * 0.82, hy),
+             (0.38, hy)], frame(), "metal", 8, closed=True, angle=20.0)
+    m.lathe([(0.36, -hy - 0.04), (0.44, -hy - 0.04), (0.44, -hy), (0.36, -hy)], frame(), "rubber", 8,
+            closed=True, angle=20.0)
+    for sx in (-1, 1):
+        m.drum((sx * r * 0.95, -hy * 0.6, 0), (sx * (r * 0.95 + 0.25), -hy * 0.6, 0), 0.22, "dark", 8,
+               hint=(0, 1, 0))
+        m.drum((sx * (r * 0.95 + 0.25), -hy * 0.6, 0), (sx * (r * 0.95 + 0.3), -hy * 0.6, 0), 0.15, "metal",
+               6, hint=(0, 1, 0))
+
+
+@builder("bastion.forearm_beam")
+def forearm_beam(m, h, part):
+    """A telescoping forearm's inner beam: a hexagonal beam with a stop collar at its top
+    (it can't run out of the sleeve), a rack down each side for the collar's pinions, and
+    the wrist's mount at its bottom end."""
+    hx, hy, hz = h
+    r = hx * 0.9
+    m.lathe([(r, -hy + 0.3), (r, hy - 0.1), (r * 0.8, hy), (0, hy)], frame(), "metal", 6, angle=20.0)
+    m.lathe([(r, hy - 0.4), (r * 1.2, hy - 0.35), (r * 1.2, hy - 0.15), (r, hy - 0.1)], frame(), "dark", 6,
+            closed=True, angle=20.0)
+    for sx in (-1, 1):
+        m.box((0.06, 2 * hy - 0.9, 0.16), at=(sx * r * 0.88, -0.1, 0), mat="dark", bevel=0.01, segments=1)
+    m.hull([(sx * hx * 1.05, y, sz * hz * 1.05) for sx in (-1, 1) for sz in (-1, 1) for y in (-hy, -hy + 0.35)]
+           + [(sx * r, -hy + 0.55, sz * r) for sx in (-1, 1) for sz in (-1, 1)], "armor2", bevel=0.01)
 
 
 @builder("bastion.grapple")

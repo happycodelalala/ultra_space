@@ -1,8 +1,9 @@
 # The Bastion (an original heavy frame: four long shell arms on shoulder saddles, curved
 # quarter-shells with lift engines). Run with ULTRA_SPACE_START_ALTITUDE=1500. Spawn it, board
-# it, step through its poses with P (from stand: cocoon, fly, stand), then walk closed up and
-# stop. Look for: the quarters closing into a ring around the body (cocoon), turned up into
-# four platforms (fly), held out beside the legs (stand); walking in the cocoon; standing
+# it, step through its poses with P (from stand: bays, cocoon, fly, stand), then walk closed up
+# and stop. Look for: the drone bay covers lifting (bays), the quarters closing into a ring
+# around the body (cocoon), pushed out into four platforms (fly), held out beside the legs
+# (stand); walking in the cocoon; standing
 # after; log "pose: ..." lines.
 0.5  press Z
 1    wait landed 40
@@ -14,17 +15,19 @@
 9.5  press F                 # board it
 11   press H                 # hide the HUD
 12   shot 01-stand.png
-12.5 press P                 # cocoon
-18   shot 02-cocoon.png
-18.5 press P                 # fly
-24   shot 03-fly.png
-24.5 press P                 # stand
-30   shot 04-stand.png
-30.5 press P                 # cocoon (closed while walking)
-34   hold W 6
-38   shot 05-walking-cocoon.png
-40.5 press M                 # legs off: stops on both feet, then plain physics
-41   press H                 # HUD back
-42   shot 06-stopping.png
-45   shot 07-stopped.png
-45.5 quit
+12.5 press P                 # bays: drone bay covers open
+18   shot 02-bays.png
+18.5 press P                 # cocoon
+24   shot 03-cocoon.png
+24.5 press P                 # fly
+30   shot 04-fly.png
+30.5 press P                 # stand
+36   shot 05-stand.png
+36.5 press P                 # cocoon (closed while walking)
+40   hold W 6
+44   shot 06-walking-cocoon.png
+46.5 press M                 # legs off: stops on both feet, then plain physics
+47   press H                 # HUD back
+48   shot 07-stopping.png
+51   shot 08-stopped.png
+51.5 quit

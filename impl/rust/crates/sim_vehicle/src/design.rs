@@ -30,7 +30,7 @@ struct DesignFile {
     gait: Option<crate::gait::GaitDef>,
 }
 
-/// A named set of joint angles (degrees, by joint part name).
+/// A named set of joint values (degrees, or metres for sliders; by joint part name).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NamedPose {
     pub name: String,

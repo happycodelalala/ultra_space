@@ -95,15 +95,41 @@ pub struct Interference {
     pub depth: f64,
 }
 
-/// Whether parts `a` and `b` are joined: one is the other's parent, or both hang on the same
-/// joint part from either side (the limbs meeting at a hinge touch there).
+/// Whether parts `a` and `b` are joined: one hangs on the other directly or through a chain
+/// of joint parts (the limbs meeting at a hinge touch there; a gimballed engine sits in the
+/// socket of the part its gimbal is mounted on), counting a telescoping beam as its sleeve.
 fn joined(vehicle: &Vehicle, a: usize, b: usize) -> bool {
-    let parent = |i: usize| vehicle.parts[i].parent;
-    let is_joint = |i: usize| vehicle.parts[i].def.joint.is_some();
-    parent(a) == Some(b)
-        || parent(b) == Some(a)
-        || parent(b).is_some_and(|j| is_joint(j) && parent(j) == Some(a))
-        || parent(a).is_some_and(|j| is_joint(j) && parent(j) == Some(b))
+    let hangs_on = |child: usize, ancestor: usize| {
+        let mut p = vehicle.parts[child].parent;
+        while let Some(j) = p {
+            if j == ancestor {
+                return true;
+            }
+            if vehicle.parts[j].def.joint.is_none() {
+                return false;
+            }
+            p = vehicle.parts[j].parent;
+        }
+        false
+    };
+    // A part riding a slider (a telescoping beam) runs inside the part the slider is on (its
+    // sleeve), so it meets whatever the sleeve meets.
+    let sleeve = |i: usize| {
+        let j = vehicle.parts[i].parent?;
+        let slides = vehicle.parts[j]
+            .def
+            .joint
+            .is_some_and(|d| d.joint_type == crate::catalog::JointType::Slider);
+        if slides {
+            vehicle.parts[j].parent
+        } else {
+            None
+        }
+    };
+    let direct = |a: usize, b: usize| hangs_on(a, b) || hangs_on(b, a);
+    direct(a, b)
+        || sleeve(a).is_some_and(|s| direct(s, b))
+        || sleeve(b).is_some_and(|s| direct(a, s))
 }
 
 /// Every pair of parts that overlap by more than `tolerance` (m) with the joints at `angles`

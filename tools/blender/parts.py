@@ -47,7 +47,8 @@ def extent(h, d):
 @builder("bastion.arm_hinge", "bastion.leg_hinge", "frame.hinge", "bastion.bend_front_left",
          "bastion.bend_front_right", "bastion.bend_back_left", "bastion.bend_back_right",
          "bastion.elbow_front_left", "bastion.elbow_front_right", "bastion.elbow_back_left",
-         "bastion.elbow_back_right")
+         "bastion.elbow_back_right", "bastion.engine_mount", "bastion.engine_gimbal",
+         "bastion.bay_hinge")
 def hinge(m, h, part):
     """A heavy hinge. A faceted mount plate on the parent; two armoured cheeks carry the pin
     down past the pivot (the end node, where the joint turns) to a spur that covers the
@@ -100,8 +101,7 @@ def hinge(m, h, part):
 # --- Arm segments -----------------------------------------------------------------------------
 
 
-@builder("bastion.link_front", "bastion.link_back", "bastion.forearm_front",
-         "bastion.forearm_back", "bastion.drop_front", "bastion.drop_back")
+@builder("bastion.link_front", "bastion.link_back", "bastion.drop_front", "bastion.drop_back")
 def beam(m, h, part):
     """An arm segment: a hexagonal spine of dark frame metal between octagonal pin bosses
     (their pins held by retainers), sheathed in armour: two overlapping chevron-ended plates

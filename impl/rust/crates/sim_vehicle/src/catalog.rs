@@ -172,10 +172,13 @@ pub enum JointType {
     Hinge,
     /// Turns freely.
     Rotor,
+    /// Slides along its axis within `limits_m` (a telescoping stage).
+    Slider,
 }
 
 /// A joint (task 3.10): parts attached beyond its `end` node turn about `axis` (part axes)
-/// through that node.
+/// through that node, or slide along it (a slider). A joint's value is an angle (radians;
+/// degrees in data) or, for a slider, a distance (metres, in data too).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JointDef {
@@ -185,8 +188,16 @@ pub struct JointDef {
     /// Hinge limits (degrees).
     #[serde(default)]
     pub limits_deg: Option<[f64; 2]>,
-    /// Fastest turn (degrees per second).
+    /// Slider limits (metres).
+    #[serde(default)]
+    pub limits_m: Option<[f64; 2]>,
+    /// Fastest turn (degrees per second; hinges and rotors).
+    #[serde(default)]
     pub speed_deg_s: f64,
+    /// Fastest slide (metres per second; sliders).
+    #[serde(default)]
+    pub speed_m_s: f64,
+    /// Strongest torque (N m), or for a slider its strongest force (N).
     pub max_torque_nm: f64,
 }
 
@@ -195,8 +206,39 @@ impl JointDef {
         DVec3::from(self.axis).normalize_or(DVec3::X)
     }
 
-    /// `angle` (radians) kept within the hinge limits.
+    /// The joint's value for a value in data (degrees, or metres for a slider).
+    pub fn from_data(&self, value: f64) -> f64 {
+        if self.joint_type == JointType::Slider {
+            value
+        } else {
+            value.to_radians()
+        }
+    }
+
+    /// The joint's value in data units (degrees, or metres for a slider), rounded (whole
+    /// degrees, or centimetres).
+    pub fn to_data(&self, value: f64) -> f64 {
+        if self.joint_type == JointType::Slider {
+            (value * 100.0).round() / 100.0
+        } else {
+            value.to_degrees().round()
+        }
+    }
+
+    /// Fastest change of the joint's value (radians or metres per second).
+    pub fn speed(&self) -> f64 {
+        if self.joint_type == JointType::Slider {
+            self.speed_m_s
+        } else {
+            self.speed_deg_s.to_radians()
+        }
+    }
+
+    /// `angle` (radians; metres for a slider) kept within the joint's limits.
     pub fn clamp(&self, angle: f64) -> f64 {
+        if self.joint_type == JointType::Slider {
+            return self.limits_m.map_or(angle, |[lo, hi]| angle.clamp(lo, hi));
+        }
         match (self.joint_type, self.limits_deg) {
             (JointType::Hinge, Some([lo, hi])) => angle.clamp(lo.to_radians(), hi.to_radians()),
             _ => angle,
@@ -258,7 +300,7 @@ pub struct Tile {
 /// Steps per profile span (between two of the four profile points) for tiles and models.
 pub const SHELL_PROFILE_STEPS: usize = 6;
 /// Largest azimuth step of a shell's tiles (degrees).
-pub const SHELL_ARC_STEP_DEG: f64 = 15.0;
+pub const SHELL_ARC_STEP_DEG: f64 = 7.5;
 
 /// A shell's side profile sampled top to bottom: (height, radius) on a Catmull-Rom curve
 /// through the four points (end points repeated), `steps` samples per span. The game's model
@@ -649,6 +691,18 @@ fn validate(p: &PartDef) -> Vec<String> {
     problems.extend(needs(p.wheel.is_some(), "wheel", PartKind::Wheel));
     problems.extend(needs(p.battery.is_some(), "battery", PartKind::Battery));
     problems.extend(needs(p.joint.is_some(), "joint", PartKind::Joint));
+    if let Some(j) = p.joint {
+        let ok = match j.joint_type {
+            JointType::Slider => j.limits_m.is_some() && positive(j.speed_m_s),
+            _ => positive(j.speed_deg_s),
+        };
+        if !ok {
+            problems.push(format!(
+                "{}: a slider needs limits_m and speed_m_s, a hinge or rotor speed_deg_s",
+                p.id
+            ));
+        }
+    }
     if p.joint.is_some() && (p.node("base").is_none() || p.node("end").is_none()) {
         problems.push(format!("{}: joints need \"base\" and \"end\" nodes", p.id));
     }
