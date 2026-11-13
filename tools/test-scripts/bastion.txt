@@ -23,7 +23,8 @@
 30   shot 04-fly.png
 30.5 press P                 # stand
 36   shot 05-stand.png
-36.5 press P                 # cocoon (closed while walking)
+36.5 press P                 # bays
+37   press P                 # cocoon (closed while walking)
 40   hold W 6
 44   shot 06-walking-cocoon.png
 46.5 press M                 # legs off: stops on both feet, then plain physics
