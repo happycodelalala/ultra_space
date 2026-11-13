@@ -57,11 +57,11 @@ test("poses put the shells where the game does", () => {
     return Math.hypot(at[0], at[2] - 0.3);
   };
   // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 5.1 m
-  // (front) and 5.2 m (back); held out in stand 8.0 m.
+  // (front) and 5.2 m (back); held out in stand 9.7 m (front) and 8.6 m (back).
   const close = (x, want, what) => assert.ok(Math.abs(x - want) < 0.1, `${what}: ${x} vs ${want}`);
   close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 5.1, "cocoon");
-  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 8.0, "stand front");
-  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 8.0, "stand back");
+  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 9.7, "stand front");
+  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 8.6, "stand back");
 });
 
 test("a pose read and written back is the same pose", () => {

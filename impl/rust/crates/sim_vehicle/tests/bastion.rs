@@ -1,12 +1,14 @@
-//! The Bastion: an original heavy frame (~24 m, ~180 t) carried in a cocoon of four curved
-//! quarter-shells, each on a shell arm. Each arm: a thick shoulder link from a saddle on the
-//! shoulder up under the dome; an elbow; the carrier the quarter is fixed to; and from the
-//! carrier a long folding leg (eight segments, thinner and thinner, ending in a grapple) that
-//! lies folded flat inside its quarter. The shoulder lift and the elbow turn about parallel
-//! axes, so swinging the link out while the elbow turns back moves a quarter outward without
-//! tilting it: walking, the quarters are held clear of the legs. Closed, the quarters make a
-//! cocoon over the head, shoulders and arm bases, tapering to just above the ankles. Every pose
-//! and every move between poses is checked free of interference.
+//! The Bastion: an original heavy frame (~24 m, ~240 t) carried in a cocoon of four curved
+//! quarter-shells, each on a shell arm. Each arm: a shoulder (swing and lift) on a saddle, a
+//! long link up under the dome, an elbow folding the arm into a V, a long forearm back down to
+//! a wrist at the quarter's upper middle, and the carrier the quarter is fixed to. The lift,
+//! elbow and wrist turn about parallel axes, so the arm moves its quarter in one plane and the
+//! wrist keeps it upright (walking: held out clear of the legs) or turns it on its back
+//! (flying: four platforms, each with four lift engines in the quarter's upper part). From
+//! the carrier a long folding leg (six segments, thinner and thinner, ending in a grapple)
+//! lies folded flat in the quarter's lower part. Closed, the quarters make a cocoon over the
+//! head, shoulders and arm bases, tapering to just above the ankles. Every pose and every move
+//! between poses is checked free of interference.
 //! `content/data/vehicles/bastion.json` is this design; refresh it with
 //! `cargo test -p sim_vehicle --test bastion -- --ignored`.
 
@@ -30,9 +32,10 @@ fn content() -> PathBuf {
 
 const NAME: &str = "Bastion";
 const DESCRIPTION: &str = "An original heavy frame, about 24 m tall, in a cocoon of four curved \
-     quarter-shells. Each quarter rides on a shell arm from the shoulder (a thick link, an elbow \
-     and the carrier it is fixed to) and hides a long folding leg with a grapple; walking, the \
-     arms hold the quarters clear of the legs. Forward is -Z.";
+     quarter-shells. Each quarter rides on a long shell arm from the shoulder (link, elbow, \
+     forearm, wrist) and hides a long folding leg with a grapple; walking, the arms hold the \
+     quarters clear of the legs; flying, they turn them into four platforms of four lift \
+     engines each. Forward is -Z.";
 
 /// The quarters on the left: name and the azimuth of its middle (0 behind, 90 left, 180 in
 /// front, degrees). The arm's parts and saddle node carry the same name.
@@ -42,8 +45,8 @@ const QUARTERS: [(&str, f64); 2] = [("front", 135.0), ("back", 45.0)];
 fn fold_direction(quarter: &str) -> f64 {
     if quarter == "front" { 1.0 } else { -1.0 }
 }
-/// Folding-leg segments after the drop (each 8 m), side by side when folded.
-const LEG_SEGMENTS: usize = 7;
+/// Folding-leg segments after the drop (7.3 m, then 6.3 m each), side by side when folded.
+const LEG_SEGMENTS: usize = 6;
 
 /// The cocoon wraps around this vertical axis (vehicle frame, x = 0).
 const SHELL_AXIS_Z: f64 = 0.3;
@@ -52,13 +55,16 @@ const SADDLE_AT: DVec3 = DVec3::new(-4.0, 2.9, 0.0);
 /// Overlap allowed between parts that aren't joined (m): the seams between neighbouring
 /// quarters.
 const TOLERANCE: f64 = 0.05;
-/// Height of each engine pair above (upper) or below (lower) the centre of mass, the spacing
-/// within a pair (m), and the azimuth they sit at (degrees).
-const ENGINE_GAP: f64 = 4.0;
-const ENGINE_SPREAD: f64 = 2.0;
-const ENGINE_AZIMUTH: f64 = 30.0;
-/// How far the walking pose swings the shoulder links out at most (degrees).
-const WALK_LIMIT: f64 = 110.0;
+/// The lift engines inside each quarter: two rows at these heights (m), two columns this far
+/// either side of the quarter's middle (degrees).
+const LIFT_ENGINE_HEIGHTS: [f64; 2] = [0.4, 2.6];
+const LIFT_ENGINE_SPREAD_DEG: f64 = 18.0;
+/// The wrist the quarter turns on: at this height on its upper middle (m).
+const WRIST_HEIGHT: f64 = 2.4;
+/// How far inside the shell's inner face the wrist sits (m).
+const WRIST_INSET: f64 = 1.3;
+/// How far from the cocoon's axis the walking pose holds the quarters' middles at most (m).
+const HELD_OUT: f64 = 9.0;
 
 /// Outward direction of the left side at azimuth `deg`: 0 behind (+Z), 90 left (−X), 180 in
 /// front (−Z).
@@ -249,6 +255,14 @@ fn assemble() -> Vehicle {
     b.pair("shin", "bottom", "frame.hinge", "base", "ankle_joint", any);
     b.pair("ankle_joint", "end", "bastion.foot", "top", "foot", any);
 
+    // The wrist sits this far from the axis: inside the shell's upper middle.
+    let wrist_radius = {
+        let shell = b.part("bastion.shell_quarter_front_left").shape;
+        let Shape::Shell { thickness_m, .. } = shell else {
+            unreachable!("the quarter is a shell")
+        };
+        profile_radius(&shell, WRIST_HEIGHT) - thickness_m / 2.0 - WRIST_INSET
+    };
     // Each side by hand (several arm parts are handed: their mirror image is a different
     // part, which the symmetry tool can't make by turning a copy).
     for side in ["left", "right"] {
@@ -296,16 +310,39 @@ fn assemble() -> Vehicle {
                 &name("link"),
                 any,
             );
+            // The elbow folds the arm into a V: its far side heads back down to the wrist at the
+            // quarter's upper middle.
+            let wrist_at = DVec3::new(0.0, WRIST_HEIGHT, SHELL_AXIS_Z)
+                + mirror(radial_left(middle)) * wrist_radius;
             b.join_best(
                 &name("link"),
                 "bottom",
-                "bastion.arm_hinge",
+                &format!("bastion.elbow_{quarter}_{side}"),
                 "base",
                 &name("elbow"),
-                axis_along(tangent),
+                move |p| {
+                    let (at, dir) = p.node_in_vehicle("end").unwrap();
+                    dir.dot((wrist_at - at).normalize())
+                },
             );
             b.join_best(
                 &name("elbow"),
+                "end",
+                &format!("bastion.forearm_{quarter}"),
+                "top",
+                &name("forearm"),
+                any,
+            );
+            b.join_best(
+                &name("forearm"),
+                "bottom",
+                "bastion.arm_hinge",
+                "base",
+                &name("wrist"),
+                axis_along(tangent),
+            );
+            b.join_best(
+                &name("wrist"),
                 "end",
                 &format!("bastion.carrier_{quarter}_{side}"),
                 "base",
@@ -378,9 +415,9 @@ fn assemble() -> Vehicle {
                     });
                     parent = knee;
                 } else {
-                    b.join_best(&seg, far, "bastion.arm_rotor", "base", &name("wrist"), any);
+                    b.join_best(&seg, far, "bastion.arm_rotor", "base", &name("hand"), any);
                     b.join_best(
-                        &name("wrist"),
+                        &name("hand"),
                         "end",
                         "bastion.grapple",
                         "top",
@@ -392,28 +429,32 @@ fn assemble() -> Vehicle {
         }
     }
 
-    // Engines: on the outer face of each rear quarter, nozzles straight back; the upper pair as
-    // far above the centre of mass as the lower pair below it, so the forward thrust line
-    // passes through it.
-    let com_y = VehicleBody::of(&b.v).unwrap().mass.center_of_mass.y;
-    let shell = b.part("bastion.shell_quarter_back_left").shape;
+    // Lift engines: four inside each quarter, in its lower part below the folded leg, exhaust
+    // toward the quarter's inside (thrust outward). Tilted up into a platform (fly), a quarter
+    // blows down.
+    let shell = b.part("bastion.shell_quarter_front_left").shape;
     let Shape::Shell { thickness_m, .. } = shell else {
         unreachable!("the quarter is a shell")
     };
-    let nozzle_back = DQuat::from_rotation_x(-std::f64::consts::FRAC_PI_2);
-    let engine = b.part("thruster.main.medium");
-    for (level, y) in [("upper", com_y + ENGINE_GAP), ("lower", com_y - ENGINE_GAP)] {
-        for (n, dy) in [ENGINE_SPREAD / 2.0, -ENGINE_SPREAD / 2.0]
-            .into_iter()
-            .enumerate()
-        {
-            let y = y + dy;
-            let r = profile_radius(&shell, y) + thickness_m / 2.0 + 0.9;
-            let at = DVec3::new(0.0, y, SHELL_AXIS_Z) + radial_left(ENGINE_AZIMUTH) * r;
-            for (side, at) in [("left", at), ("right", DVec3::new(-at.x, at.y, at.z))] {
-                let parent = b.index(&format!("back_shell_{side}"));
-                let i = attach_to_surface(&mut b.v, &engine, parent, at, nozzle_back).unwrap();
-                b.v.parts[i].name = format!("engine_{level}_{}_{side}", n + 1);
+    let engine = b.part("bastion.lift_engine");
+    for side in ["left", "right"] {
+        let sx = if side == "left" { 1.0 } else { -1.0 };
+        for (quarter, middle) in QUARTERS {
+            let parent = b.index(&format!("{quarter}_shell_{side}"));
+            for (row, y) in LIFT_ENGINE_HEIGHTS.into_iter().enumerate() {
+                for (col, da) in [-LIFT_ENGINE_SPREAD_DEG, LIFT_ENGINE_SPREAD_DEG]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let out = radial_left(middle + da);
+                    let out = DVec3::new(out.x * sx, 0.0, out.z);
+                    let r = profile_radius(&shell, y) - thickness_m / 2.0 - 0.5;
+                    let at = DVec3::new(0.0, y, SHELL_AXIS_Z) + out * r;
+                    let turn = DQuat::from_rotation_arc(DVec3::Y, out);
+                    let i = attach_to_surface(&mut b.v, &engine, parent, at, turn).unwrap();
+                    b.v.parts[i].name =
+                        format!("{quarter}_engine_{}{}_{side}", row + 1, ["a", "b"][col]);
+                }
             }
         }
     }
@@ -474,45 +515,149 @@ fn clear_path(v: &Vehicle, a: &Articulation, from: &[f64], to: &[f64]) -> bool {
     })
 }
 
-/// Swings every shoulder link out (the elbow turning back the same, so the quarters move out
-/// without tilting) in 5° steps as far as `limit`, every step free of interference.
-fn hold_out(v: &Vehicle, a: &Articulation, limit: f64) -> Vec<f64> {
-    let mut angles = vec![0.0; a.groups.len()];
-    // For each arm: lift and elbow groups and the sign that moves the quarter outward.
-    let arms: Vec<(usize, usize, f64)> = QUARTERS
-        .iter()
-        .flat_map(|&(quarter, _)| {
-            ["left", "right"].map(|side| {
-                let lift = joint(v, a, &format!("{quarter}_lift_{side}"));
-                let elbow = joint(v, a, &format!("{quarter}_elbow_{side}"));
-                let out = |deg: f64| {
-                    let mut t = vec![0.0; a.groups.len()];
-                    t[lift] = deg.to_radians();
-                    t[elbow] = -deg.to_radians();
-                    radius(quarter_at(v, a, quarter, side, &t))
-                };
-                (lift, elbow, if out(10.0) > out(-10.0) { 1.0 } else { -1.0 })
-            })
-        })
-        .collect();
-    let mut deg = 0.0;
-    while deg + 5.0 <= limit {
-        let mut next = angles.clone();
-        for &(lift, elbow, sign) in &arms {
-            next[lift] = sign * (deg + 5.0f64).to_radians();
-            next[elbow] = -sign * (deg + 5.0f64).to_radians();
+/// An arm's three hinges in the plane of its quarter: shoulder lift, elbow and wrist (degrees,
+/// left side; the right side mirrors them).
+type ArmAngles = (f64, f64, f64);
+
+/// `base` with both arms of `quarter` set to `arm`, the right one mirrored.
+fn with_arm(
+    v: &Vehicle,
+    a: &Articulation,
+    base: &[f64],
+    quarter: &str,
+    arm: ArmAngles,
+) -> Vec<f64> {
+    let mut t = base.to_vec();
+    for (side, s) in [("left", 1.0), ("right", -1.0)] {
+        t[joint(v, a, &format!("{quarter}_lift_{side}"))] = s * arm.0.to_radians();
+        t[joint(v, a, &format!("{quarter}_elbow_{side}"))] = s * arm.1.to_radians();
+        t[joint(v, a, &format!("{quarter}_wrist_{side}"))] = s * arm.2.to_radians();
+    }
+    t
+}
+
+/// Moves `quarter`'s arms from `start` to the best pose they can reach: searches the shoulder
+/// lift and the elbow (10° grid), turns the wrist to make `facing` (how well the quarter faces
+/// the way it should, 1 best) as large as it gets, and keeps poses facing better than `least`.
+/// Of those, the one with the largest `score` that is free of interference and reachable from
+/// `start` without any wins; `start` itself when none is.
+fn place_quarter(
+    v: &Vehicle,
+    a: &Articulation,
+    start: &[f64],
+    quarter: &str,
+    least: f64,
+    facing: impl Fn(&[f64]) -> f64,
+    score: impl Fn(&[f64]) -> f64,
+) -> Vec<f64> {
+    let mut candidates = Vec::new();
+    for l in (-150..=150).step_by(10) {
+        for e in (-180..=180).step_by(10) {
+            let (l, e) = (f64::from(l), f64::from(e));
+            let at = |w: f64| with_arm(v, a, start, quarter, (l, e, w));
+            // Coarse then fine search for the wrist.
+            let best = |from: f64, to: f64, step: f64| {
+                let mut w = from;
+                let mut best = (f64::MIN, from);
+                while w <= to + 1e-9 {
+                    let f = facing(&at(w));
+                    if f > best.0 {
+                        best = (f, w);
+                    }
+                    w += step;
+                }
+                best
+            };
+            let (_, w) = best(-180.0, 180.0, 10.0);
+            let (f, w) = best(w - 9.0, w + 9.0, 1.0);
+            if f > least {
+                let t = at(w);
+                candidates.push((score(&t), t));
+            }
         }
-        if !clear_path(v, a, &angles, &next) {
-            break;
-        }
-        angles = next;
-        deg += 5.0;
+    }
+    candidates.sort_by(|x, y| y.0.total_cmp(&x.0));
+    candidates
+        .into_iter()
+        .filter(|(_, t)| interferences(v, a, t, TOLERANCE).is_empty())
+        .find(|(_, t)| clear_path(v, a, start, t))
+        .map_or_else(|| start.to_vec(), |(_, t)| t)
+}
+
+/// How upright a quarter stands (its axis against the vertical, 1 upright).
+fn upright(v: &Vehicle, a: &Articulation, quarter: &str, angles: &[f64]) -> f64 {
+    let i = part(v, &format!("{quarter}_shell_left"));
+    (a.poses(angles)[a.part_group[i]].rotation * (v.parts[i].rotation * DVec3::Y)).y
+}
+
+/// The walking pose: each quarter held out upright, as far from the body as the arms take it
+/// (up to `HELD_OUT` from the axis) and no lower than closed, so the legs stride clear of it.
+fn hold_out(v: &Vehicle, a: &Articulation) -> Vec<f64> {
+    let rest = vec![0.0; a.groups.len()];
+    let mut angles = rest.clone();
+    for (quarter, _) in QUARTERS {
+        let closed = quarter_at(v, a, quarter, "left", &rest);
+        angles = place_quarter(
+            v,
+            a,
+            &angles,
+            quarter,
+            0.998,
+            |t| upright(v, a, quarter, t),
+            |t| {
+                let at = quarter_at(v, a, quarter, "left", t);
+                let sag = (closed.y - at.y).max(0.0);
+                radius(at).min(HELD_OUT) - 2.0 * sag - 0.05 * (at.y - closed.y).abs()
+            },
+        );
     }
     angles
 }
 
-/// The Bastion's poses: cocoon (closed) and stand (the quarters held out clear of the legs:
-/// the pose it walks in and starts in).
+/// How the lift engines on a quarter point (their thrust direction, mean) for joint `angles`.
+fn lift_direction(
+    v: &Vehicle,
+    a: &Articulation,
+    quarter: &str,
+    side: &str,
+    angles: &[f64],
+) -> DVec3 {
+    let poses = a.poses(angles);
+    v.parts
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| {
+            p.name.starts_with(&format!("{quarter}_engine_")) && p.name.ends_with(side)
+        })
+        .map(|(i, p)| poses[a.part_group[i]].rotation * (p.rotation * DVec3::Y))
+        .sum::<DVec3>()
+        .normalize()
+}
+
+/// The flying pose: from `start`, each quarter turned on its back into a platform, its lift
+/// engines pushing up, spread out and up from the body (the thrust above the centre of mass).
+fn tilt_up(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
+    let mut angles = start.to_vec();
+    for (quarter, _) in QUARTERS {
+        angles = place_quarter(
+            v,
+            a,
+            &angles,
+            quarter,
+            0.97,
+            |t| lift_direction(v, a, quarter, "left", t).y,
+            |t| {
+                let at = quarter_at(v, a, quarter, "left", t);
+                radius(at).min(HELD_OUT + 2.0) + 0.5 * at.y
+            },
+        );
+    }
+    angles
+}
+
+/// The Bastion's poses: cocoon (closed); stand (the quarters held out clear of the legs: the
+/// pose it walks in and starts in); fly (the quarters held out and tilted up into four
+/// platforms, their lift engines blowing down).
 fn poses(v: &Vehicle) -> Vec<NamedPose> {
     let body = VehicleBody::of(v).unwrap();
     let a = &body.articulation;
@@ -530,8 +675,13 @@ fn poses(v: &Vehicle) -> Vec<NamedPose> {
             })
             .collect(),
     };
-    let stand = hold_out(v, a, WALK_LIMIT);
-    vec![named("cocoon", &vec![0.0; n]), named("stand", &stand)]
+    let stand = hold_out(v, a);
+    let fly = tilt_up(v, a, &stand);
+    vec![
+        named("cocoon", &vec![0.0; n]),
+        named("fly", &fly),
+        named("stand", &stand),
+    ]
 }
 
 fn design() -> Vehicle {
@@ -583,7 +733,6 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
         s.problems
     );
     assert!(s.problems.is_empty(), "{:?}", s.problems);
-    assert!(s.thrust_to_weight > 1.5);
     // Fixed to their carriers, the quarters sit around the cocoon's axis.
     for (q, _) in QUARTERS {
         for side in ["left", "right"] {
@@ -610,7 +759,36 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
         .map(|p| p.def.shape.bounds().1.y * 2.0)
         .sum();
     println!("a leg's segments add up to {reach:.0} m");
-    assert!(reach > 50.0, "{reach}");
+    assert!(reach > 40.0, "{reach}");
+}
+
+#[test]
+fn flying_the_four_platforms_lift_it() {
+    let v = design();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let fly = pose(&v, a, "fly");
+    for (q, _) in QUARTERS {
+        for side in ["left", "right"] {
+            let d = lift_direction(&v, a, q, side, &fly);
+            println!("fly {q} {side}: engines push along {d:.2?}");
+            assert!(d.y > 0.95, "{q} {side} platform level");
+        }
+    }
+    let allocator = body.posed_allocator(&a.poses(&fly));
+    let up: f64 = allocator
+        .thrusters()
+        .iter()
+        .map(|t| t.direction.y * t.max_thrust)
+        .sum();
+    let weight = body.mass.mass * 9.81;
+    println!(
+        "lift {:.0} kN, weight {:.0} kN: {:.2} g",
+        up / 1e3,
+        weight / 1e3,
+        up / weight
+    );
+    assert!(up > 1.5 * weight);
 }
 
 #[test]
@@ -856,7 +1034,12 @@ fn the_bastion_walks_and_stops_standing() {
 fn arm_layout() {
     let v = assemble();
     for p in &v.parts {
-        if p.name.contains("front") || p.name.contains("back") || p.name.starts_with("saddle") {
+        if p.name.contains("front")
+            || p.name.contains("back")
+            || p.name.starts_with("saddle")
+            || p.name.starts_with("upper_arm")
+            || p.name.starts_with("fore")
+        {
             if p.name.ends_with("_right") && !p.name.contains("shell") {
                 continue;
             }
@@ -872,25 +1055,44 @@ fn arm_layout() {
 }
 
 #[test]
-#[ignore = "diagnostic: what stops the quarters being held further out"]
+#[ignore = "diagnostic: what stops the quarters being held out"]
 fn what_blocks_holding_out() {
     let v = assemble();
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
-    for deg in [55.0f64, 60.0, 70.0, 80.0] {
-        let mut angles = vec![0.0; a.groups.len()];
-        for (q, _) in QUARTERS {
-            for (side, s) in [("left", 1.0), ("right", -1.0)] {
-                angles[joint(&v, a, &format!("{q}_lift_{side}"))] = s * deg.to_radians();
-                angles[joint(&v, a, &format!("{q}_elbow_{side}"))] = -s * deg.to_radians();
+    let rest = vec![0.0; a.groups.len()];
+    let closed = quarter_at(&v, a, "front", "left", &rest);
+    for (l, e) in [
+        (20.0, -20.0),
+        (40.0, -40.0),
+        (-20.0, 20.0),
+        (-40.0, 40.0),
+        (30.0, 0.0),
+        (-30.0, 0.0),
+        (0.0, 30.0),
+        (0.0, -30.0),
+    ] {
+        let mut best = (f64::MIN, 0.0);
+        for w in -180..=180 {
+            let t = with_arm(&v, a, &rest, "front", (l, e, f64::from(w)));
+            let u = upright(&v, a, "front", &t);
+            if u > best.0 {
+                best = (u, f64::from(w));
             }
         }
-        let found: Vec<Interference> = interferences(&v, a, &angles, TOLERANCE)
-            .into_iter()
-            .filter(|i| {
-                v.parts[i.a].name.ends_with("_left") || v.parts[i.b].name.ends_with("_left")
-            })
-            .collect();
-        println!("{deg}: {}", report(&v, &found));
+        let t = with_arm(&v, a, &rest, "front", (l, e, best.1));
+        let at = quarter_at(&v, a, "front", "left", &t);
+        let right = quarter_at(&v, a, "front", "right", &t);
+        let found = interferences(&v, a, &t, TOLERANCE);
+        println!(
+            "l {l} e {e}: wrist {} upright {:.4}, at {:.2?} (closed {:.2?}) r {:.2}, right {:.2?}: {}",
+            best.1,
+            best.0,
+            at,
+            closed,
+            radius(at),
+            right,
+            report(&v, &found)
+        );
     }
 }

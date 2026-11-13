@@ -221,9 +221,9 @@
             -1.4
           ],
           "direction": [
-            0.6734,
-            0.7334,
-            -0.0933
+            0.6897,
+            0.7201,
+            0.0762
           ],
           "size": "medium"
         },
@@ -235,9 +235,9 @@
             1.4
           ],
           "direction": [
-            0.6488,
-            0.7066,
-            0.2826
+            0.6892,
+            0.7197,
+            0.0838
           ],
           "size": "medium"
         }
@@ -273,9 +273,9 @@
             -1.4
           ],
           "direction": [
-            -0.6734,
-            0.7334,
-            -0.0933
+            -0.6897,
+            0.7201,
+            0.0762
           ],
           "size": "medium"
         },
@@ -287,9 +287,9 @@
             1.4
           ],
           "direction": [
-            -0.6488,
-            0.7066,
-            0.2826
+            -0.6892,
+            0.7197,
+            0.0838
           ],
           "size": "medium"
         }
@@ -727,58 +727,6 @@
       }
     },
     {
-      "id": "bastion.link_front",
-      "name": "Bastion Shoulder Link (front)",
-      "kind": "structure",
-      "mass_kg": 3000,
-      "shape": {
-        "type": "box",
-        "size_m": [
-          1.3,
-          1.4999,
-          1.3
-        ]
-      },
-      "attach_nodes": [
-        {
-          "id": "top",
-          "position_m": [
-            0,
-            0.74995,
-            0
-          ],
-          "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "bottom",
-          "position_m": [
-            0,
-            -0.74995,
-            0
-          ],
-          "direction": [
-            0,
-            -1,
-            0
-          ],
-          "size": "medium"
-        }
-      ],
-      "description": "The first, thick segment of a shell arm: from the shoulder up under the dome to the elbow. Swung out, it holds the shell away from the body.",
-      "form": {
-        "model": "bastion.link_front",
-        "material_slots": [
-          "armor"
-        ],
-        "style": "bastion"
-      }
-    },
-    {
       "id": "bastion.carrier_front_left",
       "name": "Bastion Shell Carrier (front) (left)",
       "kind": "structure",
@@ -809,28 +757,28 @@
         {
           "id": "shell",
           "position_m": [
-            -0.1588,
-            0.2461,
-            -0.5237
+            -0.0162,
+            -0.3886,
+            0.4569
           ],
           "direction": [
-            -0.2646,
-            0.4102,
-            -0.8728
+            -0.027,
+            -0.6476,
+            0.7615
           ],
           "size": "medium"
         },
         {
           "id": "leg",
           "position_m": [
-            -0.6302,
-            -0.4066,
-            0.0
+            -0.019,
+            -0.4565,
+            -0.3889
           ],
           "direction": [
-            -0.836,
-            0.5481,
-            -0.0243
+            -0.5383,
+            -0.2576,
+            -0.8024
           ],
           "size": "medium"
         }
@@ -875,28 +823,28 @@
         {
           "id": "shell",
           "position_m": [
-            0.1588,
-            0.2461,
-            -0.5237
+            0.0162,
+            -0.3886,
+            0.4569
           ],
           "direction": [
-            0.2646,
-            0.4102,
-            -0.8728
+            0.027,
+            -0.6476,
+            0.7615
           ],
           "size": "medium"
         },
         {
           "id": "leg",
           "position_m": [
-            0.6302,
-            -0.4066,
-            0.0
+            0.019,
+            -0.4565,
+            -0.3889
           ],
           "direction": [
-            0.836,
-            0.5481,
-            -0.0243
+            0.5383,
+            -0.2576,
+            -0.8024
           ],
           "size": "medium"
         }
@@ -919,7 +867,7 @@
         "type": "box",
         "size_m": [
           1.0,
-          3.3783,
+          3.4506,
           1.0
         ]
       },
@@ -928,7 +876,7 @@
           "id": "top",
           "position_m": [
             0,
-            1.68915,
+            1.7253,
             0
           ],
           "direction": [
@@ -942,7 +890,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -1.68915,
+            -1.7253,
             0
           ],
           "direction": [
@@ -1013,8 +961,8 @@
           ],
           "direction": [
             0.0,
-            -0.7857,
-            -0.6186
+            -0.7332,
+            -0.68
           ],
           "size": "medium"
         }
@@ -1079,8 +1027,8 @@
           ],
           "direction": [
             -0.0,
-            -0.7857,
-            -0.6186
+            -0.7332,
+            -0.68
           ],
           "size": "medium"
         }
@@ -1090,58 +1038,6 @@
         "model": "bastion.bend",
         "material_slots": [
           "joint"
-        ],
-        "style": "bastion"
-      }
-    },
-    {
-      "id": "bastion.link_back",
-      "name": "Bastion Shoulder Link (back)",
-      "kind": "structure",
-      "mass_kg": 3000,
-      "shape": {
-        "type": "box",
-        "size_m": [
-          1.3,
-          1.6137,
-          1.3
-        ]
-      },
-      "attach_nodes": [
-        {
-          "id": "top",
-          "position_m": [
-            0,
-            0.80685,
-            0
-          ],
-          "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "bottom",
-          "position_m": [
-            0,
-            -0.80685,
-            0
-          ],
-          "direction": [
-            0,
-            -1,
-            0
-          ],
-          "size": "medium"
-        }
-      ],
-      "description": "The first, thick segment of a shell arm: from the shoulder up under the dome to the elbow. Swung out, it holds the shell away from the body.",
-      "form": {
-        "model": "bastion.link_back",
-        "material_slots": [
-          "armor"
         ],
         "style": "bastion"
       }
@@ -1177,28 +1073,28 @@
         {
           "id": "shell",
           "position_m": [
-            0.136,
-            0.1554,
-            -0.5634
+            0.0204,
+            -0.3845,
+            0.4601
           ],
           "direction": [
-            0.2266,
-            0.2589,
-            -0.9389
+            0.0339,
+            -0.6409,
+            0.7669
           ],
           "size": "medium"
         },
         {
           "id": "leg",
           "position_m": [
-            0.4515,
-            -0.3951,
-            -0.0
+            0.0243,
+            -0.4595,
+            -0.3851
           ],
           "direction": [
-            0.8947,
-            0.4197,
-            -0.1531
+            0.5112,
+            -0.2668,
+            -0.817
           ],
           "size": "medium"
         }
@@ -1243,28 +1139,28 @@
         {
           "id": "shell",
           "position_m": [
-            -0.136,
-            0.1554,
-            -0.5634
+            -0.0204,
+            -0.3845,
+            0.4601
           ],
           "direction": [
-            -0.2266,
-            0.2589,
-            -0.9389
+            -0.0339,
+            -0.6409,
+            0.7669
           ],
           "size": "medium"
         },
         {
           "id": "leg",
           "position_m": [
-            -0.4515,
-            -0.3951,
-            -0.0
+            -0.0243,
+            -0.4595,
+            -0.3851
           ],
           "direction": [
-            -0.8947,
-            0.4197,
-            -0.1531
+            -0.5112,
+            -0.2668,
+            -0.817
           ],
           "size": "medium"
         }
@@ -1287,7 +1183,7 @@
         "type": "box",
         "size_m": [
           1.0,
-          3.2957,
+          3.3473,
           1.0
         ]
       },
@@ -1296,7 +1192,7 @@
           "id": "top",
           "position_m": [
             0,
-            1.64785,
+            1.67365,
             0
           ],
           "direction": [
@@ -1310,7 +1206,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -1.64785,
+            -1.67365,
             0
           ],
           "direction": [
@@ -1381,8 +1277,8 @@
           ],
           "direction": [
             0.0,
-            -0.7971,
-            -0.6039
+            -0.7494,
+            -0.6622
           ],
           "size": "medium"
         }
@@ -1447,8 +1343,8 @@
           ],
           "direction": [
             -0.0,
-            -0.7971,
-            -0.6039
+            -0.7494,
+            -0.6622
           ],
           "size": "medium"
         }
@@ -1598,12 +1494,12 @@
       "id": "bastion.leg_1",
       "name": "Bastion Leg Segment 1",
       "kind": "structure",
-      "mass_kg": 2340,
+      "mass_kg": 2280,
       "shape": {
         "type": "box",
         "size_m": [
           0.9,
-          8.0,
+          7.3,
           0.9
         ]
       },
@@ -1612,7 +1508,7 @@
           "id": "top",
           "position_m": [
             0,
-            4.0,
+            3.65,
             0
           ],
           "direction": [
@@ -1626,7 +1522,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -4.0,
+            -3.65,
             0
           ],
           "direction": [
@@ -1637,7 +1533,7 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (8 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (7.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_1",
         "material_slots": [
@@ -1650,12 +1546,12 @@
       "id": "bastion.leg_2",
       "name": "Bastion Leg Segment 2",
       "kind": "structure",
-      "mass_kg": 2080,
+      "mass_kg": 2020,
       "shape": {
         "type": "box",
         "size_m": [
           0.8,
-          7.0,
+          6.3,
           0.8
         ]
       },
@@ -1664,7 +1560,7 @@
           "id": "top",
           "position_m": [
             0,
-            3.5,
+            3.15,
             0
           ],
           "direction": [
@@ -1678,7 +1574,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -3.5,
+            -3.15,
             0
           ],
           "direction": [
@@ -1689,7 +1585,7 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (6.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_2",
         "material_slots": [
@@ -1702,12 +1598,12 @@
       "id": "bastion.leg_3",
       "name": "Bastion Leg Segment 3",
       "kind": "structure",
-      "mass_kg": 1819,
+      "mass_kg": 1760,
       "shape": {
         "type": "box",
         "size_m": [
           0.7,
-          7.0,
+          6.3,
           0.7
         ]
       },
@@ -1716,7 +1612,7 @@
           "id": "top",
           "position_m": [
             0,
-            3.5,
+            3.15,
             0
           ],
           "direction": [
@@ -1730,7 +1626,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -3.5,
+            -3.15,
             0
           ],
           "direction": [
@@ -1741,7 +1637,7 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (6.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_3",
         "material_slots": [
@@ -1754,12 +1650,12 @@
       "id": "bastion.leg_4",
       "name": "Bastion Leg Segment 4",
       "kind": "structure",
-      "mass_kg": 1612,
+      "mass_kg": 1560,
       "shape": {
         "type": "box",
         "size_m": [
           0.62,
-          7.0,
+          6.3,
           0.62
         ]
       },
@@ -1768,7 +1664,7 @@
           "id": "top",
           "position_m": [
             0,
-            3.5,
+            3.15,
             0
           ],
           "direction": [
@@ -1782,7 +1678,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -3.5,
+            -3.15,
             0
           ],
           "direction": [
@@ -1793,7 +1689,7 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (6.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_4",
         "material_slots": [
@@ -1806,12 +1702,12 @@
       "id": "bastion.leg_5",
       "name": "Bastion Leg Segment 5",
       "kind": "structure",
-      "mass_kg": 1430,
+      "mass_kg": 1390,
       "shape": {
         "type": "box",
         "size_m": [
           0.55,
-          7.0,
+          6.3,
           0.55
         ]
       },
@@ -1820,7 +1716,7 @@
           "id": "top",
           "position_m": [
             0,
-            3.5,
+            3.15,
             0
           ],
           "direction": [
@@ -1834,7 +1730,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -3.5,
+            -3.15,
             0
           ],
           "direction": [
@@ -1845,7 +1741,7 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (6.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_5",
         "material_slots": [
@@ -1858,12 +1754,12 @@
       "id": "bastion.leg_6",
       "name": "Bastion Leg Segment 6",
       "kind": "structure",
-      "mass_kg": 1248,
+      "mass_kg": 1210,
       "shape": {
         "type": "box",
         "size_m": [
           0.48,
-          7.0,
+          6.3,
           0.48
         ]
       },
@@ -1872,7 +1768,7 @@
           "id": "top",
           "position_m": [
             0,
-            3.5,
+            3.15,
             0
           ],
           "direction": [
@@ -1886,7 +1782,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -3.5,
+            -3.15,
             0
           ],
           "direction": [
@@ -1897,61 +1793,9 @@
           "size": "medium"
         }
       ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
+      "description": "A folding-leg segment (6.3 m); the segments get thinner toward the grapple.",
       "form": {
         "model": "bastion.leg_6",
-        "material_slots": [
-          "armor"
-        ],
-        "style": "bastion"
-      }
-    },
-    {
-      "id": "bastion.leg_7",
-      "name": "Bastion Leg Segment 7",
-      "kind": "structure",
-      "mass_kg": 1092,
-      "shape": {
-        "type": "box",
-        "size_m": [
-          0.42,
-          7.0,
-          0.42
-        ]
-      },
-      "attach_nodes": [
-        {
-          "id": "top",
-          "position_m": [
-            0,
-            3.5,
-            0
-          ],
-          "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "bottom",
-          "position_m": [
-            0,
-            -3.5,
-            0
-          ],
-          "direction": [
-            0,
-            -1,
-            0
-          ],
-          "size": "medium"
-        }
-      ],
-      "description": "A folding-leg segment (7 m); the segments get thinner toward the grapple.",
-      "form": {
-        "model": "bastion.leg_7",
         "material_slots": [
           "armor"
         ],
@@ -2038,9 +1882,9 @@
         {
           "id": "hang",
           "position_m": [
-            -0.3253,
-            5.94,
-            3.1539
+            0.0458,
+            1.5631,
+            6.4124
           ],
           "direction": [
             0.0,
@@ -2094,9 +1938,9 @@
         {
           "id": "hang",
           "position_m": [
-            0.3253,
-            5.94,
-            3.1539
+            -0.0458,
+            1.5631,
+            6.4124
           ],
           "direction": [
             -0.0,
@@ -2150,9 +1994,9 @@
         {
           "id": "hang",
           "position_m": [
-            0.3951,
-            5.9239,
-            3.2446
+            -0.0581,
+            1.5576,
+            6.405
           ],
           "direction": [
             0.0,
@@ -2206,9 +2050,9 @@
         {
           "id": "hang",
           "position_m": [
-            -0.3951,
-            5.9239,
-            3.2446
+            0.0581,
+            1.5576,
+            6.405
           ],
           "direction": [
             -0.0,
@@ -2219,6 +2063,516 @@
         }
       ],
       "description": "The back-right curved quarter of the cocoon: large over the head and shoulders, tapering down to just above the ankles; fixed to its arm's carrier."
+    },
+    {
+      "id": "bastion.lift_engine",
+      "name": "Bastion Lift Engine",
+      "kind": "thruster",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "cylinder",
+        "radius_m": 0.75,
+        "length_m": 0.9
+      },
+      "thruster": {
+        "max_thrust_n": 500000
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.45,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A compact engine mounted inside a shell quarter, exhaust toward the shell's inside: with the quarter tilted up into a platform, it blows down.",
+      "form": {
+        "model": "bastion.lift_engine",
+        "material_slots": [
+          "hull"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.link_front",
+      "name": "Bastion Upper Arm (front)",
+      "kind": "structure",
+      "mass_kg": 3500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          2.7494,
+          1.2
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.3747,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.3747,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The first segment of a shell arm: from the shoulder up under the dome to the elbow.",
+      "form": {
+        "model": "bastion.link_front",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.elbow_front_left",
+      "name": "Bastion Arm Elbow (front left)",
+      "kind": "joint",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.1,
+          0.5,
+          1.1
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.1359,
+          0.4338,
+          0.8907
+        ],
+        "limits_deg": [
+          -180,
+          180
+        ],
+        "speed_deg_s": 30,
+        "max_torque_nm": 20000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            0.0,
+            0.9167,
+            -0.3996
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
+      "form": {
+        "model": "bastion.elbow",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.elbow_front_right",
+      "name": "Bastion Arm Elbow (front right)",
+      "kind": "joint",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.1,
+          0.5,
+          1.1
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          -0.1359,
+          0.4338,
+          0.8907
+        ],
+        "limits_deg": [
+          -180,
+          180
+        ],
+        "speed_deg_s": 30,
+        "max_torque_nm": 20000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            0.0,
+            0.9167,
+            -0.3996
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
+      "form": {
+        "model": "bastion.elbow",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.forearm_front",
+      "name": "Bastion Forearm (front)",
+      "kind": "structure",
+      "mass_kg": 3000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.0,
+          5.2049,
+          1.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            2.60245,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -2.60245,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The second segment of a shell arm: from the elbow back down to the wrist the shell turns on.",
+      "form": {
+        "model": "bastion.forearm_front",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.link_back",
+      "name": "Bastion Upper Arm (back)",
+      "kind": "structure",
+      "mass_kg": 3500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          2.7517,
+          1.2
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.37585,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.37585,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The first segment of a shell arm: from the shoulder up under the dome to the elbow.",
+      "form": {
+        "model": "bastion.link_back",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.elbow_back_left",
+      "name": "Bastion Arm Elbow (back left)",
+      "kind": "joint",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.1,
+          0.5,
+          1.1
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.2567,
+          -0.5466,
+          -0.7971
+        ],
+        "limits_deg": [
+          -180,
+          180
+        ],
+        "speed_deg_s": 30,
+        "max_torque_nm": 20000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            -0.0,
+            0.8544,
+            -0.5196
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
+      "form": {
+        "model": "bastion.elbow",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.elbow_back_right",
+      "name": "Bastion Arm Elbow (back right)",
+      "kind": "joint",
+      "mass_kg": 1200,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.1,
+          0.5,
+          1.1
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          -0.2567,
+          -0.5466,
+          -0.7971
+        ],
+        "limits_deg": [
+          -180,
+          180
+        ],
+        "speed_deg_s": 30,
+        "max_torque_nm": 20000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            -0.0,
+            0.8544,
+            -0.5196
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
+      "form": {
+        "model": "bastion.elbow",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.forearm_back",
+      "name": "Bastion Forearm (back)",
+      "kind": "structure",
+      "mass_kg": 3000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.0,
+          5.1709,
+          1.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            2.58545,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -2.58545,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The second segment of a shell arm: from the elbow back down to the wrist the shell turns on.",
+      "form": {
+        "model": "bastion.forearm_back",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
     }
   ]
 }
