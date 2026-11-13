@@ -12,6 +12,7 @@
 4    press G                 # spawn it ahead
 5    hold W 4                # walk up to it
 9.5  press F                 # board it
+11.5 press H                 # hide the HUD (legs visible)
 12   shot 01-standing.png
 12.5 press M                 # walk mode
 13   hold W 14               # walk forward
@@ -25,4 +26,5 @@
 33.5 shot 07-turned.png
 34   press M                 # stop: back to flight, standing
 37   shot 08-stopped.png
-37.5 quit
+42   shot 09-stopped-later.png
+42.5 quit
