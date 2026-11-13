@@ -497,25 +497,20 @@ fn pose_key(
         info!("this vehicle has no poses");
         return;
     }
-    let pose = vehicle.poses[*next % vehicle.poses.len()].clone();
+    let count = vehicle.poses.len();
+    let pose = vehicle.poses[*next % count].name.clone();
+    // Leaving the pose P went to last (its stages, in reverse), into this one (its stages).
+    let from = (*next > 0).then(|| vehicle.poses[(*next - 1) % count].name.clone());
     *next += 1;
-    let targets: Vec<(usize, f64)> = pose
-        .angles
-        .iter()
-        .filter_map(|(joint, deg)| {
-            let part = vehicle.parts.iter().position(|p| &p.name == joint)?;
-            let g = body.articulation.group_of_joint(part)?;
-            let joint = body.articulation.groups[g].joint?;
-            Some((g, joint.from_data(*deg)))
-        })
-        .collect();
-    let groups = body.articulation.groups.len();
+    let Some(mut route) =
+        sim_vehicle::joints::pose_route(vehicle, &body.articulation, from.as_deref(), &pose)
+    else {
+        return;
+    };
     if let Some(mut joints) = e.get_mut::<sim_vehicle::joints::JointState>() {
-        joints.targets = vec![0.0; groups];
-        for (g, angle) in targets {
-            joints.targets[g] = angle;
-        }
-        info!("pose: {}", pose.name);
+        joints.targets = route.remove(0);
+        joints.queue = route.into();
+        info!("pose: {pose}");
     }
 }
 

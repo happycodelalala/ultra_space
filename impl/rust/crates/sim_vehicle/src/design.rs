@@ -26,15 +26,22 @@ struct DesignFile {
     /// Named joint poses: pose name -> joint part id -> angle (degrees).
     #[serde(default)]
     poses: std::collections::BTreeMap<String, std::collections::BTreeMap<String, f64>>,
+    /// In-between joint sets a pose passes through on the way to it (in order; leaving it,
+    /// the same in reverse): pose name -> stages, each joint part id -> value.
+    #[serde(default)]
+    pose_stages: std::collections::BTreeMap<String, Vec<std::collections::BTreeMap<String, f64>>>,
     #[serde(default)]
     gait: Option<crate::gait::GaitDef>,
 }
 
-/// A named set of joint values (degrees, or metres for sliders; by joint part name).
+/// A named set of joint values (degrees, or metres for sliders; by joint part name), and the
+/// stages (in-between joint sets, same units) it passes through on the way to it, in order;
+/// leaving it, it passes back through them in reverse (a folded arm unfolds, then refolds).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NamedPose {
     pub name: String,
     pub angles: Vec<(String, f64)>,
+    pub stages: Vec<Vec<(String, f64)>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -256,7 +263,19 @@ impl VehicleDesign {
             }
             parts.push(part);
         }
-        for (pose, angles) in &file.poses {
+        for pose in file.pose_stages.keys() {
+            if !file.poses.contains_key(pose) {
+                problems.push(format!(
+                    "{}: stages for {pose:?}, which is no pose",
+                    file.id
+                ));
+            }
+        }
+        let staged = file
+            .pose_stages
+            .iter()
+            .flat_map(|(pose, stages)| stages.iter().map(move |s| (pose, s)));
+        for (pose, angles) in file.poses.iter().chain(staged) {
             for joint in angles.keys() {
                 let ok = parts
                     .iter()
@@ -290,10 +309,17 @@ impl VehicleDesign {
         if !problems.is_empty() {
             return Err(DesignError::Invalid(problems));
         }
+        let mut stages = file.pose_stages;
         let poses = file
             .poses
             .into_iter()
             .map(|(name, angles)| NamedPose {
+                stages: stages
+                    .remove(&name)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|s| s.into_iter().collect())
+                    .collect(),
                 name,
                 angles: angles.into_iter().collect(),
             })
@@ -397,6 +423,35 @@ pub fn design_json(
                 "    {}: {{{}}}{comma}",
                 quoted(&pose.name),
                 angles.join(", ")
+            ));
+        }
+        lines.push("  }".into());
+    }
+    let staged: Vec<&NamedPose> = vehicle
+        .poses
+        .iter()
+        .filter(|p| !p.stages.is_empty())
+        .collect();
+    if !staged.is_empty() {
+        *lines.last_mut().expect("poses") += ",";
+        lines.push("  \"pose_stages\": {".into());
+        for (k, pose) in staged.iter().enumerate() {
+            let stages: Vec<String> = pose
+                .stages
+                .iter()
+                .map(|s| {
+                    let angles: Vec<String> = s
+                        .iter()
+                        .map(|(joint, v)| format!("{}: {}", quoted(joint), tidy(*v)))
+                        .collect();
+                    format!("{{{}}}", angles.join(", "))
+                })
+                .collect();
+            let comma = if k + 1 < staged.len() { "," } else { "" };
+            lines.push(format!(
+                "    {}: [{}]{comma}",
+                quoted(&pose.name),
+                stages.join(", ")
             ));
         }
         lines.push("  }".into());

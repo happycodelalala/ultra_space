@@ -81,8 +81,14 @@ const WRIST_INSET: f64 = 1.3;
 const ARM_STANCE: (f64, f64, f64) = (6.0, 22.0, 9.0);
 /// The forearm extensions the pose searches try (m; the slide runs 0 to 2.5).
 const ARM_REACH: [f64; 3] = [0.0, 1.25, 2.5];
-/// How far from the cocoon's axis the walking pose holds the quarters' middles at most (m).
-const HELD_OUT: f64 = 9.0;
+/// How far from the cocoon's axis the walking pose holds a quarter's middle (m): the front
+/// pair further out than the back pair, which stays closer to support the back.
+fn held_out(quarter: &str) -> f64 {
+    if quarter == "front" { 13.0 } else { 10.0 }
+}
+/// How far the flying pose lets the back pair out at most (m); the front pair goes as far as
+/// it reaches.
+const FLY_BACK_OUT: f64 = 11.0;
 
 /// Outward direction of the left side at azimuth `deg`: 0 behind (+Z), 90 left (−X), 180 in
 /// front (−Z).
@@ -706,7 +712,8 @@ fn upright(v: &Vehicle, a: &Articulation, quarter: &str, angles: &[f64]) -> f64 
 }
 
 /// The walking pose: each quarter held out upright, as far from the body as the arms take it
-/// (up to `HELD_OUT` from the axis) and no lower than closed, so the legs stride clear of it.
+/// (to [`held_out`] from the axis: the front pair further than the back) and no lower than
+/// closed, so the legs stride clear of it.
 fn hold_out(v: &Vehicle, a: &Articulation) -> Vec<f64> {
     let rest = vec![0.0; a.groups.len()];
     let mut angles = body_stance(v, a);
@@ -722,7 +729,7 @@ fn hold_out(v: &Vehicle, a: &Articulation) -> Vec<f64> {
             |t| {
                 let at = quarter_at(v, a, quarter, "left", t);
                 let sag = (closed.y - at.y).max(0.0);
-                radius(at).min(HELD_OUT) - 2.0 * sag - 0.05 * (at.y - closed.y).abs()
+                -(radius(at) - held_out(quarter)).abs() - 2.0 * sag - 0.05 * (at.y - closed.y).abs()
             },
         );
     }
@@ -770,7 +777,12 @@ fn tilt_up(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
                 // Pushed out from the body, over its own corner, rather than raised.
                 let at = quarter_at(v, a, quarter, "left", t);
                 let flat = DVec3::new(at.x, 0.0, at.z - SHELL_AXIS_Z).normalize_or_zero();
-                radius(at) - 0.3 * at.y + 4.0 * flat.dot(corner)
+                let out = if quarter == "front" {
+                    radius(at)
+                } else {
+                    radius(at).min(FLY_BACK_OUT)
+                };
+                out - 0.3 * at.y + 4.0 * flat.dot(corner)
             },
         );
     }
@@ -801,6 +813,142 @@ fn body_stance(v: &Vehicle, a: &Articulation) -> Vec<f64> {
         }
     }
     t
+}
+
+/// The reaching pose and the stages it passes through: from the flying pose (the quarters
+/// pushed out over the corners, opened with their insides facing down), each folded leg first
+/// swung clear of its quarter by its deploy and bend hinges, aimed out along the diagonal,
+/// then unfolded one fold knee at a time from the root (each knee turning the way that keeps
+/// its segment clear, like a folding boom paying out). Every move P makes through them is
+/// free of interference: fly -> stages -> reach, and reach -> stages in reverse -> stand.
+/// Returns (stages, reach).
+fn reach_out(
+    v: &Vehicle,
+    a: &Articulation,
+    stand: &[f64],
+    fly: &[f64],
+) -> (Vec<Vec<f64>>, Vec<f64>) {
+    // Per quarter: the swung-clear pose and the knees after it, one by one.
+    let mut steps: Vec<Vec<Vec<f64>>> = Vec::new();
+    // Each pair searched from the flying pose on its own (the other pair's legs folded); the
+    // stages then move both together.
+    let base = fly.to_vec();
+    let mut reach = fly.to_vec();
+    for (quarter, middle) in QUARTERS {
+        let corner = radial_left(middle);
+        let tip = part(v, &format!("{quarter}_grapple_left"));
+        let shell = part(v, &format!("{quarter}_shell_left"));
+        let set = |t: &mut [f64], j: &str, value: f64| {
+            for (side, s) in [("left", 1.0), ("right", -1.0)] {
+                t[joint(v, a, &format!("{quarter}_{j}_{side}"))] = s * value.to_radians();
+            }
+        };
+        let straight = |t: &[f64]| {
+            let mut u = t.to_vec();
+            for k in 1..LEG_SEGMENTS {
+                set(&mut u, &format!("fold_{k}"), 180.0);
+            }
+            u
+        };
+        let score = |t: &[f64]| {
+            let poses = a.poses(t);
+            let at = |i: usize| {
+                let p = &v.parts[i];
+                poses[a.part_group[i]].apply(p.position + p.rotation * p.def.shape.centroid())
+            };
+            let (end, root) = (at(tip), at(shell));
+            let flat = DVec3::new(end.x, 0.0, end.z - SHELL_AXIS_Z);
+            // Out along the diagonal, a little below the quarter at most.
+            flat.dot(corner) - 0.3 * (end.y - (root.y - 4.0)).abs()
+        };
+        // Swung clear: reachable from fly, leaving for stand; best aimed first.
+        let mut clear = Vec::new();
+        for deploy in (-170..=170).step_by(10) {
+            for bend in (-90..=90).step_by(15) {
+                let mut t = base.clone();
+                set(&mut t, "deploy", f64::from(deploy));
+                set(&mut t, "bend", f64::from(bend));
+                clear.push((score(&straight(&t)), t));
+            }
+        }
+        clear.sort_by(|x, y| y.0.total_cmp(&x.0));
+        let mut found = None;
+        for (_, s1) in clear {
+            if !(interferences(v, a, &s1, TOLERANCE).is_empty()
+                && clear_path(v, a, fly, &s1)
+                && clear_path(v, a, &s1, stand))
+            {
+                continue;
+            }
+            // Unfold knee by knee.
+            let mut route = vec![s1.clone()];
+            let mut at = s1;
+            for k in 1..LEG_SEGMENTS {
+                // Each side turns its knee its own way (the left and right knees are mirror-image
+                // parts; which way keeps the segment clear isn't simply opposite).
+                let turns = [
+                    (180.0, 180.0),
+                    (-180.0, -180.0),
+                    (180.0, -180.0),
+                    (-180.0, 180.0),
+                ];
+                let next = turns.into_iter().find_map(|(left, right)| {
+                    let mut t = at.clone();
+                    let knee = |side: &str| joint(v, a, &format!("{quarter}_fold_{k}_{side}"));
+                    t[knee("left")] = f64::to_radians(left);
+                    t[knee("right")] = f64::to_radians(right);
+                    (interferences(v, a, &t, TOLERANCE).is_empty() && clear_path(v, a, &at, &t))
+                        .then_some(t)
+                });
+                match next {
+                    Some(t) => {
+                        route.push(t.clone());
+                        at = t;
+                    }
+                    None => break,
+                }
+            }
+            if route.len() == LEG_SEGMENTS {
+                found = Some(route);
+                break;
+            }
+        }
+        match found {
+            Some(route) => {
+                let last = route.last().unwrap();
+                for (i, p) in v.parts.iter().enumerate() {
+                    if p.name.starts_with(&format!("{quarter}_"))
+                        && let Some(g) = a.group_of_joint(i)
+                    {
+                        reach[g] = last[g];
+                    }
+                }
+                steps.push(route);
+            }
+            None => steps.push(Vec::new()),
+        }
+    }
+    // Both quarters together: each stage moves both pairs' legs (the back pair's swing and
+    // knees from the found route, alongside the front pair's).
+    let n = steps.iter().map(Vec::len).max().unwrap_or(0);
+    let mut stages = Vec::new();
+    for k in 0..n.saturating_sub(1) {
+        let mut t = fly.to_vec();
+        for (q, (quarter, _)) in QUARTERS.into_iter().enumerate() {
+            let Some(at) = steps[q].get(k.min(steps[q].len().saturating_sub(1))) else {
+                continue;
+            };
+            for (i, p) in v.parts.iter().enumerate() {
+                if p.name.starts_with(&format!("{quarter}_"))
+                    && let Some(g) = a.group_of_joint(i)
+                {
+                    t[g] = at[g];
+                }
+            }
+        }
+        stages.push(t);
+    }
+    (stages, reach)
 }
 
 /// `start` with every drone bay's cover swung up and out by [`BAY_OPEN_DEG`] (each hinge
@@ -836,17 +984,16 @@ fn open_bays(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
     t
 }
 
-/// The Bastion's poses: bays (standing, the drone bays open); cocoon (closed); stand (the quarters held out clear of the legs: the
+/// The Bastion's poses: bays (standing, the drone bays open); cocoon (closed); reach (shell
+/// arms and folding legs stretched out along the four diagonals); stand (the quarters held out clear of the legs: the
 /// pose it walks in and starts in); fly (the quarters held out and tilted up into four
 /// platforms, their lift engines blowing down).
 fn poses(v: &Vehicle) -> Vec<NamedPose> {
     let body = VehicleBody::of(v).unwrap();
     let a = &body.articulation;
     let n = a.groups.len();
-    let named = |name: &str, angles: &[f64]| NamedPose {
-        name: name.into(),
-        angles: v
-            .parts
+    let values = |angles: &[f64]| -> Vec<(String, f64)> {
+        v.parts
             .iter()
             .enumerate()
             .filter_map(|(i, p)| {
@@ -854,15 +1001,27 @@ fn poses(v: &Vehicle) -> Vec<NamedPose> {
                 let value = a.groups[g].joint?.to_data(angles[g]);
                 (value != 0.0).then(|| (p.name.clone(), value))
             })
-            .collect(),
+            .collect()
+    };
+    let named = |name: &str, angles: &[f64]| NamedPose {
+        name: name.into(),
+        angles: values(angles),
+        stages: Vec::new(),
     };
     let stand = hold_out(v, a);
     let fly = tilt_up(v, a, &stand);
     let bays = open_bays(v, a, &stand);
+    let (stages, reach) = reach_out(v, a, &stand, &fly);
+    // In the order P steps through them (alphabetical).
     vec![
         named("bays", &bays),
         named("cocoon", &vec![0.0; n]),
         named("fly", &fly),
+        NamedPose {
+            name: "reach".into(),
+            angles: values(&reach),
+            stages: stages.iter().map(|t| values(t)).collect(),
+        },
         named("stand", &stand),
     ]
 }
@@ -992,16 +1151,41 @@ fn closed_the_quarters_make_a_cocoon_with_nothing_in_the_way() {
 }
 
 #[test]
-fn every_pose_and_every_move_between_them_is_free_of_interference() {
+fn every_pose_and_every_move_p_makes_is_free_of_interference() {
     let v = design();
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
+    // Every pose, and every move P makes (each pose to the next, round to the first).
     let names: Vec<&str> = v.poses.iter().map(|p| p.name.as_str()).collect();
-    for from in &names {
-        for to in &names {
-            let (x, y) = (pose(&v, a, from), pose(&v, a, to));
-            assert!(clear_path(&v, a, &x, &y), "{from} -> {to}");
+    for (k, from) in names.iter().enumerate() {
+        let to = names[(k + 1) % names.len()];
+        let mut at = pose(&v, a, from);
+        assert!(interferences(&v, a, &at, TOLERANCE).is_empty(), "{from}");
+        // Through the stages on the way (leaving `from`, then into `to`).
+        let route = sim_vehicle::joints::pose_route(&v, a, Some(from), to).unwrap();
+        for (n, next) in route.into_iter().enumerate() {
+            assert!(
+                interferences(&v, a, &next, TOLERANCE).is_empty(),
+                "{from} -> {to}: stage {n}"
+            );
+            assert!(
+                clear_path(&v, a, &at, &next),
+                "{from} -> {to}: to stage {n}"
+            );
+            at = next;
         }
+    }
+    // Out of the cocoon, the front pair reaches further than the back pair (the back pair stays
+    // closer, supporting the back).
+    for name in ["bays", "fly", "reach", "stand"] {
+        let t = pose(&v, a, name);
+        let front = radius(quarter_at(&v, a, "front", "left", &t));
+        let back = radius(quarter_at(&v, a, "back", "left", &t));
+        println!("{name}: front {front:.1} m, back {back:.1} m from the axis");
+        assert!(
+            front > back + 1.0,
+            "{name}: front {front:.1} m not further than back {back:.1} m"
+        );
     }
     // Standing, the quarters are held out from the body.
     let rest = vec![0.0; a.groups.len()];
@@ -1321,4 +1505,94 @@ fn the_stance_alone() {
         "stance: {}",
         report(&v, &interferences(&v, a, &t, TOLERANCE))
     );
+}
+
+#[test]
+#[ignore = "diagnostic: what stops the folding legs reaching out"]
+fn what_blocks_reaching() {
+    let catalog = PartCatalog::load_dir(content().join("parts")).unwrap();
+    let file = VehicleDesign::from_path(content().join("vehicles/bastion.json"), &catalog).unwrap();
+    let v = Vehicle::from_design(&file);
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let (stand, fly, reach) = (
+        pose(&v, a, "stand"),
+        pose(&v, a, "fly"),
+        pose(&v, a, "reach"),
+    );
+    let quarter = "back";
+    let set = |t: &mut [f64], j: &str, value: f64| {
+        for (side, s) in [("left", 1.0), ("right", -1.0)] {
+            t[joint(&v, a, &format!("{quarter}_{j}_{side}"))] = s * value.to_radians();
+        }
+    };
+    let first = |from: &[f64], to: &[f64]| {
+        for k in 0..=24 {
+            let f = f64::from(k) / 24.0;
+            let s: Vec<f64> = from.iter().zip(to).map(|(x, y)| x + (y - x) * f).collect();
+            let h = interferences(&v, a, &s, TOLERANCE);
+            if !h.is_empty() {
+                return format!(
+                    "step {k}: {}",
+                    report(&v, &h).chars().take(140).collect::<String>()
+                );
+            }
+        }
+        "clear".to_string()
+    };
+    for deploy in (-170..=170).step_by(10) {
+        for bend in (-90..=90).step_by(15) {
+            let mut s1 = reach.clone();
+            set(&mut s1, "deploy", f64::from(deploy));
+            set(&mut s1, "bend", f64::from(bend));
+            if !(interferences(&v, a, &s1, TOLERANCE).is_empty()
+                && clear_path(&v, a, &fly, &s1)
+                && clear_path(&v, a, &s1, &stand))
+            {
+                continue;
+            }
+            let mut at = s1.clone();
+            let mut log = format!("deploy {deploy} bend {bend}:");
+            for k in 1..LEG_SEGMENTS {
+                let mut ok = None;
+                let mut why = Vec::new();
+                for (l, r) in [
+                    (180.0f64, 180.0f64),
+                    (-180.0, -180.0),
+                    (180.0, -180.0),
+                    (-180.0, 180.0),
+                ] {
+                    let turn = l * 10.0 + r;
+                    let mut t = at.clone();
+                    t[joint(&v, a, &format!("{quarter}_fold_{k}_left"))] = l.to_radians();
+                    t[joint(&v, a, &format!("{quarter}_fold_{k}_right"))] = r.to_radians();
+                    let h = interferences(&v, a, &t, TOLERANCE);
+                    if !h.is_empty() {
+                        why.push(format!(
+                            "{turn}: pose {}",
+                            report(&v, &h).chars().take(120).collect::<String>()
+                        ));
+                        continue;
+                    }
+                    let p = first(&at, &t);
+                    if p == "clear" {
+                        ok = Some(t);
+                        break;
+                    }
+                    why.push(format!("{turn}: {p}"));
+                }
+                match ok {
+                    Some(t) => {
+                        log += &format!(" k{k} ok");
+                        at = t;
+                    }
+                    None => {
+                        log += &format!(" k{k} FAIL [{}]", why.join(" | "));
+                        break;
+                    }
+                }
+            }
+            println!("{log}");
+        }
+    }
 }

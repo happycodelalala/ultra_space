@@ -107,11 +107,24 @@
     },
     "poses": {
       "type": "object",
-      "description": "Named joint poses: pose name -> joint part id -> angle in degrees (task 3.10). Joints not named go back to rest.",
+      "description": "Named joint poses: pose name -> joint part id -> angle in degrees, or metres for a slider (task 3.10). Joints not named go back to rest.",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": {
           "type": "number"
+        }
+      }
+    },
+    "pose_stages": {
+      "type": "object",
+      "description": "Stages a pose passes through: pose name -> in-between joint sets (same form as a pose), passed in order on the way to the pose and in reverse when leaving it (a folded arm swings clear, then unfolds).",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       }
     },

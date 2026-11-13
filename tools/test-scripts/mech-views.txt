@@ -2,7 +2,7 @@
 # ULTRA_SPACE_START_ALTITUDE=1500. Spawn and board it, hide the HUD, then photograph it from
 # eight directions around (yaw 0 = behind, 180 = front) at a slight downward angle, from above
 # and from low; then with its drone bays open, closed into its cocoon, in its flying pose
-# (shells pushed out into four platforms) and standing again. Look for: proportions, silhouette, how the part models and
+# (shells pushed out into four platforms), reaching out along the diagonals and standing again. Look for: proportions, silhouette, how the part models and
 # materials read (bevels, panel lines, occlusion, shadows, reflections), gaps or overlaps.
 0.5  press Z
 1    wait landed 40
@@ -46,7 +46,10 @@
 54   shot 14-fly.png
 54.5 orbit 200 25
 56   shot 15-fly-below.png
-56.5 press P                 # stand
-57   orbit 120 -15
-62   shot 16-stand-again.png
-62.5 quit
+56.5 press P                 # reach: shell arms and folding legs out along the diagonals
+57   orbit 150 -35
+65   shot 16-reach.png
+66.5 press P                 # stand
+67   orbit 120 -15
+72   shot 17-stand-again.png
+72.5 quit

@@ -56,12 +56,12 @@ test("poses put the shells where the game does", () => {
     const at = applyPose(posesOf(a, angles)[a.partGroup[i]], [0, 0, 0].map((_, k) => p.position[k] + quat.rotate(p.rotation, shapeCentroid(p.def.shape))[k]));
     return Math.hypot(at[0], at[2] - 0.3);
   };
-  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 5.5 m;
-  // held out in stand (forearms telescoped) 10.7 m (front) and 13.1 m (back).
+  // Rust (every_pose_and_every_move_p_makes_is_free_of_interference): closed 5.5 m;
+  // held out in stand (forearms telescoped) 13.0 m (front) and 10.0 m (back).
   const close = (x, want, what) => assert.ok(Math.abs(x - want) < 0.1, `${what}: ${x} vs ${want}`);
   close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 5.5, "cocoon");
-  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 10.7, "stand front");
-  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 13.1, "stand back");
+  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 13.0, "stand front");
+  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 10.0, "stand back");
 });
 
 test("a pose read and written back is the same pose", () => {

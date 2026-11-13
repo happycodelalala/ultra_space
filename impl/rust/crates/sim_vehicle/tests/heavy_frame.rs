@@ -185,6 +185,7 @@ fn assemble() -> Vehicle {
     let pose = |name: &str, angles: Vec<(String, f64)>| NamedPose {
         name: name.into(),
         angles,
+        stages: Vec::new(),
     };
     let mut arms_up = both("shoulder_joint", 150.0);
     arms_up.extend(both("elbow_joint", 20.0));

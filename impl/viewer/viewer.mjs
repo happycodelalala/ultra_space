@@ -258,7 +258,7 @@ async function build() {
   state.angles = new Array(n).fill(0);
   if (fresh && state.design) {
     // Start like the game: in the design's "stand" pose if it has one.
-    state.angles = poseAngles(state.design, state.parts, state.articulation, params.get("pose") ?? "stand") ?? state.angles;
+    state.angles = namedPose(params.get("pose") ?? "stand") ?? state.angles;
   } else {
     state.articulation.groups.forEach((g, i) => {
       const name = g.jointPart != null ? state.parts[g.jointPart].name : null;
@@ -343,18 +343,33 @@ function updateOverlays() {
 
 // --- Panel ---------------------------------------------------------------------------------
 
+/// A design pose by name, or one of its stages as "name.k" (k from 1); null without one.
+function namedPose(name) {
+  const m = /^(.*)\.(\d+)$/.exec(name);
+  const pose = m ? state.design.pose_stages?.[m[1]]?.[Number(m[2]) - 1] : state.design.poses?.[name];
+  return pose ? poseAngles({ poses: { [name]: pose } }, state.parts, state.articulation, name) : null;
+}
+
 function buildPanel() {
   const poses = $("poses");
   poses.innerHTML = "";
   $("poseSection").style.display = state.mode === "design" ? "" : "none";
   if (state.design) {
     const names = Object.keys(state.design.poses ?? {});
-    for (const name of ["rest", ...names]) {
+    // Each pose, preceded by the stages it passes through on the way (name·1, name·2, ...).
+    const buttons = [["rest", null]];
+    for (const name of names) {
+      (state.design.pose_stages?.[name] ?? []).forEach((stage, k) => buttons.push([`${name}·${k + 1}`, stage]));
+      buttons.push([name, state.design.poses[name]]);
+    }
+    for (const [label, pose] of buttons) {
       const b = document.createElement("button");
-      b.textContent = name;
+      b.textContent = label;
       b.onclick = () => {
         const n = state.articulation.groups.length;
-        state.angles = name === "rest" ? new Array(n).fill(0) : poseAngles(state.design, state.parts, state.articulation, name);
+        state.angles = pose === null
+          ? new Array(n).fill(0)
+          : poseAngles({ poses: { [label]: pose } }, state.parts, state.articulation, label);
         syncSliders();
         applyPoses();
       };
@@ -528,7 +543,7 @@ function designText(design) {
     return JSON.stringify(v);
   };
   const lines = ["{"];
-  const top = Object.entries(design).filter(([k]) => !["parts", "poses", "gait"].includes(k));
+  const top = Object.entries(design).filter(([k]) => !["parts", "poses", "pose_stages", "gait"].includes(k));
   for (const [k, v] of top) lines.push(`  ${JSON.stringify(k)}: ${JSON.stringify(v)},`);
   lines.push('  "parts": [');
   design.parts.forEach((p, i) => lines.push(`    ${value(p)}${i + 1 < design.parts.length ? "," : ""}`));
@@ -538,6 +553,14 @@ function designText(design) {
     lines[lines.length - 1] += ",";
     lines.push('  "poses": {');
     poses.forEach(([name, angles], i) => lines.push(`    ${JSON.stringify(name)}: ${value(angles)}${i + 1 < poses.length ? "," : ""}`));
+    lines.push("  }");
+  }
+  const stages = Object.entries(design.pose_stages ?? {});
+  if (stages.length) {
+    lines[lines.length - 1] += ",";
+    lines.push('  "pose_stages": {');
+    stages.forEach(([name, list], i) =>
+      lines.push(`    ${JSON.stringify(name)}: [${list.map(value).join(", ")}]${i + 1 < stages.length ? "," : ""}`));
     lines.push("  }");
   }
   if (design.gait) {

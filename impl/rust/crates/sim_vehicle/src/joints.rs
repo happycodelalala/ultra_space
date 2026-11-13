@@ -150,6 +150,9 @@ pub struct JointState {
     pub poses: Vec<Pose>,
     /// Bumped whenever the poses change (allocator and meshes follow).
     pub generation: u64,
+    /// Targets still to come (a staged move): when every joint has reached its target, the
+    /// next one becomes the target.
+    pub queue: std::collections::VecDeque<Vec<f64>>,
 }
 
 impl JointState {
@@ -161,6 +164,7 @@ impl JointState {
             targets: vec![0.0; n],
             poses: vec![Pose::IDENTITY; n],
             generation: 0,
+            queue: Default::default(),
         }
     }
 
@@ -181,6 +185,9 @@ impl JointState {
                 moved = true;
             }
         }
+        if !moved && let Some(next) = self.queue.pop_front() {
+            self.targets = next;
+        }
         if moved || self.poses.len() != articulation.groups.len() {
             self.poses = articulation.poses(&self.angles);
             self.generation += 1;
@@ -198,8 +205,18 @@ pub fn pose_angles(
     name: &str,
 ) -> Option<Vec<f64>> {
     let pose = vehicle.poses.iter().find(|p| p.name == name)?;
+    Some(values(vehicle, articulation, &pose.angles))
+}
+
+/// Joint values (radians or metres, one per group) from named data values (degrees or
+/// metres), every other joint at rest.
+fn values(
+    vehicle: &crate::vehicle::Vehicle,
+    articulation: &Articulation,
+    named: &[(String, f64)],
+) -> Vec<f64> {
     let mut angles = vec![0.0; articulation.groups.len()];
-    for (joint, deg) in &pose.angles {
+    for (joint, deg) in named {
         let Some(part) = vehicle.parts.iter().position(|p| &p.name == joint) else {
             continue;
         };
@@ -209,7 +226,31 @@ pub fn pose_angles(
                 .map_or(deg.to_radians(), |j| j.clamp(j.from_data(*deg)));
         }
     }
-    Some(angles)
+    angles
+}
+
+/// The joint targets, in order, for moving from pose `from` (None: wherever the joints are)
+/// to pose `to`: back out through `from`'s stages (in reverse), in through `to`'s stages, and
+/// `to` itself. `None` when `to` is no pose.
+pub fn pose_route(
+    vehicle: &crate::vehicle::Vehicle,
+    articulation: &Articulation,
+    from: Option<&str>,
+    to: &str,
+) -> Option<Vec<Vec<f64>>> {
+    let find = |name: &str| vehicle.poses.iter().find(|p| p.name == name);
+    let target = find(to)?;
+    let mut route = Vec::new();
+    if let Some(leaving) = from.and_then(find).filter(|p| p.name != to) {
+        for stage in leaving.stages.iter().rev() {
+            route.push(values(vehicle, articulation, stage));
+        }
+    }
+    for stage in &target.stages {
+        route.push(values(vehicle, articulation, stage));
+    }
+    route.push(values(vehicle, articulation, &target.angles));
+    Some(route)
 }
 
 /// Moves every jointed vehicle's joints toward their targets for one tick (and gives jointed
