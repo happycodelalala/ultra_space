@@ -1,0 +1,32 @@
+# The Bastion (an original heavy frame with four manipulator arms and a closing shell). Run with
+# ULTRA_SPACE_START_ALTITUDE=1500. Spawn it, board it, step through its poses with P (name
+# order: arms_deployed, arms_grab, arms_stowed, shell_closed, shell_open, stand), then walk a
+# little with the shell open and stop. Look for: four arms spreading wide with open clamps,
+# reaching forward with closed clamps, folding back; the six slabs hanging straight down into a
+# six-sided shell, then swinging far out; walking and standing after; log "pose: ..." lines.
+0.5  press Z
+1    wait landed 40
+2    press F
+3    hold Shift 0.3
+3.1  press G                 # rover -> Bastion
+4    press G                 # spawn it ahead
+5    hold W 4                # walk up to it
+9.5  press F                 # board it
+11   press H                 # hide the HUD
+12   shot 01-rest.png
+12.5 press P                 # arms deployed
+16   shot 02-arms-deployed.png
+16.5 press P                 # arms grab
+20   shot 03-arms-grab.png
+20.5 press P                 # arms stowed
+24   shot 04-arms-stowed.png
+24.5 press P                 # shell closed (arms stowed)
+28.5 shot 05-shell-closed.png
+29   press P                 # shell open
+33   shot 06-shell-open.png
+33.5 press M                 # walk
+34   hold W 6
+38   shot 07-walking.png
+40.5 press M                 # stop on both feet
+45   shot 08-stopped.png
+45.5 quit

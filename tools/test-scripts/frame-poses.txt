@@ -7,7 +7,9 @@
 1    wait landed 40
 2    press F
 3    hold Shift 0.3
-3.1  press G                 # choose the heavy frame
+3.1  press G                 # rover -> Bastion
+3.3  hold Shift 0.3
+3.4  press G                 # -> the heavy frame
 4    press G                 # spawn it ahead
 5    hold W 2.5              # walk up to it
 7.5  press F                 # board it

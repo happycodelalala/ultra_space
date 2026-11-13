@@ -1,0 +1,693 @@
+{
+  "description": "Parts of the Bastion, an original heavy frame with four manipulator arms and a closing armour shell.",
+  "parts": [
+    {
+      "id": "bastion.yoke",
+      "name": "Bastion Yoke",
+      "kind": "structure",
+      "mass_kg": 3000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          8.8,
+          0.8,
+          8.8
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "turret_left",
+          "position_m": [
+            -3.0,
+            0.4,
+            1.2
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "turret_right",
+          "position_m": [
+            3.0,
+            0.4,
+            1.2
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "shell_front",
+          "position_m": [
+            0.0,
+            -0.4,
+            -4.4
+          ],
+          "direction": [
+            0.0,
+            -0.766044,
+            -0.642788
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shell_front_right",
+          "position_m": [
+            3.8105,
+            -0.4,
+            -2.2
+          ],
+          "direction": [
+            0.55667,
+            -0.766044,
+            -0.321394
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shell_back_right",
+          "position_m": [
+            3.8105,
+            -0.4,
+            2.2
+          ],
+          "direction": [
+            0.55667,
+            -0.766044,
+            0.321394
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shell_back",
+          "position_m": [
+            0.0,
+            -0.4,
+            4.4
+          ],
+          "direction": [
+            0.0,
+            -0.766044,
+            0.642788
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shell_back_left",
+          "position_m": [
+            -3.8105,
+            -0.4,
+            2.2
+          ],
+          "direction": [
+            -0.55667,
+            -0.766044,
+            0.321394
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shell_front_left",
+          "position_m": [
+            -3.8105,
+            -0.4,
+            -2.2
+          ],
+          "direction": [
+            -0.55667,
+            -0.766044,
+            -0.321394
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A wide armoured plate over the shoulders: two arm turrets on top, six shell hinges under its rim.",
+      "form": {
+        "model": "bastion.yoke",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.turret",
+      "name": "Bastion Arm Turret",
+      "kind": "structure",
+      "mass_kg": 1800,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.6,
+          1.0,
+          1.6
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -0.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "up",
+          "position_m": [
+            0,
+            0.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "left",
+          "position_m": [
+            -0.8,
+            0,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "right",
+          "position_m": [
+            0.8,
+            0,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A block carrying two manipulator arms.",
+      "form": {
+        "model": "bastion.turret",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.arm_rotor",
+      "name": "Bastion Arm Rotor",
+      "kind": "joint",
+      "mass_kg": 500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.0,
+          0.5,
+          1.0
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "limits_deg": [
+          -180,
+          180
+        ],
+        "speed_deg_s": 90,
+        "max_torque_nm": 1000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "Twists what hangs below its end node about its own long axis.",
+      "form": {
+        "model": "bastion.arm_rotor",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.arm_hinge",
+      "name": "Bastion Arm Hinge",
+      "kind": "joint",
+      "mass_kg": 400,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.9,
+          0.5,
+          0.9
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "limits_deg": [
+          -170,
+          170
+        ],
+        "speed_deg_s": 90,
+        "max_torque_nm": 1000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A manipulator arm hinge.",
+      "form": {
+        "model": "bastion.arm_hinge",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.arm_segment",
+      "name": "Bastion Arm Segment",
+      "kind": "structure",
+      "mass_kg": 800,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.7,
+          3.0,
+          0.7
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A manipulator arm segment.",
+      "form": {
+        "model": "bastion.arm_segment",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.clamp_palm",
+      "name": "Bastion Clamp Palm",
+      "kind": "structure",
+      "mass_kg": 300,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.0,
+          0.6,
+          1.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.3,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "jaw_a",
+          "position_m": [
+            0.0,
+            -0.3,
+            -0.35
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "jaw_b",
+          "position_m": [
+            0.3031,
+            -0.3,
+            0.175
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "jaw_c",
+          "position_m": [
+            -0.3031,
+            -0.3,
+            0.175
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "small"
+        }
+      ],
+      "description": "The palm of a three-jaw clamp.",
+      "form": {
+        "model": "bastion.clamp_palm",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.jaw_hinge",
+      "name": "Bastion Jaw Hinge",
+      "kind": "joint",
+      "mass_kg": 50,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.3,
+          0.3,
+          0.3
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "limits_deg": [
+          -60,
+          60
+        ],
+        "speed_deg_s": 120,
+        "max_torque_nm": 100000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.15,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "small"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.15,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "small"
+        }
+      ],
+      "description": "Opens and closes one clamp jaw.",
+      "form": {
+        "model": "bastion.jaw_hinge",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.jaw",
+      "name": "Bastion Clamp Jaw",
+      "kind": "structure",
+      "mass_kg": 60,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.25,
+          1.0,
+          0.25
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "small"
+        }
+      ],
+      "description": "One jaw of a three-jaw clamp.",
+      "form": {
+        "model": "bastion.jaw",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.shell_hinge",
+      "name": "Bastion Shell Hinge",
+      "kind": "joint",
+      "mass_kg": 1000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          4.0,
+          0.6,
+          0.8
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "limits_deg": [
+          -120,
+          120
+        ],
+        "speed_deg_s": 45,
+        "max_torque_nm": 5000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.3,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.3,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A long hinge that swings a shell slab in and out.",
+      "form": {
+        "model": "bastion.shell_hinge",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.shell_slab",
+      "name": "Bastion Shell Slab",
+      "kind": "structure",
+      "mass_kg": 4500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          5.0,
+          9.0,
+          0.8
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "root",
+          "position_m": [
+            0,
+            4.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A flat armour slab; six close into a six-sided shell around the body.",
+      "form": {
+        "model": "bastion.shell_slab",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    }
+  ]
+}
