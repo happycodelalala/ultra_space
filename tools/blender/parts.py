@@ -48,7 +48,7 @@ def extent(h, d):
          "bastion.bend_front_right", "bastion.bend_back_left", "bastion.bend_back_right",
          "bastion.elbow_front_left", "bastion.elbow_front_right", "bastion.elbow_back_left",
          "bastion.elbow_back_right", "bastion.engine_mount", "bastion.engine_gimbal",
-         "bastion.bay_hinge")
+         "bastion.bay_hinge", "bastion.arm_roll")
 def hinge(m, h, part):
     """A heavy hinge. A faceted mount plate on the parent; two armoured cheeks carry the pin
     down past the pivot (the end node, where the joint turns) to a spur that covers the

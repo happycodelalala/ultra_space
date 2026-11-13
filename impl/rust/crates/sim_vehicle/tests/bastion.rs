@@ -23,7 +23,7 @@ use sim_vehicle::builder::{
 };
 use sim_vehicle::catalog::{SHELL_PROFILE_STEPS, Shape, shell_profile};
 use sim_vehicle::design::{NamedPose, check_join, design_json};
-use sim_vehicle::gait::{GaitDef, LegDef};
+use sim_vehicle::gait::{GaitDef, LegDef, resolve_legs, solve_leg};
 use sim_vehicle::interference::{Interference, interferences};
 use sim_vehicle::joints::{Articulation, JointState};
 use sim_vehicle::{PartCatalog, PartDef, Vehicle, VehicleBody, VehicleDesign, VehiclePart};
@@ -76,6 +76,9 @@ const ENGINE_RECESS: f64 = 0.55;
 const WRIST_HEIGHT: f64 = 2.4;
 /// How far inside the shell's inner face the wrist sits (m).
 const WRIST_INSET: f64 = 1.3;
+/// How the arms hang when standing: shoulder and elbow turned forward, and the arm out to the
+/// side (degrees).
+const ARM_STANCE: (f64, f64, f64) = (6.0, 22.0, 9.0);
 /// The forearm extensions the pose searches try (m; the slide runs 0 to 2.5).
 const ARM_REACH: [f64; 3] = [0.0, 1.25, 2.5];
 /// How far from the cocoon's axis the walking pose holds the quarters' middles at most (m).
@@ -238,9 +241,18 @@ fn assemble() -> Vehicle {
         any,
     );
     b.mirror(i, "shoulder_right");
+    // The shoulder: a roll joint (the arm out to the side), then the swing (forward and back).
     b.pair(
         "shoulder",
         "down",
+        "bastion.arm_roll",
+        "base",
+        "shoulder_roll",
+        any,
+    );
+    b.pair(
+        "shoulder_roll",
+        "end",
         "frame.hinge",
         "base",
         "shoulder_joint",
@@ -632,12 +644,12 @@ fn with_reach(v: &Vehicle, a: &Articulation, base: &[f64], quarter: &str, reach:
 /// lift and the elbow (10° grid), turns the wrist to make `facing` (how well the quarter faces
 /// the way it should, 1 best) as large as it gets, and keeps poses facing better than `least`.
 /// Of those, the one with the largest `score` that is free of interference and reachable from
-/// `from` without any (every joint moving at once: `from` is where the whole move starts, which
-/// can be before other quarters moved to `start`) wins; `start` itself when none is.
+/// each pose in `from` without any (every joint moving at once: a move can start before other
+/// quarters moved to `start`) wins; `start` itself when none is.
 fn place_quarter(
     v: &Vehicle,
     a: &Articulation,
-    (start, from): (&[f64], &[f64]),
+    (start, from): (&[f64], &[&[f64]]),
     quarter: &str,
     least: f64,
     facing: impl Fn(&[f64]) -> f64,
@@ -683,7 +695,7 @@ fn place_quarter(
     candidates
         .into_iter()
         .filter(|(_, t)| interferences(v, a, t, TOLERANCE).is_empty())
-        .find(|(_, t)| clear_path(v, a, from, t))
+        .find(|(_, t)| from.iter().all(|f| clear_path(v, a, f, t)))
         .map_or_else(|| start.to_vec(), |(_, t)| t)
 }
 
@@ -697,13 +709,13 @@ fn upright(v: &Vehicle, a: &Articulation, quarter: &str, angles: &[f64]) -> f64 
 /// (up to `HELD_OUT` from the axis) and no lower than closed, so the legs stride clear of it.
 fn hold_out(v: &Vehicle, a: &Articulation) -> Vec<f64> {
     let rest = vec![0.0; a.groups.len()];
-    let mut angles = rest.clone();
+    let mut angles = body_stance(v, a);
     for (quarter, _) in QUARTERS {
         let closed = quarter_at(v, a, quarter, "left", &rest);
         angles = place_quarter(
             v,
             a,
-            (&angles, &angles),
+            (&angles, &[&rest]),
             quarter,
             0.998,
             |t| upright(v, a, quarter, t),
@@ -744,12 +756,13 @@ fn lift_direction(
 /// wing cases (not stacked above it).
 fn tilt_up(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
     let mut angles = start.to_vec();
-    for (quarter, middle) in QUARTERS {
+    // The back quarters first: the front ones, tilting, sweep where the back ones stand.
+    for (quarter, middle) in QUARTERS.into_iter().rev() {
         let corner = radial_left(middle);
         angles = place_quarter(
             v,
             a,
-            (&angles, start),
+            (&angles, &[start]),
             quarter,
             0.97,
             |t| lift_direction(v, a, quarter, "left", t).y,
@@ -762,6 +775,32 @@ fn tilt_up(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
         );
     }
     angles
+}
+
+/// The frame's own stance, standing: the arms hanging a little forward and out from the body,
+/// bent at the elbow ([`ARM_STANCE`]), the legs bent to the gait's standing height with the soles level (as the
+/// walker stands it).
+fn body_stance(v: &Vehicle, a: &Articulation) -> Vec<f64> {
+    let mut t = vec![0.0; a.groups.len()];
+    for side in ["left", "right"] {
+        // Out to the side: a turn about +Z swings the left arm (−X side) out when negative.
+        let out = if side == "left" { -1.0 } else { 1.0 };
+        t[joint(v, a, &format!("shoulder_roll_{side}"))] = out * ARM_STANCE.2.to_radians();
+        t[joint(v, a, &format!("shoulder_joint_{side}"))] = ARM_STANCE.0.to_radians();
+        t[joint(v, a, &format!("elbow_joint_{side}"))] = ARM_STANCE.1.to_radians();
+    }
+    let body = VehicleBody::of(v).unwrap();
+    let gait = v.gait.as_ref().unwrap();
+    for leg in resolve_legs(v, &body, gait).unwrap() {
+        let reach = gait.stance * (leg.thigh() + leg.shin());
+        let (hip, knee) = solve_leg(&leg, leg.hip - DVec3::Y * reach);
+        t[leg.hip_group] = hip;
+        t[leg.knee_group] = knee;
+        if let Some(ankle) = leg.ankle_group {
+            t[ankle] = -(hip + knee);
+        }
+    }
+    t
 }
 
 /// `start` with every drone bay's cover swung up and out by [`BAY_OPEN_DEG`] (each hinge
@@ -1255,56 +1294,31 @@ fn what_blocks_tilting_up() {
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
     let held = hold_out(&v, a);
-    for q in ["front", "back"] {
-        let at = quarter_at(&v, a, q, "left", &held);
-        println!("held {q}: at {at:.2?} r {:.2}", radius(at));
-    }
-    for quarter in ["front", "back"] {
-        let mut found = Vec::new();
-        for reach in ARM_REACH {
-            for l in (-150..=150).step_by(10) {
-                for e in (-180..=180).step_by(10) {
-                    let (l, e) = (f64::from(l), f64::from(e));
-                    let mut best = (f64::MIN, 0.0);
-                    for w in (-180..=180).step_by(2) {
-                        let t = with_reach(
-                            &v,
-                            a,
-                            &with_arm(&v, a, &held, quarter, (l, e, f64::from(w))),
-                            quarter,
-                            reach,
-                        );
-                        let f = lift_direction(&v, a, quarter, "left", &t).y;
-                        if f > best.0 {
-                            best = (f, f64::from(w));
-                        }
-                    }
-                    if best.0 > 0.97 {
-                        let t = with_reach(
-                            &v,
-                            a,
-                            &with_arm(&v, a, &held, quarter, (l, e, best.1)),
-                            quarter,
-                            reach,
-                        );
-                        let hits = interferences(&v, a, &t, TOLERANCE);
-                        let at = quarter_at(&v, a, quarter, "left", &t);
-                        found.push((hits.len(), reach, l, e, best.1, at, report(&v, &hits)));
-                    }
-                }
-            }
-        }
-        found.sort_by_key(|f| f.0);
-        println!(
-            "{quarter}: {} level poses, {} free",
-            found.len(),
-            found.iter().filter(|f| f.0 == 0).count()
-        );
-        for (n, reach, l, e, w, at, r) in found.iter().take(5) {
-            println!(
-                "  reach {reach} l {l} e {e} w {w}: at {at:.2?} r {:.2}, {n} hits: {r}",
-                radius(*at)
-            );
+    let rest = vec![0.0; a.groups.len()];
+    let fly = tilt_up(&v, a, &held);
+    for k in 0..=24 {
+        let f = f64::from(k) / 24.0;
+        let s: Vec<f64> = rest
+            .iter()
+            .zip(&fly)
+            .map(|(x, y)| x + (y - x) * f)
+            .collect();
+        let h = interferences(&v, a, &s, TOLERANCE);
+        if !h.is_empty() {
+            println!("cocoon -> fly step {k}/24: {}", report(&v, &h));
         }
     }
+}
+
+#[test]
+#[ignore = "diagnostic: what the frame's standing stance runs into"]
+fn the_stance_alone() {
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let t = body_stance(&v, a);
+    println!(
+        "stance: {}",
+        report(&v, &interferences(&v, a, &t, TOLERANCE))
+    );
 }

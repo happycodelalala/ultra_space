@@ -581,6 +581,72 @@
       }
     },
     {
+      "id": "bastion.arm_roll",
+      "name": "Bastion Shoulder Roll",
+      "kind": "joint",
+      "mass_kg": 900,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          0.5,
+          1.2
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "limits_deg": [
+          -60,
+          60
+        ],
+        "speed_deg_s": 30,
+        "max_torque_nm": 3000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.25,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.25,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "The shoulder's roll joint, under the shoulder block: swings the arm out to the side (and back in to hang straight inside the cocoon).",
+      "form": {
+        "model": "bastion.arm_roll",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
       "id": "bastion.limb",
       "name": "Bastion Upper Arm",
       "kind": "structure",
@@ -588,9 +654,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          1.8,
-          3.6,
-          1.8
+          1.9,
+          3.1,
+          2.2
         ]
       },
       "attach_nodes": [
@@ -598,7 +664,7 @@
           "id": "top",
           "position_m": [
             0,
-            1.8,
+            1.55,
             0
           ],
           "direction": [
@@ -612,7 +678,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -1.8,
+            -1.55,
             0
           ],
           "direction": [
@@ -640,9 +706,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          1.8,
+          2.0,
           3.6,
-          1.8
+          2.2
         ]
       },
       "attach_nodes": [
@@ -692,9 +758,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          2.6,
+          2.8,
           5.0,
-          2.6
+          3.0
         ]
       },
       "attach_nodes": [
@@ -744,9 +810,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          2.6,
+          2.9,
           5.0,
-          2.6
+          2.9
         ]
       },
       "attach_nodes": [
@@ -2690,9 +2756,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          1.0,
+          0.9,
           4.0863,
-          1.0
+          0.9
         ]
       },
       "attach_nodes": [
@@ -2926,9 +2992,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          1.0,
+          0.9,
           4.0468,
-          1.0
+          0.9
         ]
       },
       "attach_nodes": [

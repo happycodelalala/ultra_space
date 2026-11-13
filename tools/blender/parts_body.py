@@ -195,8 +195,8 @@ def limb_body(m, h, kind):
     yb = hy * 0.84
     rb = min(hx, hz) * 0.5
     # Armour width (wider than the frame it covers), at the top and at the bottom.
-    wt, wb = {"upper_arm": (1.0, 0.95), "forearm": (1.05, 1.25), "thigh": (1.2, 1.05),
-              "shin": (1.05, 1.25)}[kind]
+    wt, wb = {"upper_arm": (1.0, 0.95), "forearm": (1.05, 1.1), "thigh": (1.04, 1.0),
+              "shin": (1.0, 1.12)}[kind]
 
     def F(x, y, z):
         w = wb + (wt - wb) * (y + 1) / 2
@@ -255,11 +255,11 @@ def limb_body(m, h, kind):
         # Knee guard over the joint above, swept to a point; calf armour over the actuators'
         # lower ends, widening to the ankle; an ankle guard.
         m.hull([F(s * 0.7, 0.5, -0.66) for s in (-1, 1)] + [F(s * 0.5, 1.04, -0.62) for s in (-1, 1)]
-               + [F(0, 0.86, -1.34), F(0, 0.35, -1.1)]
+               + [F(0, 0.86, -1.1), F(0, 0.35, -1.0)]
                + [F(s * 0.55, y, -0.45) for s in (-1, 1) for y in (0.45, 1.0)], "armor", bevel=0.008)
         m.hull([F(s * w, y, z) for s in (-1, 1) for y, w, z in ((0.2, 0.62, 0.5), (-0.75, 0.85, 0.5),
-                                                                (0.1, 0.55, 0.95), (-0.68, 0.8, 1.05))]
-               + [F(0, -0.45, 1.25)], "armor", bevel=0.008)
+                                                                (0.1, 0.55, 0.92), (-0.68, 0.8, 1.0))]
+               + [F(0, -0.45, 1.1)], "armor", bevel=0.008)
         m.hull([F(s * 0.95, y, z) for s in (-1, 1) for y in (-0.62, -0.98) for z in (-0.95, -0.4)]
                + [F(0, -0.78, -1.15)], "armor2", bevel=0.008)
 
