@@ -15,36 +15,36 @@ def octagon(w, h, k):
 
 @builder("bastion.fold_knee_left", "bastion.fold_knee_right")
 def fold_knee(m, h, part):
-    """A folding knee: a yoke whose faceted blade cheeks wrap round the bend between the two
-    side-by-side segments. The base segment sits in a graphite socket; the end segment turns
-    on an octagonal knuckle at its root (the pivot, end node), its pin held by retainers,
-    driven by a sealed actuator along the yoke through a crank."""
-    hx, hy, hz = h
+    """A fold knee, an edge hinge: a graphite bracket on the end of one folding-leg segment
+    (the base node) reaching across to the seam between it and the next segment, where two
+    outer knuckles carry the pin (square to the folded stack, along Z). The next segment's
+    roll bearing turns on the pin between them: folded, it lies beside this segment; turned
+    half a circle, it runs straight on in line."""
     ns = nodes(part)
     pb, pe = ns["base"][0], ns["end"][0]
-    zc = hz * 0.78
-    tc = max(0.04, hz * 0.16)
-    out = [(-hx * 0.98, hy * 0.5), (-hx * 0.98, -hy * 0.35), (-hx * 0.6, -hy * 0.98), (hx * 0.6, -hy * 0.98),
-           (hx * 0.98, -hy * 0.35), (hx * 0.98, hy * 0.5)]
+    r = 0.16
+    # Bracket: over the segment's end, out to the pin.
+    m.hull([V((pb.x + dx, pb.y + dy, dz)) for dx in (-0.22, 0.22) for dy in (0.0, -0.12) for dz in (-0.3, 0.3)]
+           + [V((pe.x, pe.y + dy, dz)) for dy in (-0.14, 0.0) for dz in (-0.34, 0.34)], "armor2", bevel=0.01)
     for s in (-1, 1):
-        if s > 0:
-            pl = frame((0, 0, zc - tc / 2), u=(1, 0, 0), v=(0, 1, 0))
-            pts = out
-        else:
-            pl = frame((0, 0, -zc + tc / 2), u=(-1, 0, 0), v=(0, 1, 0))
-            pts = [(-x, y) for x, y in out]
-        m.plate(pts, tc, pl, "armor", chamfer=min(0.03, tc * 0.4))
-    m.box((2 * hx * 0.9, 0.05, 2 * zc), at=(0, -hy * 0.75, 0), mat="dark", bevel=0.01, segments=1)
-    m.hull([(pb.x + sx * hx * 0.42, pb.y - y, sz * (zc - tc / 2)) for sx in (-1, 1) for sz in (-1, 1)
-            for y in (0.0,)] + [(pb.x + sx * hx * 0.3, pb.y - hy * 0.65, sz * (zc - tc / 2)) for sx in (-1, 1)
-                                 for sz in (-1, 1)], "armor2", bevel=0.01)
-    rk = min(hz * 0.7, hy * 0.75)
-    m.drum(pe - X * (hx * 0.42), pe + X * (hx * 0.42), rk, "dark", 8, hint=(0, 1, 0))
-    for s in (-1, 1):
-        m.cap(pe + X * (s * hx * 0.42), X * s, rk * 0.5)
-    rr = max(0.035, hz * 0.12)
-    zr = -(zc + tc + rr * 1.2)
-    m.piston((-hx * 0.8, -hy * 0.3, zr), (hx * 0.55, hy * 0.05, zr), rr, extension=0.4, hint=(0, 0, 1))
+        m.drum(pe + Z * (s * 0.14), pe + Z * (s * 0.34), r, "dark", 8, hint=X)
+        m.cap(pe + Z * (s * 0.34), Z * s, r * 0.6)
+
+
+@builder("bastion.leg_roll")
+def leg_roll(m, h, part):
+    """A roll bearing at a folding-leg segment's root: the middle knuckle on the fold knee's
+    pin, an arm across to the segment's axis, and there the slewing bearing that turns the
+    segment about its length."""
+    ns = nodes(part)
+    pb, pe = ns["base"][0], ns["end"][0]
+    m.drum(pb - Z * 0.13, pb + Z * 0.13, 0.15, "metal", 8, hint=X)
+    m.hull([V((pb.x, pb.y + dy, dz)) for dy in (-0.1, 0.1) for dz in (-0.12, 0.12)]
+           + [V((pe.x + dx, pe.y + dy, dz)) for dx in (-0.2, 0.2) for dy in (-0.1, 0.1) for dz in (-0.2, 0.2)],
+           "dark", bevel=0.008)
+    m.drum(pe - Y * 0.14, pe + Y * 0.14, 0.27, "metal", 8, hint=X)
+    m.lathe([(0.27, -0.03), (0.3, -0.03), (0.3, 0.03), (0.27, 0.03)], along(pe, pe + Y), "dark", 8, closed=True,
+            angle=20.0)
 
 
 @builder("bastion.arm_rotor")

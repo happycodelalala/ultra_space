@@ -7,7 +7,7 @@
 //! wrist keeps it upright (walking: held out clear of the legs) or turns it on its back
 //! (flying: pushed out over the four corners as platforms, each with four gimballed lift engines
 //! round the carrier). Each quarter's bulge holds a drone bay under a hinged cover. From
-//! the carrier a long folding leg (six segments, thinner and thinner, ending in a grapple)
+//! the carrier a long folding leg (five segments, thinner and thinner, ending in a grapple)
 //! lies folded flat along the inside of the quarter's lower part. Closed, the quarters make a cocoon over the
 //! head, shoulders and arm bases, tapering to just above the ankles. Every pose and every move
 //! between poses is checked free of interference.
@@ -48,11 +48,12 @@ const QUARTERS: [(&str, f64); 2] = [("front", 135.0), ("back", 45.0)];
 fn fold_direction(quarter: &str) -> f64 {
     if quarter == "front" { 1.0 } else { -1.0 }
 }
-/// Folding-leg segments after the drop (7.3 m, then 6.3 m each), side by side when folded.
-const LEG_SEGMENTS: usize = 6;
+/// Folding-leg segments after the drop (7.3 m, then 6.3 m each), side by side when folded (an
+/// odd number: the last hangs down, so the grapple stows at the stack's open lower end).
+const LEG_SEGMENTS: usize = 5;
 /// The folded leg lies in a plane leaning in toward the hem with the shell's inner face, this
 /// far from the vertical (degrees): its segments run along the shell, close to it.
-const FOLD_LEAN_DEG: f64 = 12.2;
+const FOLD_LEAN_DEG: f64 = 11.8;
 
 /// The cocoon wraps around this vertical axis (vehicle frame, x = 0).
 const SHELL_AXIS_Z: f64 = 0.3;
@@ -458,14 +459,23 @@ fn assemble() -> Vehicle {
                     any,
                 );
                 if k + 1 < LEG_SEGMENTS {
-                    // The next segment lies beside this one, further along the fold.
+                    // The next segment lies beside this one, further along the fold: an edge hinge
+                    // on the seam between them (so unfolded it runs straight in line), then a
+                    // roll bearing on the next segment's axis.
                     let knee = name(&format!("fold_{}", k + 1));
                     b.join_best(&seg, far, &named("bastion.fold_knee"), "base", &knee, |p| {
                         let (end, _) = p.node_in_vehicle("end").unwrap();
                         let (base, _) = p.node_in_vehicle("base").unwrap();
                         (end - base).dot(fold_along)
                     });
-                    parent = knee;
+                    // The roll bearing: from the knee's pin (on the seam) to the next segment's axis.
+                    let roll = name(&format!("roll_{}", k + 1));
+                    b.join_best(&knee, "end", "bastion.leg_roll", "base", &roll, |p| {
+                        let (end, _) = p.node_in_vehicle("end").unwrap();
+                        let (base, _) = p.node_in_vehicle("base").unwrap();
+                        (end - base).dot(fold_along)
+                    });
+                    parent = roll;
                 } else {
                     b.join_best(&seg, far, "bastion.arm_rotor", "base", &name("hand"), any);
                     b.join_best(
@@ -818,8 +828,9 @@ fn body_stance(v: &Vehicle, a: &Articulation) -> Vec<f64> {
 /// The reaching pose and the stages it passes through: from the flying pose (the quarters
 /// pushed out over the corners, opened with their insides facing down), each folded leg first
 /// swung clear of its quarter by its deploy and bend hinges, aimed out along the diagonal,
-/// then unfolded one fold knee at a time from the root (each knee turning the way that keeps
-/// its segment clear, like a folding boom paying out). Every move P makes through them is
+/// then unfolded one fold knee at a time (the root first where it can, the tip first where
+/// the grapple would otherwise fold into the leg; each knee turning the way that keeps its
+/// segment clear). Every move P makes through them is
 /// free of interference: fly -> stages -> reach, and reach -> stages in reverse -> stand.
 /// Returns (stages, reach).
 fn reach_out(
@@ -880,35 +891,59 @@ fn reach_out(
             {
                 continue;
             }
-            // Unfold knee by knee.
+            // Unfold knee by knee: each step the first remaining knee (root first) that can
+            // straighten clear. Each side turns its knee its own way (the left and right knees
+            // are mirror-image parts; which way keeps the segment clear isn't simply opposite).
             let mut route = vec![s1.clone()];
             let mut at = s1;
-            for k in 1..LEG_SEGMENTS {
-                // Each side turns its knee its own way (the left and right knees are mirror-image
-                // parts; which way keeps the segment clear isn't simply opposite).
-                let turns = [
-                    (180.0, 180.0),
-                    (-180.0, -180.0),
-                    (180.0, -180.0),
-                    (-180.0, 180.0),
-                ];
-                let next = turns.into_iter().find_map(|(left, right)| {
-                    let mut t = at.clone();
-                    let knee = |side: &str| joint(v, a, &format!("{quarter}_fold_{k}_{side}"));
-                    t[knee("left")] = f64::to_radians(left);
-                    t[knee("right")] = f64::to_radians(right);
-                    (interferences(v, a, &t, TOLERANCE).is_empty() && clear_path(v, a, &at, &t))
-                        .then_some(t)
+            let mut left: Vec<usize> = (1..LEG_SEGMENTS).collect();
+            let turns = [
+                (180.0, 180.0),
+                (-180.0, -180.0),
+                (180.0, -180.0),
+                (-180.0, 180.0),
+            ];
+            while !left.is_empty() {
+                let knee =
+                    |k: usize, side: &str| joint(v, a, &format!("{quarter}_fold_{k}_{side}"));
+                let clear = |t: &[f64]| {
+                    interferences(v, a, t, TOLERANCE).is_empty() && clear_path(v, a, &at, t)
+                };
+                // One knee alone, else the next two together (the grapple, wider than the
+                // segments, can't lie beside one).
+                let single = left.iter().enumerate().find_map(|(n, &k)| {
+                    turns.into_iter().find_map(|(l, r)| {
+                        let mut t = at.clone();
+                        t[knee(k, "left")] = f64::to_radians(l);
+                        t[knee(k, "right")] = f64::to_radians(r);
+                        clear(&t).then_some((vec![n], t))
+                    })
+                });
+                let next = single.or_else(|| {
+                    let (k1, k2) = (*left.first()?, *left.get(1)?);
+                    turns.into_iter().find_map(|(l1, r1)| {
+                        turns.into_iter().find_map(|(l2, r2)| {
+                            let mut t = at.clone();
+                            t[knee(k1, "left")] = f64::to_radians(l1);
+                            t[knee(k1, "right")] = f64::to_radians(r1);
+                            t[knee(k2, "left")] = f64::to_radians(l2);
+                            t[knee(k2, "right")] = f64::to_radians(r2);
+                            clear(&t).then_some((vec![0, 1], t))
+                        })
+                    })
                 });
                 match next {
-                    Some(t) => {
+                    Some((done, t)) => {
+                        for n in done.into_iter().rev() {
+                            left.remove(n);
+                        }
                         route.push(t.clone());
                         at = t;
                     }
                     None => break,
                 }
             }
-            if route.len() == LEG_SEGMENTS {
+            if left.is_empty() {
                 found = Some(route);
                 break;
             }
@@ -1099,7 +1134,7 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
             );
         }
     }
-    // Unfolded, a leg reaches several times the body's height from the shoulder.
+    // Unfolded, a leg (the drop and five segments) reaches well beyond the body's height.
     let reach: f64 = v
         .parts
         .iter()
@@ -1108,7 +1143,7 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
         .map(|p| p.def.shape.bounds().1.y * 2.0)
         .sum();
     println!("a leg's segments add up to {reach:.0} m");
-    assert!(reach > 40.0, "{reach}");
+    assert!(reach > 35.0, "{reach}");
 }
 
 #[test]
@@ -1515,12 +1550,8 @@ fn what_blocks_reaching() {
     let v = Vehicle::from_design(&file);
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
-    let (stand, fly, reach) = (
-        pose(&v, a, "stand"),
-        pose(&v, a, "fly"),
-        pose(&v, a, "reach"),
-    );
-    let quarter = "back";
+    let fly = pose(&v, a, "fly");
+    let quarter = "front";
     let set = |t: &mut [f64], j: &str, value: f64| {
         for (side, s) in [("left", 1.0), ("right", -1.0)] {
             t[joint(&v, a, &format!("{quarter}_{j}_{side}"))] = s * value.to_radians();
@@ -1534,65 +1565,62 @@ fn what_blocks_reaching() {
             if !h.is_empty() {
                 return format!(
                     "step {k}: {}",
-                    report(&v, &h).chars().take(140).collect::<String>()
+                    report(&v, &h).chars().take(110).collect::<String>()
                 );
             }
         }
         "clear".to_string()
     };
-    for deploy in (-170..=170).step_by(10) {
-        for bend in (-90..=90).step_by(15) {
-            let mut s1 = reach.clone();
-            set(&mut s1, "deploy", f64::from(deploy));
-            set(&mut s1, "bend", f64::from(bend));
-            if !(interferences(&v, a, &s1, TOLERANCE).is_empty()
-                && clear_path(&v, a, &fly, &s1)
-                && clear_path(&v, a, &s1, &stand))
-            {
-                continue;
-            }
-            let mut at = s1.clone();
-            let mut log = format!("deploy {deploy} bend {bend}:");
-            for k in 1..LEG_SEGMENTS {
-                let mut ok = None;
-                let mut why = Vec::new();
+    for (deploy, bend) in [(20, 0), (30, 0), (40, 0), (20, 10), (30, -10)] {
+        let mut at = fly.clone();
+        set(&mut at, "deploy", f64::from(deploy));
+        set(&mut at, "bend", f64::from(bend));
+        let mut log = format!(
+            "deploy {deploy} bend {bend}: pose {};",
+            interferences(&v, a, &at, TOLERANCE).len()
+        );
+        let mut left: Vec<usize> = (1..LEG_SEGMENTS).collect();
+        while !left.is_empty() {
+            let mut done = None;
+            let mut why = Vec::new();
+            'k: for (n, &k) in left.iter().enumerate() {
                 for (l, r) in [
                     (180.0f64, 180.0f64),
                     (-180.0, -180.0),
                     (180.0, -180.0),
                     (-180.0, 180.0),
                 ] {
-                    let turn = l * 10.0 + r;
                     let mut t = at.clone();
                     t[joint(&v, a, &format!("{quarter}_fold_{k}_left"))] = l.to_radians();
                     t[joint(&v, a, &format!("{quarter}_fold_{k}_right"))] = r.to_radians();
                     let h = interferences(&v, a, &t, TOLERANCE);
-                    if !h.is_empty() {
-                        why.push(format!(
-                            "{turn}: pose {}",
-                            report(&v, &h).chars().take(120).collect::<String>()
-                        ));
-                        continue;
-                    }
-                    let p = first(&at, &t);
+                    let p = if h.is_empty() {
+                        first(&at, &t)
+                    } else {
+                        format!(
+                            "pose {}",
+                            report(&v, &h).chars().take(110).collect::<String>()
+                        )
+                    };
                     if p == "clear" {
-                        ok = Some(t);
-                        break;
+                        done = Some((n, k, t));
+                        break 'k;
                     }
-                    why.push(format!("{turn}: {p}"));
-                }
-                match ok {
-                    Some(t) => {
-                        log += &format!(" k{k} ok");
-                        at = t;
-                    }
-                    None => {
-                        log += &format!(" k{k} FAIL [{}]", why.join(" | "));
-                        break;
-                    }
+                    why.push(format!("k{k} {l}/{r}: {p}"));
                 }
             }
-            println!("{log}");
+            match done {
+                Some((n, k, t)) => {
+                    log += &format!(" k{k} ok");
+                    left.remove(n);
+                    at = t;
+                }
+                None => {
+                    log += &format!(" STUCK [{}]", why.join(" | "));
+                    break;
+                }
+            }
         }
+        println!("{log}");
     }
 }

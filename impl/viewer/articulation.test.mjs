@@ -41,8 +41,8 @@ test("the Bastion splits into the same rigid groups as in the game", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  // 96 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
-  assert.equal(a.groups.length - 1, 96);
+  // 108 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
+  assert.equal(a.groups.length - 1, 108);
 });
 
 test("poses put the shells where the game does", () => {
