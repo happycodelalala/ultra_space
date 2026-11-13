@@ -417,13 +417,18 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
-**Status (2026-11-12):** 3.1–3.9 done on branch `batch3/builder` (not merged): rapier physics
-per region, terrain collision patches, the new part and design format with landing legs,
-design compilation, wheels and a rover, the walker colliding with vehicles, the builder (keys
-and mouse picking, symmetry, sections, stats and balance warnings) and new vehicles from
-scratch, each checked on Windows through the test queue. The developer brought jointed parts, walking and part models forward (3.10–3.12) to get a
-testable mech; then 3.13 save and load, 3.14 per-ship cruise, 3.15 review. Known gaps: stats size measures part centres, the lander parts
-are overpowered (~10 g), wheels don't spin or move with their suspension.
+**Status (2026-11-13):** 3.1–3.11 done on branch `batch3/builder` (not merged).
+- 3.1–3.9: rapier physics per region, terrain collision patches, the new part and design format
+  with landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
+  the builder (keys and mouse picking, symmetry, sections, stats and balance warnings) and new
+  vehicles from scratch.
+- The developer brought jointed parts, walking and part models forward (3.10–3.12) to get a
+  testable mech. 3.10 jointed parts and poses and 3.11 animated walking are done: the heavy
+  frame walks, turns and stops standing on Windows.
+- Each was checked on Windows through the test queue.
+- Next: 3.12 part models, then 3.13 save and load, 3.14 per-ship cruise and 3.15 review.
+- Known gaps: stats size measures part centres; the lander parts are overpowered (~10 g);
+  wheels don't spin or move with their suspension; soles don't roll to side slopes.
 
 ### 7.1 When the object system is built
 
