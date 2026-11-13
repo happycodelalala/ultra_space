@@ -136,40 +136,58 @@ def carrier(m, h, part):
         m.cable([V((hx * 0.6, 0, 0)), V((hx * 0.8, 0, 0)) + d * 0.3, p - d * 0.35 + V((0.18, 0, 0))], 0.04)
 
 
+def socket_section(p, d, along_, half_a, half_w, k):
+    """An elongated octagon round `p` in the plane across `d`: `half_a` along `along_`,
+    `half_w` across, corners cut by `k`."""
+    a = (along_ - d * along_.dot(d)).normalized()
+    w = d.cross(a).normalized()
+    pts = [(-half_a + k, -half_w), (half_a - k, -half_w), (half_a, -half_w + k), (half_a, half_w - k),
+           (half_a - k, half_w), (-half_a + k, half_w), (-half_a, half_w - k), (-half_a, -half_w + k)]
+    return [p + a * x + w * y for x, y in pts]
+
+
 @builder("bastion.saddle_left", "bastion.saddle_right")
 def saddle(m, h, part):
-    """A shoulder housing: a heavy faceted bulge on the shoulder block, armoured over its top,
-    in which the root hinges of a front and a back shell arm sit recessed:
-    each in a deep socket ringed by a reinforcing collar, braced by ribs that carry its loads
-    down into the shoulder; a power junction between the sockets feeds both arms."""
+    """A shoulder housing: a heavy faceted body on the shoulder block, and for each shell arm a
+    socket tower rising from it, its root hinge sunk in the tower's cavity (the hinge's pin
+    just above the rim, so the arm swings out of it) behind a reinforcing collar, the tower
+    braced into the body by gussets; between the towers, armour over the body and the power
+    junction that feeds both arms."""
     hx, hy, hz = h
     ns = nodes(part)
-    # The housing: wider at its base, faceted, the dark core under armour.
-    body = m.hull([(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
-                   for y, wx, wz in ((-hy, hx * 1.05, hz * 1.02), (hy * 0.2, hx * 1.08, hz * 1.04),
-                                     (hy * 0.95, hx * 0.8, hz * 0.85))], "dark", bevel=0.02)
-    # Armour over the top.
-    cap = m.hull([(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
-            for y, wx, wz in ((hy * 0.7, hx * 0.95, hz * 0.95), (hy * 1.05, hx * 0.72, hz * 0.8))], "armor",
-           bevel=0.01)
+    sx = 1.0 if part["id"].endswith("_left") else -1.0
+    # Body.
+    top = -hy * 0.1
+    body = m.hull([(cx * hx * fx, y, cz * hz * fz) for cx in (-1, 1) for cz in (-1, 1)
+                   for y, fx, fz in ((-hy, 1.0, 0.98), (top, 0.9, 0.9))], "dark", bevel=0.02)
+    cap = m.hull([(cx * hx * 0.8, y, cz * hz * 0.45) for cx in (-1, 1) for cz in (-1, 1)
+                  for y in (top - 0.05, top + 0.12)], "armor", bevel=0.01)
     for name, (p, d) in ns.items():
-        # Socket: cut deep into the housing, a reinforcing collar at its mouth.
-        mouth = p - d * 0.05
-        for ob in (body, cap):
-            m.hole(ob, mouth - d * 0.9, mouth + d * 0.6, 0.62, 8)
-        m.lathe([(0.62, -0.06), (0.82, -0.06), (0.82, 0.08), (0.62, 0.08)], along(mouth, mouth + d), "metal", 8,
-                closed=True, angle=20.0)
-        m.drum(mouth - d * 0.9, mouth - d * 0.75, 0.62, "metal", 8, hint=X)
-        # Ribs from the collar down the housing's flanks.
-        for k in range(4):
-            t = math.pi / 4 + math.pi / 2 * k
-            u = V((math.cos(t), 0, math.sin(t)))
-            w = u.cross(Y).normalized()
-            top = mouth + u * 0.82
-            m.hull([top + w * s * 0.05 for s in (-1, 1)] + [top - Y * 0.15 + w * s * 0.05 for s in (-1, 1)]
-                   + [V((top.x + u.x * 0.35, -hy * 0.9, top.z + u.z * 0.35)) + w * s * 0.06 for s in (-1, 1)],
-                   "armor2", bevel=0.004)
-    m.cable([V((0, hy * 0.6, -hz * 0.25)), V((0, hy * 0.75, 0)), V((0, hy * 0.6, hz * 0.25))], 0.05)
+        # The hinge turns about the curve's tangent at its quarter's middle.
+        middle = 135.0 if name == "front" else 45.0
+        t = math.radians(middle)
+        tangent = V((math.cos(t) * sx, 0, math.sin(t)))
+        rim = p + d * 0.42
+        foot = V((rim.x, -hy, rim.z))
+        outer = socket_section(rim, d, tangent, 0.95, 0.68, 0.25)
+        base = [V((q.x, -hy, q.z)) for q in socket_section(foot, d, tangent, 1.0, 0.72, 0.25)]
+        tower = m.hull(outer + base, "armor", bevel=0.012)
+        cavity = m.hull(socket_section(p - d * 0.25, d, tangent, 0.8, 0.53, 0.2)
+                        + socket_section(p + d * 1.2, d, tangent, 0.8, 0.53, 0.2), cutter=True)
+        for ob in (tower, body, cap):
+            m.cut(ob, cavity)
+        collar = m.hull(socket_section(rim - d * 0.08, d, tangent, 1.0, 0.73, 0.26)
+                        + socket_section(rim + d * 0.04, d, tangent, 0.98, 0.71, 0.26), "metal", bevel=0.006)
+        m.cut(collar, cavity)
+        # Gussets from the tower's sides down into the body.
+        a = (tangent - d * tangent.dot(d)).normalized()
+        w = d.cross(a).normalized()
+        for s in (-1, 1):
+            q = rim - d * 0.15 + w * s * 0.7
+            down = V((q.x + w.x * s * 0.35, -hy * 0.6, q.z + w.z * s * 0.35))
+            m.hull([q + a * e for e in (-0.06, 0.06)] + [down + a * e for e in (-0.08, 0.08)]
+                   + [V((q.x, -hy * 0.6, q.z)) + a * e for e in (-0.08, 0.08)], "armor2", bevel=0.004)
+    m.cable([V((0, top + 0.15, -hz * 0.3)), V((0, top + 0.3, 0)), V((0, top + 0.15, hz * 0.3))], 0.06)
 
 
 @builder("bastion.forearm_front", "bastion.forearm_back")
