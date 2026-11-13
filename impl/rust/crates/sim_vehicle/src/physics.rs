@@ -881,10 +881,15 @@ fn set_ground_collisions(world: &mut PhysicsWorld, e: &Entry, on: bool) {
 /// Ends a body's rest: dynamic again, moving with the turning ground.
 fn wake(world: &mut PhysicsWorld, e: &mut Entry, spin: DVec3) {
     e.still = 0.0;
-    if e.rest.take().is_none() || e.motion != Motion::Dynamic {
+    if e.rest.take().is_none() {
         return;
     }
+    // Ground collisions back on whatever moves it next (a kinematic mover that later turns
+    // dynamic again, e.g. after walking, would otherwise fall through the ground).
     set_ground_collisions(world, e, true);
+    if e.motion != Motion::Dynamic {
+        return;
+    }
     let rb = &mut world.bodies[e.handle];
     let com = rb.position().translation + *rb.rotation() * e.mass.center_of_mass;
     rb.set_body_type(RigidBodyType::Dynamic, true);
@@ -1157,5 +1162,42 @@ mod tests {
         scene.place_dynamic(id, &body, &s, Wrench::default());
         scene.step(&env, dt);
         assert!(!scene.at_rest(id), "woken by the pose change");
+
+        // Rest again, then moved kinematically (walking) and handed back: it stands on the
+        // ground rather than falling through it.
+        let mut tick = tick + 1;
+        let start = tick;
+        while !scene.at_rest(id) && tick < start + 30 * 20 {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_dynamic(id, &body, &s, Wrench::default());
+            scene.step(&env, dt);
+            s = scene.state(id).unwrap().0;
+            tick += 1;
+        }
+        assert!(scene.at_rest(id), "rests again");
+        for _ in 0..30 {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_kinematic(id, &body, &s);
+            scene.step(&env, dt);
+            s.position = DQuat::from_scaled_axis(env.spin * dt) * s.position;
+            s.velocity = env.spin.cross(s.position);
+            tick += 1;
+        }
+        let before = s.position.length() - (env.radius + env.ground_height(s.position));
+        for _ in 0..(30 * 3) {
+            let t = f64::from(tick) * dt;
+            env.surface_rotation = (DQuat::from_scaled_axis(env.spin * t) * rotation0).normalize();
+            scene.place_dynamic(id, &body, &s, Wrench::default());
+            scene.step(&env, dt);
+            s = scene.state(id).unwrap().0;
+            tick += 1;
+        }
+        let after = s.position.length() - (env.radius + env.ground_height(s.position));
+        assert!(
+            (after - before).abs() < 0.5,
+            "stands on the ground after moving kinematically: {before:.2} -> {after:.2} m"
+        );
     }
 }
