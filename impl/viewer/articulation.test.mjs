@@ -41,8 +41,8 @@ test("the Bastion splits into the same rigid groups as in the game", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  // 22 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
-  assert.equal(a.groups.length - 1, 22);
+  // 58 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
+  assert.equal(a.groups.length - 1, 58);
 });
 
 test("poses put the shells where the game does", () => {
@@ -56,20 +56,20 @@ test("poses put the shells where the game does", () => {
     const at = applyPose(posesOf(a, angles)[a.partGroup[i]], [0, 0, 0].map((_, k) => p.position[k] + quat.rotate(p.rotation, shapeCentroid(p.def.shape))[k]));
     return Math.hypot(at[0], at[2] - 0.3);
   };
-  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 4.2 m;
-  // stand and bloom front 9.1 m; bloom back 7.5 m.
+  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 5.1 m
+  // (front) and 5.2 m (back); held out in stand 8.0 m.
   const close = (x, want, what) => assert.ok(Math.abs(x - want) < 0.1, `${what}: ${x} vs ${want}`);
-  close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 4.2, "cocoon");
-  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 9.1, "stand front");
-  close(radius(poseAngles(design, parts, a, "bloom"), "back_shell_right"), 7.5, "bloom back");
+  close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 5.1, "cocoon");
+  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 8.0, "stand front");
+  close(radius(poseAngles(design, parts, a, "stand"), "back_shell_right"), 8.0, "stand back");
 });
 
 test("a pose read and written back is the same pose", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  const angles = poseAngles(design, parts, a, "bloom");
-  assert.deepEqual(poseFromAngles(parts, a, angles), design.poses.bloom);
+  const angles = poseAngles(design, parts, a, "stand");
+  assert.deepEqual(poseFromAngles(parts, a, angles), design.poses.stand);
 });
 
 test("the heavy frame stands on its soles", () => {
@@ -86,7 +86,7 @@ test("shells tile like the game's", () => {
   const tiles = shapeTiles(shell);
   // 87° arc in 15° steps: 6 columns; 3 spans x 6 steps: 18 rows.
   assert.equal(tiles.length, 6 * 18);
-  for (const t of tiles) assert.ok(t.half[0] > 0 && t.half[1] > 0 && Math.abs(t.half[2] - 0.175) < 1e-12);
+  for (const t of tiles) assert.ok(t.half[0] > 0 && t.half[1] > 0 && Math.abs(t.half[2] - 0.2) < 1e-12);
   // Symmetric arc: the centroid lies on the part's +Z side, in its middle plane.
   const c = shapeCentroid(shell);
   assert.ok(Math.abs(c[0]) < 1e-9 && c[2] > 3);

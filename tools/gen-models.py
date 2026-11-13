@@ -425,6 +425,29 @@ def shell_quarter(part):
     return m
 
 
+def grapple(h):
+    """A three-claw grapple: a palm block, three claws tapering to points."""
+    hx, hy, hz = h
+    m = Model()
+    m.add("dark", *prism(hx * 0.9, hy * 0.25, 6, 1, centre=(0, hy * 0.7, 0)))
+    m.add("armor", *prism(hx * 0.75, hy * 0.2, 6, 1, centre=(0, hy * 0.3, 0), taper=0.8))
+    for k in range(3):
+        a = 2 * math.pi * k / 3
+        cx, cz = math.sin(a) * hx * 0.5, math.cos(a) * hz * 0.5
+        m.add("trim", *bevel_box([hx * 0.16, hy * 0.42, hz * 0.16], 0.03,
+                                  centre=(cx, -hy * 0.45, cz), taper=(0.3, 1.0)))
+    return m
+
+
+def carrier(h):
+    hx, hy, hz = h
+    m = Model()
+    m.add("armor", *bevel_box([hx, hy, hz], 0.2))
+    m.add("dark", *prism(hx * 0.5, hy * 0.1, 8, 1, centre=(0, hy, 0), rotate=math.pi / 8))
+    m.add("trim", *box([hx * 0.9, 0.05, hz * 0.3], centre=(0, -hy * 0.6, hz)))
+    return m
+
+
 def saddle(h):
     """A shoulder saddle: an armoured block with a socket at each end for a shell arm."""
     hx, hy, hz = h
@@ -452,8 +475,29 @@ MODELS = {
     "frame.hinge": hinge_x,
     "bastion.arm_rotor": rotor_y,
     "bastion.arm_hinge": hinge_x,
+    "bastion.torso": torso,
+    "bastion.head": head,
+    "bastion.waist": waist,
+    "bastion.shoulder": shoulder,
+    "bastion.limb": limb,
+    "bastion.leg": lambda h: limb(h, knee=True),
+    "bastion.foot": foot,
+    "bastion.link_front": boom,
+    "bastion.link_back": boom,
+    "bastion.carrier": carrier,
+    "bastion.drop_front": boom,
+    "bastion.drop_back": boom,
+    "bastion.bend": hinge_x,
+    "bastion.fold_knee": hinge_x,
+    "bastion.leg_1": boom,
+    "bastion.leg_2": boom,
+    "bastion.leg_3": boom,
+    "bastion.leg_4": boom,
+    "bastion.leg_5": boom,
+    "bastion.leg_6": boom,
+    "bastion.leg_7": boom,
+    "bastion.grapple": grapple,
     "bastion.saddle": saddle,
-    "bastion.arm_beam": boom,
     "bastion.shell_quarter": shell_quarter,
     "thruster.main.medium": engine,
 }
