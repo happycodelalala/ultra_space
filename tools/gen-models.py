@@ -296,13 +296,22 @@ def rotor_y(h):
 
 
 def yoke(h):
+    """An open square frame over the shoulders (the torso and head show through the middle),
+    with corner blocks and trim along the outer rim."""
     hx, hy, hz = h
+    side = hx * 0.5  # side bars from x = hx/2 to hx (they carry the arm turrets)
+    end = hz * 0.36  # front and back bars
     m = Model()
-    m.add("armor", *bevel_box([hx, hy * 0.6, hz], 0.35, centre=(0, -hy * 0.4, 0)))
-    m.add("armor", *bevel_box([hx * 0.7, hy * 0.4, hz * 0.7], 0.2, centre=(0, hy * 0.6, 0)))
     for s in (-1, 1):
-        m.add("trim", *box([hx * 0.9, 0.08, 0.15], centre=(0, hy * 0.2, s * hz * 0.98)))
-        m.add("trim", *box([0.15, 0.08, hz * 0.9], centre=(s * hx * 0.98, hy * 0.2, 0)))
+        m.add("armor", *bevel_box([(hx - side) / 2, hy, hz], 0.25,
+                                  centre=(s * (side + hx) / 2, 0, 0)))
+        m.add("armor", *bevel_box([side, hy * 0.85, end / 2], 0.2,
+                                  centre=(0, -hy * 0.15, s * (hz - end / 2))))
+        m.add("trim", *box([hx * 0.92, 0.08, 0.12], centre=(0, hy * 0.3, s * hz * 0.99)))
+        m.add("trim", *box([0.12, 0.08, hz * 0.92], centre=(s * hx * 0.99, hy * 0.3, 0)))
+        for t in (-1, 1):
+            m.add("dark", *bevel_box([0.45, hy * 1.0, 0.45], 0.1,
+                                     centre=(s * (side + 0.5), 0, t * (hz - end - 0.5))))
     return m
 
 
@@ -319,11 +328,14 @@ def turret(h):
 def arm_segment(h):
     hx, hy, hz = h
     m = Model()
-    m.add("armor", *bevel_box([hx * 0.8, hy * 0.92, hz * 0.8], 0.12, taper=(0.75, 1.0)))
-    for y in (hy * 0.7, -hy * 0.7):
-        m.add("dark", *prism(hx * 0.95, 0.1, 8, 1, centre=(0, y, 0), rotate=math.pi / 8))
-    m.add("trim", *box([0.06, hy * 0.6, hz * 0.4], centre=(hx * 0.78, 0, 0)))
-    m.add("trim", *box([0.06, hy * 0.6, hz * 0.4], centre=(-hx * 0.78, 0, 0)))
+    # Full length, so it meets the joints at both ends.
+    m.add("armor", *bevel_box([hx * 0.8, hy * 0.8, hz * 0.8], 0.12, taper=(0.75, 1.0)))
+    for y in (hy * 0.9, -hy * 0.9):
+        m.add("dark", *prism(hx * 0.72, hy * 0.1, 8, 1, centre=(0, y, 0), rotate=math.pi / 8))
+    for y in (hy * 0.62, -hy * 0.62):
+        m.add("dark", *prism(hx * 0.95, 0.08, 8, 1, centre=(0, y, 0), rotate=math.pi / 8))
+    m.add("trim", *box([0.06, hy * 0.5, hz * 0.4], centre=(hx * 0.78, 0, 0)))
+    m.add("trim", *box([0.06, hy * 0.5, hz * 0.4], centre=(-hx * 0.78, 0, 0)))
     return m
 
 

@@ -179,6 +179,29 @@ impl JointState {
     }
 }
 
+/// The joint angles (radians, one per group) of `vehicle`'s pose `name`: its named joints at
+/// their angles (within limits), every other joint at rest. `None` without such a pose.
+pub fn pose_angles(
+    vehicle: &crate::vehicle::Vehicle,
+    articulation: &Articulation,
+    name: &str,
+) -> Option<Vec<f64>> {
+    let pose = vehicle.poses.iter().find(|p| p.name == name)?;
+    let mut angles = vec![0.0; articulation.groups.len()];
+    for (joint, deg) in &pose.angles {
+        let Some(part) = vehicle.parts.iter().position(|p| &p.name == joint) else {
+            continue;
+        };
+        if let Some(g) = articulation.group_of_joint(part) {
+            let angle = deg.to_radians();
+            angles[g] = articulation.groups[g]
+                .joint
+                .map_or(angle, |j| j.clamp(angle));
+        }
+    }
+    Some(angles)
+}
+
 /// Moves every jointed vehicle's joints toward their targets for one tick (and gives jointed
 /// vehicles their joint state); when they move (or walking, which sets them directly, ends), the
 /// thrust allocator follows the new poses.
@@ -190,17 +213,27 @@ pub fn joint_system(
         Entity,
         &mut crate::vehicle::VehicleBody,
         Option<&mut JointState>,
+        Option<&crate::vehicle::Vehicle>,
     )>,
 ) {
     let stopped: std::collections::HashSet<Entity> = stopped_walking.read().collect();
-    for (entity, mut body, state) in &mut vehicles {
+    for (entity, mut body, state, vehicle) in &mut vehicles {
         if !body.articulation.is_jointed() {
             continue;
         }
         let Some(mut state) = state else {
-            let mut rest = JointState::rest(&body.articulation);
-            rest.advance(&body.articulation, 0.0);
-            commands.entity(entity).insert(rest);
+            // A new jointed vehicle starts in its design's "stand" pose (or at rest).
+            let mut start = JointState::rest(&body.articulation);
+            if let Some(angles) = vehicle.and_then(|v| pose_angles(v, &body.articulation, "stand"))
+            {
+                start.angles = angles.clone();
+                start.targets = angles;
+            }
+            start.advance(&body.articulation, 0.0);
+            start.poses = body.articulation.poses(&start.angles);
+            start.generation += 1;
+            body.allocator = body.posed_allocator(&start.poses);
+            commands.entity(entity).insert(start);
             continue;
         };
         if state.advance(&body.articulation, clock.dt) || stopped.contains(&entity) {

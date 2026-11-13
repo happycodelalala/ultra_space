@@ -496,7 +496,8 @@ fn poses(v: &Vehicle) -> Vec<NamedPose> {
         closed_stowed[g] = angle;
     }
     vec![
-        named("stand", &rest()),
+        // Standing (the pose it starts in): arms folded back.
+        named("stand", &stowed),
         named("arms_deployed", &deployed),
         named("arms_grab", &grab),
         named("arms_stowed", &stowed),
