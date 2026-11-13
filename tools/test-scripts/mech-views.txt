@@ -48,8 +48,8 @@
 56   shot 15-fly-below.png
 56.5 press P                 # reach: shell arms and folding legs out along the diagonals
 57   orbit 150 -35
-65   shot 16-reach.png
-66.5 press P                 # stand
-67   orbit 120 -15
-72   shot 17-stand-again.png
-72.5 quit
+79   shot 16-reach.png
+80.5 press P                 # stand
+81   orbit 120 -15
+86   shot 17-stand-again.png
+86.5 quit
