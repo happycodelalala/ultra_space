@@ -24,13 +24,13 @@
 30.5 press P                 # reach: shell arms and folding legs out along the diagonals
 52   shot 05-reach.png
 52.5 press P                 # stand
-58   shot 06-stand.png
-58.5 press P                 # bays
-59   press P                 # cocoon (closed while walking)
-62   hold W 6
-66   shot 07-walking-cocoon.png
-68.5 press M                 # legs off: stops on both feet, then plain physics
-69   press H                 # HUD back
-70   shot 08-stopping.png
-73   shot 09-stopped.png
-73.5 quit
+74   shot 06-stand.png
+74.5 press P                 # bays
+75   press P                 # cocoon (closed while walking)
+78   hold W 6
+82   shot 07-walking-cocoon.png
+84.5 press M                 # legs off: stops on both feet, then plain physics
+85   press H                 # HUD back
+86   shot 08-stopping.png
+89   shot 09-stopped.png
+89.5 quit

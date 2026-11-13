@@ -51,5 +51,5 @@
 79   shot 16-reach.png
 80.5 press P                 # stand
 81   orbit 120 -15
-86   shot 17-stand-again.png
-86.5 quit
+102  shot 17-stand-again.png
+102.5 quit
