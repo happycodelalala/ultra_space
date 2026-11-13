@@ -125,9 +125,13 @@ honestly with their output.
   `tools/viewer-shots.sh <design> [pose] [views]` (or `--part <id>`) saves review shots to
   `.viewer-shots/` with headless Chromium, no window: use it to check geometry before a game
   round. `FOCUS=<part name prefixes>` frames the shots on those parts (close-ups of details).
-  Part models come from `tools/gen-models.py` (rigid per part: a joint's actuators sit inside
-  its own part). The viewer writes only design JSON and `.glb` models in the game's folders and
+  The viewer writes only design JSON and `.glb` models in the game's folders and
   formats.
+- **Part models:** `tools/build-models.sh [names...] [--preview DIR]` builds them in headless
+  Blender (`~/.local/opt/blender-4.2.3-linux-x64`, or `$BLENDER`) from `tools/blender/*.py`
+  into `assets/export/models/` (~10 min for all; `--preview` adds a studio render per model).
+  A full build writes `models.stamp`; CI fails when the scripts, parts or palette changed
+  since. Materials are the slots in `content/data/part_materials.json`.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.

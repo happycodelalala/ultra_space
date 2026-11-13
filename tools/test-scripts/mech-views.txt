@@ -1,8 +1,9 @@
 # Review shots of the Bastion from around it (for design review). Run with
 # ULTRA_SPACE_START_ALTITUDE=1500. Spawn and board it, hide the HUD, then photograph it from
 # eight directions around (yaw 0 = behind, 180 = front) at a slight downward angle, from above
-# and from low; then closed into its cocoon, back in its standing pose, and opened
-# like a flower (bloom). Look for: proportions, silhouette, how the part models read, gaps or overlaps.
+# and from low; then closed into its cocoon, in its flying pose (shells turned up into four
+# platforms) and standing again. Look for: proportions, silhouette, how the part models and
+# materials read (bevels, panel lines, occlusion, shadows, reflections), gaps or overlaps.
 0.5  press Z
 1    wait landed 40
 2    press F
@@ -32,18 +33,17 @@
 29   shot 09-above.png
 29.5 orbit 200 15
 31   shot 10-low-front.png
-31.5 press P                 # bloom
-32   press P                 # cocoon (shells closed)
+31.5 press P                 # cocoon (shells closed)
 32   orbit 150 -10
 37   shot 11-cocoon.png
 37.5 orbit 330 -10
 39   shot 12-cocoon-back.png
-39.5 press P                 # stand (front quarters open)
-40   orbit 120 -15
-45   shot 13-stand-again.png
-45.5 press P                 # bloom (all four open like petals)
-46   orbit 160 -10
-51   shot 14-bloom.png
-51.5 orbit 20 -20
-53   shot 15-bloom-back.png
-53.5 quit
+39.5 press P                 # fly: shells turned up into four platforms
+40   orbit 160 -10
+46   shot 13-fly.png
+46.5 orbit 200 25
+48   shot 14-fly-below.png
+48.5 press P                 # stand
+49   orbit 120 -15
+54   shot 15-stand-again.png
+54.5 quit

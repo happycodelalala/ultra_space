@@ -199,9 +199,25 @@ pub enum Layer {
 #[derive(Component)]
 pub struct MainCamera;
 
-fn spawn_camera(mut commands: Commands) {
+/// The sky's light on ordinary (PBR) meshes: a sky-over-ground gradient for ambient light and
+/// reflections, turned to the local up and dimmed at night and in space (`ship::aim_sky`).
+pub fn sky_light(images: &mut Assets<Image>) -> bevy::light::EnvironmentMapLight {
+    bevy::light::EnvironmentMapLight::hemispherical_gradient(
+        images,
+        Color::srgb(0.55, 0.65, 0.85),
+        Color::srgb(0.7, 0.68, 0.62),
+        Color::srgb(0.3, 0.27, 0.24),
+    )
+}
+
+fn spawn_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         MainCamera,
+        sky_light(&mut images),
+        // Contact shadows in creases and between parts (needs MSAA off; SMAA smooths edges).
+        bevy::pbr::ScreenSpaceAmbientOcclusion::default(),
+        Msaa::Off,
+        bevy::anti_alias::smaa::Smaa::default(),
         Camera3d::default(),
         Camera {
             clear_color: ClearColorConfig::Custom(Color::BLACK),

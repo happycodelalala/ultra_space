@@ -244,7 +244,7 @@
       ],
       "description": "Bolted on a shoulder block: carries the shoulder hinges of a front and a back shell arm, their loads going down through the shoulder into the torso.",
       "form": {
-        "model": "bastion.saddle",
+        "model": "bastion.saddle_left",
         "material_slots": [
           "armor"
         ],
@@ -296,7 +296,7 @@
       ],
       "description": "Bolted on a shoulder block: carries the shoulder hinges of a front and a back shell arm, their loads going down through the shoulder into the torso.",
       "form": {
-        "model": "bastion.saddle",
+        "model": "bastion.saddle_right",
         "material_slots": [
           "armor"
         ],
@@ -823,7 +823,7 @@
       ],
       "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
-        "model": "bastion.carrier",
+        "model": "bastion.carrier_front_left",
         "material_slots": [
           "armor"
         ],
@@ -889,7 +889,7 @@
       ],
       "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
-        "model": "bastion.carrier",
+        "model": "bastion.carrier_front_right",
         "material_slots": [
           "armor"
         ],
@@ -1007,7 +1007,7 @@
       ],
       "description": "A bent knee of a folding leg (turns the leg down into its fold).",
       "form": {
-        "model": "bastion.bend",
+        "model": "bastion.bend_front_left",
         "material_slots": [
           "joint"
         ],
@@ -1073,7 +1073,7 @@
       ],
       "description": "A bent knee of a folding leg (turns the leg down into its fold).",
       "form": {
-        "model": "bastion.bend",
+        "model": "bastion.bend_front_right",
         "material_slots": [
           "joint"
         ],
@@ -1139,7 +1139,7 @@
       ],
       "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
-        "model": "bastion.carrier",
+        "model": "bastion.carrier_back_left",
         "material_slots": [
           "armor"
         ],
@@ -1205,7 +1205,7 @@
       ],
       "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
-        "model": "bastion.carrier",
+        "model": "bastion.carrier_back_right",
         "material_slots": [
           "armor"
         ],
@@ -1323,7 +1323,7 @@
       ],
       "description": "A bent knee of a folding leg (turns the leg down into its fold).",
       "form": {
-        "model": "bastion.bend",
+        "model": "bastion.bend_back_left",
         "material_slots": [
           "joint"
         ],
@@ -1389,7 +1389,7 @@
       ],
       "description": "A bent knee of a folding leg (turns the leg down into its fold).",
       "form": {
-        "model": "bastion.bend",
+        "model": "bastion.bend_back_right",
         "material_slots": [
           "joint"
         ],
@@ -1455,7 +1455,7 @@
       ],
       "description": "A folding knee: its two segments lie side by side when folded and line up (with a small jog) when unfolded.",
       "form": {
-        "model": "bastion.fold_knee",
+        "model": "bastion.fold_knee_left",
         "material_slots": [
           "joint"
         ],
@@ -1521,7 +1521,7 @@
       ],
       "description": "A folding knee: its two segments lie side by side when folded and line up (with a small jog) when unfolded.",
       "form": {
-        "model": "bastion.fold_knee",
+        "model": "bastion.fold_knee_right",
         "material_slots": [
           "joint"
         ],
@@ -2251,7 +2251,7 @@
       ],
       "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
       "form": {
-        "model": "bastion.elbow",
+        "model": "bastion.elbow_front_left",
         "material_slots": [
           "joint"
         ],
@@ -2317,7 +2317,7 @@
       ],
       "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
       "form": {
-        "model": "bastion.elbow",
+        "model": "bastion.elbow_front_right",
         "material_slots": [
           "joint"
         ],
@@ -2487,7 +2487,7 @@
       ],
       "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
       "form": {
-        "model": "bastion.elbow",
+        "model": "bastion.elbow_back_left",
         "material_slots": [
           "joint"
         ],
@@ -2553,7 +2553,7 @@
       ],
       "description": "A shell arm's elbow, folded into a V when closed; straightening it pushes the shell out.",
       "form": {
-        "model": "bastion.elbow",
+        "model": "bastion.elbow_back_right",
         "material_slots": [
           "joint"
         ],

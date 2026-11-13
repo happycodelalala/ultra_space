@@ -30,7 +30,7 @@ step() {
 step "secrets"       "$ROOT/tools/check-secrets.sh" --all
 step "boundaries"    "$ROOT/tools/check-boundaries.py"
 step "content"       "$ROOT/tools/check-content.py"
-step "models"        "$ROOT/tools/gen-models.py" --check
+step "models"        "$ROOT/tools/build-models.sh" --check
 if command -v node >/dev/null; then
     step "viewer"        bash -c "node --test '$ROOT'/impl/viewer/*.test.mjs"
 fi

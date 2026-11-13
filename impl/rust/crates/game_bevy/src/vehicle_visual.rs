@@ -36,14 +36,150 @@ impl Plugin for VehicleVisualPlugin {
     }
 }
 
-/// The materials parts are drawn with.
+/// The materials parts are drawn with: the slots of `content/data/part_materials.json`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PartMaterial {
+    /// Painted armour (slot `armor`).
     Hull,
-    Glass,
+    /// Second paint: frames, inner plates.
+    Armor2,
+    /// Bare machined steel.
+    Metal,
+    /// Polished rods and pins.
+    Chrome,
     Dark,
-    /// Accent plates and stripes on part models.
+    /// Hoses, seals, treads.
+    Rubber,
+    /// Accent and hazard paint.
     Trim,
+    Glass,
+    /// Lamps (emissive).
+    Light,
+}
+
+impl PartMaterial {
+    pub const ALL: [PartMaterial; 9] = [
+        PartMaterial::Hull,
+        PartMaterial::Armor2,
+        PartMaterial::Metal,
+        PartMaterial::Chrome,
+        PartMaterial::Dark,
+        PartMaterial::Rubber,
+        PartMaterial::Trim,
+        PartMaterial::Glass,
+        PartMaterial::Light,
+    ];
+
+    /// Its name in the palette and in part models.
+    pub fn slot(self) -> &'static str {
+        match self {
+            PartMaterial::Hull => "armor",
+            PartMaterial::Armor2 => "armor2",
+            PartMaterial::Metal => "metal",
+            PartMaterial::Chrome => "chrome",
+            PartMaterial::Dark => "dark",
+            PartMaterial::Rubber => "rubber",
+            PartMaterial::Trim => "trim",
+            PartMaterial::Glass => "glass",
+            PartMaterial::Light => "light",
+        }
+    }
+
+    /// The material a model primitive's material name picks (armour for unknown names).
+    pub fn named(name: Option<&str>) -> PartMaterial {
+        match name {
+            Some("joint") => PartMaterial::Dark,
+            Some(n) => Self::ALL
+                .into_iter()
+                .find(|m| m.slot() == n)
+                .unwrap_or(PartMaterial::Hull),
+            None => PartMaterial::Hull,
+        }
+    }
+}
+
+/// A palette entry (`content/data/part_materials.json`).
+struct PaletteEntry {
+    color: [f32; 3],
+    metallic: f32,
+    roughness: f32,
+    emissive: Option<[f32; 3]>,
+    emissive_strength: Option<f32>,
+}
+
+impl PaletteEntry {
+    fn from_json(v: &serde_json::Value) -> Option<Self> {
+        let rgb = |v: &serde_json::Value| -> Option<[f32; 3]> {
+            let a = v.as_array()?;
+            Some([
+                a.first()?.as_f64()? as f32,
+                a.get(1)?.as_f64()? as f32,
+                a.get(2)?.as_f64()? as f32,
+            ])
+        };
+        Some(Self {
+            color: rgb(v.get("color")?)?,
+            metallic: v.get("metallic")?.as_f64()? as f32,
+            roughness: v.get("roughness")?.as_f64()? as f32,
+            emissive: v.get("emissive").and_then(rgb),
+            emissive_strength: v
+                .get("emissive_strength")
+                .and_then(|s| s.as_f64())
+                .map(|s| s as f32),
+        })
+    }
+}
+
+/// The part materials from the palette file, with built-in fallbacks for missing ones.
+fn palette_materials() -> HashMap<PartMaterial, StandardMaterial> {
+    let mut entries: HashMap<String, PaletteEntry> = HashMap::new();
+    if let Some(dir) = crate::universe::content_dir() {
+        let path = dir.join("data/part_materials.json");
+        match std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).map_err(|e| e.to_string()))
+        {
+            Ok(file) => {
+                if let Some(map) = file.get("materials").and_then(|m| m.as_object()) {
+                    for (name, v) in map {
+                        match PaletteEntry::from_json(v) {
+                            Some(e) => {
+                                entries.insert(name.clone(), e);
+                            }
+                            None => warn!("part materials: bad entry {name}"),
+                        }
+                    }
+                }
+            }
+            Err(e) => warn!("part materials {}: {e}", path.display()),
+        }
+    }
+    PartMaterial::ALL
+        .into_iter()
+        .map(|m| {
+            let e = entries.remove(m.slot()).unwrap_or(PaletteEntry {
+                color: [0.5, 0.52, 0.55],
+                metallic: 0.5,
+                roughness: 0.5,
+                emissive: None,
+                emissive_strength: None,
+            });
+            let [r, g, b] = e.color;
+            let emissive = e.emissive.map_or(LinearRgba::BLACK, |[r, g, b]| {
+                LinearRgba::from(Color::srgb(r, g, b)) * e.emissive_strength.unwrap_or(1.0)
+            });
+            (
+                m,
+                StandardMaterial {
+                    base_color: Color::srgb(r, g, b),
+                    metallic: e.metallic,
+                    perceptual_roughness: e.roughness,
+                    emissive,
+                    ..default()
+                },
+            )
+        })
+        .collect()
 }
 
 pub fn part_material(kind: PartKind) -> PartMaterial {
@@ -125,6 +261,9 @@ pub fn merged_group_meshes(
                         // along Y.
                         mesh = mesh.rotated_by(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
                     }
+                    // White vertex colours, as the models' baked occlusion: so they merge.
+                    let n = mesh.count_vertices();
+                    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; n]);
                     vec![(part_material(part.def.kind), mesh)]
                 }
             };
@@ -154,7 +293,7 @@ type GroupMeshes = Vec<(usize, PartMaterial, Mesh)>;
 pub struct VehicleMeshes {
     ready: HashMap<u64, Vec<(usize, PartMaterial, Handle<Mesh>)>>,
     pending: HashMap<u64, Task<GroupMeshes>>,
-    materials: Option<[Handle<StandardMaterial>; 4]>,
+    materials: HashMap<PartMaterial, Handle<StandardMaterial>>,
 }
 
 impl VehicleMeshes {
@@ -177,40 +316,13 @@ impl VehicleMeshes {
         which: PartMaterial,
         materials: &mut Assets<StandardMaterial>,
     ) -> Handle<StandardMaterial> {
-        let [hull, glass, dark, trim] = self.materials.get_or_insert_with(|| {
-            [
-                materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.62, 0.64, 0.68),
-                    metallic: 0.6,
-                    perceptual_roughness: 0.45,
-                    ..default()
-                }),
-                materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.12, 0.2, 0.3),
-                    metallic: 0.2,
-                    perceptual_roughness: 0.15,
-                    ..default()
-                }),
-                materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.18, 0.18, 0.2),
-                    metallic: 0.8,
-                    perceptual_roughness: 0.5,
-                    ..default()
-                }),
-                materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.72, 0.55, 0.28),
-                    metallic: 0.5,
-                    perceptual_roughness: 0.4,
-                    ..default()
-                }),
-            ]
-        });
-        match which {
-            PartMaterial::Hull => hull.clone(),
-            PartMaterial::Glass => glass.clone(),
-            PartMaterial::Dark => dark.clone(),
-            PartMaterial::Trim => trim.clone(),
+        if self.materials.is_empty() {
+            self.materials = palette_materials()
+                .into_iter()
+                .map(|(m, material)| (m, materials.add(material)))
+                .collect();
         }
+        self.materials[&which].clone()
     }
 }
 
@@ -605,8 +717,13 @@ mod tests {
         let design =
             VehicleDesign::from_path(content.join("vehicles/kestrel.json"), &catalog).unwrap();
         let merged = merged_meshes(&design.parts);
-        // Hull, glass, dark, and trim from the engine's model.
-        assert_eq!(merged.len(), 4);
+        // One mesh per material: the placeholders' hull, glass and dark, and the engine
+        // model's metal, chrome and dark (one mesh each, however many parts use them).
+        let mut materials: Vec<PartMaterial> = merged.iter().map(|(m, _)| *m).collect();
+        materials.sort_by_key(|m| m.slot());
+        materials.dedup();
+        assert_eq!(materials.len(), merged.len(), "one mesh per material");
+        assert!(merged.len() >= 4, "{} meshes", merged.len());
         // Every part's vertices are in there (its model's, else its placeholder shape's).
         let models = crate::part_models::part_models();
         let expected: usize = design

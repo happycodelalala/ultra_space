@@ -1,6 +1,7 @@
 //! Part models (task 3.12): low-poly glTF binaries in `assets/export/models/<model>.glb` (the
 //! repo) or `assets/models/` (next to an exported executable), named by a part form's `model`.
-//! Each primitive's material name picks the game material (`armor`, `trim`, `dark`, `glass`).
+//! Each primitive's material name picks the game material (a slot of
+//! `content/data/part_materials.json`); its COLOR_0 is baked ambient occlusion.
 //! Loaded once, on first use, on whichever thread asks (the mesh workers); parts without a
 //! model keep their placeholder shape.
 
@@ -75,16 +76,6 @@ fn load_dir(dir: &Path) -> HashMap<String, PartModel> {
     models
 }
 
-/// Material by its glTF material name.
-fn material_named(name: Option<&str>) -> PartMaterial {
-    match name {
-        Some("trim") => PartMaterial::Trim,
-        Some("dark" | "joint") => PartMaterial::Dark,
-        Some("glass") => PartMaterial::Glass,
-        _ => PartMaterial::Hull,
-    }
-}
-
 /// Reads a glTF binary's first mesh: positions, normals and indices of each primitive.
 pub fn parse_glb(bytes: &[u8]) -> Result<PartModel, String> {
     let gltf = gltf::Gltf::from_slice(bytes).map_err(|e| e.to_string())?;
@@ -101,6 +92,11 @@ pub fn parse_glb(bytes: &[u8]) -> Result<PartModel, String> {
             .into_u32()
             .collect();
         let uvs = vec![[0.0f32, 0.0]; positions.len()];
+        // Baked ambient occlusion (white without it).
+        let colors: Vec<[f32; 4]> = match reader.read_colors(0) {
+            Some(c) => c.into_rgba_f32().collect(),
+            None => vec![[1.0; 4]; positions.len()],
+        };
         let mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
@@ -108,8 +104,9 @@ pub fn parse_glb(bytes: &[u8]) -> Result<PartModel, String> {
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
         .with_inserted_indices(Indices::U32(indices));
-        let material = material_named(primitive.material().name());
+        let material = PartMaterial::named(primitive.material().name());
         match out.iter_mut().find(|(m, _)| *m == material) {
             Some((_, into)) => into.merge(&mesh).map_err(|e| e.to_string())?,
             None => out.push((material, mesh)),

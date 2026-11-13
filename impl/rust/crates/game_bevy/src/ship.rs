@@ -63,6 +63,7 @@ impl Plugin for ShipPlugin {
                     track_ship.after(SimSet).before(CameraSet),
                     follow_ship.in_set(CameraStage::Follow),
                     aim_starlight.after(CameraSet),
+                    aim_sky.after(CameraSet),
                     cursor_lock,
                 )
                     .in_set(InGame),
@@ -869,9 +870,18 @@ fn spawn_starlight(mut commands: Commands) {
         Starlight,
         DirectionalLight {
             illuminance,
-            shadow_maps_enabled: false,
+            shadow_maps_enabled: true,
             ..default()
         },
+        // Shadows near the camera only (vehicles, the ground under them).
+        bevy::light::CascadeShadowConfigBuilder {
+            num_cascades: 3,
+            minimum_distance: 0.5,
+            first_cascade_far_bound: 40.0,
+            maximum_distance: 600.0,
+            ..default()
+        }
+        .build(),
         Transform::default(),
     ));
 }
@@ -896,6 +906,42 @@ fn aim_starlight(
         for mut transform in &mut lights {
             *transform = Transform::default().looking_to(direction, Vec3::Y);
         }
+    }
+}
+
+/// Sky light at full strength (cd/m²): about a sixth of the starlight, as a clear sky.
+const SKY_LIGHT: f32 = 180.0;
+/// Sky light left in space and at night (bounce from the planet, stars).
+const SKY_FLOOR: f32 = 0.08;
+
+/// Turns the sky light (the camera's environment map) to the local up over the anchor body and
+/// sets its strength: full by day low down, fading at night and with height to a floor.
+fn aim_sky(
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut lights: Query<&mut EnvironmentMapLight, With<MainCamera>>,
+) {
+    let system = &universe.0;
+    let body = &system.bodies[camera.anchor];
+    let up = camera.offset.normalize_or_zero();
+    if up == DVec3::ZERO {
+        return;
+    }
+    let star = system.frames.transform_point(
+        body.inertial_frame,
+        system.star().inertial_frame,
+        render.0,
+        DVec3::ZERO,
+    ) - camera.offset;
+    let day = up.dot(star.normalize_or_zero()).clamp(0.0, 1.0).sqrt();
+    let height = (camera.offset.length() - body.radius).max(0.0);
+    let air = body.atmosphere.as_ref().map_or(0.0, |a| a.height).max(1.0);
+    let in_air = (1.0 - height / (air * 2.0)).clamp(0.0, 1.0);
+    let strength = SKY_FLOOR + (1.0 - SKY_FLOOR) * day as f32 * in_air as f32;
+    for mut light in &mut lights {
+        light.rotation = Quat::from_rotation_arc(Vec3::Y, up.as_vec3());
+        light.intensity = SKY_LIGHT * strength;
     }
 }
 

@@ -5,6 +5,11 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import {
   applyPose,
   articulationOf,
@@ -24,23 +29,36 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const DEG = Math.PI / 180;
 
-// --- Materials: the game's four, by slot name -------------------------------------------------
+// --- Materials: the game's, by name, from content/data/part_materials.json ---------------------
 
-const MATERIALS = {
-  armor: new THREE.MeshStandardMaterial({ color: srgb(0.62, 0.64, 0.68), metalness: 0.6, roughness: 0.45, name: "armor" }),
-  glass: new THREE.MeshStandardMaterial({ color: srgb(0.12, 0.2, 0.3), metalness: 0.2, roughness: 0.15, name: "glass" }),
-  dark: new THREE.MeshStandardMaterial({ color: srgb(0.18, 0.18, 0.2), metalness: 0.8, roughness: 0.5, name: "dark" }),
-  trim: new THREE.MeshStandardMaterial({ color: srgb(0.72, 0.55, 0.28), metalness: 0.5, roughness: 0.4, name: "trim" }),
-};
+/// Placeholder materials (no vertex colours) and model materials (baked occlusion in the
+/// vertex colours), filled from the palette by loadPalette().
+const MATERIALS = {};
+const MODEL_MATERIALS = {};
 function srgb(r, g, b) {
   return new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace);
 }
+async function loadPalette() {
+  const { materials } = await getJson("/content/data/part_materials.json");
+  for (const [name, m] of Object.entries(materials)) {
+    for (const [into, vertexColors] of [[MATERIALS, false], [MODEL_MATERIALS, true]]) {
+      into[name] = new THREE.MeshStandardMaterial({
+        name,
+        color: srgb(...m.color),
+        metalness: m.metallic,
+        roughness: m.roughness,
+        vertexColors,
+        emissive: m.emissive ? srgb(...m.emissive) : new THREE.Color(0, 0, 0),
+        emissiveIntensity: m.emissive_strength ?? 1,
+      });
+    }
+  }
+}
 /// The game's material for a model primitive's material name (part_models.rs).
-function materialNamed(name) {
-  if (name === "trim") return MATERIALS.trim;
-  if (name === "dark" || name === "joint") return MATERIALS.dark;
-  if (name === "glass") return MATERIALS.glass;
-  return MATERIALS.armor;
+function materialNamed(name, vertexColors = false) {
+  const set = vertexColors ? MODEL_MATERIALS : MATERIALS;
+  if (name === "joint") return set.dark;
+  return set[name] ?? set.armor;
 }
 /// The game's placeholder material for a part kind (vehicle_visual.rs part_material).
 function kindMaterial(kind) {
@@ -58,16 +76,33 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffe
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 view.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2a3440);
+// Reflections and soft ambient light from a studio environment.
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.6;
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, 1.1));
-const sun = new THREE.DirectionalLight(0xfff2dd, 2.2);
+scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x3a3226, 0.4));
+const sun = new THREE.DirectionalLight(0xfff2dd, 2.4);
 sun.position.set(-30, 50, -20);
-scene.add(sun);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;
+scene.add(sun, sun.target);
+// Screen-space ambient occlusion over the baked occlusion, then tone mapping.
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const gtao = new GTAOPass(scene, camera, 1, 1);
+gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: 16 });
+gtao.blendIntensity = 0.85;
+composer.addPass(gtao);
+composer.addPass(new OutputPass());
 const fill = new THREE.DirectionalLight(0x9fb8d8, 0.6);
 fill.position.set(25, 10, 30);
 scene.add(fill);
@@ -95,6 +130,7 @@ function resize() {
   const w = view.clientWidth;
   const h = view.clientHeight;
   renderer.setSize(w, h);
+  composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -126,6 +162,7 @@ async function getJson(url) {
 
 async function loadCatalog() {
   state.list = await getJson("/api/list");
+  await loadPalette();
   const files = await Promise.all(
     state.list.partFiles.map((f) => getJson(`/content/data/parts/${f}`)),
   );
@@ -144,7 +181,11 @@ function model(name) {
         ? Promise.resolve(null)
         : loader.loadAsync(`/assets/export/models/${name}.glb?v=${state.version}`).then((gltf) => {
             gltf.scene.traverse((o) => {
-              if (o.isMesh) o.material = materialNamed(o.material?.name);
+              if (o.isMesh) {
+                o.material = materialNamed(o.material?.name, Boolean(o.geometry.attributes.color));
+                o.castShadow = true;
+                o.receiveShadow = true;
+              }
             });
             return gltf.scene;
           }),
@@ -180,6 +221,12 @@ async function partObject(def) {
   const name = def.form?.model;
   const m = name ? await model(name) : null;
   const object = m ? m.clone(true) : placeholder(def);
+  object.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
   object.userData.def = def;
   return object;
 }
@@ -385,7 +432,25 @@ function focusBounds() {
   return bounds.isEmpty() ? null : bounds;
 }
 
+/// Fits the sun's shadow camera round the whole vehicle.
+function fitShadow() {
+  const bounds = new THREE.Box3().setFromObject(root);
+  if (bounds.isEmpty()) return;
+  const centre = bounds.getCenter(new THREE.Vector3());
+  const radius = bounds.getSize(new THREE.Vector3()).length() / 2;
+  const dir = new THREE.Vector3(-30, 50, -20).normalize();
+  sun.position.copy(centre).addScaledVector(dir, radius * 2);
+  sun.target.position.copy(centre);
+  const cam = sun.shadow.camera;
+  cam.left = cam.bottom = -radius;
+  cam.right = cam.top = radius;
+  cam.near = radius * 0.5;
+  cam.far = radius * 4;
+  cam.updateProjectionMatrix();
+}
+
 function setView(name) {
+  fitShadow();
   const [yaw, pitch] = VIEWS[name] ?? VIEWS["front-right"];
   const bounds = focusBounds() ?? new THREE.Box3().setFromObject(root);
   const centre = bounds.getCenter(new THREE.Vector3());
@@ -427,7 +492,7 @@ async function save(path, payload) {
 function render() {
   controls.update();
   root.updateMatrixWorld(true);
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 /// Renders each standard view and saves it to .viewer-shots/<subject>-<view>.png.
