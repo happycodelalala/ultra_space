@@ -612,6 +612,72 @@
         ],
         "style": "heavy_frame"
       }
+    },
+    {
+      "id": "frame.hinge",
+      "name": "Frame Hinge",
+      "kind": "joint",
+      "mass_kg": 800,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          0.6,
+          1.2
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "limits_deg": [
+          -170,
+          170
+        ],
+        "speed_deg_s": 60,
+        "max_torque_nm": 5000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.3,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.3,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A heavy hinge: what hangs below its end node turns about its X axis.",
+      "form": {
+        "model": "frame.hinge",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "heavy_frame"
+      }
     }
   ]
 }

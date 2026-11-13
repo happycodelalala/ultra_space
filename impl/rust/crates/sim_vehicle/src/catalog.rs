@@ -23,6 +23,8 @@ pub enum PartKind {
     LandingLeg,
     Wheel,
     Battery,
+    /// A hinge or rotor: what is attached beyond its `end` node turns about its axis.
+    Joint,
 }
 
 /// Size class of attach nodes, connectors and slots: only matching sizes join.
@@ -163,6 +165,45 @@ pub struct LandingLegDef {
     pub damping_n_s_per_m: Option<f64>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JointType {
+    /// Turns within angle limits.
+    Hinge,
+    /// Turns freely.
+    Rotor,
+}
+
+/// A joint (task 3.10): parts attached beyond its `end` node turn about `axis` (part axes)
+/// through that node.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JointDef {
+    #[serde(rename = "type")]
+    pub joint_type: JointType,
+    pub axis: [f64; 3],
+    /// Hinge limits (degrees).
+    #[serde(default)]
+    pub limits_deg: Option<[f64; 2]>,
+    /// Fastest turn (degrees per second).
+    pub speed_deg_s: f64,
+    pub max_torque_nm: f64,
+}
+
+impl JointDef {
+    pub fn axis(&self) -> DVec3 {
+        DVec3::from(self.axis).normalize_or(DVec3::X)
+    }
+
+    /// `angle` (radians) kept within the hinge limits.
+    pub fn clamp(&self, angle: f64) -> f64 {
+        match (self.joint_type, self.limits_deg) {
+            (JointType::Hinge, Some([lo, hi])) => angle.clamp(lo.to_radians(), hi.to_radians()),
+            _ => angle,
+        }
+    }
+}
+
 /// A driven wheel on suspension along the part's local −Y axis, rolling along −Z (task 3.5).
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -244,6 +285,8 @@ pub struct PartDef {
     pub landing_leg: Option<LandingLegDef>,
     #[serde(default)]
     pub wheel: Option<WheelDef>,
+    #[serde(default)]
+    pub joint: Option<JointDef>,
     #[serde(default)]
     pub attach_nodes: Vec<AttachNode>,
     /// Can attach to other parts' surfaces (default true).
@@ -444,6 +487,10 @@ fn validate(p: &PartDef) -> Vec<String> {
     ));
     problems.extend(needs(p.wheel.is_some(), "wheel", PartKind::Wheel));
     problems.extend(needs(p.battery.is_some(), "battery", PartKind::Battery));
+    problems.extend(needs(p.joint.is_some(), "joint", PartKind::Joint));
+    if p.joint.is_some() && (p.node("base").is_none() || p.node("end").is_none()) {
+        problems.push(format!("{}: joints need \"base\" and \"end\" nodes", p.id));
+    }
     if p.thruster.is_some_and(|t| !positive(t.max_thrust_n)) {
         problems.push(format!("{}: max_thrust_n must be positive", p.id));
     }

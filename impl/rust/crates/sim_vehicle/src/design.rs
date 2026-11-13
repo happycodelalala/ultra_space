@@ -23,6 +23,16 @@ struct DesignFile {
     #[serde(default)]
     description: String,
     parts: Vec<PlacedPartFile>,
+    /// Named joint poses: pose name -> joint part id -> angle (degrees).
+    #[serde(default)]
+    poses: std::collections::BTreeMap<String, std::collections::BTreeMap<String, f64>>,
+}
+
+/// A named set of joint angles (degrees, by joint part name).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NamedPose {
+    pub name: String,
+    pub angles: Vec<(String, f64)>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +118,7 @@ pub struct VehicleDesign {
     pub name: String,
     pub description: String,
     pub parts: Vec<VehiclePart>,
+    pub poses: Vec<NamedPose>,
 }
 
 #[derive(Debug)]
@@ -242,14 +253,36 @@ impl VehicleDesign {
             }
             parts.push(part);
         }
+        for (pose, angles) in &file.poses {
+            for joint in angles.keys() {
+                let ok = parts
+                    .iter()
+                    .any(|p| &p.name == joint && p.def.joint.is_some());
+                if !ok {
+                    problems.push(format!(
+                        "{}: pose {pose:?} names {joint:?}, not a joint",
+                        file.id
+                    ));
+                }
+            }
+        }
         if !problems.is_empty() {
             return Err(DesignError::Invalid(problems));
         }
+        let poses = file
+            .poses
+            .into_iter()
+            .map(|(name, angles)| NamedPose {
+                name,
+                angles: angles.into_iter().collect(),
+            })
+            .collect();
         Ok(Self {
             id: file.id,
             name: file.name,
             description: file.description,
             parts,
+            poses,
         })
     }
 }
@@ -326,7 +359,27 @@ pub fn design_json(
         let comma = if i + 1 < n { "," } else { "" };
         lines.push(format!("    {{{}}}{comma}", fields.join(", ")));
     }
-    lines.push("  ]".into());
+    if vehicle.poses.is_empty() {
+        lines.push("  ]".into());
+    } else {
+        lines.push("  ],".into());
+        lines.push("  \"poses\": {".into());
+        let m = vehicle.poses.len();
+        for (k, pose) in vehicle.poses.iter().enumerate() {
+            let angles: Vec<String> = pose
+                .angles
+                .iter()
+                .map(|(joint, deg)| format!("{}: {}", quoted(joint), tidy(*deg)))
+                .collect();
+            let comma = if k + 1 < m { "," } else { "" };
+            lines.push(format!(
+                "    {}: {{{}}}{comma}",
+                quoted(&pose.name),
+                angles.join(", ")
+            ));
+        }
+        lines.push("  }".into());
+    }
     lines.push("}".into());
     lines.join("\n") + "\n"
 }

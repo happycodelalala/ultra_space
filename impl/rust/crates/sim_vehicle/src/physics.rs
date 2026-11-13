@@ -72,6 +72,9 @@ enum Motion {
 struct Entry {
     handle: RigidBodyHandle,
     collider_handles: Vec<ColliderHandle>,
+    /// The rigid group of each collider, and the joint poses they were last placed at.
+    collider_groups: Vec<usize>,
+    pose_generation: u64,
     /// The design hash it was built from; a different hash means the parts changed.
     hash: u64,
     mass: crate::mass::MassProperties,
@@ -97,8 +100,9 @@ struct Entry {
 pub struct PhysicsScene {
     world: PhysicsWorld,
     bodies: HashMap<ObjectId, Entry>,
-    /// Compound collision shapes by design hash, shared by every vehicle of a design.
-    shapes: HashMap<u64, SharedShape>,
+    /// Compound collision shapes by design hash and rigid group, shared by every vehicle of a
+    /// design.
+    shapes: HashMap<(u64, usize), SharedShape>,
     ground: Option<Ground>,
     /// Whether terrain gets collision patches (single-vehicle helpers use the contact model).
     patches: bool,
@@ -330,6 +334,27 @@ impl PhysicsScene {
         }
     }
 
+    /// Moves a jointed vehicle's group colliders to `poses` (from its `JointState`), unless they
+    /// are already there (same `generation`).
+    pub fn set_poses(&mut self, id: ObjectId, poses: &[crate::joints::Pose], generation: u64) {
+        let Some(e) = self.bodies.get_mut(&id) else {
+            return;
+        };
+        if e.pose_generation == generation {
+            return;
+        }
+        e.pose_generation = generation;
+        for (&h, &g) in e.collider_handles.iter().zip(&e.collider_groups) {
+            let pose = poses
+                .get(g)
+                .copied()
+                .unwrap_or(crate::joints::Pose::IDENTITY);
+            if let Some(c) = self.world.colliders.get_mut(h) {
+                c.set_position_wrt_parent(Pose::from_parts(pose.translation, pose.rotation));
+            }
+        }
+    }
+
     /// Places a vehicle moved by other code this tick (it still collides with others).
     pub fn place_kinematic(&mut self, id: ObjectId, body: &VehicleBody, state: &RigidState) {
         self.place(id, body, state, Wrench::default(), Motion::Kinematic);
@@ -360,22 +385,41 @@ impl PhysicsScene {
                 ))
                 .build();
             let handle = world.insert_body(rigid);
-            let shape = shapes
-                .entry(body.hash)
-                .or_insert_with(|| compound_shape(&body.colliders))
-                .clone();
-            let collider = ColliderBuilder::new(shape)
-                // Mass and inertia come from our own mass properties.
-                .density(0.0)
-                .friction(HULL_FRICTION)
-                .collision_groups(vehicle_groups(true));
-            let collider_handles = vec![world.insert_collider(collider, Some(handle))];
+            // One compound collider per rigid group (one without joints); jointed groups move
+            // with their poses (see `set_poses`).
+            let collider_handles = (0..body.articulation.groups.len().max(1))
+                .filter_map(|g| {
+                    let pieces: Vec<PartCollider> = body
+                        .colliders
+                        .iter()
+                        .filter(|c| c.group == g)
+                        .copied()
+                        .collect();
+                    if pieces.is_empty() {
+                        return None;
+                    }
+                    let shape = shapes
+                        .entry((body.hash, g))
+                        .or_insert_with(|| compound_shape(&pieces))
+                        .clone();
+                    let collider = ColliderBuilder::new(shape)
+                        // Mass and inertia come from our own mass properties.
+                        .density(0.0)
+                        .friction(HULL_FRICTION)
+                        .collision_groups(vehicle_groups(true));
+                    Some((g, world.insert_collider(collider, Some(handle))))
+                })
+                .collect::<Vec<_>>();
+            let collider_groups = collider_handles.iter().map(|(g, _)| *g).collect();
+            let collider_handles = collider_handles.into_iter().map(|(_, h)| h).collect();
             let wheels = body.wheels.clone();
             let controller =
                 (!wheels.is_empty()).then(|| crate::wheels::controller(handle, &wheels, m.mass));
             Entry {
                 handle,
                 collider_handles,
+                collider_groups,
+                pose_generation: 0,
                 wheels,
                 controller,
                 drive: Drive::default(),

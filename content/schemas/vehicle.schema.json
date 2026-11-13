@@ -104,6 +104,16 @@
           ]
         }
       }
+    },
+    "poses": {
+      "type": "object",
+      "description": "Named joint poses: pose name -> joint part id -> angle in degrees (task 3.10). Joints not named go back to rest.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      }
     }
   }
 }

@@ -10,11 +10,13 @@ use crate::design::{VehicleDesign, VehiclePart};
 use crate::mass::MassProperties;
 
 /// A vehicle's own parts. Spawned from a design; later edited by the builder (Batch 3).
-#[derive(Component, Clone, Debug, PartialEq)]
+#[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct Vehicle {
     pub design_id: String,
     pub name: String,
     pub parts: Vec<VehiclePart>,
+    /// Named joint poses from the design (task 3.10).
+    pub poses: Vec<crate::design::NamedPose>,
 }
 
 impl Vehicle {
@@ -23,6 +25,7 @@ impl Vehicle {
             design_id: design.id.clone(),
             name: design.name.clone(),
             parts: design.parts.clone(),
+            poses: design.poses.clone(),
         }
     }
 }
@@ -54,6 +57,14 @@ pub struct VehicleBody {
     pub performance: Performance,
     /// One collision shape per part, in vehicle axes (the compound collider).
     pub colliders: Vec<PartCollider>,
+    /// How the parts split into rigid groups at joints (one group without joints).
+    pub articulation: crate::joints::Articulation,
+    /// Thrusters at rest (vehicle axes, positions from the vehicle origin) and their groups, to
+    /// rebuild the allocator when joints move.
+    pub rest_thrusters: Vec<(Thruster, usize)>,
+    /// Reaction-wheel torque and characteristic size, for rebuilding the allocator.
+    pub wheel_torque: f64,
+    pub size: f64,
     /// Wheels, driven by the raycast vehicle controller (not part of the collider).
     pub wheels: Vec<crate::wheels::WheelMount>,
     /// [`Vehicle::design_hash`] of the parts this was compiled from: identical designs share
@@ -70,6 +81,8 @@ pub struct PartCollider {
     /// Keep this exact shape in the compiled collider (feet); other parts are merged into a few
     /// boxes.
     pub exact: bool,
+    /// The rigid group it moves with (0 without joints).
+    pub group: usize,
 }
 
 /// Directions matching [`Performance::max_acceleration`].
@@ -140,6 +153,22 @@ impl VehicleBody {
     pub fn of(vehicle: &Vehicle) -> Option<Self> {
         let mass = MassProperties::of_parts(&vehicle.parts)?;
         let com = mass.center_of_mass;
+        let articulation = crate::joints::Articulation::of(&vehicle.parts);
+        let rest_thrusters: Vec<(Thruster, usize)> = vehicle
+            .parts
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                p.def.thruster.map(|t| {
+                    let thruster = Thruster {
+                        direction: (p.rotation * DVec3::Y).normalize(),
+                        position: p.position,
+                        max_thrust: t.max_thrust_n,
+                    };
+                    (thruster, articulation.part_group[i])
+                })
+            })
+            .collect();
         let thrusters = vehicle
             .parts
             .iter()
@@ -174,12 +203,14 @@ impl VehicleBody {
         let colliders = vehicle
             .parts
             .iter()
-            .filter(|p| p.def.wheel.is_none())
-            .map(|p| PartCollider {
+            .enumerate()
+            .filter(|(_, p)| p.def.wheel.is_none())
+            .map(|(i, p)| PartCollider {
                 shape: p.def.collision_shape(),
                 position: p.position,
                 rotation: p.rotation,
                 exact: p.def.kind == PartKind::LandingLeg,
+                group: articulation.part_group[i],
             })
             .collect();
         Some(Self {
@@ -187,9 +218,35 @@ impl VehicleBody {
             allocator,
             performance,
             colliders,
+            articulation,
+            rest_thrusters,
+            wheel_torque: wheel,
+            size,
             wheels,
             hash: vehicle.design_hash(),
         })
+    }
+
+    /// The thrust allocator with the rigid groups at `poses` (thrusters on moving limbs push
+    /// along their current direction).
+    pub fn posed_allocator(&self, poses: &[crate::joints::Pose]) -> Allocator {
+        let com = self.mass.center_of_mass;
+        let thrusters = self
+            .rest_thrusters
+            .iter()
+            .map(|(t, g)| {
+                let pose = poses
+                    .get(*g)
+                    .copied()
+                    .unwrap_or(crate::joints::Pose::IDENTITY);
+                Thruster {
+                    direction: (pose.rotation * t.direction).normalize(),
+                    position: pose.apply(t.position) - com,
+                    max_thrust: t.max_thrust,
+                }
+            })
+            .collect();
+        Allocator::new(thrusters, self.wheel_torque, self.size)
     }
 }
 

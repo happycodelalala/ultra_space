@@ -31,6 +31,7 @@ fn lander() -> Vehicle {
             def: part("hull.section.medium"),
             ..Default::default()
         }],
+        ..Default::default()
     };
     let node = |v: &Vehicle, part: usize, id: &str| {
         free_nodes(v)
@@ -67,6 +68,7 @@ fn unbalanced_lander() -> Vehicle {
             def: part("cockpit.small"),
             ..Default::default()
         }],
+        ..Default::default()
     };
     let at = free_nodes(&v)
         .into_iter()

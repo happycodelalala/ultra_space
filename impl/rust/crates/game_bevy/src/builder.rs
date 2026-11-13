@@ -324,6 +324,7 @@ fn enter_or_leave(
                     def: root,
                     ..Default::default()
                 }],
+                ..Default::default()
             };
             let Some(body) = VehicleBody::of(&vehicle) else {
                 return;

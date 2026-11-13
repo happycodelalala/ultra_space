@@ -119,7 +119,8 @@
             "landing_leg",
             "wheel",
             "battery",
-            "structure"
+            "structure",
+            "joint"
           ]
         },
         "mass_kg": {
@@ -315,6 +316,45 @@
               "exclusiveMinimum": 0
             }
           }
+        },
+        "joint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "axis",
+            "speed_deg_s",
+            "max_torque_nm"
+          ],
+          "description": "A hinge or rotor: parts attached beyond its \"end\" node turn about the axis (part axes) through that node. Joint parts need \"base\" and \"end\" nodes.",
+          "properties": {
+            "type": {
+              "enum": [
+                "hinge",
+                "rotor"
+              ]
+            },
+            "axis": {
+              "$ref": "#/$defs/vec3"
+            },
+            "limits_deg": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Hinge limits (degrees)."
+            },
+            "speed_deg_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "max_torque_nm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       },
       "allOf": [
@@ -399,6 +439,20 @@
           "then": {
             "required": [
               "battery"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "joint"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "joint"
             ]
           }
         }

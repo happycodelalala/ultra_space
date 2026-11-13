@@ -12,7 +12,7 @@ use sim_core::ObjectId;
 use sim_vehicle::builder::{
     Symmetry, attach_at_node, attach_to_surface, free_nodes, place_symmetric, stats,
 };
-use sim_vehicle::design::{check_join, design_json};
+use sim_vehicle::design::{NamedPose, check_join, design_json};
 use sim_vehicle::flight::{BodyEnv, FlightPlan, RigidState, plan_flight};
 use sim_vehicle::{
     FlightControl, FlightTelemetry, PartCatalog, PartDef, PhysicsScene, Vehicle, VehicleBody,
@@ -44,6 +44,7 @@ fn assemble() -> Vehicle {
             def: part("frame.torso"),
             ..Default::default()
         }],
+        ..Default::default()
     };
     // Attach `id` by its node `own` to node `to` of the named part; returns the new index.
     let join = |v: &mut Vehicle, parent: &str, to: &str, id: &str, own: &str| -> usize {
@@ -70,21 +71,37 @@ fn assemble() -> Vehicle {
     rename(&mut v, i, "shoulder_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "shoulder_right");
-    let i = join(&mut v, "shoulder_left", "down", "frame.limb", "top");
+    let i = join(&mut v, "shoulder_left", "down", "frame.hinge", "base");
+    rename(&mut v, i, "shoulder_joint_left");
+    place_symmetric(&mut v, i, Symmetry::Mirror);
+    rename_last(&mut v, "shoulder_joint_right");
+    let i = join(&mut v, "shoulder_joint_left", "end", "frame.limb", "top");
     rename(&mut v, i, "upper_arm_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "upper_arm_right");
-    let i = join(&mut v, "upper_arm_left", "bottom", "frame.limb", "top");
+    let i = join(&mut v, "upper_arm_left", "bottom", "frame.hinge", "base");
+    rename(&mut v, i, "elbow_joint_left");
+    place_symmetric(&mut v, i, Symmetry::Mirror);
+    rename_last(&mut v, "elbow_joint_right");
+    let i = join(&mut v, "elbow_joint_left", "end", "frame.limb", "top");
     rename(&mut v, i, "forearm_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "forearm_right");
 
     // Legs: thigh, shin and foot on the left hip, mirrored.
-    let i = join(&mut v, "waist", "hip_left", "frame.leg", "top");
+    let i = join(&mut v, "waist", "hip_left", "frame.hinge", "base");
+    rename(&mut v, i, "hip_joint_left");
+    place_symmetric(&mut v, i, Symmetry::Mirror);
+    rename_last(&mut v, "hip_joint_right");
+    let i = join(&mut v, "hip_joint_left", "end", "frame.leg", "top");
     rename(&mut v, i, "thigh_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "thigh_right");
-    let i = join(&mut v, "thigh_left", "bottom", "frame.leg", "top");
+    let i = join(&mut v, "thigh_left", "bottom", "frame.hinge", "base");
+    rename(&mut v, i, "knee_joint_left");
+    place_symmetric(&mut v, i, Symmetry::Mirror);
+    rename_last(&mut v, "knee_joint_right");
+    let i = join(&mut v, "knee_joint_left", "end", "frame.leg", "top");
     rename(&mut v, i, "shin_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "shin_right");
@@ -100,9 +117,16 @@ fn assemble() -> Vehicle {
         &mut v,
         "backpack",
         "mount_upper_right",
-        "frame.binder",
-        "root",
+        "frame.hinge",
+        "base",
     );
+    rename(&mut v, i, "binder_joint_1");
+    let first_copy = v.parts.len();
+    place_symmetric(&mut v, i, Symmetry::Radial(4));
+    for (k, j) in (first_copy..v.parts.len()).enumerate() {
+        rename(&mut v, j, &format!("binder_joint_{}", k + 2));
+    }
+    let i = join(&mut v, "binder_joint_1", "end", "frame.binder", "root");
     rename(&mut v, i, "binder_1");
     let first_copy = v.parts.len();
     place_symmetric(&mut v, i, Symmetry::Radial(4));
@@ -151,6 +175,25 @@ fn assemble() -> Vehicle {
     let i =
         attach_to_surface(&mut v, &part("frame.gyro"), 0, DVec3::ZERO, DQuat::IDENTITY).unwrap();
     rename(&mut v, i, "gyro");
+    // Poses (degrees; a positive turn about a hinge's X swings what hangs below it forward).
+    let both = |side: &str, a: f64| vec![(format!("{side}_left"), a), (format!("{side}_right"), a)];
+    let pose = |name: &str, angles: Vec<(String, f64)>| NamedPose {
+        name: name.into(),
+        angles,
+    };
+    let mut arms_up = both("shoulder_joint", 150.0);
+    arms_up.extend(both("elbow_joint", 20.0));
+    let binders = (1..=4)
+        .map(|k| (format!("binder_joint_{k}"), 35.0))
+        .collect();
+    let mut crouch = both("hip_joint", 45.0);
+    crouch.extend(both("knee_joint", -90.0));
+    v.poses = vec![
+        pose("stand", Vec::new()),
+        pose("arms_up", arms_up),
+        pose("binders_open", binders),
+        pose("crouch", crouch),
+    ];
     v
 }
 
@@ -158,8 +201,9 @@ fn assemble() -> Vehicle {
 fn the_heavy_frame_assembles_into_a_valid_balanced_design() {
     let v = assemble();
     // Torso, head, waist; 2 × (shoulder, upper arm, forearm, thigh, shin, foot); backpack;
-    // 4 binders, 4 engines, 8 pods; 2 thigh engines; gyro.
-    assert_eq!(v.parts.len(), 3 + 12 + 1 + 4 + 4 + 8 + 2 + 1);
+    // 4 binders, 4 engines, 8 pods; 2 thigh engines; gyro; 12 hinges (shoulders, elbows,
+    // hips, knees, binders).
+    assert_eq!(v.parts.len(), 3 + 12 + 1 + 4 + 4 + 8 + 2 + 1 + 12);
     for (i, p) in v.parts.iter().enumerate().skip(1) {
         let parent = p.parent.unwrap();
         assert!(parent < i);
@@ -297,4 +341,54 @@ fn the_design_file_is_this_design() {
 fn write_the_design_file() {
     let json = design_json(&assemble(), "heavy_frame", NAME, DESCRIPTION);
     std::fs::write(content().join("vehicles/heavy_frame.json"), json).unwrap();
+}
+
+#[test]
+fn the_heavy_frame_moves_its_joints() {
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    // The root plus one rigid group per hinge.
+    assert_eq!(a.groups.len(), 13);
+    let mut state = sim_vehicle::joints::JointState::rest(a);
+    let set = |state: &mut sim_vehicle::joints::JointState, pose: &str| {
+        let pose = v.poses.iter().find(|p| p.name == pose).unwrap();
+        for (joint, deg) in &pose.angles {
+            let part = v.parts.iter().position(|p| &p.name == joint).unwrap();
+            state.targets[a.group_of_joint(part).unwrap()] = deg.to_radians();
+        }
+    };
+    set(&mut state, "arms_up");
+    for _ in 0..(30 * 4) {
+        state.advance(a, 1.0 / 30.0);
+    }
+    // The left forearm, which hung below the shoulder, is now above it.
+    let forearm = v
+        .parts
+        .iter()
+        .position(|p| p.name == "forearm_left")
+        .unwrap();
+    let shoulder = v
+        .parts
+        .iter()
+        .position(|p| p.name == "shoulder_left")
+        .unwrap();
+    let raised = state.poses[a.part_group[forearm]].apply(v.parts[forearm].position);
+    assert!(
+        raised.y > v.parts[shoulder].position.y,
+        "forearm at {raised:?}, shoulder at {:?}",
+        v.parts[shoulder].position
+    );
+    // Opening the binders turns their engines: the allocator follows.
+    let rest = body.allocator.thrusters()[0].direction;
+    set(&mut state, "binders_open");
+    for _ in 0..(30 * 2) {
+        state.advance(a, 1.0 / 30.0);
+    }
+    let posed = body.posed_allocator(&state.poses);
+    let engine = posed.thrusters()[0].direction;
+    assert!(
+        rest.dot(engine) < 0.95,
+        "engine turned with its binder: {rest:?} -> {engine:?}"
+    );
 }

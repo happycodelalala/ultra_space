@@ -595,6 +595,7 @@ mod tests {
                 def,
                 ..Default::default()
             }],
+            ..Default::default()
         }
     }
 

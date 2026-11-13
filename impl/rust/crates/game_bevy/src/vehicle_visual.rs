@@ -51,7 +51,8 @@ pub fn part_material(kind: PartKind) -> PartMaterial {
         | PartKind::ReactionWheel
         | PartKind::CruiseDrive
         | PartKind::LandingLeg
-        | PartKind::Wheel => PartMaterial::Dark,
+        | PartKind::Wheel
+        | PartKind::Joint => PartMaterial::Dark,
         PartKind::Hull | PartKind::Structure | PartKind::Tank | PartKind::Battery => {
             PartMaterial::Hull
         }
@@ -69,10 +70,22 @@ pub fn shape_mesh(shape: Shape) -> Mesh {
     }
 }
 
-/// One mesh per material for `parts`, in the vehicle frame. Pure: runs on the worker pool.
+/// One mesh per material for `parts`, in the vehicle frame (ignoring joints).
 pub fn merged_meshes(parts: &[VehiclePart]) -> Vec<(PartMaterial, Mesh)> {
-    let mut merged: Vec<(PartMaterial, Mesh)> = Vec::new();
-    for part in parts {
+    merged_group_meshes(parts, &vec![0; parts.len()])
+        .into_iter()
+        .map(|(_, m, mesh)| (m, mesh))
+        .collect()
+}
+
+/// One mesh per rigid group and material, in the vehicle's rest frame (`groups`: each part's
+/// group). Pure: runs on the worker pool.
+pub fn merged_group_meshes(
+    parts: &[VehiclePart],
+    groups: &[usize],
+) -> Vec<(usize, PartMaterial, Mesh)> {
+    let mut merged: Vec<(usize, PartMaterial, Mesh)> = Vec::new();
+    for (part, &group) in parts.iter().zip(groups) {
         let material = part_material(part.def.kind);
         let transform = Transform::from_translation(part.position.as_vec3())
             .with_rotation(part.rotation.as_quat());
@@ -82,23 +95,29 @@ pub fn merged_meshes(parts: &[VehiclePart]) -> Vec<(PartMaterial, Mesh)> {
             mesh = mesh.rotated_by(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
         }
         let mesh = mesh.transformed_by(transform);
-        match merged.iter_mut().find(|(m, _)| *m == material) {
-            Some((_, into)) => {
+        match merged
+            .iter_mut()
+            .find(|(g, m, _)| *g == group && *m == material)
+        {
+            Some((_, _, into)) => {
                 if let Err(e) = into.merge(&mesh) {
                     warn!("can't merge a part mesh: {e}");
                 }
             }
-            None => merged.push((material, mesh)),
+            None => merged.push((group, material, mesh)),
         }
     }
     merged
 }
 
+/// Merged meshes of a design: one per rigid group and material.
+type GroupMeshes = Vec<(usize, PartMaterial, Mesh)>;
+
 /// Merged meshes by design hash, and designs being built.
 #[derive(Resource, Default)]
 pub struct VehicleMeshes {
-    ready: HashMap<u64, Vec<(PartMaterial, Handle<Mesh>)>>,
-    pending: HashMap<u64, Task<Vec<(PartMaterial, Mesh)>>>,
+    ready: HashMap<u64, Vec<(usize, PartMaterial, Handle<Mesh>)>>,
+    pending: HashMap<u64, Task<GroupMeshes>>,
     materials: Option<[Handle<StandardMaterial>; 3]>,
 }
 
@@ -110,7 +129,10 @@ impl VehicleMeshes {
             return;
         }
         let parts = vehicle.parts.clone();
-        let task = workers().spawn(async move { merged_meshes(&parts) });
+        let task = workers().spawn(async move {
+            let groups = sim_vehicle::joints::Articulation::of(&parts).part_group;
+            merged_group_meshes(&parts, &groups)
+        });
         self.pending.insert(hash, task);
     }
 
@@ -160,11 +182,21 @@ impl VehicleMesh {
     pub fn new(hash: u64) -> Self {
         Self { hash, shown: None }
     }
+
+    /// Shows the meshes again once they are ready (after the group nodes were rebuilt).
+    fn reset(&mut self) {
+        self.shown = None;
+    }
 }
 
-/// The merged-mesh children of a vehicle visual.
+/// The merged-mesh children of a vehicle visual's group nodes.
 #[derive(Component)]
 struct MergedPart;
+
+/// A rigid group of a vehicle visual (index into its articulation); placed at the group's joint
+/// pose, it carries the group's merged meshes and thruster mounts.
+#[derive(Component)]
+pub struct GroupNode(pub usize);
 
 /// Collects finished mesh builds and gives every vehicle visual its design's meshes, replacing
 /// old ones only once the new ones are ready.
@@ -174,6 +206,7 @@ fn finish_vehicle_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut visuals: Query<(Entity, &mut VehicleMesh, Option<&Children>)>,
+    nodes: Query<(&GroupNode, Option<&Children>)>,
     merged_parts: Query<(), With<MergedPart>>,
 ) {
     let cache = &mut *cache;
@@ -184,7 +217,7 @@ fn finish_vehicle_meshes(
         .map(|(hash, built)| {
             let handles = built
                 .into_iter()
-                .map(|(material, mesh)| (material, meshes.add(mesh)))
+                .map(|(group, material, mesh)| (group, material, meshes.add(mesh)))
                 .collect();
             cache.ready.insert(hash, handles);
             hash
@@ -201,21 +234,36 @@ fn finish_vehicle_meshes(
         let Some(handles) = cache.ready.get(&visual.hash).cloned() else {
             continue;
         };
+        // The group nodes (spawned with the visual) carry the meshes.
+        let mut group_nodes: HashMap<usize, Entity> = HashMap::new();
         for child in children.into_iter().flatten() {
-            if merged_parts.contains(*child) {
-                commands.entity(*child).despawn();
+            if let Ok((node, grandchildren)) = nodes.get(*child) {
+                group_nodes.insert(node.0, *child);
+                for g in grandchildren.into_iter().flatten() {
+                    if merged_parts.contains(*g) {
+                        commands.entity(*g).despawn();
+                    }
+                }
             }
         }
-        commands.entity(entity).with_children(|v| {
-            for (material, mesh) in handles {
-                v.spawn((
+        if group_nodes.is_empty() {
+            continue; // spawned next frame
+        }
+        let _ = entity;
+        for (group, material, mesh) in handles {
+            let Some(&node) = group_nodes.get(&group) else {
+                continue;
+            };
+            let material = cache.material(material, &mut materials);
+            commands.entity(node).with_children(|n| {
+                n.spawn((
                     MergedPart,
                     Mesh3d(mesh),
-                    MeshMaterial3d(cache.material(material, &mut materials)),
+                    MeshMaterial3d(material),
                     Transform::default(),
                 ));
-            }
-        });
+            });
+        }
         visual.shown = Some(visual.hash);
     }
 }
@@ -282,7 +330,8 @@ fn spawn_vehicle_visual(
     spawn_plumes(commands, entity, id, vehicle, plume_assets);
 }
 
-/// A mount with an exhaust plume for each of the vehicle's thrusters, under its visual.
+/// The visual's rigid-group nodes (one per joint group, one without joints), each with a mount
+/// and an exhaust plume for its thrusters.
 fn spawn_plumes(
     commands: &mut Commands,
     visual: Entity,
@@ -290,38 +339,58 @@ fn spawn_plumes(
     vehicle: &Vehicle,
     plume_assets: &(Handle<Mesh>, Handle<StandardMaterial>),
 ) {
+    let articulation = sim_vehicle::joints::Articulation::of(&vehicle.parts);
     let mut thruster_index = 0;
     commands.entity(visual).with_children(|v| {
-        for part in vehicle.parts.iter().filter(|p| p.def.thruster.is_some()) {
-            let transform = Transform::from_translation(part.position.as_vec3())
-                .with_rotation(part.rotation.as_quat());
-            // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
-            let (radius, length) = match part.def.shape {
-                Shape::Cylinder { radius_m, length_m } => (radius_m as f32 * 0.8, length_m as f32),
-                Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
-                Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
-            };
-            let nozzle_y = -length / 2.0;
-            v.spawn((PlumeMount, transform, Visibility::default()))
-                .with_children(|p| {
-                    p.spawn((
-                        Plume {
-                            vehicle: id,
-                            index: thruster_index,
-                            length: radius * 8.0,
-                            nozzle_y,
-                        },
-                        Mesh3d(plume_assets.0.clone()),
-                        MeshMaterial3d(plume_assets.1.clone()),
-                        Transform::from_xyz(0.0, nozzle_y, 0.0)
-                            .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
-                            .with_scale(Vec3::new(radius, 0.0, radius)),
-                        Visibility::Hidden,
-                    ));
+        for g in 0..articulation.groups.len() {
+            v.spawn((GroupNode(g), Transform::default(), Visibility::default()))
+                .with_children(|node| {
+                    for (i, part) in vehicle.parts.iter().enumerate() {
+                        if part.def.thruster.is_none() {
+                            continue;
+                        }
+                        // Allocator order is part order: count every thruster.
+                        let index = vehicle.parts[..i]
+                            .iter()
+                            .filter(|p| p.def.thruster.is_some())
+                            .count();
+                        if articulation.part_group[i] != g {
+                            continue;
+                        }
+                        let transform = Transform::from_translation(part.position.as_vec3())
+                            .with_rotation(part.rotation.as_quat());
+                        // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
+                        let (radius, length) = match part.def.shape {
+                            Shape::Cylinder { radius_m, length_m } => {
+                                (radius_m as f32 * 0.8, length_m as f32)
+                            }
+                            Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
+                            Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
+                        };
+                        let nozzle_y = -length / 2.0;
+                        node.spawn((PlumeMount, transform, Visibility::default()))
+                            .with_children(|p| {
+                                p.spawn((
+                                    Plume {
+                                        vehicle: id,
+                                        index,
+                                        length: radius * 8.0,
+                                        nozzle_y,
+                                    },
+                                    Mesh3d(plume_assets.0.clone()),
+                                    MeshMaterial3d(plume_assets.1.clone()),
+                                    Transform::from_xyz(0.0, nozzle_y, 0.0)
+                                        .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
+                                        .with_scale(Vec3::new(radius, 0.0, radius)),
+                                    Visibility::Hidden,
+                                ));
+                            });
+                        thruster_index += 1;
+                    }
                 });
-            thruster_index += 1;
         }
     });
+    let _ = thruster_index;
 }
 
 /// Keeps one visual per simulated vehicle and places each at its state interpolated to the
@@ -345,7 +414,8 @@ fn sync_vehicle_visuals(
         &mut Visibility,
         Option<&Children>,
     )>,
-    mounts: Query<(), With<PlumeMount>>,
+    group_nodes: Query<(), With<GroupNode>>,
+    mut node_transforms: Query<(&GroupNode, &mut Transform), Without<VehicleVisual>>,
 ) {
     let system = &universe.0;
     let sim = &mut sim.0;
@@ -366,17 +436,25 @@ fn sync_vehicle_visuals(
     // nothing here looks at parts, except to build a new vehicle's visual).
     let shown: std::collections::HashSet<ObjectId> = visuals.iter().map(|v| v.1.id).collect();
     let mut vehicles: HashMap<ObjectId, (ObjectState, u64, Option<Vehicle>)> = HashMap::new();
+    let mut poses: HashMap<ObjectId, Vec<sim_vehicle::joints::Pose>> = HashMap::new();
     for (index, region) in sim.regions.iter_mut().enumerate() {
         let frame = system.bodies[index].inertial_frame;
-        let mut query = region
-            .world
-            .query::<(&Object, &ObjectState, &VehicleBody, &Vehicle)>();
-        for (object, state, body, vehicle) in query.iter(&region.world) {
+        let mut query = region.world.query::<(
+            &Object,
+            &ObjectState,
+            &VehicleBody,
+            &Vehicle,
+            Option<&sim_vehicle::joints::JointState>,
+        )>();
+        for (object, state, body, vehicle, joints) in query.iter(&region.world) {
             let new = (!shown.contains(&object.id)).then(|| vehicle.clone());
             vehicles.insert(
                 object.id,
                 (state.in_frame(&system.frames, frame, t), body.hash, new),
             );
+            if let Some(j) = joints {
+                poses.insert(object.id, j.poses.clone());
+            }
         }
     }
 
@@ -394,10 +472,11 @@ fn sync_vehicle_visuals(
             cache.request(&v);
             mesh.hash = *hash;
             for child in children.into_iter().flatten() {
-                if mounts.contains(*child) {
+                if group_nodes.contains(*child) {
                     commands.entity(*child).despawn();
                 }
             }
+            mesh.reset();
             spawn_plumes(&mut commands, entity, visual.id, &v, plume_assets);
         }
         if visual.current.is_none_or(|(tc, _)| tc != t) {
@@ -409,6 +488,17 @@ fn sync_vehicle_visuals(
         transform.translation = (s.position - camera.offset).as_vec3();
         transform.rotation = s.rotation.as_quat().normalize();
         *visibility = Visibility::Inherited;
+        // Joint poses: each rigid group node at its pose in the vehicle's rest frame.
+        if let Some(group_poses) = poses.get(&visual.id) {
+            for child in children.into_iter().flatten() {
+                if let Ok((node, mut t)) = node_transforms.get_mut(*child)
+                    && let Some(p) = group_poses.get(node.0)
+                {
+                    t.translation = p.translation.as_vec3();
+                    t.rotation = p.rotation.as_quat();
+                }
+            }
+        }
     }
     for (id, (_, _, vehicle)) in vehicles {
         if let Some(vehicle) = vehicle {

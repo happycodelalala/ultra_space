@@ -652,6 +652,7 @@ pub fn flight_system(
             Option<&Cruise>,
             Has<ArcadeFlight>,
             Has<Frozen>,
+            Option<&crate::joints::JointState>,
         ),
         With<Vehicle>,
     >,
@@ -667,6 +668,7 @@ pub fn flight_system(
     };
 
     let mut integrating = Vec::new();
+    let mut pending_poses = Vec::new();
     for (
         entity,
         object,
@@ -678,8 +680,13 @@ pub fn flight_system(
         cruise,
         arcade,
         frozen,
+        joints,
     ) in &mut vehicles
     {
+        if let Some(j) = joints {
+            // Jointed: the group colliders follow the joint poses (placed below this tick).
+            pending_poses.push((object.id, j.poses.clone(), j.generation));
+        }
         // Flight works in the body's inertial frame.
         let local = state.in_frame(&system.frames, inertial, t);
         if frozen {
@@ -747,6 +754,9 @@ pub fn flight_system(
         }
     }
 
+    for (id, poses, generation) in &pending_poses {
+        scene.set_poses(*id, poses, *generation);
+    }
     scene.step(&env, clock.dt);
 
     for entity in integrating {
@@ -803,6 +813,7 @@ pub fn add_flight_systems(schedule: &mut Schedule) {
             // Walkers first: they move against the ground and vehicles as the last physics step
             // left them, then turn with the planet like everything else this tick.
             crate::walker::walker_system,
+            crate::joints::joint_system,
             flight_system,
             arcade_system,
             cruise_system,

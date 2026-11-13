@@ -16,7 +16,7 @@ use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
-    OnRails, VehicleBody,
+    OnRails, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -52,6 +52,7 @@ impl Plugin for ShipPlugin {
                         cruise_keys,
                         full_stop_key,
                         arcade_key,
+                        pose_key,
                         pilot_input,
                     )
                         .chain()
@@ -468,6 +469,54 @@ fn full_stop_key(
 /// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
 /// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
 /// turning it off hands the current velocity back to Newtonian flight.
+/// P: the controlled vehicle steps through its design's poses (task 3.10): each named joint
+/// turns toward its angle, every other joint back to rest.
+fn pose_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
+    mut sim: ResMut<Sim>,
+    mut next: Local<usize>,
+) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyP) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let mut e = region.world.entity_mut(loc.entity);
+    let (Some(vehicle), Some(body)) = (e.get::<Vehicle>(), e.get::<VehicleBody>()) else {
+        return;
+    };
+    if vehicle.poses.is_empty() || !body.articulation.is_jointed() {
+        info!("this vehicle has no poses");
+        return;
+    }
+    let pose = vehicle.poses[*next % vehicle.poses.len()].clone();
+    *next += 1;
+    let targets: Vec<(usize, f64)> = pose
+        .angles
+        .iter()
+        .filter_map(|(joint, deg)| {
+            let part = vehicle.parts.iter().position(|p| &p.name == joint)?;
+            Some((body.articulation.group_of_joint(part)?, deg.to_radians()))
+        })
+        .collect();
+    let groups = body.articulation.groups.len();
+    if let Some(mut joints) = e.get_mut::<sim_vehicle::joints::JointState>() {
+        joints.targets = vec![0.0; groups];
+        for (g, angle) in targets {
+            joints.targets[g] = angle;
+        }
+        info!("pose: {}", pose.name);
+    }
+}
+
 fn arcade_key(
     keys: Res<ButtonInput<KeyCode>>,
     ship: Option<Res<PlayerShip>>,
