@@ -1,5 +1,5 @@
 {
-  "description": "Parts of the Bastion, an original heavy frame: four shell arms on a dorsal spine carry faceted half-shells that close into a cocoon.",
+  "description": "Parts of the Bastion, an original heavy frame: four shell arms on shoulder pods carry faceted quarter-shells that close into a cocoon.",
   "parts": [
     {
       "id": "bastion.arm_rotor",
@@ -134,16 +134,16 @@
       }
     },
     {
-      "id": "bastion.spine",
-      "name": "Bastion Dorsal Spine",
+      "id": "bastion.shoulder_pod",
+      "name": "Bastion Shoulder Pod",
       "kind": "structure",
-      "mass_kg": 4000,
+      "mass_kg": 1200,
       "shape": {
         "type": "box",
         "size_m": [
-          1.6,
-          10.0,
-          1.4
+          1.4,
+          0.8,
+          2.4
         ]
       },
       "attach_nodes": [
@@ -151,128 +151,34 @@
           "id": "front",
           "position_m": [
             0,
-            1.5,
-            -0.7
+            -0.2,
+            -1.2
           ],
           "direction": [
-            0,
-            0,
-            -1
-          ],
-          "size": "large"
-        },
-        {
-          "id": "arm_upper_left",
-          "position_m": [
-            -0.8,
-            4.5,
-            0
-          ],
-          "direction": [
-            -0.984808,
-            0,
-            0.173648
+            0.1047,
+            -0.807,
+            -0.5812
           ],
           "size": "medium"
         },
         {
-          "id": "arm_upper_right",
+          "id": "back",
           "position_m": [
-            0.8,
-            4.5,
-            0
+            0,
+            -0.2,
+            1.2
           ],
           "direction": [
-            0.984808,
-            0,
-            0.173648
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "arm_lower_left",
-          "position_m": [
-            -0.8,
-            -4.5,
-            0
-          ],
-          "direction": [
-            -0.984808,
-            0,
-            0.173648
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "arm_lower_right",
-          "position_m": [
-            0.8,
-            -4.5,
-            0
-          ],
-          "direction": [
-            0.984808,
-            0,
-            0.173648
+            0.0861,
+            -0.6635,
+            0.7433
           ],
           "size": "medium"
         }
       ],
-      "description": "A frame on the back over the torso and waist carrying the four shell arms close to the centre of mass: the upper pair above the shoulders, the lower pair at the hips.",
+      "description": "Sits on a shoulder and carries two shell arms, one reaching down the front, one down the back.",
       "form": {
-        "model": "bastion.spine",
-        "material_slots": [
-          "armor"
-        ],
-        "style": "bastion"
-      }
-    },
-    {
-      "id": "bastion.boom",
-      "name": "Bastion Shell Arm Boom",
-      "kind": "structure",
-      "mass_kg": 1200,
-      "shape": {
-        "type": "box",
-        "size_m": [
-          0.8,
-          1.6,
-          0.8
-        ]
-      },
-      "attach_nodes": [
-        {
-          "id": "top",
-          "position_m": [
-            0,
-            0.8,
-            0
-          ],
-          "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "bottom",
-          "position_m": [
-            0,
-            -0.8,
-            0
-          ],
-          "direction": [
-            0,
-            -1,
-            0
-          ],
-          "size": "medium"
-        }
-      ],
-      "description": "The main beam of a shell arm.",
-      "form": {
-        "model": "bastion.boom",
+        "model": "bastion.shoulder_pod",
         "material_slots": [
           "armor"
         ],
@@ -379,58 +285,6 @@
         "model": "bastion.boom_stub",
         "material_slots": [
           "armor"
-        ],
-        "style": "bastion"
-      }
-    },
-    {
-      "id": "bastion.knuckle",
-      "name": "Bastion Arm Knuckle",
-      "kind": "structure",
-      "mass_kg": 500,
-      "shape": {
-        "type": "box",
-        "size_m": [
-          0.8,
-          0.8,
-          0.8
-        ]
-      },
-      "attach_nodes": [
-        {
-          "id": "base",
-          "position_m": [
-            0,
-            0.4,
-            0
-          ],
-          "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "end",
-          "position_m": [
-            0,
-            0,
-            -0.4
-          ],
-          "direction": [
-            0,
-            0,
-            -1
-          ],
-          "size": "medium"
-        }
-      ],
-      "description": "A fixed right-angle bracket: a shell arm turns here to run forward along the inside of its shell when folded.",
-      "form": {
-        "model": "bastion.knuckle",
-        "material_slots": [
-          "joint"
         ],
         "style": "bastion"
       }

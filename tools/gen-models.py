@@ -320,20 +320,6 @@ def engine(h):
     return m
 
 
-def spine(h):
-    """A dorsal frame: a dark core beam with armoured vertebra blocks and arm sockets."""
-    hx, hy, hz = h
-    m = Model()
-    m.add("dark", *bevel_box([hx * 0.55, hy, hz * 0.55], 0.12))
-    n = 6
-    for k in range(n):
-        y = -hy + (k + 0.5) * 2 * hy / n
-        m.add("armor", *bevel_box([hx, hy / n * 0.78, hz], 0.18, centre=(0, y, 0.05),
-                                  taper=(0.9, 1.0)))
-        m.add("trim", *box([hx * 0.5, 0.06, 0.06], centre=(0, y + hy / n * 0.5, hz * 0.98)))
-    return m
-
-
 def boom(h):
     hx, hy, hz = h
     m = Model()
@@ -347,12 +333,16 @@ def boom(h):
     return m
 
 
-def knuckle(h):
+def shoulder_pod(h):
+    """A shoulder pod: an armoured saddle with an arm socket at each end (front and back)."""
     hx, hy, hz = h
     m = Model()
-    m.add("dark", *bevel_box([hx, hy, hz], 0.18))
-    m.add("trim", *prism(hx * 0.55, 0.05, 8, 0, centre=(hx, 0, 0), rotate=math.pi / 8))
-    m.add("trim", *prism(hx * 0.55, 0.05, 8, 0, centre=(-hx, 0, 0), rotate=math.pi / 8))
+    m.add("armor", *bevel_box([hx, hy * 0.75, hz * 0.8], 0.22, centre=(0, hy * 0.25, 0),
+                              taper=(1.0, 0.85)))
+    for s in (-1, 1):
+        m.add("dark", *prism(hx * 0.5, hz * 0.12, 8, 2, centre=(0, -hy * 0.35, s * hz * 0.88),
+                             rotate=math.pi / 8))
+    m.add("trim", *box([hx * 0.9, 0.06, hz * 0.7], centre=(0, hy * 0.98, 0)))
     return m
 
 
@@ -403,11 +393,9 @@ MODELS = {
     "frame.hinge": hinge_x,
     "bastion.arm_rotor": rotor_y,
     "bastion.arm_hinge": hinge_x,
-    "bastion.spine": spine,
-    "bastion.boom": boom,
+    "bastion.shoulder_pod": shoulder_pod,
     "bastion.boom_short": boom,
     "bastion.boom_stub": boom,
-    "bastion.knuckle": knuckle,
     "bastion.shell_mount": shell_mount,
     "bastion.shell_facet_upper": shell_facet,
     "bastion.shell_facet_lower": shell_facet,

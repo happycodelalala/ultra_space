@@ -39,8 +39,8 @@ test("the Bastion splits into the same rigid groups as in the game", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  // 26 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
-  assert.equal(a.groups.length - 1, 26);
+  // 22 joints (Rust: the_bastion_assembles_into_a_valid_balanced_design).
+  assert.equal(a.groups.length - 1, 22);
 });
 
 test("poses put the shells where the game does", () => {
@@ -61,17 +61,20 @@ test("poses put the shells where the game does", () => {
     );
     return sum.map((c) => c / facets.length);
   };
-  // Rust: "stand upper left: middle (-3.8, 0.2, 4.0)", "wings upper left: middle (-4.8, 2.1, 0.7)".
-  near(middle(poseAngles(design, parts, a, "stand"), "upper"), [-3.8, 0.2, 4.0], 0.1, "stand");
-  near(middle(poseAngles(design, parts, a, "wings"), "upper"), [-4.8, 2.1, 0.7], 0.1, "wings");
+  // Rust (the_quarters_open_like_petals): "bloom front left: middle (-7.3, 0.4, -5.6)",
+  // "bloom back left: middle (-7.0, 1.0, 6.5)"; closed "(-2.8, -3.9, -2.4)".
+  const bloom = poseAngles(design, parts, a, "bloom");
+  near(middle(bloom, "front"), [-7.3, 0.4, -5.6], 0.1, "bloom front");
+  near(middle(bloom, "back"), [-7.0, 1.0, 6.5], 0.1, "bloom back");
+  near(middle(poseAngles(design, parts, a, "cocoon"), "front"), [-2.8, -3.9, -2.4], 0.1, "cocoon");
 });
 
 test("a pose read and written back is the same pose", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  const angles = poseAngles(design, parts, a, "wings");
-  assert.deepEqual(poseFromAngles(parts, a, angles), design.poses.wings);
+  const angles = poseAngles(design, parts, a, "bloom");
+  assert.deepEqual(poseFromAngles(parts, a, angles), design.poses.bloom);
 });
 
 test("the heavy frame stands on its soles", () => {
