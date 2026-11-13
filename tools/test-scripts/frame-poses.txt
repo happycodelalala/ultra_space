@@ -1,5 +1,5 @@
 # Jointed parts (task 3.10). Run with ULTRA_SPACE_START_ALTITUDE=1500. Spawn the heavy frame,
-# board it, and step through its poses with P (stand, arms up, binders open, crouch), viewed from
+# board it, and step through its poses with P (arms up, binders open, crouch), viewed from
 # the side. Look for: the arms swinging up to above the head, the four binders swinging out with
 # their engines, the knees bending in the crouch; the log lines "pose: arms_up" and so on; no
 # parts flying apart.
@@ -14,10 +14,9 @@
 8    hold MouseRight 1.5     # chase camera round to its side
 8    mouse 10 2 1.5
 10   shot 01-stand.png
-10.5 press P                 # stand (rest)
-11   press P                 # arms up
+10.5 press P                 # arms up (poses go in name order: arms_up, binders_open, crouch, stand)
 14   shot 02-arms-up.png
-14.5 press P                 # binders open
+14.5 press P                 # binders open (the arms go back down)
 17.5 shot 03-binders-open.png
 18   press P                 # crouch
 21.5 shot 04-crouch.png
