@@ -133,18 +133,32 @@ pub struct Foot {
     pub step: Option<(DVec3, DVec3, f64)>,
 }
 
-/// Walk mode: the vehicle's legs carry it (insert to start walking, remove to stop).
+/// Walk mode: the vehicle's legs carry it. Insert to start walking; set `stopping` to stop: it
+/// slows down, brings its feet under it, and then leaves walk mode (the component is removed).
 #[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct Walking {
     /// Speed along the ground (m/s, forward positive) and the feet (empty until the first tick).
     pub speed: f64,
     pub feet: Vec<Foot>,
+    pub stopping: bool,
+}
+
+/// What a tick of walking ended with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WalkStep {
+    Walking,
+    /// Stopped and standing on both feet: back to flight.
+    Stopped,
+    /// No ground under the feet: back to flight.
+    NoGround,
 }
 
 /// How long a step takes (s).
 const STEP_TIME: f64 = 0.55;
 /// Walking acceleration (m/s²).
 const ACCELERATION: f64 = 3.0;
+/// Steepest slope the soles follow (radians).
+const MAX_SOLE_PITCH: f64 = 0.35;
 /// Walking ends when the ground is this much further below the feet than standing (m).
 const LOST_GROUND: f64 = 3.0;
 
@@ -160,7 +174,7 @@ fn ground_at(env: &BodyEnv, p: DVec3) -> DVec3 {
     dir * (env.radius + env.ground_height(dir * env.radius))
 }
 
-/// One tick of walking for one vehicle. Returns `false` when walking must end (no ground).
+/// One tick of walking for one vehicle.
 #[allow(clippy::too_many_arguments)]
 pub fn walk_tick(
     state: &mut sim_core::frames::FrameState,
@@ -172,7 +186,7 @@ pub fn walk_tick(
     control: &FlightControl,
     env: &BodyEnv,
     dt: f64,
-) -> bool {
+) -> WalkStep {
     let to_surface = env.surface_rotation.inverse();
     let to_inertial = env.surface_rotation;
     // Standing height: the origin this far above the ground (legs bent to the stance).
@@ -188,15 +202,20 @@ pub fn walk_tick(
     state.position = spin * state.position;
     state.rotation = (spin * state.rotation).normalize();
     let up = state.position.normalize();
-    let turn = -control.translate.x.clamp(-1.0, 1.0) * gait.turn_rate_deg_s.to_radians() * dt;
+    let (steer, drive) = if walking.stopping {
+        (0.0, 0.0)
+    } else {
+        (control.translate.x, control.translate.z)
+    };
+    let turn = -steer.clamp(-1.0, 1.0) * gait.turn_rate_deg_s.to_radians() * dt;
     let forward = DQuat::from_axis_angle(up, turn) * (state.rotation * DVec3::NEG_Z);
-    let wanted = -control.translate.z.clamp(-1.0, 1.0) * gait.speed_m_s;
+    let wanted = -drive.clamp(-1.0, 1.0) * gait.speed_m_s;
     walking.speed += (wanted - walking.speed).clamp(-ACCELERATION * dt, ACCELERATION * dt);
     let forward_level = (forward - up * forward.dot(up)).normalize_or(forward);
     state.position += forward_level * walking.speed * dt;
     let ground = ground_at(env, state.position);
     if state.position.length() - ground.length() > stand + LOST_GROUND {
-        return false;
+        return WalkStep::NoGround;
     }
     state.position = ground.normalize() * (ground.length() + stand);
     let up = state.position.normalize();
@@ -221,11 +240,16 @@ pub fn walk_tick(
             .collect();
     }
     let stepping = walking.feet.iter().any(|f| f.step.is_some());
-    // Where each foot would like to be: under its hip, a little ahead when moving.
+    // Where each foot would like to be: under the vehicle, a little ahead when moving.
     let lead = forward_level * walking.speed * STEP_TIME * 0.5;
     let mut started = stepping;
+    // Stopping: feet come closer under the hips before standing.
+    let near = if walking.stopping { 0.15 } else { 0.4 };
+    let mut settled = !stepping && walking.speed == 0.0;
     for (foot, leg) in walking.feet.iter_mut().zip(legs) {
-        let home = ground_at(env, to_world(leg.sole) + lead);
+        // Fore and aft under the centre of mass (balance), sideways under the hip.
+        let under = DVec3::new(leg.sole.x, leg.sole.y, body.mass.center_of_mass.z);
+        let home = ground_at(env, to_world(under) + lead);
         match foot.step {
             Some((from, to, t)) => {
                 let t = (t + dt / STEP_TIME).min(1.0);
@@ -241,8 +265,11 @@ pub fn walk_tick(
                 let limit = if walking.speed.abs() > 0.1 {
                     gait.step_length_m * 0.5
                 } else {
-                    0.4
+                    near
                 };
+                if off > near {
+                    settled = false;
+                }
                 if off > limit && !started {
                     foot.step = Some((foot.planted, surface(home), 0.0));
                     started = true;
@@ -266,22 +293,33 @@ pub fn walk_tick(
             }
             None => inertial(foot.planted),
         };
-        // The ankle sits above the sole as at rest.
-        let target = from_world(sole) + (leg.ankle - leg.sole);
+        // With an ankle, the sole follows the ground's fore-and-aft slope (a flat sole on a slope
+        // would dig in at one end); the ankle sits above the sole as at rest, tilted with it.
+        let pitch = if leg.ankle_group.is_some() {
+            let n = state.rotation.inverse() * env.ground_normal(sole);
+            n.z.atan2(n.y).clamp(-MAX_SOLE_PITCH, MAX_SOLE_PITCH)
+        } else {
+            0.0
+        };
+        let target = from_world(sole) + DQuat::from_rotation_x(pitch) * (leg.ankle - leg.sole);
         let (hip, knee) = solve_leg(leg, target);
         joints.angles[leg.hip_group] = hip;
         joints.targets[leg.hip_group] = hip;
         joints.angles[leg.knee_group] = knee;
         joints.targets[leg.knee_group] = knee;
         if let Some(a) = leg.ankle_group {
-            // Keep the sole level: undo the thigh's and shin's tilt.
-            joints.angles[a] = -(hip + knee);
-            joints.targets[a] = -(hip + knee);
+            // Undo the thigh's and shin's tilt, then match the ground.
+            joints.angles[a] = pitch - (hip + knee);
+            joints.targets[a] = pitch - (hip + knee);
         }
     }
     joints.poses = body.articulation.poses(&joints.angles);
     joints.generation += 1;
-    true
+    if walking.stopping && settled {
+        WalkStep::Stopped
+    } else {
+        WalkStep::Walking
+    }
 }
 
 /// Walks every vehicle in walk mode for one tick (vehicles without legs, or without ground under
@@ -319,7 +357,7 @@ pub fn walking_system(
             continue;
         };
         let mut local = state.in_frame(&system.frames, frame, t);
-        let ok = walk_tick(
+        let step = walk_tick(
             &mut local.state,
             &mut walking,
             &mut joints,
@@ -332,14 +370,14 @@ pub fn walking_system(
         );
         *state = local;
         if let Some(mut tel) = telemetry {
-            tel.in_contact = ok;
+            tel.in_contact = step != WalkStep::NoGround;
             tel.relative_velocity = local.state.velocity - env.spin.cross(local.state.position);
             // Heights of the centre of mass, as in flight.
             let com = local.state.position + local.state.rotation * body.mass.center_of_mass;
             tel.altitude = com.length() - env.radius;
             tel.ground_altitude = crate::flight::ground_altitude(&env, com);
         }
-        if !ok {
+        if step != WalkStep::Walking {
             commands.entity(entity).remove::<Walking>();
         }
     }

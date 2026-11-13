@@ -525,8 +525,8 @@ const WALK_START_SPEED: f64 = 2.0;
 const WALK_START_MARGIN: f64 = 3.0;
 
 /// M: a vehicle with legs (a design `gait`, task 3.11) starts or stops walking. It starts only
-/// when standing on the ground (landed, or low and slow); W/S walk, A/D turn. Stopping hands it
-/// back to flight where it stands.
+/// when standing on the ground (landed, or low and slow); W/S walk, A/D turn. Stopping slows it,
+/// brings its feet under it and then hands it back to flight where it stands.
 fn walk_key(
     keys: Res<ButtonInput<KeyCode>>,
     pilot: Res<PilotState>,
@@ -547,12 +547,21 @@ fn walk_key(
     let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
         return;
     };
-    if e.contains::<Walking>() {
-        e.remove::<Walking>();
+    if let Some(mut walking) = e.get_mut::<Walking>() {
+        // Stops, brings its feet under it, then hands back to flight (or walks on).
+        walking.stopping = !walking.stopping;
+        let stopping = walking.stopping;
         if let Some(mut control) = e.get_mut::<FlightControl>() {
             control.desired_velocity = None;
         }
-        info!("walking off: flight");
+        info!(
+            "{}",
+            if stopping {
+                "walking off: stopping on both feet"
+            } else {
+                "walking on"
+            }
+        );
         return;
     }
     if e.get::<Vehicle>().is_none_or(|v| v.gait.is_none()) {

@@ -417,7 +417,7 @@ fn the_heavy_frame_moves_its_joints() {
 #[test]
 fn the_heavy_frame_walks_over_hills_and_turns() {
     use sim_vehicle::flight::{RegionTerrain, region_env};
-    use sim_vehicle::gait::{Walking, resolve_legs, walk_tick};
+    use sim_vehicle::gait::{WalkStep, Walking, resolve_legs, walk_tick};
 
     let v = assemble();
     let body = VehicleBody::of(&v).unwrap();
@@ -470,17 +470,20 @@ fn the_heavy_frame_walks_over_hills_and_turns() {
         }
         let env = env_at(t);
         let before: Vec<bool> = walking.feet.iter().map(|f| f.step.is_some()).collect();
-        assert!(walk_tick(
-            &mut s,
-            &mut walking,
-            &mut joints,
-            &body,
-            &legs,
-            &gait,
-            &control,
-            &env,
-            dt
-        ));
+        assert_eq!(
+            walk_tick(
+                &mut s,
+                &mut walking,
+                &mut joints,
+                &body,
+                &legs,
+                &gait,
+                &control,
+                &env,
+                dt
+            ),
+            WalkStep::Walking
+        );
         for (k, foot) in walking.feet.iter().enumerate() {
             if foot.step.is_some() && !before.get(k).copied().unwrap_or(false) {
                 steps += 1;
@@ -529,5 +532,48 @@ fn the_heavy_frame_walks_over_hills_and_turns() {
     assert!(
         worst_planted < 0.3,
         "planted feet on the ground: {worst_planted:.2} m"
+    );
+
+    // Stop: it slows, brings its feet under it and stands; then physics holds it upright.
+    walking.stopping = true;
+    let mut tick = 30 * 40;
+    loop {
+        let t = f64::from(tick + 1) * dt;
+        let step = walk_tick(
+            &mut s,
+            &mut walking,
+            &mut joints,
+            &body,
+            &legs,
+            &gait,
+            &control,
+            &env_at(t),
+            dt,
+        );
+        tick += 1;
+        if step == WalkStep::Stopped {
+            break;
+        }
+        assert_eq!(step, WalkStep::Walking);
+        assert!(tick < 30 * 46, "stopped within 6 s");
+    }
+    let com = body.mass.center_of_mass;
+    let mut r = RigidState::from_origin(&s, com);
+    let mut scene = PhysicsScene::with_inline_patches();
+    let id = ObjectId(1);
+    for k in 0..(30 * 10) {
+        let env = env_at(f64::from(tick + k + 1) * dt);
+        scene.place_dynamic(id, &body, &r, Default::default());
+        scene.set_poses(id, &joints.poses, joints.generation);
+        scene.step(&env, dt);
+        r = scene.state(id).unwrap().0;
+    }
+    let up = r.position.normalize();
+    let tilt = (r.rotation * DVec3::Y).angle_between(up).to_degrees();
+    let speed = (r.velocity - env_at(f64::from(tick + 300) * dt).spin.cross(r.position)).length();
+    println!("stopped: tilt {tilt:.1} deg, speed {speed:.2} m/s after 10 s");
+    assert!(
+        tilt < 10.0,
+        "stands upright after stopping: tilted {tilt:.1} deg"
     );
 }
