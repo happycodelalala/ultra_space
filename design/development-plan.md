@@ -406,20 +406,23 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 | 3.7 | **Builder mode:** enter and leave (B), orbit camera, parts palette, snap to attach nodes, place, rotate, select, remove, undo | Build a small lander from parts and fly it |
 | 3.8 | **Builder tools:** symmetry, sections, stats (mass, centre of mass, thrust-to-weight, hover/strafe/turn, rover stability, Δv estimate), validation | Stats match flight; invalid designs explained |
 | 3.9 | **New vehicles:** start from a root part on open ground | Build a rover and a ship from scratch, drive and fly them |
-| 3.10 | **Save and load:** versioned JSON, object records, `ObjectId` allocator, terrain deltas, quick save and load | Round-trip tests; reload puts everything back as it was |
-| 3.11 | **Per-ship cruise characteristics** from the drive part and the ship (objects-vehicles-physics §8) | Heavier ships charge and turn slower in cruise |
-| 3.12 | **Batch review** | Exit criteria met |
+| 3.10 | **Jointed parts** (brought forward 2026-11-13): hinge and rotor parts, rigid groups turning about joints (kinematic articulation), moving colliders and meshes, joint angles and poses | The heavy frame raises its arms and swings its binders on Windows; tests |
+| 3.11 | **Animated walking:** legs declared in the design, a locomotion controller and gait, two-joint leg solving onto the terrain, walk controls | The heavy frame walks over hills and turns |
+| 3.12 | **Part models:** glTF models in `assets/models/` merged into vehicle meshes; generated original low-poly models for the frame and core parts | The frame looks like armour, not boxes; draw calls stay a few per vehicle |
+| 3.13 | **Save and load:** versioned JSON, object records, `ObjectId` allocator, terrain deltas, quick save and load | Round-trip tests; reload puts everything back as it was |
+| 3.14 | **Per-ship cruise characteristics** from the drive part and the ship (objects-vehicles-physics §8) | Heavier ships charge and turn slower in cruise |
+| 3.15 | **Batch review** | Exit criteria met |
 
 **Exit criteria:** build a rover and a ship from parts in the world, drive and fly them, land on
-legs and wheels, save and load everything; no frame over 50 ms when entering or leaving the
+legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
 **Status (2026-11-12):** 3.1–3.9 done on branch `batch3/builder` (not merged): rapier physics
 per region, terrain collision patches, the new part and design format with landing legs,
 design compilation, wheels and a rover, the walker colliding with vehicles, the builder (keys
 and mouse picking, symmetry, sections, stats and balance warnings) and new vehicles from
-scratch, each checked on Windows through the test queue. Next: 3.10 save and load, 3.11
-per-ship cruise, 3.12 review. Known gaps: stats size measures part centres, the lander parts
+scratch, each checked on Windows through the test queue. The developer brought jointed parts, walking and part models forward (3.10–3.12) to get a
+testable mech; then 3.13 save and load, 3.14 per-ship cruise, 3.15 review. Known gaps: stats size measures part centres, the lander parts
 are overpowered (~10 g), wheels don't spin or move with their suspension.
 
 ### 7.1 When the object system is built
