@@ -637,3 +637,102 @@ fn write_the_design_file() {
     let json = design_json(&design(), "bastion", NAME, DESCRIPTION);
     std::fs::write(content().join("vehicles/bastion.json"), json).unwrap();
 }
+
+/// Walks a few seconds with the shell open on a slope on Meridian, stops, and hands the frame
+/// to physics: it must stay standing.
+#[test]
+fn the_bastion_walks_and_stops_standing_with_its_shell_open() {
+    use sim_core::ObjectId;
+    use sim_vehicle::flight::{RegionTerrain, RigidState, region_env};
+    use sim_vehicle::gait::{WalkStep, Walking, resolve_legs, walk_tick};
+    use sim_vehicle::{FlightControl, PhysicsScene};
+
+    let v = design();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let gait = v.gait.clone().unwrap();
+    let legs = resolve_legs(&v, &body, &gait).unwrap();
+    let mut joints = JointState::rest(a);
+    for (joint, deg) in &v
+        .poses
+        .iter()
+        .find(|p| p.name == "shell_open")
+        .unwrap()
+        .angles
+    {
+        let part = v.parts.iter().position(|p| &p.name == joint).unwrap();
+        let g = a.group_of_joint(part).unwrap();
+        joints.angles[g] = deg.to_radians();
+        joints.targets[g] = deg.to_radians();
+    }
+    let sys = sim_core::StarSystem::from_path(content().join("star_systems/halcyon.json")).unwrap();
+    let i = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+    let terrain = RegionTerrain(sim_planet::Terrain::of(&sys.bodies[i]).map(Arc::new));
+    let env_at = |t: f64| region_env(&sys, i, t, Some(&terrain));
+    let env = env_at(0.0);
+    let up = sim_planet::fibonacci_directions(20_000)
+        .map(|d| env.surface_rotation * d)
+        .find(|&d| {
+            let p = d * env.radius;
+            env.ground_height(p) > 100.0 && env.ground_normal(p).dot(d) < 0.995
+        })
+        .unwrap();
+    let north = up.cross(DVec3::Y.cross(up)).normalize();
+    let rotation = DQuat::from_mat3(&glam::DMat3::from_cols(north.cross(up), up, -north));
+    let ground = env.radius + env.ground_height(up * env.radius);
+    let mut s = sim_core::frames::FrameState {
+        position: up * (ground + 15.0),
+        rotation,
+        velocity: env.spin.cross(up * ground),
+        angular_velocity: env.spin,
+    };
+    let mut walking = Walking::default();
+    let mut control = FlightControl {
+        translate: DVec3::NEG_Z,
+        ..Default::default()
+    };
+    let dt = 1.0 / 30.0;
+    let mut tick = 0u32;
+    loop {
+        tick += 1;
+        if tick == 30 * 6 {
+            walking.stopping = true;
+            control.translate = DVec3::ZERO;
+        }
+        let step = walk_tick(
+            &mut s,
+            &mut walking,
+            &mut joints,
+            &body,
+            &legs,
+            &gait,
+            &control,
+            &env_at(f64::from(tick) * dt),
+            dt,
+        );
+        if step == WalkStep::Stopped {
+            break;
+        }
+        assert_eq!(step, WalkStep::Walking);
+        assert!(tick < 30 * 14, "stopped");
+    }
+    let com = body.mass.center_of_mass;
+    let mut r = RigidState::from_origin(&s, com);
+    let mut scene = PhysicsScene::with_inline_patches();
+    let id = ObjectId(1);
+    for k in 0..(30 * 10) {
+        let env = env_at(f64::from(tick + k + 1) * dt);
+        scene.place_dynamic(id, &body, &r, Default::default());
+        scene.set_poses(id, &joints.poses, joints.generation);
+        scene.step(&env, dt);
+        r = scene.state(id).unwrap().0;
+        if k % 30 == 0 {
+            let tilt = (r.rotation * DVec3::Y).angle_between(r.position.normalize());
+            println!("t {} tilt {:.1}", k / 30, tilt.to_degrees());
+        }
+    }
+    let tilt = (r.rotation * DVec3::Y)
+        .angle_between(r.position.normalize())
+        .to_degrees();
+    assert!(tilt < 10.0, "stands after stopping: tilted {tilt:.1} deg");
+}

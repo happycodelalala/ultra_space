@@ -28,5 +28,7 @@
 34   hold W 6
 38   shot 07-walking.png
 40.5 press M                 # stop on both feet
-45   shot 08-stopped.png
+41   press H                 # HUD back
+42   shot 08-stopping.png
+45   shot 09-stopped.png
 45.5 quit
