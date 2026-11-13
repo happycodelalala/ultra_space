@@ -136,6 +136,12 @@ def main():
         del argv[i:i + 2]
     defs = part_defs()
     names = argv or sorted(defs)
+    if not argv:
+        # A model file no builder makes would go stale unnoticed (a lost builder).
+        orphans = sorted(f.stem for f in OUT.glob("*.glb") if f.stem not in defs)
+        if orphans:
+            print(f"build-models: model files without a builder: {', '.join(orphans)}")
+            sys.exit(1)
     OUT.mkdir(parents=True, exist_ok=True)
     total = 0
     for name in names:

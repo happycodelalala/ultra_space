@@ -96,7 +96,11 @@ QUARTER = next(p for p in json.loads((Path(__file__).resolve().parents[2] / "con
                                      .read_text())["parts"] if p["id"] == "bastion.shell_quarter_front_left")
 # The drone bay in a quarter's bulge (azimuths, heights; matches bastion.bay_cover) and the
 # lift engines' sockets in its inner skin (rows of height and azimuths; the design's layout).
-BAY_DEG, BAY_TOP, BAY_BOTTOM = 28.0, 5.0, -3.3
+BAY_DEG, BAY_TOP, BAY_BOTTOM = 24.0, 5.0, -10.0
+# The blister door: how far it rises out of the outer face at its middle (m).
+BLISTER = 1.2
+# The bulge keeps its full depth this far either side of the middle (degrees).
+LENS_FLAT = 28.0
 ENGINE_SOCKETS = [(-0.3, (-31.0, 31.0)), (1.9, (-31.0, 31.0))]
 BANDS_BELOW_TOP = [4.6, 2.75, 2.45, -1.5, -6.0, -10.5]
 
@@ -105,19 +109,32 @@ def lens(t):
     """The bulge's outer face (offset from the mid-surface) at azimuth `d`: the full
     thickness across the middle, thinning toward the side seams (a lens in section)."""
     def outer(d, y):
-        x = min(1.0, max(0.0, (abs(d) - BAY_DEG) / (43.5 - BAY_DEG)))
+        x = min(1.0, max(0.0, (abs(d) - LENS_FLAT) / (43.5 - LENS_FLAT)))
         return t / 2 * (1.0 - 0.75 * x * x * (3 - 2 * x))
     return outer
 
 
-def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside):
+def blister(t):
+    """The bay door's outer face (offset from the quarter's mid-surface): the bulge's face
+    raised by up to BLISTER at the middle of the bay, falling to the face at its edges."""
+    outer = lens(t)
+
+    def face(d, y):
+        fy = (BAY_TOP - y) / (BAY_TOP - BAY_BOTTOM)
+        fy = math.sin(math.pi * min(1.0, max(0.0, fy))) ** 0.7
+        fd = max(0.0, 1.0 - (d / BAY_DEG) ** 2) ** 0.5
+        return outer(d, y) + BLISTER * fy * fd
+    return face
+
+
+def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside, surface=None):
     """The armour plates over a quarter's bulge: bands down the curve (raised bands overlap
     their neighbours), three columns of two facets, a graphite band at the shoulder line,
     raised chevron plates on the larger panels. `inside(y_hi, y_lo, d0, d1)` splits each
     panel into the pieces this model draws (the quarter outside the drone bay, the bay
     cover inside it). Returns the pieces at the hem."""
     sharp = 4.0
-    outer = lens(t)
+    outer = surface or lens(t)
     bands = [top] + BANDS_BELOW_TOP + [bottom]
     gap_deg = 0.45
     cols = [(a0 + 2 * fdeg * k, a0 + 2 * fdeg * (k + 1)) for k in range(3)]
@@ -168,7 +185,7 @@ def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside):
     return hem
 
 
-def keel(m, prof, t, top, bottom, keep):
+def keel(m, prof, t, top, bottom, keep, raise_=None):
     """A graphite blade down a quarter's middle (deflecting hits, stiffening it), rising to a
     point above the top; only its stretches where `keep(y)`."""
     mid = 0.0
@@ -178,7 +195,8 @@ def keel(m, prof, t, top, bottom, keep):
             continue
         f0, f1 = i / (len(rows) - 1), (i + 1) / (len(rows) - 1)
         h0, h1 = 0.3 + 0.35 * (1 - f0), 0.3 + 0.35 * (1 - f1)
-        base0, base1 = r0 + t / 2 + 0.1, r1 + t / 2 + 0.1
+        lift0, lift1 = (raise_(y0), raise_(y1)) if raise_ else (0.0, 0.0)
+        base0, base1 = r0 + t / 2 + 0.1 + lift0, r1 + t / 2 + 0.1 + lift1
         pts = [point(mid + s * math.degrees(0.16 / max(r, 1)), y, rb) for s in (-1, 1)
                for y, r, rb in ((y0, r0, base0), (y1, r1, base1))]
         pts += [point(mid, y0, base0 + h0), point(mid, y1, base1 + h1)]
@@ -286,9 +304,10 @@ def shell_quarter(m, h, part):
 
 @builder("bastion.bay_cover")
 def bay_cover(m, h, part, quarter=None):
-    """A drone bay's cover: the bulge's outer layer over the bay (the same scales, shoulder
-    band and keel as the rest of its quarter, so closed it is flush), on a stiffening inner
-    skin, with a hinge knuckle along its top edge."""
+    """A drone bay's door: a faceted blister rising out of the middle of its quarter's bulge
+    (up to BLISTER at its middle, meeting the quarter's face all round its seam), under the
+    same scale armour and keel as the rest of the quarter; a stiffening inner skin and a
+    hinge knuckle along its top edge. It pivots up and out to open the bay under it."""
     q = quarter or QUARTER
     shape = q["shape"]
     P = shape["profile_m"]
@@ -297,13 +316,14 @@ def bay_cover(m, h, part, quarter=None):
     prof = catmull(P, 40)
     top, bottom = P[0][0], P[-1][0]
     fdeg = (a1 - a0) / 6
-    outer = lens(t)
+    face = blister(t)
     lid = part["shape"]["thickness_m"]
     rows = resample(prof, BAY_TOP - 0.05, BAY_BOTTOM + 0.05, 0.8)
-    skin(m, rows, -BAY_DEG + 0.2, BAY_DEG - 0.2, lambda d, y: outer(d, y) - lid,
-         lambda d, y: outer(d, y) - 0.06, "dark", facets=(a0, fdeg), angle=4.0)
-    armour(m, prof, t, a0, a1, fdeg, top, bottom, inside_bay)
-    keel(m, prof, t, top, bottom, lambda y: BAY_BOTTOM + 0.2 < y < BAY_TOP + 0.2)
+    skin(m, rows, -BAY_DEG + 0.2, BAY_DEG - 0.2, lambda d, y: face(d, y) - lid,
+         lambda d, y: face(d, y) - 0.06, "dark", facets=(a0, fdeg), angle=4.0)
+    armour(m, prof, t, a0, a1, fdeg, top, bottom, inside_bay, surface=face)
+    keel(m, prof, t, top, bottom, lambda y: BAY_BOTTOM + 0.2 < y < BAY_TOP + 0.2,
+         raise_=lambda y: face(0.0, y) - lens(t)(0.0, y))
 
 
 @builder("bastion.lift_engine", "thruster.main.medium")

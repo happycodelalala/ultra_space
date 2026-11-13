@@ -2446,32 +2446,32 @@
       "id": "bastion.bay_cover",
       "name": "Bastion Bay Cover",
       "kind": "structure",
-      "mass_kg": 1800,
+      "mass_kg": 3000,
       "shape": {
         "type": "shell",
         "profile_m": [
           [
             5.0,
-            5.845
+            5.895
           ],
           [
-            2.233,
-            7.45
+            0.5,
+            8.705
           ],
           [
-            -0.533,
-            7.6
+            -5.5,
+            8.049
           ],
           [
-            -3.3,
-            7.319
+            -10.0,
+            6.057
           ]
         ],
         "arc_deg": [
-          -28,
-          28
+          -24,
+          24
         ],
-        "thickness_m": 0.4
+        "thickness_m": 0.3
       },
       "attach_nodes": [
         {
@@ -2489,7 +2489,7 @@
           "size": "medium"
         }
       ],
-      "description": "The cover of a quarter's drone bay: the outer layer of the bulge from the quarter's middle up to below the dome, hinged along its top edge; open, it lifts up and out to expose the bay.",
+      "description": "The door of a quarter's drone bay: a faceted blister rising up to 1.2 m out of the middle of the quarter's outer face (a bay up to about 2 m deep under it), hinged along its top edge; open, it pivots up and out to expose the bay.",
       "form": {
         "model": "bastion.bay_cover",
         "material_slots": [
