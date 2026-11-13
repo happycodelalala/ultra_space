@@ -3,6 +3,7 @@
 # headless Chromium (software WebGL) and saves them to .viewer-shots/.
 #   tools/viewer-shots.sh bastion [pose] [views]     e.g. tools/viewer-shots.sh bastion wings front,left
 #   tools/viewer-shots.sh --part frame.foot
+#   FOCUS=torso,head tools/viewer-shots.sh bastion stand    # frame the shots on those parts
 set -euo pipefail
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 PORT=${VIEWER_PORT:-8799}
@@ -13,6 +14,7 @@ else
     [[ -n "${2:-}" ]] && QUERY+="&pose=$2"
 fi
 [[ -n "${3:-}" ]] && QUERY+="&views=$3"
+[[ -n "${FOCUS:-}" ]] && QUERY+="&focus=$FOCUS"
 CHROME=$(ls -d "$HOME"/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell 2>/dev/null | tail -1)
 [[ -x "$CHROME" ]] || { echo "viewer-shots: no headless Chromium (npx playwright install chromium-headless-shell)"; exit 1; }
 python3 "$ROOT/impl/viewer/server.py" "$PORT" >/dev/null 2>&1 &

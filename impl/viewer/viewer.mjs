@@ -370,9 +370,24 @@ const VIEWS = {
   low: [200, -12],
 };
 
+/// With `?focus=<name prefixes, comma separated>`, the box around the parts whose names start
+/// with one of them (to frame shots on a detail); otherwise none.
+function focusBounds() {
+  const prefixes = params.get("focus")?.split(",");
+  if (!prefixes || state.mode === "part") return null;
+  const bounds = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (o.userData.partIndex == null) return;
+    const name = state.parts[o.userData.partIndex]?.name ?? "";
+    if (prefixes.some((f) => name.startsWith(f))) bounds.expandByObject(o);
+  });
+  return bounds.isEmpty() ? null : bounds;
+}
+
 function setView(name) {
   const [yaw, pitch] = VIEWS[name] ?? VIEWS["front-right"];
-  const bounds = new THREE.Box3().setFromObject(root);
+  const bounds = focusBounds() ?? new THREE.Box3().setFromObject(root);
   const centre = bounds.getCenter(new THREE.Vector3());
   const radius = bounds.getSize(new THREE.Vector3()).length() / 2;
   const distance = radius / Math.sin((camera.fov * DEG) / 2) * 0.95;
@@ -417,7 +432,8 @@ function render() {
 
 /// Renders each standard view and saves it to .viewer-shots/<subject>-<view>.png.
 async function reviewShots(views = Object.keys(VIEWS)) {
-  const subject = state.mode === "part" ? state.partId : `${state.designId}-${params.get("pose") ?? "current"}`;
+  const focus = params.get("focus") ? `-${params.get("focus").replaceAll(",", "-")}` : "";
+  const subject = state.mode === "part" ? state.partId : `${state.designId}-${params.get("pose") ?? "current"}${focus}`;
   for (const name of views) {
     setView(name);
     render();
@@ -578,9 +594,13 @@ async function main() {
   await loadCatalog();
   state.designId = params.get("design") ?? state.list.designs[0];
   fillSelects();
+  if (params.get("bare")) {
+    // Review shots show the model alone.
+    document.body.classList.add("bare");
+    $("showCom").checked = false;
+  }
   await build();
   setView(params.get("view") ?? "front-right");
-  if (params.get("bare")) document.body.classList.add("bare");
   resize();
   if (params.get("shots")) {
     // Headless review: save the standard views, then signal done.

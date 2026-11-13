@@ -1,5 +1,5 @@
 //! The Bastion: an original heavy frame (~24 m, ~240 t) carried in a cocoon of four curved
-//! quarter-shells, each on a shell arm. Each arm: a shoulder (swing and lift) on a saddle, a
+//! quarter-shells, each on a shell arm. Each arm: a shoulder hinge on a saddle, a
 //! long link up under the dome, an elbow folding the arm into a V, a long forearm back down to
 //! a wrist at the quarter's upper middle, and the carrier the quarter is fixed to. The lift,
 //! elbow and wrist turn about parallel axes, so the arm moves its quarter in one plane and the
@@ -248,6 +248,7 @@ fn assemble() -> Vehicle {
         any,
     );
     b.pair("elbow_joint", "end", "bastion.limb", "top", "forearm", any);
+    b.pair("forearm", "bottom", "bastion.hand", "wrist", "hand", any);
     b.pair("waist", "hip_left", "frame.hinge", "base", "hip_joint", any);
     b.pair("hip_joint", "end", "bastion.leg", "top", "thigh", any);
     b.pair("thigh", "bottom", "frame.hinge", "base", "knee_joint", any);
@@ -285,18 +286,10 @@ fn assemble() -> Vehicle {
             let name = |part: &str| format!("{quarter}_{part}_{side}");
             let tangent = mirror(tangent_left(middle));
             let fold_along = tangent * fold_direction(quarter);
-            // Shoulder: swing (vertical axis) and lift (along the curve, parallel to the elbow).
+            // Shoulder: the lift hinge, turning along the curve (parallel to elbow and wrist).
             b.join_best(
                 &named("saddle"),
                 quarter,
-                "bastion.arm_hinge",
-                "base",
-                &name("swing"),
-                axis_along(DVec3::Y),
-            );
-            b.join_best(
-                &name("swing"),
-                "end",
                 "bastion.arm_hinge",
                 "base",
                 &name("lift"),

@@ -124,7 +124,9 @@ honestly with their output.
   `assets/export/models/` with joints, poses, collision boxes, centre of mass and live reload.
   `tools/viewer-shots.sh <design> [pose] [views]` (or `--part <id>`) saves review shots to
   `.viewer-shots/` with headless Chromium, no window: use it to check geometry before a game
-  round. The viewer writes only design JSON and `.glb` models in the game's folders and
+  round. `FOCUS=<part name prefixes>` frames the shots on those parts (close-ups of details).
+  Part models come from `tools/gen-models.py` (rigid per part: a joint's actuators sit inside
+  its own part). The viewer writes only design JSON and `.glb` models in the game's folders and
   formats.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates

@@ -58,7 +58,7 @@
           "size": "medium"
         }
       ],
-      "description": "The wrist of a folding leg: turns the grapple.",
+      "description": "The wrist of a folding leg: a slewing bearing and motor that turn the grapple.",
       "form": {
         "model": "bastion.arm_rotor",
         "material_slots": [
@@ -124,7 +124,7 @@
           "size": "medium"
         }
       ],
-      "description": "A heavy shell-arm hinge (shoulder, elbow, the leg's first joint).",
+      "description": "A heavy hinge (shell-arm shoulder and wrist): clevis, knuckle on the pivot pin and a rotary vane actuator.",
       "form": {
         "model": "bastion.arm_hinge",
         "material_slots": [
@@ -190,7 +190,7 @@
           "size": "medium"
         }
       ],
-      "description": "The first joint of a folding leg: swings the folded leg out from under its shell.",
+      "description": "The first joint of a folding leg: swings the folded leg out from under its quarter.",
       "form": {
         "model": "bastion.arm_hinge",
         "material_slots": [
@@ -242,7 +242,7 @@
           "size": "medium"
         }
       ],
-      "description": "Bolted on a shoulder block: carries a front and a back shell arm, their loads going down the shoulder into the torso.",
+      "description": "Bolted on a shoulder block: carries the shoulder hinges of a front and a back shell arm, their loads going down through the shoulder into the torso.",
       "form": {
         "model": "bastion.saddle",
         "material_slots": [
@@ -294,7 +294,7 @@
           "size": "medium"
         }
       ],
-      "description": "Bolted on a shoulder block: carries a front and a back shell arm, their loads going down the shoulder into the torso.",
+      "description": "Bolted on a shoulder block: carries the shoulder hinges of a front and a back shell arm, their loads going down through the shoulder into the torso.",
       "form": {
         "model": "bastion.saddle",
         "material_slots": [
@@ -401,7 +401,7 @@
           }
         ]
       },
-      "description": "The Bastion's heavier body: torso.",
+      "description": "The armoured torso and cockpit: crew hatch and viewport in the chest, side intakes, the reactor and its radiator on the back; the shoulders, neck and waist bolt to it.",
       "form": {
         "model": "bastion.torso",
         "material_slots": [
@@ -439,7 +439,7 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: head.",
+      "description": "The sensor head: visor, main optics, side sensor pods and the antenna, on a turning neck bearing.",
       "form": {
         "model": "bastion.head",
         "material_slots": [
@@ -505,7 +505,7 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: waist.",
+      "description": "The pelvis: a slewing ring under the torso, the frame carrying both hip joints, and armour skirts front and back.",
       "form": {
         "model": "bastion.waist",
         "material_slots": [
@@ -571,7 +571,7 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: shoulder.",
+      "description": "A shoulder block: turns the arm on the torso and carries a saddle for two shell arms on top.",
       "form": {
         "model": "bastion.shoulder",
         "material_slots": [
@@ -623,7 +623,7 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: limb.",
+      "description": "An arm segment (upper arm or forearm): structural spine, armour shells and the rams that work the joint below.",
       "form": {
         "model": "bastion.limb",
         "material_slots": [
@@ -675,7 +675,7 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: leg.",
+      "description": "A leg segment (thigh or shin): structural spine, armour with a knee guard and the twin rams that work the joint below.",
       "form": {
         "model": "bastion.leg",
         "material_slots": [
@@ -717,9 +717,47 @@
           "size": "large"
         }
       ],
-      "description": "The Bastion's heavier body: foot.",
+      "description": "A foot: treaded sole, split toe plates, heel spur and shock struts; carries the frame's weight.",
       "form": {
         "model": "bastion.foot",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.hand",
+      "name": "Bastion Hand",
+      "kind": "structure",
+      "mass_kg": 1400,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.3,
+          1.8,
+          1.5
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "wrist",
+          "position_m": [
+            0,
+            0.9,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A heavy three-fingered hand with an opposed thumb, its finger actuators inside the palm: the frame's own hands for work inside the cocoon.",
+      "form": {
+        "model": "bastion.hand",
         "material_slots": [
           "armor"
         ],
@@ -783,7 +821,7 @@
           "size": "medium"
         }
       ],
-      "description": "The second segment of a shell arm: the shell is fixed to it, and the folding leg starts from it.",
+      "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
         "model": "bastion.carrier",
         "material_slots": [
@@ -849,7 +887,7 @@
           "size": "medium"
         }
       ],
-      "description": "The second segment of a shell arm: the shell is fixed to it, and the folding leg starts from it.",
+      "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
         "model": "bastion.carrier",
         "material_slots": [
@@ -1099,7 +1137,7 @@
           "size": "medium"
         }
       ],
-      "description": "The second segment of a shell arm: the shell is fixed to it, and the folding leg starts from it.",
+      "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
         "model": "bastion.carrier",
         "material_slots": [
@@ -1165,7 +1203,7 @@
           "size": "medium"
         }
       ],
-      "description": "The second segment of a shell arm: the shell is fixed to it, and the folding leg starts from it.",
+      "description": "The bracket a quarter is bolted to, on the shell arm's wrist: it carries the quarter and the folding leg's deploy hinge, and feeds both.",
       "form": {
         "model": "bastion.carrier",
         "material_slots": [
@@ -2106,12 +2144,12 @@
       "id": "bastion.link_front",
       "name": "Bastion Upper Arm (front)",
       "kind": "structure",
-      "mass_kg": 3500,
+      "mass_kg": 4140,
       "shape": {
         "type": "box",
         "size_m": [
           1.2,
-          2.7494,
+          3.2494,
           1.2
         ]
       },
@@ -2120,7 +2158,7 @@
           "id": "top",
           "position_m": [
             0,
-            1.3747,
+            1.6247,
             0
           ],
           "direction": [
@@ -2134,7 +2172,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -1.3747,
+            -1.6247,
             0
           ],
           "direction": [
@@ -2342,12 +2380,12 @@
       "id": "bastion.link_back",
       "name": "Bastion Upper Arm (back)",
       "kind": "structure",
-      "mass_kg": 3500,
+      "mass_kg": 4140,
       "shape": {
         "type": "box",
         "size_m": [
           1.2,
-          2.7517,
+          3.2517,
           1.2
         ]
       },
@@ -2356,7 +2394,7 @@
           "id": "top",
           "position_m": [
             0,
-            1.37585,
+            1.62585,
             0
           ],
           "direction": [
@@ -2370,7 +2408,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -1.37585,
+            -1.62585,
             0
           ],
           "direction": [

@@ -130,7 +130,8 @@ mod tests {
         assert!(models.len() >= 15, "{} models", models.len());
         let torso = &models["frame.torso"];
         assert!(torso.iter().any(|(m, _)| *m == PartMaterial::Trim));
-        // Sized to the part: the torso is 5 x 5 x 3.5 m.
+        // Sized to the part: the torso is 5 x 5 x 3.5 m (details such as the hatch, ladder and
+        // radiator fins stand out from it by up to a tenth).
         for (_, mesh) in torso {
             let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) =
                 mesh.attribute(Mesh::ATTRIBUTE_POSITION)
@@ -139,8 +140,8 @@ mod tests {
             };
             for p in points {
                 assert!(
-                    p[0].abs() <= 2.51 && p[1].abs() <= 2.6 && p[2].abs() <= 1.8,
-                    "{p:?} inside the 5 x 5 x 3.5 m part"
+                    p[0].abs() <= 2.75 && p[1].abs() <= 2.75 && p[2].abs() <= 1.93,
+                    "{p:?} near the 5 x 5 x 3.5 m part"
                 );
             }
         }
