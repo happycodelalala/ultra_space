@@ -12,7 +12,8 @@ use sim_core::objects::Object;
 use sim_core::{ObjectId, ObjectState, Simulation};
 use sim_vehicle::walker::EYE_HEIGHT;
 use sim_vehicle::{
-    Cruise, FlightControl, FlightTelemetry, Vehicle, VehicleBody, Walker, WalkerControl,
+    ArcadeFlight, Cruise, FlightControl, FlightTelemetry, Vehicle, VehicleBody, Walker,
+    WalkerControl,
 };
 
 use crate::camera::{CameraBlend, CameraSet, CameraStage, SpaceCamera};
@@ -93,6 +94,7 @@ fn exit_or_board(
     ship: Option<Res<PlayerShip>>,
     on_foot: Option<Res<OnFoot>>,
     mut pilot: ResMut<PilotState>,
+    mut notice: ResMut<crate::hud::Notice>,
     mut render: ResMut<WalkerRenderState>,
     mut blend: ResMut<CameraBlend>,
     camera: Res<SpaceCamera>,
@@ -179,15 +181,39 @@ fn exit_or_board(
     };
     // Low (or touching the ground) and nearly still: a ship skidding along the ground counts as
     // touching it, but isn't safe to leave.
-    let settled = (telemetry.in_contact || telemetry.ground_altitude < EXIT_MAX_ALTITUDE)
-        && telemetry.relative_velocity.length() < EXIT_MAX_SPEED;
-    if !settled {
-        info!(
-            "can't leave the ship: land first ({:.0} m above ground, {:.1} m/s)",
-            telemetry.ground_altitude,
-            telemetry.relative_velocity.length()
-        );
+    let low = telemetry.in_contact || telemetry.ground_altitude < EXIT_MAX_ALTITUDE;
+    let speed = telemetry.relative_velocity.length();
+    let arcade = sim
+        .regions
+        .get(ship_loc.region)
+        .is_some_and(|r| r.world.get::<ArcadeFlight>(ship_loc.entity).is_some());
+    if !low || speed >= EXIT_MAX_SPEED {
+        let text = if !low {
+            format!(
+                "Can't leave the ship: land first ({:.0} m above the ground)",
+                telemetry.ground_altitude
+            )
+        } else if arcade {
+            format!("Can't leave the ship: slow down first ({speed:.0} m/s; X brakes)")
+        } else {
+            format!("Can't leave the ship: slow down first ({speed:.0} m/s)")
+        };
+        info!("{text}");
+        notice.show(text, now);
         return;
+    }
+    if arcade {
+        // Hovering low in arcade flight: back to normal flight, so the ship settles onto the
+        // ground once the pilot is out.
+        if let Some(region) = sim.regions.get_mut(ship_loc.region)
+            && let Ok(mut e) = region.world.get_entity_mut(ship_loc.entity)
+        {
+            e.remove::<ArcadeFlight>();
+            if let Some(mut control) = e.get_mut::<FlightControl>() {
+                control.desired_velocity = None;
+            }
+        }
+        info!("arcade flight off: stepping out");
     }
     let s = ship_state.state;
     let up = s.position.normalize();
