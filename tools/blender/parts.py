@@ -49,11 +49,10 @@ def extent(h, d):
          "bastion.elbow_front_left", "bastion.elbow_front_right", "bastion.elbow_back_left",
          "bastion.elbow_back_right")
 def hinge(m, h, part):
-    """A heavy hinge. A flange bolts to the parent; two clevis lugs, pocketed and gusseted,
-    come down to the pivot (the end node, where the joint turns); the child's knuckle turns
-    between them on a polished pin. On one side a rotary vane actuator, finned and bolted
-    shut, is fed by two hoses from a valve block under the flange; on the other an angle
-    encoder reports the joint's position."""
+    """A heavy hinge. A faceted mount plate on the parent; two blade cheeks come down past
+    the pivot (the end node, where the joint turns) to a spur; the child's knuckle, an
+    octagonal drum, turns between them, its energy gap glowing. Outside one cheek the sealed
+    rotary actuator drives it; outside the other a sensor cap reads its angle."""
     a = V(part["joint"]["axis"]).normalized()
     ns = nodes(part)
     pb, db = ns["base"]
@@ -69,58 +68,37 @@ def hinge(m, h, part):
     L = extent(h, a)
     R = max(0.14, min(0.85 * extent(h, w), 0.6))
     H = max((pb - pivot).dot(v), R * 0.6)
-    t = max(0.05, L * 0.24)
+    t = max(0.06, L * 0.22)
     xo = L - 0.02
-    # Flange, overhanging on the actuator side to carry the valve block.
-    over = R * 0.75
-    flange = m.box((2 * L + over, 0.09, 2 * R * 1.12), place=J @ frame((over / 2, H - 0.045, 0)),
-                   mat="armor2", bevel=0.015)
-    m.groove(flange, p(-L + 0.06, H, -R), p(-L + 0.06, H, R), v, width=0.015, depth=0.01)
+    # Mount plate: an elongated octagon, chamfered, under the parent.
+    k = R * 0.35
+    out = [(-xo + k, -R), (xo - k, -R), (xo, -R + k), (xo, R - k), (xo - k, R), (-xo + k, R),
+           (-xo, R - k), (-xo, -R + k)]
+    m.plate(out, 0.1, J @ frame((0, H - 0.1, 0), u=(1, 0, 0), w=(0, 1, 0)), "armor2", chamfer=0.04)
+    # Blade cheeks: down from the plate, round the pivot to a spur.
+    side = [(-R, H - 0.1), (R, H - 0.1), (R * 0.98, R * 0.1), (R * 0.55, -R * 0.82),
+            (-R * 0.25, -R * 1.18), (-R * 0.92, -R * 0.42)]
     for s in (-1, 1):
-        m.bolt_row(p(-L, H - 0.09, s * R * 0.98), p(L + over, H - 0.09, s * R * 0.98), -v,
-                   4, size=0.03)
-    # Clevis lugs with pockets; gussets on the encoder side.
+        x = s * (xo - t)
+        if s > 0:
+            pl = J @ frame((x, 0, 0), u=(0, 0, -1), v=(0, 1, 0))
+            pts = [(-z, y) for z, y in side]
+        else:
+            pl = J @ frame((x, 0, 0), u=(0, 0, 1), v=(0, 1, 0))
+            pts = side
+        cheek = m.plate(pts, t, pl, "armor", chamfer=min(0.05, t * 0.4))
+        m.slit(cheek, p(s * xo, H * 0.75, -R * 0.55), p(s * xo, R * 0.55, -R * 0.55), a * s,
+               0.025, 0.03)
+    # Knuckle and the energy gaps at the cheeks.
+    g = xo - t - 0.02
+    m.drum(p(-g, 0, 0), p(g, 0, 0), R * 0.82, "dark", 8, glow=True, hint=v)
     for s in (-1, 1):
-        x = s * (xo - t / 2)
-        lug = m.lug(p(x, H - 0.09, 0), p(x, 0, 0), 2 * R * 0.96, t, a, "armor")
-        m.cut_box(lug, (t * 0.5, H * 0.4, R * 0.95), place=J @ frame((s * xo, H * 0.5, 0)))
-    for z in (-R * 0.55, R * 0.55):
-        m.extrude([(0, 0), (0.14, 0), (0, -0.2)], 0.04,
-                  J @ frame((-xo, H - 0.09, z), u=(-1, 0, 0), v=(0, 1, 0)), "armor", 0.008, 1)
-    # Knuckle (grooved) and pin.
-    g = xo - t - 0.025
-    m.lathe([(0, -g), (R * 0.8, -g), (R * 0.9, -g + 0.03), (R * 0.9, -0.06), (R * 0.84, -0.045),
-             (R * 0.84, 0.045), (R * 0.9, 0.06), (R * 0.9, g - 0.03), (R * 0.8, g), (0, g)],
-            J @ frame((0, 0, 0), u=v, v=(1, 0, 0)), "dark", 32, bevel=0.008)
-    m.cyl(p(-L - 0.04, 0, 0), p(L + 0.02, 0, 0), R * 0.26, "chrome", 20)
-    m.cyl(p(-L - 0.02, 0, 0), p(-L - 0.06, 0, 0), R * 0.42, "metal", 24, bevel=0.008)
-    m.bolts(p(-L - 0.06, 0, 0), -a, R * 0.32, 6, size=0.022, up=v)
-    # Vane actuator.
-    x0 = L
-    ra = R * 0.82
-    m.lathe([(0, x0), (ra, x0), (ra, x0 + 0.03), (ra * 1.08, x0 + 0.04), (ra * 1.08, x0 + 0.07),
-             (ra, x0 + 0.08), (ra, x0 + 0.1), (ra * 1.08, x0 + 0.11), (ra * 1.08, x0 + 0.14),
-             (ra, x0 + 0.15), (ra, x0 + 0.2), (ra * 0.92, x0 + 0.22), (0, x0 + 0.22)],
-            J @ frame((0, 0, 0), u=v, v=(1, 0, 0)), "dark", 32, bevel=0.006)
-    m.cyl(p(x0 + 0.22, 0, 0), p(x0 + 0.25, 0, 0), ra * 0.9, "metal", 32, bevel=0.006)
-    m.bolts(p(x0 + 0.25, 0, 0), a, ra * 0.75, 10, size=0.022, up=v)
-    m.cyl(p(x0 + 0.25, 0, 0), p(x0 + 0.29, 0, 0), ra * 0.3, "chrome", 16)
-    # Valve block and hoses.
-    vb = (L + over * 0.5, H - 0.09 - 0.09, 0)
-    m.box((over * 0.7, 0.16, R * 0.9), at=p(*vb), place=J @ frame(vb), mat="metal", bevel=0.01)
-    for s in (-1, 1):
-        port = p(x0 + 0.11, ra * 0.98, s * ra * 0.35)
-        m.cyl(port - v * 0.02, port + v * 0.05, 0.03, "metal", 6)
-        start = p(vb[0], vb[1] - 0.08, s * R * 0.3)
-        m.cyl(start, start - v * 0.04, 0.03, "metal", 6)
-        m.hose([start - v * 0.04, (start + port) / 2 - v * 0.04 + w * s * 0.08, port + v * 0.05],
-               0.025)
-        top = p(vb[0] + over * 0.25, vb[1], s * R * 0.42)
-        m.hose([top, top + v * 0.08 + a * 0.05, p(L + over * 0.9, H + 0.05, s * R * 0.5)], 0.025)
-    # Encoder and its cable.
-    m.cyl(p(-L - 0.06, R * 0.55, 0), p(-L - 0.13, R * 0.55, 0), R * 0.16, "dark", 16, bevel=0.005)
-    m.hose([p(-L - 0.13, R * 0.55, 0), p(-L - 0.16, R * 0.8, 0.05), p(-L - 0.05, H - 0.1, R * 0.3)],
-           0.012)
+        m.ring_glow(p(s * (g + 0.01), 0, 0), a, R * 0.45, R * 0.62, 0.02)
+    # Actuator and sensor cap.
+    m.drum(p(L, 0, 0), p(L + 0.26, 0, 0), R * 0.78, "metal", 8, glow=True, hint=v)
+    m.cyl(p(L + 0.26, 0, 0), p(L + 0.31, 0, 0), R * 0.42, "dark", 6, bevel=0.01, segments=1)
+    m.cyl(p(-L, 0, 0), p(-L - 0.07, 0, 0), R * 0.5, "dark", 8, bevel=0.01, segments=1)
+    m.cyl(p(-L - 0.07, 0, 0), p(-L - 0.09, 0, 0), R * 0.18, "light", 8)
 
 
 # --- Arm segments -----------------------------------------------------------------------------
@@ -129,70 +107,63 @@ def hinge(m, h, part):
 @builder("bastion.link_front", "bastion.link_back", "bastion.forearm_front",
          "bastion.forearm_back", "bastion.drop_front", "bastion.drop_back")
 def beam(m, h, part):
-    """A welded box girder: two side webs with lightening holes, cover plates bolted top
-    and bottom, diaphragms inside, turned pin bosses at both ends. Its ram rides on welded
-    brackets along the back (it works the next joint through a crank); a pair of hydraulic
-    lines run down the front in clamps."""
+    """An arm segment: a hexagonal spine of dark frame metal between octagonal pin bosses,
+    sheathed in armour. A keeled fairing with chevron ends covers the front, graphite side
+    plates carry glowing cooling seams, and along the back a sealed actuator (it works the
+    next joint through a crank) runs between two blade fins."""
     hx, hy, hz = h
     R = min(hz * 0.62, hy * 0.25)
     end = hy - R
-    tw = max(0.035, hx * 0.1)
-    xw = hx * 0.8 - tw / 2
-    # Webs with lightening holes.
-    span = 2 * end
-    holes = max(1, int(span / (2 * hz * 1.25)))
-    for s in (-1, 1):
-        web = m.box((tw, span + R, 2 * hz * 0.86), at=(s * xw, 0, 0), mat="armor", bevel=0.012)
-        for k in range(holes):
-            y = -end + span * (k + 0.5) / holes
-            m.hole(web, (s * (xw - tw), y, 0), (s * (xw + tw), y, 0), hz * 0.48, 32)
-    # Cover plates, bolted.
-    tf = max(0.03, hz * 0.07)
-    for s in (-1, 1):
-        z = s * (hz * 0.86 + tf / 2)
-        plate = m.box((2 * hx * 0.86, span + R * 0.6, tf), at=(0, 0, z), mat="armor2", bevel=0.01)
-        for y in (-end * 0.5, end * 0.5):
-            m.groove(plate, (-hx * 0.86, y, z + s * tf / 2), (hx * 0.86, y, z + s * tf / 2),
-                     (0, 0, s), width=0.012, depth=0.008)
-        for sx in (-1, 1):
-            m.bolt_row((sx * hx * 0.7, -end, z + s * tf / 2), (sx * hx * 0.7, end, z + s * tf / 2),
-                       (0, 0, s), max(3, int(span / 0.45)), size=0.022)
-    # Diaphragms, seen through the holes.
-    for k in range(holes + 1):
-        y = -end + span * k / holes
-        m.box((2 * (xw - tw / 2), 0.03, 2 * hz * 0.84), at=(0, y, 0), mat="dark", bevel=0)
-    # Pin bosses at both ends, with the bore and pin.
+    # Spine.
+    cx, cz = hx * 0.55, hz * 0.6
+    sec = [(cx, 0), (cx * 0.6, cz), (-cx * 0.6, cz), (-cx, 0), (-cx * 0.6, -cz), (cx * 0.6, -cz)]
+    m.hull([(x, y, z) for x, z in sec for y in (-end, end)], "dark", bevel=0.01)
+    # Pin bosses.
     for s in (-1, 1):
         y = s * end
-        m.lathe([(R * 0.45, -hx * 0.98), (R, -hx * 0.98), (R, -hx * 0.9), (R * 0.94, -hx * 0.86),
-                 (R * 0.94, hx * 0.86), (R, hx * 0.9), (R, hx * 0.98), (R * 0.45, hx * 0.98)],
-                frame((0, y, 0), u=(0, 1, 0), v=(1, 0, 0)), "metal", 40, bevel=0.006)
-        m.cyl((-hx * 1.02, y, 0), (hx * 1.02, y, 0), R * 0.45, "chrome", 24)
+        m.drum((-hx * 0.98, y, 0), (hx * 0.98, y, 0), R, "dark", 8, glow=False, hint=(0, 0, 1))
         for sx in (-1, 1):
-            m.bolts((sx * hx * 1.02, y, 0), (sx, 0, 0), R * 0.3, 6, size=0.02)
-    # Ram on brackets along the back (+Z).
-    rr = max(0.06, hx * 0.17)
-    zr = hz * 0.86 + tf + rr * 1.3
-    ya, yb = end * 0.82, -end * 0.78
-    m.ram((0, ya, zr), (0, yb, zr), rr, extension=0.45, hint=(1, 0, 0))
-    for y in (ya, yb):
-        for sx in (-1, 1):
-            m.lug((sx * rr * 0.9, y, hz * 0.86 + tf), (sx * rr * 0.9, y, zr), rr * 1.6, 0.04,
-                  (1, 0, 0), "armor2")
-    # Hydraulic lines in clamps down the front (-Z).
-    zf = -(hz * 0.86 + tf)
-    for sx in (-0.35, 0.35):
-        x = sx * hx
-        m.hose([(x, end, zf - 0.04), (x, 0, zf - 0.045), (x, -end, zf - 0.04)], 0.028)
-    for k in range(max(2, int(span / 0.7))):
-        y = -end * 0.9 + 1.8 * end * k / max(1, int(span / 0.7) - 1)
-        m.box((hx * 1.1, 0.05, 0.03), at=(0, y, zf - 0.075), mat="metal", bevel=0.006)
-        m.bolt((0, y, zf - 0.09), (0, 0, -1), 0.018)
-    # Data plate and hazard bands near the ends.
-    m.box((0.012, 0.18, 0.28), at=(hx * 0.8 + 0.006, end * 0.35, 0), mat="metal", bevel=0.003)
-    for s in (-1, 1):
-        m.box((2 * hx * 0.9, 0.06, 0.012), at=(0, s * end * 0.62, hz * 0.86 + tf + 0.006),
-              mat="trim", bevel=0.003)
+            m.ring_glow((sx * hx * 0.985, y, 0), X, R * 0.42, R * 0.6, 0.02)
+            m.cyl((sx * hx * 0.98, y, 0), (sx * hx * 1.02, y, 0), R * 0.38, "metal", 6)
+    # Front fairing: two overlapping chevron-ended plates (the upper one over the lower),
+    # a keel down the upper one, glowing seams in the lower.
+    tip = end - R * 1.05
+    shoulder = end - R * 1.7
+    zf = -hz * 0.62
+    split = shoulder * 0.1
+    low = [(-hx * 0.8, -shoulder), (0, -tip), (hx * 0.8, -shoulder), (hx * 0.8, split + 0.2),
+           (0, split + 0.35), (-hx * 0.8, split + 0.2)]
+    lower = m.plate(low, 0.1, frame((0, 0, zf), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.04)
+    up = [(-hx * 0.88, split - 0.05), (0, split - 0.3), (hx * 0.88, split - 0.05), (hx * 0.88, shoulder),
+          (0, tip), (-hx * 0.88, shoulder)]
+    m.plate(up, 0.1, frame((0, 0, zf - 0.08), u=(-1, 0, 0), w=(0, 0, -1)), "armor", chamfer=0.04)
+    m.hull([(sx * 0.06, y, zf - 0.18) for sx in (-1, 1) for y in (split + 0.1, shoulder * 0.9)]
+           + [(0, y, zf - 0.32) for y in (split + 0.25, shoulder * 0.75)], "armor2", bevel=0.004)
+    for sx in (-1, 1):
+        m.slit(lower, (sx * hx * 0.42, -shoulder * 0.8, zf - 0.1), (sx * hx * 0.42, split - 0.1, zf - 0.1),
+               -Z, 0.025, 0.035)
+    # Side plates with cooling seams.
+    for sx in (-1, 1):
+        x = sx * hx * 0.6
+        out = [(-hz * 0.55, -shoulder * 0.95), (hz * 0.45, -shoulder * 0.8), (hz * 0.45, shoulder * 0.8),
+               (-hz * 0.55, shoulder * 0.95)]
+        pl = frame((x, 0, 0), u=(0, 0, -sx), v=(0, 1, 0))
+        side = m.plate([(-z, y) for z, y in out] if sx > 0 else out, hx * 0.28, pl, "armor2",
+                       chamfer=0.03)
+        xs = x + sx * hx * 0.28
+        for k in range(3):
+            y0 = -shoulder * 0.7 + k * shoulder * 0.55
+            m.slit(side, (xs, y0, -hz * 0.3), (xs, y0 + shoulder * 0.35, hz * 0.2), X * sx, 0.02, 0.03)
+    # Actuator between blade fins on the back (+Z).
+    rr = max(0.06, hx * 0.15)
+    zr = cz + rr * 1.2
+    ya, yb = end * 0.8, -end * 0.78
+    m.piston((0, ya, zr), (0, yb, zr), rr, extension=0.45, hint=(1, 0, 0))
+    for sx in (-1, 1):
+        x = sx * rr * 1.9
+        m.hull([(x + dx, y, cz) for dx in (-0.03, 0.03) for y in (-shoulder, shoulder)]
+               + [(x, y, zr + rr * 0.9) for y in (-shoulder * 0.85, shoulder * 0.85)], "armor2",
+               bevel=0.004)
 
 
 # The other builders register themselves on import.

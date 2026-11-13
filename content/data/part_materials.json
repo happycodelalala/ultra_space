@@ -3,53 +3,53 @@
   "materials": {
     "armor": {
       "color": [
-        0.52,
-        0.54,
-        0.55
+        0.78,
+        0.77,
+        0.73
       ],
-      "metallic": 0.25,
-      "roughness": 0.55,
-      "about": "painted armour plate"
+      "metallic": 0.05,
+      "roughness": 0.35,
+      "about": "armour plates: pale ceramic composite"
     },
     "armor2": {
       "color": [
-        0.3,
-        0.32,
-        0.35
+        0.2,
+        0.21,
+        0.22
       ],
-      "metallic": 0.35,
-      "roughness": 0.5,
-      "about": "second paint: frames, inner plates"
+      "metallic": 0.4,
+      "roughness": 0.38,
+      "about": "second plates: graphite composite, keels, mounts"
     },
     "metal": {
       "color": [
-        0.56,
-        0.56,
-        0.57
+        0.3,
+        0.33,
+        0.32
       ],
       "metallic": 1.0,
-      "roughness": 0.35,
-      "about": "bare machined steel: bolts, flanges, brackets"
+      "roughness": 0.28,
+      "about": "actuator sleeves and machined frame metal"
     },
     "chrome": {
       "color": [
-        0.9,
-        0.9,
-        0.92
+        0.8,
+        0.84,
+        0.82
       ],
       "metallic": 1.0,
-      "roughness": 0.08,
-      "about": "polished ram rods and pins"
+      "roughness": 0.1,
+      "about": "polished actuator rods and pins"
     },
     "dark": {
       "color": [
-        0.17,
-        0.17,
-        0.18
+        0.11,
+        0.12,
+        0.12
       ],
-      "metallic": 0.7,
-      "roughness": 0.45,
-      "about": "gunmetal housings and structure"
+      "metallic": 0.85,
+      "roughness": 0.32,
+      "about": "skeletal frame: dark living metal"
     },
     "rubber": {
       "color": [
@@ -59,43 +59,43 @@
       ],
       "metallic": 0.0,
       "roughness": 0.85,
-      "about": "hoses, seals, boots, treads"
+      "about": "grip pads and seals"
     },
     "trim": {
       "color": [
-        0.86,
-        0.58,
-        0.12
+        0.1,
+        0.3,
+        0.27
       ],
-      "metallic": 0.1,
-      "roughness": 0.5,
-      "about": "accent and hazard paint"
+      "metallic": 0.6,
+      "roughness": 0.35,
+      "about": "anodised accent"
     },
     "glass": {
       "color": [
-        0.05,
-        0.12,
-        0.18
+        0.02,
+        0.07,
+        0.05
       ],
       "metallic": 0.0,
-      "roughness": 0.05,
-      "about": "viewports and lenses"
+      "roughness": 0.04,
+      "about": "sensor lenses and viewports"
     },
     "light": {
       "color": [
+        0.35,
         1.0,
-        0.78,
-        0.45
+        0.68
       ],
       "metallic": 0.0,
       "roughness": 0.5,
       "emissive": [
+        0.35,
         1.0,
-        0.78,
-        0.45
+        0.68
       ],
-      "emissive_strength": 4.0,
-      "about": "lamps and status lights"
+      "emissive_strength": 6.0,
+      "about": "energy seams, joint rings, lamps"
     }
   }
 }

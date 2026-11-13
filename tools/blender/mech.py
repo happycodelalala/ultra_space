@@ -2,11 +2,13 @@
 
 Models are built in part axes (metres, Y up, as the game and the glTF file use them; Blender's
 own Z-up convention plays no part). Every object carries one material, named by its slot in
-`content/data/part_materials.json`. Edges are bevelled and normals hardened, cuts (recesses,
-holes, panel grooves) are booleans, turned parts are lathed profiles, hoses are curves. A
-finished model is frozen, its ambient occlusion baked into vertex colours (Cycles, with every
-piece of the part shadowing the others) and written as a single-mesh glTF binary, one
-primitive per material: the layout `game_bevy/src/part_models.rs` and the design viewer read.
+`content/data/part_materials.json`. The visual language (design/vehicle-builder.md §7.3): a
+dark skeletal frame under sharp, faceted armour plates (hulls, chamfered plates), sealed
+octagonal actuators, and energy that glows in seams, joint gaps and ribbed conduits; no
+bolts, hoses or stencils. Cuts (grooves, slits) are booleans. A finished model is frozen,
+its ambient occlusion baked into vertex colours (Cycles, with every piece of the part
+shadowing the others) and written as a single-mesh glTF binary, one primitive per material:
+the layout `game_bevy/src/part_models.rs` and the design viewer read.
 """
 
 import json
@@ -173,25 +175,148 @@ class Model:
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         return self._object(bm, mat, place, bevel, segments, cutter=cutter)
 
-    def hose(self, points, r, mat="rubber", resolution=10):
-        """A hose through `points` (a smooth curve)."""
-        cu = bpy.data.curves.new(self.name, "CURVE")
-        cu.dimensions = "3D"
-        cu.bevel_depth = r
-        cu.bevel_resolution = 3
-        cu.use_fill_caps = True
-        sp = cu.splines.new("NURBS")
-        sp.points.add(len(points) - 1)
-        for p, q in zip(sp.points, points):
-            p.co = (*vec(q), 1.0)
-        sp.use_endpoint_u = True
-        sp.order_u = min(4, len(points))
-        sp.resolution_u = resolution
-        ob = bpy.data.objects.new(self.name, cu)
-        self.pieces.objects.link(ob)
-        cu.materials.append(material(mat))
-        ob["bevel"] = (0.0, 1, 30.0)
-        return ob
+    def hull(self, points, mat="armor", place=None, bevel=0.008, segments=1, angle=30.0,
+             cutter=False):
+        """The convex hull of `points` (in the placement's axes): faceted solids, wedges and
+        blades. Coplanar triangles are merged into flat facets."""
+        bm = bmesh.new()
+        for p in points:
+            bm.verts.new(vec(p))
+        res = bmesh.ops.convex_hull(bm, input=bm.verts[:])
+        drop = list({g for g in res["geom_interior"] + res["geom_unused"] if isinstance(g, bmesh.types.BMVert)})
+        if drop:
+            bmesh.ops.delete(bm, geom=drop, context="VERTS")
+        bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(0.5), verts=bm.verts[:], edges=bm.edges[:])
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        return self._object(bm, mat, place if place is not None else frame(), bevel, segments, angle,
+                            cutter=cutter)
+
+    def plate(self, outline, thickness, place, mat="armor", chamfer=None, bevel=0.006,
+              cutter=False):
+        """An armour plate: a flat outline ((x, y) in the placement's plane) given
+        `thickness` along its +Z from z = 0, the outer face chamfered all round."""
+        pts = list(outline)
+        area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+        if area < 0:
+            pts.reverse()
+        ch = min(thickness * 0.6, 0.08) if chamfer is None else chamfer
+        bm = bmesh.new()
+        face = bm.faces.new([bm.verts.new((x, y, 0.0)) for x, y in pts])
+        ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+        moved = [e for e in ext["geom"] if isinstance(e, bmesh.types.BMVert)]
+        top = [e for e in ext["geom"] if isinstance(e, bmesh.types.BMFace)]
+        bmesh.ops.translate(bm, verts=moved, vec=(0, 0, thickness - ch))
+        bm.normal_update()
+        if ch > 0:
+            bmesh.ops.inset_region(bm, faces=top, thickness=ch, depth=ch)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        return self._object(bm, mat, place, bevel, 1, 30.0, cutter=cutter)
+
+    def facet(self, corners, thickness, inset=0.06, outward=(0, 0, 0), mat="armor",
+              chamfer=None, bevel=0.005):
+        """An armour plate lying on a face of a faceted body: `corners` (roughly planar, in
+        order) shrunk by `inset` (a fraction) toward their centre, raised `thickness` away
+        from the `outward` point and chamfered. Returns the plate, its outer centre and
+        normal."""
+        pts = [vec(p) for p in corners]
+        c = sum(pts, V((0, 0, 0))) / len(pts)
+        n = V((0, 0, 0))
+        for p, q in zip(pts, pts[1:] + pts[:1]):
+            n += (p - c).cross(q - c)
+        n.normalize()
+        if n.dot(c - vec(outward)) < 0:
+            n = -n
+        pts = [p - n * (p - c).dot(n) for p in pts]
+        size = sum(((p - c).length for p in pts)) / len(pts)
+        ch = min(thickness * 0.6, 0.06) if chamfer is None else chamfer
+        f = 1 - ch / max(size, 1e-6)
+        base = [c + (p - c) * (1 - inset) for p in pts]
+        top = [c + (p - c) * (1 - inset) * f + n * thickness for p in pts]
+        mid = [b + n * (thickness - ch) for b in base]
+        ob = self.hull(base + mid + top, mat, bevel=bevel)
+        return ob, c + n * thickness, n
+
+    def ring_glow(self, centre, axis, r_in, r_out, width, sides=8):
+        """An emissive ring (a joint's energy gap) about `axis` through `centre`."""
+        c = vec(centre)
+        place = along(c, c + vec(axis))
+        return self.lathe([(r_in, -width / 2), (r_out, -width / 2), (r_out, width / 2),
+                           (r_in, width / 2)], place, "light", sides, closed=True)
+
+    def drum(self, a, b, r, mat="dark", sides=8, glow=True, hint=None):
+        """An enclosed rotary actuator from `a` to `b`: a faceted housing with chamfered
+        ends, split round its middle by a glowing energy gap."""
+        a, b = vec(a), vec(b)
+        place = along(a, b, hint)
+        length = (b - a).length
+        ch = min(r * 0.2, length * 0.18)
+        g = min(r * 0.18, length * 0.12) if glow else 0.0
+        half = (length - g) / 2
+        self.lathe([(0, 0), (r - ch, 0), (r, ch), (r, half), (0, half)], place, mat, sides,
+                   angle=20.0)
+        self.lathe([(0, length - half), (r, length - half), (r, length - ch), (r - ch, length),
+                    (0, length)], place, mat, sides, angle=20.0)
+        if glow:
+            self.lathe([(0, half - 0.001), (r * 0.9, half - 0.001), (r * 0.9, length - half + 0.001),
+                        (0, length - half + 0.001)], place, "light", sides)
+        return place
+
+    def piston(self, a, b, r, extension=0.4, hint=None):
+        """A sealed linear actuator from `a` (sleeve) to `b` (rod): a hexagonal sleeve with
+        chamfered ends, a glowing gland, the polished rod, faceted eyes on their pins."""
+        a, b = vec(a), vec(b)
+        place = along(a, b, hint)
+        length = (b - a).length
+        eye = r * 1.1
+        y0 = eye * 0.8
+        y1 = y0 + (length - 2 * eye) * (1 - extension * 0.5)
+        self.lathe([(0, y0), (r * 0.6, y0), (r, y0 + r * 0.6), (r, y1 - r * 0.5), (r * 0.72, y1),
+                    (0, y1)], place, "metal", 6, angle=20.0)
+        self.lathe([(r * 0.42, y1), (r * 0.66, y1), (r * 0.66, y1 + r * 0.25), (r * 0.42, y1 + r * 0.25)],
+                   place, "light", 6, closed=True)
+        self.cyl(place @ V((0, y1, 0)), place @ V((0, length - eye * 0.7, 0)), r * 0.38, "chrome", 12)
+        u = (place.to_3x3() @ X).normalized()
+        for y in (0.0, length):
+            c = place @ V((0, y, 0))
+            self.cyl(c - u * eye * 0.5, c + u * eye * 0.5, eye * 0.75, "dark", 6, bevel=eye * 0.08,
+                     segments=1)
+        return place
+
+    def conduit(self, points, r, spacing=None):
+        """A ribbed power conduit through `points`: a glowing core sheathed in dark rings."""
+        pts = [vec(p) for p in points]
+        spacing = spacing or r * 1.7
+        for p, q in zip(pts, pts[1:]):
+            d = q - p
+            n = max(1, int(d.length / spacing))
+            self.cyl(p, q, r * 0.42, "light", 6)
+            for k in range(n):
+                c = p + d * ((k + 0.5) / n)
+                self.cyl(c - d.normalized() * r * 0.32, c + d.normalized() * r * 0.32, r, "dark", 6,
+                         bevel=r * 0.15, segments=1)
+
+    def slit(self, target, a, b, normal, width=0.03, depth=0.04):
+        """A glowing seam: a groove from `a` to `b` with an emissive strip down in it."""
+        a, b, n = vec(a), vec(b), vec(normal).normalized()
+        d = b - a
+        self.groove(target, a, b, n, width, depth)
+        self.box((d.length - width * 0.5, width * 0.55, depth * 0.5),
+                 place=frame((a + b) / 2 - n * depth * 0.7, u=d, w=n), mat="light", bevel=0)
+
+    def sensor(self, centre, normal, up, count=3, r=0.05, mat="armor2"):
+        """A sensor cluster: lenses in a row on a faceted mount, each with a glowing iris."""
+        c, n = vec(centre), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        w = r * 2.6 * count
+        self.hull([c + a * sx * w / 2 + u * sy * r * 1.6 + n * dz
+                   for sx in (-1, 1) for sy in (-1, 1) for dz in (0, r * 0.6)]
+                  + [c + a * sx * (w / 2 + r) + n * r * 0.3 for sx in (-1, 1)], mat, bevel=0.004)
+        for k in range(count):
+            p = c + a * ((k - (count - 1) / 2) * r * 2.6) + n * r * 0.6
+            self.cyl(p - n * 0.01, p + n * r * 0.4, r, "glass", 8)
+            self.cyl(p + n * r * 0.4, p + n * r * 0.45, r * 0.35, "light", 8)
 
     # Cuts -------------------------------------------------------------------------------
 
@@ -205,9 +330,6 @@ class Model:
     def cut_box(self, target, size, at=(0, 0, 0), place=None):
         return self.cut(target, self.box(size, at, place=place, bevel=0, cutter=True))
 
-    def hole(self, target, a, b, r, sides=24):
-        return self.cut(target, self.cyl(a, b, r, sides=sides, cutter=True))
-
     def groove(self, target, a, b, normal, width=0.025, depth=0.025):
         """A panel line from `a` to `b` on a face with outward `normal`."""
         a, b, n = vec(a), vec(b), vec(normal).normalized()
@@ -216,136 +338,6 @@ class Model:
         return self.cut_box(target, (d.length, width, depth * 2), place=place)
 
     # Details ----------------------------------------------------------------------------
-
-    def bolts(self, centre, normal, radius, count, size=0.035, mat="metal", phase=0.0,
-              up=None):
-        """A ring of hex bolt heads with washers on a face (`normal` out of it)."""
-        c, n = vec(centre), vec(normal).normalized()
-        u = (vec(up) if up is not None else (Y if abs(n.y) < 0.9 else X))
-        u = (u - n * u.dot(n)).normalized()
-        w = n.cross(u)
-        for k in range(count):
-            t = 2 * math.pi * (k + phase) / count
-            p = c + (u * math.cos(t) + w * math.sin(t)) * radius
-            self.bolt(p, n, size, mat)
-
-    def bolt(self, p, normal, size=0.035, mat="metal"):
-        p, n = vec(p), vec(normal).normalized()
-        self.cyl(p, p + n * size * 0.25, size * 1.45, mat, sides=12)
-        self.cyl(p + n * size * 0.25, p + n * size * 0.95, size, mat, sides=6, bevel=size * 0.12,
-                 segments=1)
-
-    def bolt_row(self, a, b, normal, count, size=0.035, mat="metal"):
-        a, b = vec(a), vec(b)
-        for k in range(count):
-            self.bolt(a.lerp(b, (k + 0.5) / count), normal, size, mat)
-
-    def ram(self, a, b, r, extension=0.5, hint=None, ports=True):
-        """A double-acting hydraulic ram from `a` (barrel eye) to `b` (rod eye): a turned
-        barrel with its end cap and hose ports, the gland nut, the polished rod and a forged
-        eye with a pin at each end."""
-        a, b = vec(a), vec(b)
-        d = (b - a)
-        length = d.length
-        place = along(a, b, hint)
-        eye = r * 1.05
-        barrel = (length - 2 * eye) * (1 - extension * 0.5)
-        y0, y1 = eye * 0.9, eye * 0.9 + barrel
-        self.lathe([(0, y0 - 0.01), (r * 0.85, y0 - 0.01), (r * 1.0, y0 + r * 0.25),
-                    (r * 1.0, y0 + r * 0.6), (r * 0.9, y0 + r * 0.7), (r * 0.9, y1 - r * 0.7),
-                    (r * 1.0, y1 - r * 0.6), (r * 1.0, y1), (r * 0.62, y1 + r * 0.25),
-                    (r * 0.55, y1 + r * 0.45), (0, y1 + r * 0.45)], place, "dark", 24,
-                   bevel=r * 0.04)
-        self.lathe([(0, y1 + r * 0.2), (r * 0.66, y1 + r * 0.2), (r * 0.66, y1 + r * 0.55),
-                    (0, y1 + r * 0.55)], place, "metal", 8)
-        rod = r * 0.45
-        self.cyl(place @ V((0, y1, 0)), place @ V((0, length - eye * 0.9, 0)), rod, "chrome", 16)
-        u = (place.to_3x3() @ X).normalized()
-        for y, mat in ((0.0, "dark"), (length, "metal")):
-            c = place @ V((0, y, 0))
-            self.cyl(c - u * eye * 0.55, c + u * eye * 0.55, eye, mat, 16, bevel=eye * 0.12)
-            self.cyl(c - u * eye * 0.75, c + u * eye * 0.75, eye * 0.38, "chrome", 12)
-        if ports:
-            w = (place.to_3x3() @ Z).normalized()
-            for y in (y0 + r * 0.45, y1 - r * 0.45):
-                c = place @ V((0, y, 0))
-                self.cyl(c + w * r * 0.7, c + w * r * 1.3, r * 0.22, "metal", 6)
-        return place
-
-    def detail(self, target, centre, normal, up, width, height, seed=0, hatch=True, grille=True):
-        """Surface detail on a flat face of `target` (centre on the face, `normal` out of it,
-        `up` along its height): panel lines splitting it, a recessed access hatch with a bolted
-        cover, a slotted grille, a rivet row and a small data plate. Deterministic per
-        `seed`."""
-        import random
-        rnd = random.Random(seed)
-        c, n = vec(centre), vec(normal).normalized()
-        u = vec(up)
-        u = (u - n * u.dot(n)).normalized()
-        a = u.cross(n)
-        if min(width, height) < 0.25:
-            return
-        xs = rnd.uniform(-0.22, 0.22) * width
-        ys = rnd.uniform(-0.18, 0.18) * height
-        g = min(0.02, 0.012 + 0.004 * min(width, height))
-        self.groove(target, c + a * xs - u * height * 0.5, c + a * xs + u * height * 0.5, n, g, g)
-        self.groove(target, c + u * ys - a * width * 0.5, c + u * ys + a * width * 0.5, n, g, g)
-        quads = [(sx, sy) for sx in (-1, 1) for sy in (-1, 1)]
-        rnd.shuffle(quads)
-
-        def quad_centre(q):
-            sx, sy = q
-            x0, x1 = (-width / 2, xs) if sx < 0 else (xs, width / 2)
-            y0, y1 = (-height / 2, ys) if sy < 0 else (ys, height / 2)
-            return (x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0
-
-        if hatch:
-            qx, qy, qw, qh = quad_centre(quads[0])
-            hw, hh = qw * 0.55, qh * 0.5
-            hc = c + a * qx + u * qy
-            place = frame(hc, u=a, v=u)
-            self.cut_box(target, (hw, hh, 0.04), place=place)
-            self.box((hw * 0.94, hh * 0.92, 0.018), place=frame(hc - n * 0.004, u=a, v=u), mat="armor2",
-                     bevel=0.005, segments=1)
-            for sx in (-1, 1):
-                for sy in (-1, 1):
-                    self.bolt(hc + a * (sx * hw * 0.38) + u * (sy * hh * 0.36) + n * 0.005, n, 0.016)
-            self.box((hw * 0.25, 0.02, 0.015), place=frame(hc + u * (hh * 0.25) + n * 0.01, u=a, v=u),
-                     mat="metal", bevel=0.003, segments=1)
-        if grille:
-            qx, qy, qw, qh = quad_centre(quads[1])
-            gc = c + a * qx + u * qy
-            slots = 4
-            for k in range(slots):
-                y = (-0.5 + (k + 0.5) / slots) * qh * 0.5
-                self.cut_box(target, (qw * 0.5, qh * 0.05, 0.05), place=frame(gc + u * y, u=a, v=u))
-        qx, qy, qw, qh = quad_centre(quads[2])
-        self.bolt_row(c + a * (qx - qw * 0.4) + u * (qy + qh * 0.4), c + a * (qx + qw * 0.4) + u * (qy + qh * 0.4),
-                      n, max(2, int(qw / 0.12)), size=0.014)
-        qx, qy, qw, qh = quad_centre(quads[3])
-        pc = c + a * qx + u * qy + n * 0.004
-        self.box((min(0.3, qw * 0.4), min(0.12, qh * 0.25), 0.008), place=frame(pc, u=a, v=u),
-                 mat=rnd.choice(["metal", "trim"]), bevel=0.002, segments=1)
-
-    def lug(self, base, tip, width, thickness, normal, mat="armor", hole=None):
-        """A clevis lug: a plate from `base` (its straight edge) to a rounded end around
-        `tip`, `normal` through its thickness; `hole` the pin radius."""
-        base, tip, n = vec(base), vec(tip), vec(normal).normalized()
-        d = tip - base
-        h = d.length
-        r = width / 2
-        pts = [(-r, 0.0), (r, 0.0)]
-        for k in range(13):
-            t = math.pi * k / 12
-            pts.append((r * math.cos(t), h + r * math.sin(t)))
-        pts.append((-r, 0.0))
-        pts = pts[:-1]
-        place = frame(base, v=d, w=n)
-        ob = self.extrude(pts, thickness, place, mat, bevel=min(0.02, thickness * 0.2))
-        if hole:
-            self.hole(ob, tip - n * thickness, tip + n * thickness, hole)
-        return ob
-
 
 def sharp_by_angle(bm, degrees):
     """Marks edges sharper than `degrees` sharp; faces smooth (so curved parts shade
@@ -395,12 +387,30 @@ def freeze(model):
         if ob.type == "CURVE":
             for p in me.polygons:
                 p.use_smooth = True
+        densify(me)
         fo = bpy.data.objects.new(ob.name, me)
         fo.matrix_world = ob.matrix_world.copy()
+        fo["angle"] = float(ob.get("bevel", (0.0, 1, 30.0))[2])
         frozen.objects.link(fo)
         out.append(fo)
     model.pieces.hide_render = True
     return out
+
+
+def densify(me, longest=0.5, rounds=4):
+    """Splits long edges (flat faces stay flat) so the occlusion baked per corner has
+    enough points to follow: big low-poly facets otherwise show diagonal smears."""
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    for _ in range(rounds):
+        long_ = [e for e in bm.edges if e.calc_length() > longest]
+        if not long_:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long_, cuts=1, use_grid_fill=False)
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bm.to_mesh(me)
+    bm.free()
 
 
 def bake_ao(objects, distance=0.6, samples=48):
@@ -434,7 +444,7 @@ def write_glb(objects, path, colours):
         m = o.matrix_world
         nm = m.to_3x3().inverted().transposed()
         ao = me.color_attributes.get("ao")
-        normals = smooth_normals(me)
+        normals = smooth_normals(me, min(35.0, o.get("angle", 35.0)))
         name = me.materials[0].name if me.materials else "armor"
         verts, nrms, cols, idx, seen = prims.setdefault(name, ([], [], [], [], {}))
         for tri in me.loop_triangles:

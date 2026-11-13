@@ -5,7 +5,8 @@
 Builds every model named by a part's `form.model` that a builder exists for (or just
 `names`), writes `assets/export/models/<name>.glb`, and records a stamp of the inputs
 (`assets/export/models/models.stamp`) that `tools/build-models.sh --check` compares. With
-`--preview DIR`, also renders each built model to `DIR/<name>.png` (studio light, Cycles).
+`--preview DIR`, also renders each built model to `DIR/<name>.png` (studio light, Cycles),
+seen from the direction `--view x,y,z` (default front-left, above).
 """
 
 import hashlib
@@ -51,7 +52,7 @@ def part_defs():
     return out
 
 
-def preview(objects, path):
+def preview(objects, path, view=(-0.9, 0.55, -1.1)):
     """A studio render of the frozen model: three area lights, a grey world, 3/4 view."""
     scene = bpy.context.scene
     lo = Vector((min(v[i] for o in objects for v in o.bound_box) for i in range(3)))
@@ -104,7 +105,7 @@ def preview(objects, path):
     cam = bpy.data.cameras.new("cam")
     cam.lens = 50
     co = bpy.data.objects.new("cam", cam)
-    co.location = centre + Vector((-0.9, 0.55, -1.1)).normalized() * size * 1.7
+    co.location = centre + Vector(view).normalized() * size * 1.7
     look(co, centre)
     scene.collection.objects.link(co)
     scene.camera = co
@@ -128,6 +129,11 @@ def main():
         i = argv.index("--preview")
         preview_dir = Path(argv[i + 1])
         del argv[i:i + 2]
+    view = (-0.9, 0.55, -1.1)
+    if "--view" in argv:
+        i = argv.index("--view")
+        view = tuple(float(c) for c in argv[i + 1].split(","))
+        del argv[i:i + 2]
     defs = part_defs()
     names = argv or sorted(defs)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -148,7 +154,7 @@ def main():
         print(f"build-models: {name}: {tris} triangles, {time.time() - start:.1f} s")
         if preview_dir:
             preview_dir.mkdir(parents=True, exist_ok=True)
-            preview(objects, preview_dir / f"{name}.png")
+            preview(objects, preview_dir / f"{name}.png", view)
     if not argv:
         STAMP.write_text(inputs_hash() + "\n")
     print(f"build-models: {len(names)} models, {total} triangles")

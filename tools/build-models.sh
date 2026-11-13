@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the part models with Blender (headless) from tools/blender/*.py.
 #   tools/build-models.sh                     # every model, and the stamp CI checks
-#   tools/build-models.sh NAME... [--preview DIR]   # some models (and studio renders)
+#   tools/build-models.sh NAME... [--preview DIR [--view X,Y,Z]]   # some models (and studio renders)
 #   tools/build-models.sh --check             # fails if the models are older than their inputs
 # Blender: $BLENDER, else ~/.local/opt/blender-*/blender, else blender on the PATH.
 set -euo pipefail

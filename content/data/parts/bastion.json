@@ -401,7 +401,7 @@
           }
         ]
       },
-      "description": "The armoured torso and cockpit: crew hatch and viewport in the chest, side intakes, the reactor and its radiator on the back; the shoulders, neck and waist bolt to it.",
+      "description": "The armoured torso and cockpit: the chest plates part along the keel as the crew hatch, with vision slits; heat vents in the flanks, the reactor on the back; the shoulders, neck and waist mount to it.",
       "form": {
         "model": "bastion.torso",
         "material_slots": [

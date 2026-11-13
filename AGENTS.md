@@ -129,7 +129,8 @@ honestly with their output.
   formats.
 - **Part models:** `tools/build-models.sh [names...] [--preview DIR]` builds them in headless
   Blender (`~/.local/opt/blender-4.2.3-linux-x64`, or `$BLENDER`) from `tools/blender/*.py`
-  into `assets/export/models/` (~10 min for all; `--preview` adds a studio render per model).
+  into `assets/export/models/` (~8 min for all; `--preview` adds a studio render per model,
+  `--view x,y,z` its direction).
   A full build writes `models.stamp`; CI fails when the scripts, parts or palette changed
   since. Materials are the slots in `content/data/part_materials.json`.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
