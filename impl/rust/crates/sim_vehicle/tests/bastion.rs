@@ -1,19 +1,22 @@
-//! The Bastion: an original heavy frame (~22 m, ~130 t) with four manipulator arms on a shoulder
-//! yoke and six armour slabs hinged under the yoke's rim that close into a six-sided shell around
-//! the body. Built only with the builder's operations, on the heavy frame's walking body (torso,
-//! arms, hinged legs with ankles). `content/data/vehicles/bastion.json` is this design; refresh
-//! it with `cargo test -p sim_vehicle --test bastion -- --ignored`.
+//! The Bastion: an original heavy frame (~22 m, ~130 t) whose armour moves. A dorsal spine on
+//! its back carries four shell arms; each arm holds a faceted half-shell. The upper pair
+//! covers the torso and head, the lower pair the thighs; closed, each pair meets its mirror
+//! twin at seams front and back and the four make a cocoon (travel, landing, taking fire),
+//! with the arms folded inside. Thrusters on the shells' rear facets point straight back when
+//! closed; the arms aim them with the shells when open. Built only with the builder's
+//! operations, on the heavy frame's walking body. `content/data/vehicles/bastion.json` is this
+//! design; refresh it with `cargo test -p sim_vehicle --test bastion -- --ignored`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use glam::{DQuat, DVec3};
+use glam::{DMat3, DQuat, DVec3};
 use sim_vehicle::builder::{
     FreeNode, Symmetry, attach_at_node, attach_to_surface, free_nodes, place_symmetric, stats,
 };
 use sim_vehicle::design::{NamedPose, check_join, design_json};
 use sim_vehicle::gait::{GaitDef, LegDef};
-use sim_vehicle::joints::{Articulation, JointState};
+use sim_vehicle::joints::{Articulation, JointState, Pose};
 use sim_vehicle::{PartCatalog, PartDef, Vehicle, VehicleBody, VehicleDesign, VehiclePart};
 
 fn content() -> PathBuf {
@@ -21,24 +24,60 @@ fn content() -> PathBuf {
 }
 
 const NAME: &str = "Bastion";
-const DESCRIPTION: &str = "An original heavy frame, about 22 m and 130 tonnes: a walking \
-     humanoid body, a wide yoke over the shoulders carrying four manipulator arms with three-jaw \
-     clamps, and six armour slabs hinged under the yoke that close into a six-sided shell. \
-     Engines on the three rear slabs. Forward is -Z.";
+const DESCRIPTION: &str = "An original heavy frame, about 22 m and 130 tonnes, whose armour \
+     moves: a dorsal spine carries four shell arms, each holding a faceted half-shell. Closed, \
+     the shells make a cocoon around the body with the arms folded inside and the engines on \
+     the rear facets pointing straight back; open, they swing back like wing cases, or the \
+     upper pair comes round in front as a shield wall. Forward is -Z.";
 
-/// The six shell slabs, clockwise from the front seen from above (azimuth 60° apart).
-const SHELLS: [&str; 6] = [
-    "front",
-    "front_right",
-    "back_right",
-    "back",
-    "back_left",
-    "front_left",
+/// A half-shell and its arm: name, the spine node of its arm, its beams, radius (m), the
+/// height of the shell's middle (m, vehicle frame) and its facet part.
+struct ShellSpec {
+    name: &'static str,
+    node: &'static str,
+    /// The beam from the shoulder to the knuckle, and the forearm after the elbow.
+    boom: &'static str,
+    forearm: &'static str,
+    radius: f64,
+    middle: f64,
+    facet: &'static str,
+}
+
+const SHELLS: [ShellSpec; 2] = [
+    ShellSpec {
+        name: "upper",
+        node: "arm_upper",
+        boom: "bastion.boom_short",
+        forearm: "bastion.boom",
+        radius: 5.0,
+        middle: 0.3,
+        facet: "bastion.shell_facet_upper",
+    },
+    ShellSpec {
+        name: "lower",
+        node: "arm_lower",
+        boom: "bastion.boom_stub",
+        forearm: "bastion.boom",
+        radius: 4.2,
+        middle: -8.0,
+        facet: "bastion.shell_facet_lower",
+    },
 ];
 
-/// How far down each rear slab its two engines sit, from the slab's centre (m along the slab),
-/// chosen so forward thrust passes through the centre of mass.
-const ENGINE_ALONG: f64 = -1.6;
+/// The shells wrap around this vertical axis (vehicle frame, x = 0).
+const SHELL_AXIS_Z: f64 = 0.4;
+/// Facets per half-shell (each spans 180° / FACETS).
+const FACETS: usize = 4;
+/// Height of each engine pair above (upper shells) or below (lower shells) the centre of mass
+/// (m), and the spacing within a pair.
+const ENGINE_GAP: f64 = 4.4;
+const ENGINE_SPREAD: f64 = 2.4;
+
+/// Outward direction of the left side at azimuth `phi` (radians): 0 behind (+Z), π/2 left
+/// (−X), π in front (−Z).
+fn radial_left(phi: f64) -> DVec3 {
+    DVec3::new(-phi.sin(), 0.0, phi.cos())
+}
 
 struct Builder {
     v: Vehicle,
@@ -47,7 +86,10 @@ struct Builder {
 
 impl Builder {
     fn part(&self, id: &str) -> Arc<PartDef> {
-        self.catalog.get(id).unwrap().clone()
+        self.catalog
+            .get(id)
+            .unwrap_or_else(|| panic!("no part {id}"))
+            .clone()
     }
 
     fn index(&self, name: &str) -> usize {
@@ -75,8 +117,8 @@ impl Builder {
         i
     }
 
-    /// Like [`join`], turned about the node so that the part's X axis lies along `want_x`
-    /// (as near as whole degrees allow).
+    /// Like [`Builder::join`], turned about the node so that the part's X axis (a hinge's
+    /// axis) lies along `want_x` as near as whole degrees allow.
     fn join_aligned(
         &mut self,
         parent: &str,
@@ -98,8 +140,27 @@ impl Builder {
                 best = (score, roll);
             }
         }
-        let roll = best.1;
-        let i = attach_at_node(&mut self.v, &def, own, &at, roll).unwrap();
+        let i = attach_at_node(&mut self.v, &def, own, &at, best.1).unwrap();
+        self.v.parts[i].name = name.into();
+        i
+    }
+
+    /// Like [`Builder::join`], turned about the node so that the new part's `end` node points
+    /// as nearly along `want` as whole degrees allow (a bent bracket).
+    fn join_bent(&mut self, parent: &str, to: &str, id: &str, name: &str, want: DVec3) -> usize {
+        let at = self.free(parent, to);
+        let def = self.part(id);
+        let mut best = (f64::MIN, 0.0);
+        for d in 0..360 {
+            let roll = f64::from(d).to_radians();
+            let i = attach_at_node(&mut self.v, &def, "base", &at, roll).unwrap();
+            let score = self.v.parts[i].node_in_vehicle("end").unwrap().1.dot(want);
+            self.v.parts.pop();
+            if score > best.0 {
+                best = (score, roll);
+            }
+        }
+        let i = attach_at_node(&mut self.v, &def, "base", &at, best.1).unwrap();
         self.v.parts[i].name = name.into();
         i
     }
@@ -124,6 +185,29 @@ impl Builder {
             own,
             &format!("{base}_left"),
         );
+        self.mirror(i, &format!("{base}_right"));
+    }
+
+    /// Like [`Builder::pair`] with the left part's X axis along `want_x`.
+    fn pair_aligned(&mut self, parent: &str, to: &str, id: &str, base: &str, want_x: DVec3) {
+        let i = self.join_aligned(parent, to, id, "base", &format!("{base}_left"), want_x);
+        self.mirror(i, &format!("{base}_right"));
+    }
+
+    /// Fixes part `id` on the surface of `parent` (left side) at `position` with `rotation`,
+    /// and mirrors it: names `{base}_left` and `{base}_right`.
+    fn surface_pair(
+        &mut self,
+        parent: &str,
+        id: &str,
+        position: DVec3,
+        rotation: DQuat,
+        base: &str,
+    ) {
+        let p = self.index(parent);
+        let def = self.part(id);
+        let i = attach_to_surface(&mut self.v, &def, p, position, rotation).unwrap();
+        self.v.parts[i].name = format!("{base}_left");
         self.mirror(i, &format!("{base}_right"));
     }
 }
@@ -169,128 +253,109 @@ fn assemble() -> Vehicle {
     b.pair("shin", "bottom", "frame.hinge", "base", "ankle_joint");
     b.pair("ankle_joint", "end", "frame.foot", "top", "foot");
 
-    // The yoke over the shoulders, on the torso's top.
-    let yoke = b.part("bastion.yoke");
-    let i = attach_to_surface(
-        &mut b.v,
-        &yoke,
-        0,
-        DVec3::new(0.0, 2.9, 0.0),
-        DQuat::IDENTITY,
-    )
-    .unwrap();
-    b.v.parts[i].name = "yoke".into();
+    // The dorsal spine on the torso's back, over the torso and waist.
+    b.join("torso", "back", "bastion.spine", "front", "spine");
 
-    // Shell: a long hinge and a slab under each of the yoke's six rim nodes, the hinge's axis
-    // along the rim so the slab swings in and out.
-    for (k, shell) in SHELLS.iter().enumerate() {
-        let azimuth = f64::from(k as u32 * 60).to_radians();
-        let tangent = DVec3::new(azimuth.cos(), 0.0, azimuth.sin());
-        b.join_aligned(
-            "yoke",
-            &format!("shell_{shell}"),
-            "bastion.shell_hinge",
+    // Four shell arms (built on the left, mirrored): shoulder swing (vertical axis: opens the
+    // shell like a door), shoulder lift, a beam outward, a right-angle knuckle (folded, the arm
+    // turns here to run forward along the inside of its shell), elbow (vertical: straightened,
+    // it brings the shell round to the front), forearm, wrist twist (turns the shell), and the
+    // mount the shell's facets are fixed to.
+    for spec in &SHELLS {
+        let along = b.free("spine", &format!("{}_left", spec.node)).direction;
+        let name = |part: &str| format!("{}_{part}", spec.name);
+        let i = b.join_aligned(
+            "spine",
+            &format!("{}_left", spec.node),
+            "bastion.arm_hinge",
             "base",
-            &format!("shell_hinge_{shell}"),
-            tangent,
+            &format!("{}_left", name("swing")),
+            DVec3::Y,
         );
-        b.join(
-            &format!("shell_hinge_{shell}"),
+        b.mirror(i, &format!("{}_right", name("swing")));
+        b.pair_aligned(
+            &format!("{}_left", name("swing")),
             "end",
-            "bastion.shell_slab",
-            "root",
-            &format!("shell_{shell}"),
+            "bastion.arm_hinge",
+            &name("lift"),
+            DVec3::Y.cross(along).normalize(),
         );
-    }
-
-    // Engines: two on the outer face of each rear slab, nozzles back.
-    let engine = b.part("thruster.main.medium");
-    for shell in ["back_right", "back", "back_left"] {
-        let s = b.index(&format!("shell_{shell}"));
-        let (centre, rotation) = (b.v.parts[s].position, b.v.parts[s].rotation);
-        // The slab's outer face: its local Z axis or the opposite, whichever points away from
-        // the body's axis.
-        let normal = rotation * DVec3::Z;
-        let outward = if normal.dot(DVec3::new(centre.x, 0.0, centre.z)) > 0.0 {
-            normal
-        } else {
-            -normal
-        };
-        for (n, across) in [-1.4, 1.4].into_iter().enumerate() {
-            let at =
-                centre + rotation * DVec3::new(across, ENGINE_ALONG, 0.0) + outward * (0.4 + 0.9);
-            let nozzle_back = DQuat::from_rotation_x(-std::f64::consts::FRAC_PI_2);
-            let i = attach_to_surface(&mut b.v, &engine, s, at, nozzle_back).unwrap();
-            b.v.parts[i].name = format!("engine_{shell}_{}", n + 1);
-        }
-    }
-
-    // Arm turrets on the yoke, mirrored.
-    let i = b.join(
-        "yoke",
-        "turret_left",
-        "bastion.turret",
-        "bottom",
-        "turret_left",
-    );
-    b.mirror(i, "turret_right");
-
-    // Four manipulator arms: an upper one rising from each turret's top and a lower one from
-    // its outer side. Rotor (twist), shoulder hinge, segment, elbow hinge, segment, wrist hinge,
-    // palm, three jaws.
-    for (arm, node) in [("upper", "up"), ("lower", "left")] {
-        let name = |part: &str| format!("{arm}_{part}");
-        let i = b.join(
-            "turret_left",
-            node,
+        b.pair(&name("lift"), "end", spec.boom, "top", &name("boom"));
+        let i = b.join_bent(
+            &format!("{}_left", name("boom")),
+            "bottom",
+            "bastion.knuckle",
+            &format!("{}_left", name("knuckle")),
+            DVec3::NEG_Z,
+        );
+        b.mirror(i, &format!("{}_right", name("knuckle")));
+        b.pair_aligned(
+            &format!("{}_left", name("knuckle")),
+            "end",
+            "bastion.arm_hinge",
+            &name("elbow"),
+            DVec3::Y,
+        );
+        b.pair(&name("elbow"), "end", spec.forearm, "top", &name("forearm"));
+        b.pair(
+            &name("forearm"),
+            "bottom",
             "bastion.arm_rotor",
             "base",
-            &format!("{}_left", name("rotor")),
+            &name("wrist"),
         );
-        b.mirror(i, &format!("{}_right", name("rotor")));
-        let chain = [
-            ("rotor", "bastion.arm_hinge", "base", "shoulder"),
-            ("shoulder", "bastion.arm_segment", "top", "boom"),
-            ("boom", "bastion.arm_hinge", "base", "elbow"),
-            ("elbow", "bastion.arm_segment", "top", "reach"),
-            ("reach", "bastion.arm_hinge", "base", "wrist"),
-            ("wrist", "bastion.clamp_palm", "top", "palm"),
-        ];
-        for (parent, id, own, part) in chain {
-            // Joints hand on at their end node, segments at their bottom.
-            let to = if matches!(parent, "boom" | "reach") {
-                "bottom"
-            } else {
-                "end"
-            };
-            b.pair(&name(parent), to, id, own, &name(part));
-        }
-        // Jaws: each hinge turned so a positive angle opens its jaw outward.
-        for jaw in ["a", "b", "c"] {
-            let palm = b.index(&format!("{}_left", name("palm")));
-            let (pp, pr) = (b.v.parts[palm].position, b.v.parts[palm].rotation);
-            let node = b.v.parts[palm]
-                .node_in_vehicle(&format!("jaw_{jaw}"))
-                .unwrap()
-                .0;
-            let up = pr * DVec3::Y;
-            let radial = (node - pp) - up * (node - pp).dot(up);
-            let opens = radial.normalize().cross(up);
-            let i = b.join_aligned(
-                &format!("{}_left", name("palm")),
-                &format!("jaw_{jaw}"),
-                "bastion.jaw_hinge",
-                "base",
-                &format!("{}_left", name(&format!("jaw_hinge_{jaw}"))),
-                opens,
+        b.pair(
+            &name("wrist"),
+            "end",
+            "bastion.shell_mount",
+            "base",
+            &name("mount"),
+        );
+
+        // The half-shell: flat facets around the axis, from behind to in front.
+        let span = std::f64::consts::PI / FACETS as f64;
+        for k in 0..FACETS {
+            let phi = span * (k as f64 + 0.5);
+            let out = radial_left(phi);
+            let centre =
+                DVec3::new(0.0, spec.middle, SHELL_AXIS_Z) + out * spec.radius * (span / 2.0).cos();
+            // Facet axes: X along the shell's curve, Y up, Z outward.
+            let rotation = DQuat::from_mat3(&DMat3::from_cols(DVec3::Y.cross(out), DVec3::Y, out));
+            b.surface_pair(
+                &format!("{}_left", name("mount")),
+                spec.facet,
+                centre,
+                rotation,
+                &name(&format!("facet_{}", k + 1)),
             );
-            b.mirror(i, &format!("{}_right", name(&format!("jaw_hinge_{jaw}"))));
-            b.pair(
-                &name(&format!("jaw_hinge_{jaw}")),
-                "end",
-                "bastion.jaw",
-                "top",
-                &name(&format!("jaw_{jaw}")),
+        }
+    }
+
+    // Engines: two on the outer face of each shell's rear facet, nozzles straight back; the
+    // upper pairs as far above the centre of mass as the lower pairs below it, so the forward
+    // thrust line passes through it.
+    let com_y = VehicleBody::of(&b.v).unwrap().mass.center_of_mass.y;
+    let nozzle_back = DQuat::from_rotation_x(-std::f64::consts::FRAC_PI_2);
+    for spec in &SHELLS {
+        let facet = b.index(&format!("{}_facet_1_left", spec.name));
+        let (centre, rotation) = (b.v.parts[facet].position, b.v.parts[facet].rotation);
+        let out = rotation * DVec3::Z;
+        let y = if spec.name == "upper" {
+            com_y + ENGINE_GAP
+        } else {
+            com_y - ENGINE_GAP
+        };
+        for (n, dy) in [ENGINE_SPREAD / 2.0, -ENGINE_SPREAD / 2.0]
+            .into_iter()
+            .enumerate()
+        {
+            let at = DVec3::new(centre.x, y + dy, centre.z) + out * (0.25 + 0.9);
+            b.surface_pair(
+                &format!("{}_facet_1_left", spec.name),
+                "thruster.main.medium",
+                at,
+                nozzle_back,
+                &format!("{}_engine_{}", spec.name, n + 1),
             );
         }
     }
@@ -318,58 +383,129 @@ fn assemble() -> Vehicle {
     b.v
 }
 
-/// Every group's joint angle that brings `point` of `part` (rest frame) nearest `target`, among
-/// a few joints searched on a grid of whole steps (a tiny brute-force solver for posing arms).
-fn reach(
+/// One shell arm: its joint groups, the group its facets move with, and the facets.
+struct ShellArm {
+    swing: usize,
+    lift: usize,
+    elbow: usize,
+    wrist: usize,
+    group: usize,
+    facets: Vec<usize>,
+}
+
+fn shell_arm(v: &Vehicle, a: &Articulation, shell: &str, side: &str) -> ShellArm {
+    let part = |name: String| {
+        v.parts
+            .iter()
+            .position(|p| p.name == name)
+            .unwrap_or_else(|| panic!("no part {name}"))
+    };
+    let joint = |j: &str| {
+        a.group_of_joint(part(format!("{shell}_{j}_{side}")))
+            .unwrap()
+    };
+    let facets: Vec<usize> = (1..=FACETS)
+        .map(|k| part(format!("{shell}_facet_{k}_{side}")))
+        .collect();
+    ShellArm {
+        swing: joint("swing"),
+        lift: joint("lift"),
+        elbow: joint("elbow"),
+        wrist: joint("wrist"),
+        group: a.part_group[facets[0]],
+        facets,
+    }
+}
+
+/// Where a shell is for joint `angles`: the middle of its facets and its outward direction
+/// (the mean of the facets' outward normals).
+fn shell_at(v: &Vehicle, a: &Articulation, arm: &ShellArm, angles: &[f64]) -> (DVec3, DVec3) {
+    let poses: Vec<Pose> = a.poses(angles);
+    let pose = poses[arm.group];
+    let n = arm.facets.len() as f64;
+    let centre = arm
+        .facets
+        .iter()
+        .map(|&f| pose.apply(v.parts[f].position))
+        .sum::<DVec3>()
+        / n;
+    let out = arm
+        .facets
+        .iter()
+        .map(|&f| pose.rotation * (v.parts[f].rotation * DVec3::Z))
+        .sum::<DVec3>()
+        .normalize();
+    (centre, out)
+}
+
+/// Sets `joints` (each searched in whole 15° steps within ±range degrees) to bring the shell's
+/// middle nearest `target`, facing `facing`.
+fn place_shell(
+    v: &Vehicle,
     a: &Articulation,
+    arm: &ShellArm,
     angles: &mut [f64],
-    groups: &[usize],
-    part_group: usize,
-    point: DVec3,
+    joints: &[(usize, f64)],
     target: DVec3,
+    facing: DVec3,
 ) {
-    let steps: Vec<f64> = (-12..=12).map(|k| f64::from(k * 15).to_radians()).collect();
-    let mut best = (f64::MAX, vec![0.0; groups.len()]);
+    let steps: Vec<Vec<f64>> = joints
+        .iter()
+        .map(|&(_, range)| {
+            let n = (range / 15.0) as i32;
+            (-n..=n).map(|k| f64::from(k * 15).to_radians()).collect()
+        })
+        .collect();
+    let mut best = (f64::MAX, vec![0.0; joints.len()]);
+    let mut pick = vec![0usize; joints.len()];
     let mut trial = angles.to_vec();
-    let mut pick = vec![0usize; groups.len()];
-    loop {
-        for (g, &k) in groups.iter().zip(&pick) {
-            trial[*g] = steps[k];
+    'search: loop {
+        for ((g, _), (k, s)) in joints.iter().zip(pick.iter().zip(&steps)) {
+            trial[*g] = s[*k];
         }
-        let poses = a.poses(&trial);
-        let d = poses[part_group].apply(point).distance(target);
-        if d < best.0 {
-            best = (d, groups.iter().map(|&g| trial[g]).collect());
+        let (centre, out) = shell_at(v, a, arm, &trial);
+        let cost = centre.distance(target) + 4.0 * (1.0 - out.dot(facing));
+        if cost < best.0 {
+            best = (cost, joints.iter().map(|(g, _)| trial[*g]).collect());
         }
-        // Next combination.
         let mut j = 0;
         loop {
             if j == pick.len() {
-                for (g, angle) in groups.iter().zip(&best.1) {
-                    angles[*g] = *angle;
-                }
-                return;
+                break 'search;
             }
             pick[j] += 1;
-            if pick[j] < steps.len() {
+            if pick[j] < steps[j].len() {
                 break;
             }
             pick[j] = 0;
             j += 1;
         }
     }
+    for ((g, _), angle) in joints.iter().zip(best.1) {
+        angles[*g] = angle;
+    }
 }
 
-/// The Bastion's poses, solved for its geometry: shell closed and open, arms deployed and
-/// reaching forward to grab, arms stowed.
+/// Where the poses put the shells' middles (left side; the right mirrors x).
+const STAND_UPPER: DVec3 = DVec3::new(-3.6, 0.3, 4.0);
+const STAND_LOWER: DVec3 = DVec3::new(-3.0, -8.0, 3.6);
+/// Wings: the shells lifted out to the sides (upper up and out, lower out and a little up).
+const WINGS_UPPER_FACING: DVec3 = DVec3::new(-0.6, 0.8, 0.0);
+const WINGS_LOWER_FACING: DVec3 = DVec3::new(-0.9, 0.44, 0.0);
+
+fn mirrored(p: DVec3, side: &str) -> DVec3 {
+    if side == "left" {
+        p
+    } else {
+        DVec3::new(-p.x, p.y, p.z)
+    }
+}
+
+/// The Bastion's poses, solved for its geometry.
 fn poses(v: &Vehicle) -> Vec<NamedPose> {
     let body = VehicleBody::of(v).unwrap();
     let a = &body.articulation;
-    let group = |name: &str| {
-        let part = v.parts.iter().position(|p| p.name == name).unwrap();
-        a.group_of_joint(part).unwrap_or_else(|| a.part_group[part])
-    };
-    let rest = || vec![0.0; a.groups.len()];
+    let n = a.groups.len();
     let named = |name: &str, angles: &[f64]| NamedPose {
         name: name.into(),
         angles: v
@@ -378,131 +514,51 @@ fn poses(v: &Vehicle) -> Vec<NamedPose> {
             .enumerate()
             .filter_map(|(i, p)| {
                 let g = a.group_of_joint(i)?;
-                let deg = angles[g].to_degrees();
-                (deg.abs() > 1e-9).then(|| (p.name.clone(), deg.round()))
+                let deg = angles[g].to_degrees().round();
+                (deg != 0.0).then(|| (p.name.clone(), deg))
             })
             .collect(),
     };
-
-    // Shell: the angle that hangs each slab straight down (closed), and 45° further out (open).
-    let shell_closed: Vec<(usize, f64)> = SHELLS
-        .iter()
-        .map(|s| {
-            let g = group(&format!("shell_hinge_{s}"));
-            let slab = v
-                .parts
-                .iter()
-                .position(|p| p.name == format!("shell_{s}"))
-                .unwrap();
-            let pivot = a.groups[g].pivot;
-            let hang = v.parts[slab].position - pivot;
-            let best = (-90..=90)
-                .map(f64::from)
-                .min_by(|x, y| {
-                    let down = |deg: f64| {
-                        let d = DQuat::from_axis_angle(a.groups[g].axis, deg.to_radians()) * hang;
-                        -d.normalize().y
-                    };
-                    down(*y).total_cmp(&down(*x))
-                })
-                .unwrap();
-            (g, best.to_radians())
-        })
-        .collect();
-    let mut closed = rest();
-    let mut open = rest();
-    for &(g, angle) in &shell_closed {
-        closed[g] = angle;
-        open[g] = -angle.signum() * 45f64.to_radians();
-    }
-
-    // Arms: rotor, shoulder and elbow searched so each palm reaches a target point.
-    let arm_groups = |arm: &str, side: &str| {
-        [
-            group(&format!("{arm}_rotor_{side}")),
-            group(&format!("{arm}_shoulder_{side}")),
-            group(&format!("{arm}_elbow_{side}")),
-        ]
-    };
-    let palm = |arm: &str, side: &str| {
-        let i = v
-            .parts
-            .iter()
-            .position(|p| p.name == format!("{arm}_palm_{side}"))
-            .unwrap();
-        (a.part_group[i], v.parts[i].position)
-    };
-    let jaws = |angles: &mut Vec<f64>, deg: f64| {
-        for arm in ["upper", "lower"] {
-            for side in ["left", "right"] {
-                for jaw in ["a", "b", "c"] {
-                    let g = group(&format!("{arm}_jaw_hinge_{jaw}_{side}"));
-                    // Mirrored hinges turn the other way: check which sign opens.
-                    let axis = a.groups[g].axis;
-                    let jaw_part = v
-                        .parts
-                        .iter()
-                        .position(|p| p.name == format!("{arm}_jaw_{jaw}_{side}"))
-                        .unwrap();
-                    let hang = v.parts[jaw_part].position - a.groups[g].pivot;
-                    let (pg, pp) = palm(arm, side);
-                    let _ = pg;
-                    let outward = a.groups[g].pivot - pp;
-                    let sign = axis.cross(hang).dot(outward).signum();
-                    angles[g] = sign * deg.to_radians();
+    // Stand: the shells swung back behind the body like folded wing cases, facing outward
+    // and back; the front is open for work.
+    let mut stand = vec![0.0; n];
+    // Wings: the shells lifted out to the sides about their fore-and-aft shoulder axes; the
+    // engines on their rear facets keep pointing straight back.
+    let mut wings = vec![0.0; n];
+    for side in ["left", "right"] {
+        let outward = mirrored(DVec3::new(-1.0, 0.0, 1.0).normalize(), side);
+        for (shell, target) in [("upper", STAND_UPPER), ("lower", STAND_LOWER)] {
+            let arm = shell_arm(v, a, shell, side);
+            place_shell(
+                v,
+                a,
+                &arm,
+                &mut stand,
+                &[(arm.swing, 120.0), (arm.elbow, 120.0), (arm.wrist, 90.0)],
+                mirrored(target, side),
+                outward,
+            );
+        }
+        for (shell, facing) in [("upper", WINGS_UPPER_FACING), ("lower", WINGS_LOWER_FACING)] {
+            let arm = shell_arm(v, a, shell, side);
+            let facing = mirrored(facing, side).normalize();
+            // Only the lift moves: the best facing, wherever that puts the shell.
+            let mut best = (f64::MIN, 0.0);
+            for d in -120..=120 {
+                let mut trial = wings.clone();
+                trial[arm.lift] = f64::from(d).to_radians();
+                let (_, out) = shell_at(v, a, &arm, &trial);
+                if out.dot(facing) > best.0 {
+                    best = (out.dot(facing), trial[arm.lift]);
                 }
             }
+            wings[arm.lift] = best.1;
         }
-    };
-    let arms = |angles: &mut Vec<f64>, targets: [(&str, DVec3); 2]| {
-        for (arm, target) in targets {
-            for (side, x) in [("left", 1.0), ("right", -1.0)] {
-                let (pg, pp) = palm(arm, side);
-                let t = DVec3::new(target.x * x, target.y, target.z);
-                reach(a, angles, &arm_groups(arm, side), pg, pp, t);
-            }
-        }
-    };
-
-    let mut deployed = rest();
-    arms(
-        &mut deployed,
-        [
-            ("upper", DVec3::new(-8.0, 11.0, 1.0)),
-            ("lower", DVec3::new(-11.0, 3.0, -1.0)),
-        ],
-    );
-    jaws(&mut deployed, 35.0);
-    let mut grab = rest();
-    arms(
-        &mut grab,
-        [
-            ("upper", DVec3::new(-3.0, 3.0, -6.0)),
-            ("lower", DVec3::new(-4.5, -1.0, -6.5)),
-        ],
-    );
-    jaws(&mut grab, -20.0);
-    let mut stowed = rest();
-    arms(
-        &mut stowed,
-        [
-            ("upper", DVec3::new(-2.5, 5.0, 4.5)),
-            ("lower", DVec3::new(-3.0, 1.0, 5.0)),
-        ],
-    );
-    // Shell closed with the arms stowed inside its top.
-    let mut closed_stowed = stowed.clone();
-    for &(g, angle) in &shell_closed {
-        closed_stowed[g] = angle;
     }
     vec![
-        // Standing (the pose it starts in): arms folded back.
-        named("stand", &stowed),
-        named("arms_deployed", &deployed),
-        named("arms_grab", &grab),
-        named("arms_stowed", &stowed),
-        named("shell_closed", &closed_stowed),
-        named("shell_open", &open),
+        named("cocoon", &vec![0.0; n]),
+        named("stand", &stand),
+        named("wings", &wings),
     ]
 }
 
@@ -510,6 +566,10 @@ fn design() -> Vehicle {
     let mut v = assemble();
     v.poses = poses(&v);
     v
+}
+
+fn pose(v: &Vehicle, a: &Articulation, name: &str) -> Vec<f64> {
+    sim_vehicle::joints::pose_angles(v, a, name).unwrap_or_else(|| panic!("pose {name}"))
 }
 
 #[test]
@@ -525,21 +585,6 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
     let body = VehicleBody::of(&v).unwrap();
     let com = body.mass.center_of_mass;
     assert!(com.x.abs() < 1e-6, "balanced left and right: {com:?}");
-    // Six shell hinges with their axes along the yoke's rim.
-    for s in SHELLS {
-        let part = v
-            .parts
-            .iter()
-            .position(|p| p.name == format!("shell_hinge_{s}"))
-            .unwrap();
-        let g = body.articulation.group_of_joint(part).unwrap();
-        let radial = DVec3::new(v.parts[part].position.x, 0.0, v.parts[part].position.z);
-        let axis = body.articulation.groups[g].axis;
-        assert!(
-            axis.dot(radial.normalize()).abs() < 0.05 && axis.y.abs() < 0.05,
-            "{s}: axis {axis:?} along the rim"
-        );
-    }
     let s = stats(&v, 9.81);
     println!(
         "{} parts, {} joints, {:.1} t, {:.1} x {:.1} x {:.1} m, com {com:?}, thrust/weight {:.2}, turn {:.2} rad/s2, problems {:?}",
@@ -554,56 +599,115 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
         s.problems
     );
     assert!(s.problems.is_empty(), "{:?}", s.problems);
-    assert!(s.thrust_to_weight > 1.2);
+    assert!(s.thrust_to_weight > 1.5);
+    // Each arm's mount meets the inside of its shell.
+    for spec in &SHELLS {
+        let mount = &v.parts[v
+            .parts
+            .iter()
+            .position(|p| p.name == format!("{}_mount_left", spec.name))
+            .unwrap()];
+        let face = mount.position + mount.rotation * DVec3::new(0.0, -0.2, 0.0);
+        let r = DVec3::new(face.x, 0.0, face.z - SHELL_AXIS_Z).length();
+        let inside = spec.radius * (std::f64::consts::PI / FACETS as f64 / 2.0).cos() - 0.25;
+        println!(
+            "{} mount reaches r {r:.2} m; the shell's inside is at {inside:.2} m",
+            spec.name
+        );
+        assert!(
+            r < inside && r > inside - 0.7,
+            "{}: mount at {r:.2} m, shell at {inside:.2} m",
+            spec.name
+        );
+    }
 }
 
 #[test]
-fn the_bastion_closes_its_shell_and_moves_its_arms() {
+fn closed_the_shells_make_a_cocoon_around_the_body() {
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let rest = vec![0.0; a.groups.len()];
+    // Every other part is inside the shells at its height (the shins and feet walk below the
+    // lower shells; the arms that carry the shells fold inside them).
+    for p in &v.parts {
+        if p.name.contains("facet") || p.name.contains("engine") {
+            continue;
+        }
+        let r = DVec3::new(p.position.x, 0.0, p.position.z - SHELL_AXIS_Z).length();
+        let limit = if p.position.y > -4.0 {
+            5.0
+        } else if p.position.y > -12.0 {
+            4.2
+        } else {
+            continue;
+        };
+        assert!(
+            r < limit - 0.25,
+            "{} at r {r:.2} m pokes out of the shell ({limit} m)",
+            p.name
+        );
+    }
+    // The two halves of each pair are mirror images facing out to the sides.
+    for shell in ["upper", "lower"] {
+        let (lc, lo) = shell_at(&v, a, &shell_arm(&v, a, shell, "left"), &rest);
+        let (rc, ro) = shell_at(&v, a, &shell_arm(&v, a, shell, "right"), &rest);
+        assert!(
+            (lc.x + rc.x).abs() < 1e-6 && (lc.z - rc.z).abs() < 1e-6,
+            "{shell} mirrored"
+        );
+        assert!(
+            lo.x < -0.9 && ro.x > 0.9,
+            "{shell}: halves face out to the sides"
+        );
+    }
+}
+
+#[test]
+fn the_poses_open_the_shells_back_and_spread_them_as_wings() {
     let v = design();
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
-    let at = |pose: &str| {
-        let mut s = JointState::rest(a);
-        for (joint, deg) in &v.poses.iter().find(|p| p.name == pose).unwrap().angles {
-            let part = v.parts.iter().position(|p| &p.name == joint).unwrap();
-            s.angles[a.group_of_joint(part).unwrap()] = deg.to_radians();
+    let (stand, wings) = (pose(&v, a, "stand"), pose(&v, a, "wings"));
+    for side in ["left", "right"] {
+        for (shell, target) in [("upper", STAND_UPPER), ("lower", STAND_LOWER)] {
+            let (c, o) = shell_at(&v, a, &shell_arm(&v, a, shell, side), &stand);
+            let t = mirrored(target, side);
+            println!("stand {shell} {side}: middle {c:.1?} (target {t:.1?}), facing {o:.2?}");
+            assert!(c.distance(t) < 2.0, "stand {shell} {side}");
+            assert!(
+                c.z > 2.5,
+                "stand {shell} {side}: swung back behind the body"
+            );
         }
-        a.poses(&s.angles)
-    };
-    let where_is = |poses: &[sim_vehicle::joints::Pose], name: &str| {
-        let i = v.parts.iter().position(|p| p.name == name).unwrap();
-        poses[a.part_group[i]].apply(v.parts[i].position)
-    };
-    // Closed: every slab hangs straight down, its centre on a ring around the body; open: out.
-    let closed = at("shell_closed");
-    let open = at("shell_open");
-    for s in SHELLS {
-        let c = where_is(&closed, &format!("shell_{s}"));
-        let o = where_is(&open, &format!("shell_{s}"));
-        let r = |p: DVec3| DVec3::new(p.x, 0.0, p.z).length();
-        println!(
-            "shell {s}: closed {c:.1?} (r {:.1}), open {o:.1?} (r {:.1})",
-            r(c),
-            r(o)
-        );
-        assert!((4.0..6.5).contains(&r(c)), "{s} closed around the body");
-        assert!(r(o) > r(c) + 3.0, "{s} swings out when open");
-    }
-    // Arms: palms reach their targets within a couple of metres.
-    for (pose, arm, target) in [
-        ("arms_deployed", "upper", DVec3::new(-8.0, 11.0, 1.0)),
-        ("arms_deployed", "lower", DVec3::new(-11.0, 3.0, -1.0)),
-        ("arms_grab", "upper", DVec3::new(-3.0, 3.0, -6.0)),
-        ("arms_grab", "lower", DVec3::new(-4.5, -1.0, -6.5)),
-    ] {
-        let poses = at(pose);
-        for (side, x) in [("left", 1.0), ("right", -1.0)] {
-            let p = where_is(&poses, &format!("{arm}_palm_{side}"));
-            let t = DVec3::new(target.x * x, target.y, target.z);
-            println!("{pose} {arm} {side}: palm {p:.1?}, target {t:.1?}");
-            assert!(p.distance(t) < 2.5, "{pose} {arm} {side}: {p:?} vs {t:?}");
+        for shell in ["upper", "lower"] {
+            let (c, o) = shell_at(&v, a, &shell_arm(&v, a, shell, side), &wings);
+            println!("wings {shell} {side}: middle {c:.1?}, facing {o:.2?}");
+            let sx = if side == "left" { -1.0 } else { 1.0 };
+            assert!(
+                o.x * sx > 0.5,
+                "wings {shell} {side}: out to the side ({o:?})"
+            );
         }
+        let (_, o) = shell_at(&v, a, &shell_arm(&v, a, "upper", side), &wings);
+        assert!(o.y > 0.5, "wings: the upper shells lifted ({o:?})");
     }
+    // Spreading the wings keeps the engines pointing straight back: forward thrust stays.
+    let forward = |angles: &[f64]| {
+        body.posed_allocator(&a.poses(angles))
+            .thrusters()
+            .iter()
+            .map(|t| -t.direction.z * t.max_thrust)
+            .filter(|f| *f > 0.0)
+            .sum::<f64>()
+    };
+    let (closed, spread) = (forward(&vec![0.0; a.groups.len()]), forward(&wings));
+    println!(
+        "forward thrust: cocoon {:.0} kN, wings {:.0} kN",
+        closed / 1e3,
+        spread / 1e3
+    );
+    assert!(spread > 0.95 * closed, "wings keep the thrust forward");
 }
 
 #[test]
@@ -639,10 +743,10 @@ fn write_the_design_file() {
     std::fs::write(content().join("vehicles/bastion.json"), json).unwrap();
 }
 
-/// Walks a few seconds with the shell open on a slope on Meridian, stops, and hands the frame
-/// to physics: it must stay standing.
+/// Walks a few seconds in its standing pose on a slope on Meridian, stops, and hands the
+/// frame to physics: it must stay standing.
 #[test]
-fn the_bastion_walks_and_stops_standing_with_its_shell_open() {
+fn the_bastion_walks_and_stops_standing() {
     use sim_core::ObjectId;
     use sim_vehicle::flight::{RegionTerrain, RigidState, region_env};
     use sim_vehicle::gait::{WalkStep, Walking, resolve_legs, walk_tick};
@@ -654,18 +758,9 @@ fn the_bastion_walks_and_stops_standing_with_its_shell_open() {
     let gait = v.gait.clone().unwrap();
     let legs = resolve_legs(&v, &body, &gait).unwrap();
     let mut joints = JointState::rest(a);
-    for (joint, deg) in &v
-        .poses
-        .iter()
-        .find(|p| p.name == "shell_open")
-        .unwrap()
-        .angles
-    {
-        let part = v.parts.iter().position(|p| &p.name == joint).unwrap();
-        let g = a.group_of_joint(part).unwrap();
-        joints.angles[g] = deg.to_radians();
-        joints.targets[g] = deg.to_radians();
-    }
+    let stand = pose(&v, a, "stand");
+    joints.angles = stand.clone();
+    joints.targets = stand;
     let sys = sim_core::StarSystem::from_path(content().join("star_systems/halcyon.json")).unwrap();
     let i = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
     let terrain = RegionTerrain(sim_planet::Terrain::of(&sys.bodies[i]).map(Arc::new));
@@ -679,7 +774,7 @@ fn the_bastion_walks_and_stops_standing_with_its_shell_open() {
         })
         .unwrap();
     let north = up.cross(DVec3::Y.cross(up)).normalize();
-    let rotation = DQuat::from_mat3(&glam::DMat3::from_cols(north.cross(up), up, -north));
+    let rotation = DQuat::from_mat3(&DMat3::from_cols(north.cross(up), up, -north));
     let ground = env.radius + env.ground_height(up * env.radius);
     let mut s = sim_core::frames::FrameState {
         position: up * (ground + 15.0),
@@ -727,10 +822,6 @@ fn the_bastion_walks_and_stops_standing_with_its_shell_open() {
         scene.set_poses(id, &joints.poses, joints.generation);
         scene.step(&env, dt);
         r = scene.state(id).unwrap().0;
-        if k % 30 == 0 {
-            let tilt = (r.rotation * DVec3::Y).angle_between(r.position.normalize());
-            println!("t {} tilt {:.1}", k / 30, tilt.to_degrees());
-        }
     }
     let tilt = (r.rotation * DVec3::Y)
         .angle_between(r.position.normalize())

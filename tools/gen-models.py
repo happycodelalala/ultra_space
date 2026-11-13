@@ -295,36 +295,6 @@ def rotor_y(h):
     return m
 
 
-def yoke(h):
-    """An open square frame over the shoulders (the torso and head show through the middle),
-    with corner blocks and trim along the outer rim."""
-    hx, hy, hz = h
-    side = hx * 0.5  # side bars from x = hx/2 to hx (they carry the arm turrets)
-    end = hz * 0.36  # front and back bars
-    m = Model()
-    for s in (-1, 1):
-        m.add("armor", *bevel_box([(hx - side) / 2, hy, hz], 0.25,
-                                  centre=(s * (side + hx) / 2, 0, 0)))
-        m.add("armor", *bevel_box([side, hy * 0.85, end / 2], 0.2,
-                                  centre=(0, -hy * 0.15, s * (hz - end / 2))))
-        m.add("trim", *box([hx * 0.92, 0.08, 0.12], centre=(0, hy * 0.3, s * hz * 0.99)))
-        m.add("trim", *box([0.12, 0.08, hz * 0.92], centre=(s * hx * 0.99, hy * 0.3, 0)))
-        for t in (-1, 1):
-            m.add("dark", *bevel_box([0.45, hy * 1.0, 0.45], 0.1,
-                                     centre=(s * (side + 0.5), 0, t * (hz - end - 0.5))))
-    return m
-
-
-def turret(h):
-    hx, hy, hz = h
-    m = Model()
-    m.add("armor", *prism(min(hx, hz), hy * 0.8, 8, 1, centre=(0, -hy * 0.2, 0), taper=0.85,
-                          rotate=math.pi / 8))
-    m.add("dark", *prism(min(hx, hz) * 0.6, hy * 0.2, 8, 1, centre=(0, hy * 0.8, 0),
-                         rotate=math.pi / 8))
-    return m
-
-
 def arm_segment(h):
     hx, hy, hz = h
     m = Model()
@@ -339,36 +309,6 @@ def arm_segment(h):
     return m
 
 
-def palm(h):
-    hx, hy, hz = h
-    m = Model()
-    m.add("armor", *prism(min(hx, hz), hy * 0.7, 6, 1, centre=(0, hy * 0.3, 0), taper=0.8))
-    m.add("dark", *prism(min(hx, hz) * 0.8, hy * 0.3, 6, 1, centre=(0, -hy * 0.7, 0)))
-    return m
-
-
-def jaw(h):
-    hx, hy, hz = h
-    m = Model()
-    # A prong narrowing to its tip (down).
-    m.add("trim", *bevel_box([hx, hy, hz], 0.04, taper=(0.35, 1.0)))
-    return m
-
-
-def shell_slab(h):
-    hx, hy, hz = h
-    m = Model()
-    m.add("armor", *bevel_box([hx, hy, hz * 0.7], 0.3))
-    # Raised plates on both faces in two columns, a trim stripe down the middle.
-    for s in (-1, 1):
-        for col in (-1, 1):
-            for row in (0.45, -0.1, -0.6):
-                m.add("armor", *bevel_box([hx * 0.38, hy * 0.2, 0.12], 0.08,
-                                          centre=(col * hx * 0.46, row * hy, s * hz * 0.75)))
-        m.add("trim", *box([0.12, hy * 0.85, 0.06], centre=(0, -hy * 0.05, s * hz * 0.72)))
-    return m
-
-
 def engine(h):
     r, hl, _ = h
     m = Model()
@@ -377,6 +317,74 @@ def engine(h):
     m.add("dark", *prism(r * 0.55, hl * 0.65, 8, 1, centre=(0, -hl * 0.35, 0), taper=1 / 1.75,
                          rotate=math.pi / 8))
     m.add("trim", *prism(r * 0.9, hl * 0.06, 8, 1, centre=(0, hl * 0.3, 0), rotate=math.pi / 8))
+    return m
+
+
+def spine(h):
+    """A dorsal frame: a dark core beam with armoured vertebra blocks and arm sockets."""
+    hx, hy, hz = h
+    m = Model()
+    m.add("dark", *bevel_box([hx * 0.55, hy, hz * 0.55], 0.12))
+    n = 6
+    for k in range(n):
+        y = -hy + (k + 0.5) * 2 * hy / n
+        m.add("armor", *bevel_box([hx, hy / n * 0.78, hz], 0.18, centre=(0, y, 0.05),
+                                  taper=(0.9, 1.0)))
+        m.add("trim", *box([hx * 0.5, 0.06, 0.06], centre=(0, y + hy / n * 0.5, hz * 0.98)))
+    return m
+
+
+def boom(h):
+    hx, hy, hz = h
+    m = Model()
+    m.add("armor", *bevel_box([hx * 0.85, hy, hz * 0.85], 0.12, taper=(0.85, 1.0)))
+    for y in (hy * 0.85, -hy * 0.85):
+        m.add("dark", *prism(hx * 0.98, min(0.1, hy * 0.12), 8, 1, centre=(0, y, 0),
+                             rotate=math.pi / 8))
+    if hy > 0.4:
+        m.add("trim", *box([0.06, hy * 0.55, hz * 0.4], centre=(hx * 0.84, 0, 0)))
+        m.add("trim", *box([0.06, hy * 0.55, hz * 0.4], centre=(-hx * 0.84, 0, 0)))
+    return m
+
+
+def knuckle(h):
+    hx, hy, hz = h
+    m = Model()
+    m.add("dark", *bevel_box([hx, hy, hz], 0.18))
+    m.add("trim", *prism(hx * 0.55, 0.05, 8, 0, centre=(hx, 0, 0), rotate=math.pi / 8))
+    m.add("trim", *prism(hx * 0.55, 0.05, 8, 0, centre=(-hx, 0, 0), rotate=math.pi / 8))
+    return m
+
+
+def shell_mount(h):
+    hx, hy, hz = h
+    m = Model()
+    m.add("dark", *bevel_box([hx, hy, hz], 0.1))
+    m.add("armor", *bevel_box([hx * 0.7, hy * 0.5, hz * 0.7], 0.08, centre=(0, -hy * 0.6, 0)))
+    return m
+
+
+def shell_facet(h):
+    """One flat facet of a half-shell: an armour plate whose side edges are chamfered so
+    neighbouring facets close into a faceted curve; raised panels outside (+Z), a dark ribbed
+    frame inside, a trim band along the top."""
+    hx, hy, hz = h
+    m = Model()
+
+    def close_edges(p):
+        # Narrow the inner side so the facets meet at the curve's facet angle (45°).
+        if p[2] < 0:
+            p[0] *= 1.0 - (-p[2] / hz) * 0.12
+        return p
+
+    m.add("armor", *bevel_box([hx, hy, hz * 0.6], 0.12, squash=close_edges))
+    for row in (0.6, 0.05, -0.5):
+        m.add("armor", *bevel_box([hx * 0.78, hy * 0.2, 0.1], 0.07,
+                                  centre=(0, row * hy, hz * 0.65)))
+    m.add("trim", *box([hx * 0.85, 0.12, 0.08], centre=(0, hy * 0.9, hz * 0.62)))
+    m.add("trim", *box([hx * 0.85, 0.08, 0.06], centre=(0, -hy * 0.92, hz * 0.62)))
+    for x in (-hx * 0.5, 0.0, hx * 0.5):
+        m.add("dark", *box([0.1, hy * 0.85, 0.12], centre=(x, 0, -hz * 0.62)))
     return m
 
 
@@ -393,16 +401,16 @@ MODELS = {
     "frame.drone_pod": drone_pod,
     "frame.gyro": gyro,
     "frame.hinge": hinge_x,
-    "bastion.yoke": yoke,
-    "bastion.turret": turret,
     "bastion.arm_rotor": rotor_y,
     "bastion.arm_hinge": hinge_x,
-    "bastion.arm_segment": arm_segment,
-    "bastion.clamp_palm": palm,
-    "bastion.jaw_hinge": hinge_x,
-    "bastion.jaw": jaw,
-    "bastion.shell_hinge": lambda h: hinge_x(h, sides=6),
-    "bastion.shell_slab": shell_slab,
+    "bastion.spine": spine,
+    "bastion.boom": boom,
+    "bastion.boom_short": boom,
+    "bastion.boom_stub": boom,
+    "bastion.knuckle": knuckle,
+    "bastion.shell_mount": shell_mount,
+    "bastion.shell_facet_upper": shell_facet,
+    "bastion.shell_facet_lower": shell_facet,
     "thruster.main.medium": engine,
 }
 

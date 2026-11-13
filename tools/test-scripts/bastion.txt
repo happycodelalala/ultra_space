@@ -1,9 +1,8 @@
-# The Bastion (an original heavy frame with four manipulator arms and a closing shell). Run with
+# The Bastion (an original heavy frame: four shell arms on a dorsal spine, faceted half-shells). Run with
 # ULTRA_SPACE_START_ALTITUDE=1500. Spawn it, board it, step through its poses with P (name
-# order: arms_deployed, arms_grab, arms_stowed, shell_closed, shell_open, stand), then walk a
-# little with the shell open and stop. Look for: four arms spreading wide with open clamps,
-# reaching forward with closed clamps, folding back; the six slabs hanging straight down into a
-# six-sided shell, then swinging far out; walking and standing after; log "pose: ..." lines.
+# order: cocoon, stand, wings), then walk closed up and stop. Look for: the four half-shells
+# closing into a cocoon around the body, swinging back like wing cases, lifting out to the
+# sides as wings; walking in the cocoon; standing after; log "pose: ..." lines.
 0.5  press Z
 1    wait landed 40
 2    press F
@@ -13,21 +12,18 @@
 5    hold W 4                # walk up to it
 9.5  press F                 # board it
 11   press H                 # hide the HUD
-12   shot 01-rest.png
-12.5 press P                 # arms deployed
-16   shot 02-arms-deployed.png
-16.5 press P                 # arms grab
-20   shot 03-arms-grab.png
-20.5 press P                 # arms stowed
-24   shot 04-arms-stowed.png
-24.5 press P                 # shell closed (arms stowed)
-28.5 shot 05-shell-closed.png
-29   press P                 # shell open
-33   shot 06-shell-open.png
+12   shot 01-stand.png
+12.5 press P                 # cocoon
+18   shot 02-cocoon.png
+18.5 press P                 # stand
+24   shot 03-stand.png
+24.5 press P                 # wings
+30   shot 04-wings.png
+30.5 press P                 # cocoon again (shells closed while walking)
 34   hold W 6
-38   shot 07-walking.png
+38   shot 05-walking-cocoon.png
 40.5 press M                 # legs off: stops on both feet, then plain physics
 41   press H                 # HUD back
-42   shot 08-stopping.png
-45   shot 09-stopped.png
+42   shot 06-stopping.png
+45   shot 07-stopped.png
 45.5 quit
