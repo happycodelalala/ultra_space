@@ -4,7 +4,7 @@
 # their engines, the knees bending in the crouch; the log lines "pose: arms_up" and so on; no
 # parts flying apart.
 0.5  press Z
-1    wait landed 20
+1    wait landed 40
 2    press F
 3    hold Shift 0.3
 3.1  press G                 # choose the heavy frame
