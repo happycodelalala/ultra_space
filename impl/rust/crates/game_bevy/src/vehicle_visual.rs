@@ -535,6 +535,7 @@ fn spawn_plumes(
                                     },
                                     Mesh3d(plume_assets.0.clone()),
                                     MeshMaterial3d(plume_assets.1.clone()),
+                                    bevy::light::NotShadowCaster,
                                     Transform::from_xyz(0.0, nozzle_y, 0.0)
                                         .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
                                         .with_scale(Vec3::new(radius, 0.0, radius)),
@@ -579,10 +580,11 @@ fn sync_vehicle_visuals(
     let plume_assets = plume_assets.get_or_insert_with(|| {
         (
             meshes.add(Cone::new(1.0, 1.0)),
+            // Glowing exhaust: unlit, added to what is behind it.
             materials.add(StandardMaterial {
-                base_color: Color::BLACK,
-                emissive: LinearRgba::rgb(9.0, 5.0, 2.0),
+                base_color: Color::linear_rgb(6.0, 3.2, 1.2),
                 unlit: true,
+                alpha_mode: AlphaMode::Add,
                 ..default()
             }),
         )

@@ -84,6 +84,12 @@ pub struct PlanetMaterial {
 }
 
 impl Material for PlanetMaterial {
+    // Planets, air and ground don't cast shadows: only vehicles do (an atmosphere or cloud
+    // shell would otherwise shade everything inside it).
+    fn enable_shadows() -> bool {
+        false
+    }
+
     fn fragment_shader() -> ShaderRef {
         PLANET_SHADER.into()
     }
@@ -155,6 +161,12 @@ pub struct AtmosphereMaterial {
 }
 
 impl Material for AtmosphereMaterial {
+    // Planets, air and ground don't cast shadows: only vehicles do (an atmosphere or cloud
+    // shell would otherwise shade everything inside it).
+    fn enable_shadows() -> bool {
+        false
+    }
+
     fn fragment_shader() -> ShaderRef {
         ATMOSPHERE_SHADER.into()
     }

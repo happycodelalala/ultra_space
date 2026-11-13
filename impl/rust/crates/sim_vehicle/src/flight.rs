@@ -708,6 +708,10 @@ pub fn flight_system(
             telemetry.in_contact = true;
             continue;
         }
+        if walking {
+            // Its engines are idle while its legs carry it (no stale throttles left showing).
+            telemetry.throttles.iter_mut().for_each(|t| *t = 0.0);
+        }
         if arcade || walking || cruise.is_some_and(Cruise::is_cruising) {
             // Moved by arcade flight, its legs or the cruise drive; still there for others to hit.
             let com = body.mass.center_of_mass;
