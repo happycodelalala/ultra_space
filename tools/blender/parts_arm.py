@@ -169,21 +169,30 @@ def saddle(m, h, part):
         tangent = V((math.cos(t) * sx, 0, math.sin(t)))
         rim = p + d * 0.42
         foot = V((rim.x, -hy, rim.z))
-        outer = socket_section(rim, d, tangent, 0.95, 0.68, 0.25)
-        base = [V((q.x, -hy, q.z)) for q in socket_section(foot, d, tangent, 1.0, 0.72, 0.25)]
+        # The root hinge reaches 0.84 m along its axis (its actuator) and 0.5 m across.
+        outer = socket_section(rim, d, tangent, 1.08, 0.72, 0.28)
+        base = [V((q.x, -hy, q.z)) for q in socket_section(foot, d, tangent, 1.12, 0.76, 0.28)]
         tower = m.hull(outer + base, "armor", bevel=0.012)
-        cavity = m.hull(socket_section(p - d * 0.25, d, tangent, 0.8, 0.53, 0.2)
-                        + socket_section(p + d * 1.2, d, tangent, 0.8, 0.53, 0.2), cutter=True)
-        for ob in (tower, body, cap):
-            m.cut(ob, cavity)
-        collar = m.hull(socket_section(rim - d * 0.08, d, tangent, 1.0, 0.73, 0.26)
-                        + socket_section(rim + d * 0.04, d, tangent, 0.98, 0.71, 0.26), "metal", bevel=0.006)
-        m.cut(collar, cavity)
+
+        def cavity(grow):
+            return m.hull(socket_section(p - d * (0.25 + 2 * grow), d, tangent, 0.93 + grow, 0.58 + grow, 0.22)
+                          + socket_section(p + d * 1.2, d, tangent, 0.93 + grow, 0.58 + grow, 0.22),
+                          cutter=True)
+        m.cut(tower, cavity(0.0))
+        # The body and cap are cut wider and deeper, so their cut faces stay hidden behind the
+        # tower's (no two surfaces in the same place).
+        wide = cavity(0.06)
+        for ob in (body, cap):
+            m.cut(ob, wide)
+        # Collar on the rim (above the tower's top, no faces shared with it).
+        collar = m.hull(socket_section(rim + d * 0.005, d, tangent, 1.13, 0.77, 0.3)
+                        + socket_section(rim + d * 0.09, d, tangent, 1.1, 0.74, 0.3), "metal", bevel=0.006)
+        m.cut(collar, cavity(-0.02))
         # Gussets from the tower's sides down into the body.
         a = (tangent - d * tangent.dot(d)).normalized()
         w = d.cross(a).normalized()
         for s in (-1, 1):
-            q = rim - d * 0.15 + w * s * 0.7
+            q = rim - d * 0.15 + w * s * 0.74
             down = V((q.x + w.x * s * 0.35, -hy * 0.6, q.z + w.z * s * 0.35))
             m.hull([q + a * e for e in (-0.06, 0.06)] + [down + a * e for e in (-0.08, 0.08)]
                    + [V((q.x, -hy * 0.6, q.z)) + a * e for e in (-0.08, 0.08)], "armor2", bevel=0.004)
