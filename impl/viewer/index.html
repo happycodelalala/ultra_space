@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Viewer</title>
+<style>
+  :root { --bg: #11151a; --panel: #1b2129; --line: #2c3540; --text: #d9e2ec; --dim: #8796a5;
+          --accent: #c9963f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 13px/1.4 system-ui, sans-serif; }
+  #app { display: grid; grid-template-columns: 300px 1fr; height: 100%; }
+  #panel { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto;
+           padding: 10px 12px; }
+  #view { position: relative; overflow: hidden; }
+  canvas { display: block; }
+  h1 { font-size: 15px; margin: 0 0 8px; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+       margin: 14px 0 6px; }
+  select, input[type=text], button { background: #0f1318; color: var(--text);
+       border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+  select, input[type=text] { width: 100%; }
+  button { cursor: pointer; margin: 0 4px 4px 0; }
+  button:hover { border-color: var(--accent); }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  label.toggle { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; }
+  .joint { display: grid; grid-template-columns: 1fr 44px; gap: 2px 6px; margin-bottom: 4px; }
+  .joint span { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; }
+  .joint input[type=range] { grid-column: 1 / 3; width: 100%; }
+  #info { font: 12px/1.5 ui-monospace, monospace; color: var(--dim); white-space: pre-wrap; }
+  #status { position: absolute; left: 10px; bottom: 8px; font: 12px ui-monospace, monospace;
+            color: var(--dim); }
+  #hover { position: absolute; pointer-events: none; background: rgba(0,0,0,.7); padding: 2px 6px;
+           border-radius: 3px; font: 12px ui-monospace, monospace; display: none; }
+  body.bare #panel, body.bare #status { display: none; }
+  body.bare #app { grid-template-columns: 1fr; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <h1>Design Viewer</h1>
+    <h2>Show</h2>
+    <select id="mode">
+      <option value="design">A design (content/data/vehicles)</option>
+      <option value="part">A part and its model (content/data/parts)</option>
+    </select>
+    <div style="height:6px"></div>
+    <select id="design"></select>
+    <select id="part" style="display:none"></select>
+
+    <h2>Views</h2>
+    <div id="views"></div>
+
+    <h2>Overlays</h2>
+    <label class="toggle"><input type="checkbox" id="showBoxes">collision</label>
+    <label class="toggle"><input type="checkbox" id="showNodes">nodes</label>
+    <label class="toggle"><input type="checkbox" id="showCom" checked>centre of mass</label>
+    <label class="toggle"><input type="checkbox" id="showGround" checked>ground</label>
+
+    <div id="poseSection">
+      <h2>Poses</h2>
+      <div id="poses"></div>
+      <button id="savePose">Save pose as…</button>
+      <h2>Joints <span id="jointCount"></span></h2>
+      <input type="text" id="jointFilter" placeholder="filter joints">
+      <div style="height:6px"></div>
+      <div id="joints"></div>
+    </div>
+
+    <h2>Output</h2>
+    <button id="shots">Review shots</button>
+    <button id="exportGlb">Export model (.glb)</button>
+
+    <h2>Info</h2>
+    <div id="info"></div>
+  </div>
+  <div id="view"><div id="hover"></div><div id="status"></div></div>
+</div>
+<script type="module" src="/viewer/viewer.mjs"></script>
+</body>
+</html>

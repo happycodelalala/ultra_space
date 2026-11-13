@@ -119,6 +119,13 @@ honestly with their output.
   changes aren't tested.
   WSL itself can only render in software (OpenGL on Mesa's D3D12 driver can't present to a
   window or run the atmosphere shader), so in-WSL captures are a fallback.
+- **Design viewer** (`impl/viewer`, three.js): `tools/viewer.sh` serves http://localhost:8765/
+  (open it in a Windows browser) showing designs and part models from `content/` and
+  `assets/export/models/` with joints, poses, collision boxes, centre of mass and live reload.
+  `tools/viewer-shots.sh <design> [pose] [views]` (or `--part <id>`) saves review shots to
+  `.viewer-shots/` with headless Chromium, no window: use it to check geometry before a game
+  round. The viewer writes only design JSON and `.glb` models in the game's folders and
+  formats.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.
