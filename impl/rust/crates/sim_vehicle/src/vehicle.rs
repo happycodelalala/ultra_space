@@ -208,12 +208,32 @@ impl VehicleBody {
             .iter()
             .enumerate()
             .filter(|(_, p)| p.def.wheel.is_none())
-            .map(|(i, p)| PartCollider {
-                shape: p.def.collision_shape(),
-                position: p.position,
-                rotation: p.rotation,
-                exact: p.def.kind == PartKind::LandingLeg,
-                group: articulation.part_group[i],
+            .flat_map(|(i, p)| {
+                let shape = p.def.collision_shape();
+                let group = articulation.part_group[i];
+                let tiles = shape.tiles();
+                if tiles.is_empty() {
+                    return vec![PartCollider {
+                        shape,
+                        position: p.position,
+                        rotation: p.rotation,
+                        exact: p.def.kind == PartKind::LandingLeg,
+                        group,
+                    }];
+                }
+                // A procedural shape collides as its tiles (boxes following its surface).
+                tiles
+                    .into_iter()
+                    .map(|t| PartCollider {
+                        shape: Shape::Box {
+                            size_m: (t.half * 2.0).to_array(),
+                        },
+                        position: p.position + p.rotation * t.centre,
+                        rotation: (p.rotation * t.rotation).normalize(),
+                        exact: false,
+                        group,
+                    })
+                    .collect()
             })
             .collect();
         Some(Self {

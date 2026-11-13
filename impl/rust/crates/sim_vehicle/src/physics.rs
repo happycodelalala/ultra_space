@@ -165,6 +165,11 @@ fn part_shape(shape: Shape) -> SharedShape {
         }
         Shape::Cylinder { radius_m, length_m } => SharedShape::cylinder(length_m / 2.0, radius_m),
         Shape::Sphere { radius_m } => SharedShape::ball(radius_m),
+        // Shells reach physics as their tiles (VehicleBody colliders); never as one shape.
+        Shape::Shell { .. } => {
+            let half = shape.bounds().1;
+            SharedShape::cuboid(half.x, half.y, half.z)
+        }
     }
 }
 
@@ -194,6 +199,10 @@ fn shape_points(c: &PartCollider) -> Vec<DVec3> {
                 DVec3::new(a.cos() * radius_m, y, a.sin() * radius_m)
             })
             .collect(),
+        Shape::Shell { .. } => {
+            let (mid, half) = c.shape.bounds();
+            corners(half).into_iter().map(|p| p + mid).collect()
+        }
         Shape::Sphere { radius_m } => [
             DVec3::X,
             DVec3::NEG_X,

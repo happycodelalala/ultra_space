@@ -87,6 +87,47 @@
               "exclusiveMinimum": 0
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "profile_m",
+            "arc_deg",
+            "thickness_m"
+          ],
+          "description": "A curved shell (procedural): part of a surface of revolution about the part's Y axis, its side profile a smooth curve through four (height, radius) points top to bottom, spanning the azimuths arc_deg (0 along +Z, 90 along -X). Collides as tiles following the surface.",
+          "properties": {
+            "type": {
+              "const": "shell"
+            },
+            "profile_m": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "arc_deg": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "thickness_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       ]
     },

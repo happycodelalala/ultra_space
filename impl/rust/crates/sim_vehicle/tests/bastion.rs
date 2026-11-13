@@ -1,11 +1,13 @@
-//! The Bastion: an original heavy frame (~22 m, ~120 t) whose armour moves. A pod on each
-//! shoulder carries two shell arms, one reaching down the front and one down the back; each arm
-//! holds a faceted quarter-shell. Closed, the four quarters make a ring around the body seen from
-//! above — a cocoon over the torso, head and thighs (wider at the shoulders, narrower at the
-//! thighs), with the arms folded inside. Each arm opens its quarter like a petal. Thrusters on
-//! the rear quarters point straight back when closed. Built only with the builder's operations,
-//! on the heavy frame's walking body. `content/data/vehicles/bastion.json` is this design;
-//! refresh it with `cargo test -p sim_vehicle --test bastion -- --ignored`.
+//! The Bastion: an original heavy frame (~22 m, ~110 t) whose armour moves. A saddle bolted
+//! on each shoulder carries two shell arms, one at the front and one at the back; each arm
+//! reaches up over the shoulder and holds a curved quarter-shell by its crown. Closed, the four
+//! quarters make a cocoon around the body — domed over the head, widest at the shoulders,
+//! tapering to mid-thigh so the legs walk free below — with the arms inside the dome, where
+//! there is room. Hung from their crowns, the quarters stay closed under their own weight. Each
+//! arm opens its quarter like a petal. Thrusters on the rear quarters point straight back when
+//! closed. Every pose and every move between poses is checked free of interference.
+//! `content/data/vehicles/bastion.json` is this design; refresh it with
+//! `cargo test -p sim_vehicle --test bastion -- --ignored`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,9 +16,11 @@ use glam::{DMat3, DQuat, DVec3};
 use sim_vehicle::builder::{
     FreeNode, Symmetry, attach_at_node, attach_to_surface, free_nodes, place_symmetric, stats,
 };
+use sim_vehicle::catalog::{SHELL_PROFILE_STEPS, Shape, shell_profile};
 use sim_vehicle::design::{NamedPose, check_join, design_json};
 use sim_vehicle::gait::{GaitDef, LegDef};
-use sim_vehicle::joints::{Articulation, JointState, Pose};
+use sim_vehicle::interference::{Interference, interferences};
+use sim_vehicle::joints::{Articulation, JointState};
 use sim_vehicle::{PartCatalog, PartDef, Vehicle, VehicleBody, VehicleDesign, VehiclePart};
 
 fn content() -> PathBuf {
@@ -24,53 +28,30 @@ fn content() -> PathBuf {
 }
 
 const NAME: &str = "Bastion";
-const DESCRIPTION: &str = "An original heavy frame, about 22 m and 120 tonnes, whose armour \
-     moves: a pod on each shoulder carries two shell arms, front and back, each holding a \
-     faceted quarter-shell. Closed, the four quarters ring the body into a cocoon with the arms \
-     folded inside and the engines on the rear quarters pointing straight back; each arm opens \
-     its quarter like a petal. Forward is -Z.";
+const DESCRIPTION: &str = "An original heavy frame, about 22 m and 110 tonnes, whose armour \
+     moves: a saddle on each shoulder carries two shell arms, front and back, each holding a \
+     curved quarter-shell by its crown. Closed, the quarters make a cocoon domed over the head \
+     and tapering to mid-thigh, the arms inside the dome and the engines on the rear quarters \
+     pointing straight back; each arm opens its quarter like a petal. Forward is -Z.";
 
-/// A quarter-shell and its arm: name, the shoulder pod's node, the arm's beam, and the
-/// azimuths its facets span (left side; 0 behind, 90 left, 180 in front, degrees).
-struct Quarter {
-    name: &'static str,
-    node: &'static str,
-    beam: &'static str,
-    from_deg: f64,
-}
+/// The quarters on the left: name, the saddle node of its arm, and the azimuth of its middle
+/// (0 behind, 90 left, 180 in front, degrees).
+const QUARTERS: [(&str, &str, f64); 2] = [("front", "front", 135.0), ("back", "back", 45.0)];
 
-const QUARTERS: [Quarter; 2] = [
-    Quarter {
-        name: "front",
-        node: "front",
-        beam: "bastion.boom_stub",
-        from_deg: 90.0,
-    },
-    Quarter {
-        name: "back",
-        node: "back",
-        beam: "bastion.boom_short",
-        from_deg: 0.0,
-    },
-];
-
-/// The cocoon's two rings: radius (m), height of the middle (m), facet part. The upper ring
-/// covers the torso and head, the lower the waist and thighs.
-const RINGS: [(f64, f64, &str); 2] = [
-    (5.0, 0.3, "bastion.shell_facet_upper"),
-    (4.2, -8.0, "bastion.shell_facet_lower"),
-];
-
-/// The shells wrap around this vertical axis (vehicle frame, x = 0).
-const SHELL_AXIS_Z: f64 = 0.4;
-/// Each facet spans 45°: two per quarter and ring.
-const FACET_DEG: f64 = 45.0;
-/// Where the shoulder pods sit (left; on top of the shoulder block).
-const POD_AT: DVec3 = DVec3::new(-3.3, 2.7, 0.0);
-/// Height of each engine pair above (upper ring) or below (lower ring) the centre of mass
-/// (m), and the spacing within a pair.
-const ENGINE_GAP: f64 = 4.4;
-const ENGINE_SPREAD: f64 = 2.4;
+/// The cocoon wraps around this vertical axis (vehicle frame, x = 0).
+const SHELL_AXIS_Z: f64 = 0.3;
+/// Where the shoulder saddles sit (left; on top of the shoulder block, clear of the torso).
+const SADDLE_AT: DVec3 = DVec3::new(-3.35, 2.55, 0.0);
+/// Overlap allowed between parts that aren't joined (m): the seams between neighbouring
+/// quarters.
+const TOLERANCE: f64 = 0.05;
+/// Height of each engine pair above (upper) or below (lower) the centre of mass, the spacing
+/// within a pair (m), and the azimuth they sit at (near the back seam, degrees).
+const ENGINE_GAP: f64 = 3.5;
+const ENGINE_SPREAD: f64 = 2.0;
+const ENGINE_AZIMUTH: f64 = 30.0;
+/// How far the poses open the quarters at most (degrees).
+const OPEN_LIMIT: f64 = 100.0;
 
 /// Outward direction of the left side at azimuth `deg`: 0 behind (+Z), 90 left (−X), 180 in
 /// front (−Z).
@@ -117,8 +98,8 @@ impl Builder {
         i
     }
 
-    /// Like [`Builder::join`], turned about the node so that the part's X axis (a hinge's
-    /// axis) lies along `want_x` as near as whole degrees allow.
+    /// Like [`Builder::join`] by the part's `base` node, turned about the node so that its X
+    /// axis (a hinge's axis) lies along `want_x` as near as whole degrees allow.
     fn join_aligned(
         &mut self,
         parent: &str,
@@ -169,13 +150,7 @@ impl Builder {
 
     /// Like [`Builder::pair`] for a hinge whose axis (on the left) lies along `want_x`.
     fn pair_hinge(&mut self, parent: &str, to: &str, id: &str, base: &str, want_x: DVec3) {
-        let i = self.join_aligned(
-            &format!("{parent}_left"),
-            to,
-            id,
-            &format!("{base}_left"),
-            want_x,
-        );
+        let i = self.join_aligned(parent, to, id, &format!("{base}_left"), want_x);
         self.mirror(i, &format!("{base}_right"));
     }
 
@@ -195,6 +170,21 @@ impl Builder {
         self.v.parts[i].name = format!("{base}_left");
         self.mirror(i, &format!("{base}_right"));
     }
+}
+
+/// The quarter's profile radius at height `y` (m; linear between the curve's samples).
+fn profile_radius(shape: &Shape, y: f64) -> f64 {
+    let Shape::Shell { profile_m, .. } = *shape else {
+        panic!("not a shell")
+    };
+    let samples = shell_profile(profile_m, SHELL_PROFILE_STEPS * 4);
+    for w in samples.windows(2) {
+        let ([y0, r0], [y1, r1]) = (w[0], w[1]);
+        if (y1..=y0).contains(&y) {
+            return r0 + (r1 - r0) * (y - y0) / (y1 - y0);
+        }
+    }
+    panic!("height {y} outside the shell")
 }
 
 /// Assembles the Bastion with the builder's operations.
@@ -238,101 +228,98 @@ fn assemble() -> Vehicle {
     b.pair("shin", "bottom", "frame.hinge", "base", "ankle_joint");
     b.pair("ankle_joint", "end", "frame.foot", "top", "foot");
 
-    // A pod on each shoulder.
+    // A saddle bolted on each shoulder block.
     b.surface_pair(
         "shoulder_left",
-        "bastion.shoulder_pod",
-        POD_AT,
+        "bastion.saddle",
+        SADDLE_AT,
         DQuat::IDENTITY,
-        "pod",
+        "saddle",
     );
 
-    // Four shell arms (built on the left, mirrored), each hanging from its pod down the inside
-    // of its quarter: open (axis along the shell's curve: swings the quarter's bottom out like
-    // a petal), sweep (turns it round the body), a beam, twist (turns it about the arm), and the
-    // mount its facets are fixed to.
-    for q in &QUARTERS {
-        let middle = q.from_deg + FACET_DEG;
+    // Four shell arms (built on the left, mirrored), each from its saddle up over the head to
+    // the inside of its quarter's dome: swing and lift at the shoulder (move the whole quarter),
+    // a beam, and the open hinge the quarter hangs from (axis along the shell's curve, near the
+    // crown: the quarter swings out from its top like a petal, nearly all of it below the
+    // pivot, so its dome doesn't swing in onto the head or its neighbours).
+    for (quarter, node, middle) in QUARTERS {
+        let name = |part: &str| format!("{quarter}_{part}");
         let tangent = DVec3::Y.cross(radial_left(middle)).normalize();
-        let name = |part: &str| format!("{}_{part}", q.name);
-        let i = b.join_aligned(
-            "pod_left",
-            q.node,
+        let along = b.free("saddle_left", node).direction;
+        b.pair_hinge(
+            "saddle_left",
+            node,
             "bastion.arm_hinge",
-            &format!("{}_left", name("open")),
+            &name("swing"),
+            DVec3::Y,
+        );
+        b.pair_hinge(
+            &format!("{}_left", name("swing")),
+            "end",
+            "bastion.arm_hinge",
+            &name("lift"),
+            DVec3::Y.cross(along).normalize(),
+        );
+        b.pair(
+            &name("lift"),
+            "end",
+            "bastion.arm_beam",
+            "top",
+            &name("beam"),
+        );
+        b.pair_hinge(
+            &format!("{}_left", name("beam")),
+            "bottom",
+            "bastion.arm_hinge",
+            &name("open"),
             tangent,
         );
-        b.mirror(i, &format!("{}_right", name("open")));
-        b.pair_hinge(
-            &name("open"),
-            "end",
-            "bastion.arm_hinge",
-            &name("sweep"),
-            radial_left(middle),
-        );
-        b.pair(&name("sweep"), "end", q.beam, "top", &name("beam"));
-        b.pair(
-            &name("beam"),
-            "bottom",
-            "bastion.arm_rotor",
-            "base",
-            &name("twist"),
-        );
-        b.pair(
-            &name("twist"),
-            "end",
-            "bastion.shell_mount",
-            "base",
-            &name("mount"),
-        );
-
-        // The quarter: two facets per ring, around the axis.
-        for (ring, (radius, height, facet)) in RINGS.iter().enumerate() {
-            for k in 0..2 {
-                let deg = q.from_deg + FACET_DEG * (k as f64 + 0.5);
-                let out = radial_left(deg);
-                let centre = DVec3::new(0.0, *height, SHELL_AXIS_Z)
-                    + out * radius * (FACET_DEG.to_radians() / 2.0).cos();
-                // Facet axes: X along the curve, Y up, Z outward.
-                let rotation =
-                    DQuat::from_mat3(&DMat3::from_cols(DVec3::Y.cross(out), DVec3::Y, out));
-                b.surface_pair(
-                    &format!("{}_left", name("mount")),
-                    facet,
-                    centre,
-                    rotation,
-                    &name(&format!("facet_{}_{}", ring + 1, k + 1)),
-                );
+        // The quarter hangs from the open hinge by its node near the crown, facing its
+        // diagonal; its axis lands on the cocoon's axis. Each side has its own (handed) part.
+        for (side, deg) in [("left", middle), ("right", -middle)] {
+            let parent = format!("{}_{side}", name("open"));
+            let at = b.free(&parent, "end");
+            let def = b.part(&format!("bastion.shell_quarter_{quarter}_{side}"));
+            let want = radial_left(deg);
+            let mut best = (f64::MIN, 0.0);
+            for d in 0..360 {
+                let roll = f64::from(d).to_radians();
+                let i = attach_at_node(&mut b.v, &def, "hang", &at, roll).unwrap();
+                let score = (b.v.parts[i].rotation * DVec3::Z).dot(want);
+                b.v.parts.pop();
+                if score > best.0 {
+                    best = (score, roll);
+                }
             }
+            let i = attach_at_node(&mut b.v, &def, "hang", &at, best.1).unwrap();
+            b.v.parts[i].name = format!("{}_{side}", name("shell"));
         }
     }
 
-    // Engines: on the outer face of each rear quarter's rearmost facets, nozzles straight back;
-    // the upper pair as far above the centre of mass as the lower pair below it, so the forward
-    // thrust line passes through it.
+    // Engines: on the outer face of each rear quarter near the back seam, nozzles straight
+    // back; the upper pair as far above the centre of mass as the lower pair below it, so the
+    // forward thrust line passes through it.
     let com_y = VehicleBody::of(&b.v).unwrap().mass.center_of_mass.y;
+    let shell = b.part("bastion.shell_quarter_back_left").shape;
+    let Shape::Shell { thickness_m, .. } = shell else {
+        unreachable!("the quarter is a shell")
+    };
     let nozzle_back = DQuat::from_rotation_x(-std::f64::consts::FRAC_PI_2);
-    for (ring, (_, _, _)) in RINGS.iter().enumerate() {
-        let facet = b.index(&format!("back_facet_{}_1_left", ring + 1));
-        let (centre, rotation) = (b.v.parts[facet].position, b.v.parts[facet].rotation);
-        let out = rotation * DVec3::Z;
-        let y = if ring == 0 {
-            com_y + ENGINE_GAP
-        } else {
-            com_y - ENGINE_GAP
-        };
+    for (level, y) in [("upper", com_y + ENGINE_GAP), ("lower", com_y - ENGINE_GAP)] {
         for (n, dy) in [ENGINE_SPREAD / 2.0, -ENGINE_SPREAD / 2.0]
             .into_iter()
             .enumerate()
         {
-            let at = DVec3::new(centre.x, y + dy, centre.z) + out * (0.25 + 0.9);
-            b.surface_pair(
-                &format!("back_facet_{}_1_left", ring + 1),
-                "thruster.main.medium",
-                at,
-                nozzle_back,
-                &format!("engine_{}_{}", ring + 1, n + 1),
-            );
+            let y = y + dy;
+            let r = profile_radius(&shell, y) + thickness_m / 2.0 + 0.9;
+            let at = DVec3::new(0.0, y, SHELL_AXIS_Z) + radial_left(ENGINE_AZIMUTH) * r;
+            // On each side by hand, on its own quarter (the quarters aren't mirrored copies).
+            let engine = b.part("thruster.main.medium");
+            for (side, at) in [("left", at), ("right", DVec3::new(-at.x, at.y, at.z))] {
+                let parent = b.index(&format!("back_shell_{side}"));
+                let i = attach_to_surface(&mut b.v, &engine, parent, at, nozzle_back).unwrap();
+                b.v.parts[i].name = format!("engine_{level}_{}_{side}", n + 1);
+            }
         }
     }
 
@@ -359,79 +346,82 @@ fn assemble() -> Vehicle {
     b.v
 }
 
-/// One quarter-shell arm: its open joint's group, the group its facets move with, and the
-/// facets.
-struct ShellArm {
-    open: usize,
-    group: usize,
-    facets: Vec<usize>,
+fn part(v: &Vehicle, name: &str) -> usize {
+    v.parts
+        .iter()
+        .position(|p| p.name == name)
+        .unwrap_or_else(|| panic!("no part {name}"))
 }
 
-fn shell_arm(v: &Vehicle, a: &Articulation, quarter: &str, side: &str) -> ShellArm {
-    let part = |name: String| {
-        v.parts
+fn joint(v: &Vehicle, a: &Articulation, name: &str) -> usize {
+    a.group_of_joint(part(v, name)).unwrap()
+}
+
+/// Where a quarter's middle (its centre of mass) is for joint `angles`.
+fn quarter_at(v: &Vehicle, a: &Articulation, quarter: &str, side: &str, angles: &[f64]) -> DVec3 {
+    let i = part(v, &format!("{quarter}_shell_{side}"));
+    let p = &v.parts[i];
+    a.poses(angles)[a.part_group[i]].apply(p.position + p.rotation * p.def.shape.centroid())
+}
+
+/// Distance of a point from the cocoon's axis.
+fn radius(p: DVec3) -> f64 {
+    DVec3::new(p.x, 0.0, p.z - SHELL_AXIS_Z).length()
+}
+
+/// Whether moving the joints from `from` to `to` in small steps stays free of interference.
+fn clear_path(v: &Vehicle, a: &Articulation, from: &[f64], to: &[f64]) -> bool {
+    let steps = 12;
+    (0..=steps).all(|k| {
+        let t = f64::from(k) / f64::from(steps);
+        let angles: Vec<f64> = from.iter().zip(to).map(|(x, y)| x + (y - x) * t).collect();
+        interferences(v, a, &angles, TOLERANCE).is_empty()
+    })
+}
+
+/// Opens the named quarters' petals from `start` as far as `limit` degrees (5° steps), keeping
+/// every step free of interference. Returns the angles.
+fn open_quarters(
+    v: &Vehicle,
+    a: &Articulation,
+    start: &[f64],
+    quarters: &[&str],
+    limit: f64,
+) -> Vec<f64> {
+    let mut angles = start.to_vec();
+    for &quarter in quarters {
+        // Both sides together, mirror images (a pair opens symmetrically).
+        let joints: Vec<(usize, f64)> = ["left", "right"]
             .iter()
-            .position(|p| p.name == name)
-            .unwrap_or_else(|| panic!("no part {name}"))
-    };
-    let joint = |j: &str| {
-        a.group_of_joint(part(format!("{quarter}_{j}_{side}")))
-            .unwrap()
-    };
-    let facets: Vec<usize> = [(1, 1), (1, 2), (2, 1), (2, 2)]
-        .iter()
-        .map(|(r, k)| part(format!("{quarter}_facet_{r}_{k}_{side}")))
-        .collect();
-    ShellArm {
-        open: joint("open"),
-        group: a.part_group[facets[0]],
-        facets,
+            .map(|side| {
+                let g = joint(v, a, &format!("{quarter}_open_{side}"));
+                // The sign that swings the quarter outward.
+                let out = |deg: f64| {
+                    let mut t = angles.clone();
+                    t[g] = deg.to_radians();
+                    radius(quarter_at(v, a, quarter, side, &t))
+                };
+                (g, if out(10.0) > out(-10.0) { 1.0 } else { -1.0 })
+            })
+            .collect();
+        let mut deg = 0.0;
+        while deg + 5.0 <= limit {
+            let mut next = angles.clone();
+            for &(g, sign) in &joints {
+                next[g] = sign * (deg + 5.0f64).to_radians();
+            }
+            if !clear_path(v, a, &angles, &next) {
+                break;
+            }
+            angles = next;
+            deg += 5.0;
+        }
     }
+    angles
 }
 
-/// Where a quarter is for joint `angles`: the middle of its facets and its outward direction
-/// (the mean of the facets' outward normals).
-fn shell_at(v: &Vehicle, a: &Articulation, arm: &ShellArm, angles: &[f64]) -> (DVec3, DVec3) {
-    let poses: Vec<Pose> = a.poses(angles);
-    let pose = poses[arm.group];
-    let n = arm.facets.len() as f64;
-    let centre = arm
-        .facets
-        .iter()
-        .map(|&f| pose.apply(v.parts[f].position))
-        .sum::<DVec3>()
-        / n;
-    let out = arm
-        .facets
-        .iter()
-        .map(|&f| pose.rotation * (v.parts[f].rotation * DVec3::Z))
-        .sum::<DVec3>()
-        .normalize();
-    (centre, out)
-}
-
-/// The open angle (degrees, the sign that swings the quarter outward) of `magnitude`.
-fn opened(v: &Vehicle, a: &Articulation, arm: &ShellArm, magnitude: f64) -> f64 {
-    let n = a.groups.len();
-    let reach = |deg: f64| {
-        let mut angles = vec![0.0; n];
-        angles[arm.open] = deg.to_radians();
-        let (c, _) = shell_at(v, a, arm, &angles);
-        DVec3::new(c.x, 0.0, c.z - SHELL_AXIS_Z).length()
-    };
-    if reach(magnitude) >= reach(-magnitude) {
-        magnitude
-    } else {
-        -magnitude
-    }
-}
-
-/// How far each pose opens the quarters (degrees).
-const STAND_FRONT_OPEN: f64 = 70.0;
-const BLOOM_OPEN: f64 = 75.0;
-
-/// The Bastion's poses: cocoon (closed), stand (front quarters open, back closed: the front
-/// free for work, the back armoured) and bloom (all four open like petals).
+/// The Bastion's poses: cocoon (closed), stand (the front quarters open: the front free for
+/// work, the back armoured) and bloom (all four open like petals).
 fn poses(v: &Vehicle) -> Vec<NamedPose> {
     let body = VehicleBody::of(v).unwrap();
     let a = &body.articulation;
@@ -449,20 +439,12 @@ fn poses(v: &Vehicle) -> Vec<NamedPose> {
             })
             .collect(),
     };
-    let mut stand = vec![0.0; n];
-    let mut bloom = vec![0.0; n];
-    for side in ["left", "right"] {
-        for q in &QUARTERS {
-            let arm = shell_arm(v, a, q.name, side);
-            if q.name == "front" {
-                stand[arm.open] = opened(v, a, &arm, STAND_FRONT_OPEN).to_radians();
-            }
-            bloom[arm.open] = opened(v, a, &arm, BLOOM_OPEN).to_radians();
-        }
-    }
+    let closed = vec![0.0; n];
+    let stand = open_quarters(v, a, &closed, &["front"], OPEN_LIMIT);
+    let bloom = open_quarters(v, a, &stand, &["back"], OPEN_LIMIT);
     vec![
         named("bloom", &bloom),
-        named("cocoon", &vec![0.0; n]),
+        named("cocoon", &closed),
         named("stand", &stand),
     ]
 }
@@ -475,6 +457,19 @@ fn design() -> Vehicle {
 
 fn pose(v: &Vehicle, a: &Articulation, name: &str) -> Vec<f64> {
     sim_vehicle::joints::pose_angles(v, a, name).unwrap_or_else(|| panic!("pose {name}"))
+}
+
+fn report(v: &Vehicle, found: &[Interference]) -> String {
+    found
+        .iter()
+        .map(|i| {
+            format!(
+                "{} x {} ({:.2} m)",
+                v.parts[i.a].name, v.parts[i.b].name, i.depth
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 #[test]
@@ -505,93 +500,92 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
     );
     assert!(s.problems.is_empty(), "{:?}", s.problems);
     assert!(s.thrust_to_weight > 1.5);
-    // Each arm's mount ends inside its quarter, near the plates.
-    for q in &QUARTERS {
-        let mount = &v.parts[v
-            .parts
-            .iter()
-            .position(|p| p.name == format!("{}_mount_left", q.name))
-            .unwrap()];
-        let face = mount.position + mount.rotation * DVec3::new(0.0, -0.2, 0.0);
-        let r = DVec3::new(face.x, 0.0, face.z - SHELL_AXIS_Z).length();
-        let inside = RINGS[0].0 * (FACET_DEG.to_radians() / 2.0).cos() - 0.25;
-        println!(
-            "{} mount at {:.2?}, r {r:.2} m; the quarter's inside is at {inside:.2} m",
-            q.name, face
-        );
-        assert!(
-            r < inside && r > inside - 1.0,
-            "{}: mount at r {r:.2} m, shell at {inside:.2} m",
-            q.name
-        );
+    // Hung from their arms, the quarters sit around the cocoon's axis.
+    for q in ["front", "back"] {
+        for side in ["left", "right"] {
+            let p = &v.parts[part(&v, &format!("{q}_shell_{side}"))];
+            let axis = p.position - DVec3::new(0.0, 0.0, SHELL_AXIS_Z);
+            let up = p.rotation * DVec3::Y;
+            println!(
+                "{q} {side} quarter: axis off by {:.3} m, tilted {:.2} deg",
+                axis.length(),
+                up.angle_between(DVec3::Y).to_degrees()
+            );
+            assert!(
+                axis.length() < 0.06 && up.dot(DVec3::Y) > 0.9995,
+                "{q} {side}"
+            );
+        }
     }
 }
 
 #[test]
-fn closed_the_quarters_ring_the_body_into_a_cocoon() {
+fn closed_the_quarters_make_a_cocoon_with_nothing_in_the_way() {
     let v = assemble();
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
     let rest = vec![0.0; a.groups.len()];
-    // Every other part is inside the rings at its height (the shins and feet walk out below).
-    for p in &v.parts {
-        if p.name.contains("facet") || p.name.contains("engine") {
-            continue;
-        }
-        let r = DVec3::new(p.position.x, 0.0, p.position.z - SHELL_AXIS_Z).length();
-        let limit = if p.position.y > -4.0 {
-            RINGS[0].0
-        } else if p.position.y > -12.0 {
-            RINGS[1].0
-        } else {
-            continue;
-        };
-        assert!(
-            r < limit - 0.25,
-            "{} at r {r:.2} m pokes out of the cocoon ({limit} m)",
-            p.name
-        );
-    }
-    // Seen from above, the four quarters face the four diagonals.
-    for (q, side, want) in [
+    let found = interferences(&v, a, &rest, TOLERANCE);
+    assert!(found.is_empty(), "closed: {}", report(&v, &found));
+    // Seen from above, the four quarters' middles lie on the four diagonals.
+    for (quarter, side, want) in [
         ("front", "left", DVec3::new(-1.0, 0.0, -1.0)),
         ("back", "left", DVec3::new(-1.0, 0.0, 1.0)),
         ("front", "right", DVec3::new(1.0, 0.0, -1.0)),
         ("back", "right", DVec3::new(1.0, 0.0, 1.0)),
     ] {
-        let (_, out) = shell_at(&v, a, &shell_arm(&v, a, q, side), &rest);
-        assert!(out.dot(want.normalize()) > 0.99, "{q} {side} faces {out:?}");
+        let c = quarter_at(&v, a, quarter, side, &rest);
+        let flat = DVec3::new(c.x, 0.0, c.z - SHELL_AXIS_Z).normalize();
+        assert!(flat.dot(want.normalize()) > 0.99, "{quarter} {side}: {c:?}");
     }
 }
 
 #[test]
-fn the_quarters_open_like_petals() {
+fn every_pose_and_every_move_between_them_is_free_of_interference() {
     let v = design();
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
+    let names: Vec<&str> = v.poses.iter().map(|p| p.name.as_str()).collect();
+    for from in &names {
+        for to in &names {
+            let (x, y) = (pose(&v, a, from), pose(&v, a, to));
+            assert!(clear_path(&v, a, &x, &y), "{from} -> {to}");
+        }
+    }
+    // The petals open well: the front quarters in stand, all four in bloom.
     let rest = vec![0.0; a.groups.len()];
-    let (stand, bloom) = (pose(&v, a, "stand"), pose(&v, a, "bloom"));
-    let radius = |c: DVec3| DVec3::new(c.x, 0.0, c.z - SHELL_AXIS_Z).length();
     for side in ["left", "right"] {
-        for q in ["front", "back"] {
-            let arm = shell_arm(&v, a, q, side);
-            let (closed, _) = shell_at(&v, a, &arm, &rest);
-            let (open, out) = shell_at(&v, a, &arm, &bloom);
-            println!("bloom {q} {side}: middle {open:.1?} (closed {closed:.1?}), facing {out:.2?}");
-            assert!(
-                radius(open) > radius(closed) + 2.0,
-                "bloom {q} {side} opens out"
+        for (quarter, pose_name) in [("front", "stand"), ("front", "bloom"), ("back", "bloom")] {
+            let closed = radius(quarter_at(&v, a, quarter, side, &rest));
+            let open = radius(quarter_at(&v, a, quarter, side, &pose(&v, a, pose_name)));
+            println!(
+                "{pose_name} {quarter} {side}: middle {closed:.1} m -> {open:.1} m from the axis"
             );
-            assert!(
-                out.y > 0.3,
-                "bloom {q} {side}: the outer face turns up and out like a petal's"
-            );
-            let (s, _) = shell_at(&v, a, &arm, &stand);
-            if q == "front" {
-                assert!(radius(s) > radius(closed) + 2.0, "stand: front {side} open");
-            } else {
-                assert!(s.distance(closed) < 1e-6, "stand: back {side} closed");
+            assert!(open > closed + 2.0, "{pose_name}: {quarter} {side} opens");
+        }
+    }
+}
+
+#[test]
+fn the_legs_walk_inside_the_closed_cocoon() {
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    // Strides like the gait's (4 m steps, legs bent to 90 % when standing): hips swing about
+    // ±20°, knees bend up to about 50°.
+    for hip in [-20.0f64, -10.0, 0.0, 10.0, 20.0] {
+        for knee in [0.0f64, -25.0, -50.0] {
+            let mut angles = vec![0.0; a.groups.len()];
+            for side in ["left", "right"] {
+                angles[joint(&v, a, &format!("hip_joint_{side}"))] = hip.to_radians();
+                angles[joint(&v, a, &format!("knee_joint_{side}"))] = knee.to_radians();
             }
+            let found = interferences(&v, a, &angles, TOLERANCE);
+            assert!(
+                found.is_empty(),
+                "hip {hip}, knee {knee}: {}",
+                report(&v, &found)
+            );
         }
     }
 }
@@ -627,6 +621,27 @@ fn the_design_file_is_this_design() {
 fn write_the_design_file() {
     let json = design_json(&design(), "bastion", NAME, DESCRIPTION);
     std::fs::write(content().join("vehicles/bastion.json"), json).unwrap();
+}
+
+#[test]
+#[ignore = "diagnostic: lists overlapping parts closed and in each pose"]
+fn list_interferences() {
+    let v = design();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    let rest = vec![0.0; a.groups.len()];
+    println!(
+        "rest: {}",
+        report(&v, &interferences(&v, a, &rest, TOLERANCE))
+    );
+    for p in &v.poses {
+        let angles = pose(&v, a, &p.name);
+        println!("{}: {:?}", p.name, p.angles);
+        println!(
+            "  {}",
+            report(&v, &interferences(&v, a, &angles, TOLERANCE))
+        );
+    }
 }
 
 /// Walks a few seconds in its standing pose on a slope on Meridian, stops, and hands the
@@ -713,4 +728,25 @@ fn the_bastion_walks_and_stops_standing() {
         .angle_between(r.position.normalize())
         .to_degrees();
     assert!(tilt < 10.0, "stands after stopping: tilted {tilt:.1} deg");
+}
+
+#[test]
+#[ignore = "diagnostic: what blocks each petal from opening"]
+fn what_blocks_opening() {
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let a = &body.articulation;
+    for q in ["front", "back"] {
+        let g = joint(&v, a, &format!("{q}_open_left"));
+        for deg in [-10.0f64, -15.0, -20.0, -30.0, -45.0, -60.0] {
+            let mut angles = vec![0.0; a.groups.len()];
+            angles[g] = deg.to_radians();
+            let c = quarter_at(&v, a, q, "left", &angles);
+            println!(
+                "{q} open {deg}: middle r {:.2} -> {}",
+                radius(c),
+                report(&v, &interferences(&v, a, &angles, TOLERANCE))
+            );
+        }
+    }
 }

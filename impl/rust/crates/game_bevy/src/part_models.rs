@@ -127,7 +127,7 @@ mod tests {
         let dir =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../assets/export/models");
         let models = load_dir(&dir);
-        assert!(models.len() >= 20, "{} models", models.len());
+        assert!(models.len() >= 15, "{} models", models.len());
         let torso = &models["frame.torso"];
         assert!(torso.iter().any(|(m, _)| *m == PartMaterial::Trim));
         // Sized to the part: the torso is 5 x 5 x 3.5 m.

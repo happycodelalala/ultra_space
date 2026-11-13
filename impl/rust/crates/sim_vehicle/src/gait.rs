@@ -82,11 +82,7 @@ pub fn resolve_legs(vehicle: &Vehicle, body: &VehicleBody, gait: &GaitDef) -> Op
                 None => None,
             };
             let foot = &vehicle.parts[index(&l.foot)?];
-            let half_height = match foot.def.shape {
-                crate::catalog::Shape::Box { size_m } => size_m[1] / 2.0,
-                crate::catalog::Shape::Cylinder { length_m, .. } => length_m / 2.0,
-                crate::catalog::Shape::Sphere { radius_m } => radius_m,
-            };
+            let half_height = foot.def.shape.bounds().1.y;
             let groups = &body.articulation.groups;
             let ankle = match ankle_group {
                 Some(g) => groups[g].pivot,

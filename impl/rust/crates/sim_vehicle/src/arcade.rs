@@ -52,6 +52,12 @@ pub fn hull_depth(hull: &[crate::vehicle::PartCollider], rotation: DQuat, up: DV
                     radius_m, length_m, ..
                 } => u.y.abs() * length_m / 2.0 + radius_m * (1.0 - u.y * u.y).max(0.0).sqrt(),
                 Shape::Sphere { radius_m } => radius_m,
+                // Shells reach here as their tiles (vehicle colliders); otherwise their bounds:
+                // the box's lowest point along `u` (part axes).
+                Shape::Shell { .. } => {
+                    let (mid, half) = c.shape.bounds();
+                    u.x.abs() * half.x + u.y.abs() * half.y + u.z.abs() * half.z - u.dot(mid)
+                }
             };
             centre + extent
         })

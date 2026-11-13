@@ -17,6 +17,8 @@ import {
   applyPose,
   quat,
   rotationFromDegrees,
+  shapeTiles,
+  shapeCentroid,
 } from "./articulation.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "content", "data");
@@ -47,26 +49,19 @@ test("poses put the shells where the game does", () => {
   const design = load("bastion");
   const parts = partsOf(design, catalog);
   const a = articulationOf(parts);
-  const middle = (angles, shell) => {
-    const poses = posesOf(a, angles);
-    const facets = parts
-      .map((p, i) => [p, i])
-      .filter(([p]) => p.name.startsWith(`${shell}_facet_`) && p.name.endsWith("_left"));
-    const sum = facets.reduce(
-      (s, [p, i]) => {
-        const x = applyPose(poses[a.partGroup[i]], p.position);
-        return [s[0] + x[0], s[1] + x[1], s[2] + x[2]];
-      },
-      [0, 0, 0],
-    );
-    return sum.map((c) => c / facets.length);
+  // A quarter's middle (its centroid) and its distance from the cocoon's axis (z = 0.3).
+  const radius = (angles, name) => {
+    const i = parts.findIndex((p) => p.name === name);
+    const p = parts[i];
+    const at = applyPose(posesOf(a, angles)[a.partGroup[i]], [0, 0, 0].map((_, k) => p.position[k] + quat.rotate(p.rotation, shapeCentroid(p.def.shape))[k]));
+    return Math.hypot(at[0], at[2] - 0.3);
   };
-  // Rust (the_quarters_open_like_petals): "bloom front left: middle (-7.3, 0.4, -5.6)",
-  // "bloom back left: middle (-7.0, 1.0, 6.5)"; closed "(-2.8, -3.9, -2.4)".
-  const bloom = poseAngles(design, parts, a, "bloom");
-  near(middle(bloom, "front"), [-7.3, 0.4, -5.6], 0.1, "bloom front");
-  near(middle(bloom, "back"), [-7.0, 1.0, 6.5], 0.1, "bloom back");
-  near(middle(poseAngles(design, parts, a, "cocoon"), "front"), [-2.8, -3.9, -2.4], 0.1, "cocoon");
+  // Rust (every_pose_and_every_move_between_them_is_free_of_interference): closed 4.2 m;
+  // stand and bloom front 9.1 m; bloom back 7.5 m.
+  const close = (x, want, what) => assert.ok(Math.abs(x - want) < 0.1, `${what}: ${x} vs ${want}`);
+  close(radius(poseAngles(design, parts, a, "cocoon"), "front_shell_left"), 4.2, "cocoon");
+  close(radius(poseAngles(design, parts, a, "stand"), "front_shell_left"), 9.1, "stand front");
+  close(radius(poseAngles(design, parts, a, "bloom"), "back_shell_right"), 7.5, "bloom back");
 });
 
 test("a pose read and written back is the same pose", () => {
@@ -84,4 +79,15 @@ test("the heavy frame stands on its soles", () => {
   const rest = new Array(a.groups.length).fill(0);
   // Soles 16.8 m below the origin (Rust: legs ... sole -16.8).
   assert.ok(Math.abs(lowestPoint(parts, a, posesOf(a, rest)) + 16.8) < 0.05);
+});
+
+test("shells tile like the game's", () => {
+  const shell = catalog.get("bastion.shell_quarter_front_left").shape;
+  const tiles = shapeTiles(shell);
+  // 87° arc in 15° steps: 6 columns; 3 spans x 6 steps: 18 rows.
+  assert.equal(tiles.length, 6 * 18);
+  for (const t of tiles) assert.ok(t.half[0] > 0 && t.half[1] > 0 && Math.abs(t.half[2] - 0.175) < 1e-12);
+  // Symmetric arc: the centroid lies on the part's +Z side, in its middle plane.
+  const c = shapeCentroid(shell);
+  assert.ok(Math.abs(c[0]) < 1e-9 && c[2] > 3);
 });

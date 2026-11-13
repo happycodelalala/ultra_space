@@ -151,6 +151,8 @@ def box(half, centre=(0, 0, 0)):
 
 def size_of(part):
     shape = part["shape"]
+    if shape["type"] == "shell":
+        return [1, 1, 1]
     if shape["type"] == "box":
         return [s / 2 for s in shape["size_m"]]
     if shape["type"] == "cylinder":
@@ -333,48 +335,105 @@ def boom(h):
     return m
 
 
-def shoulder_pod(h):
-    """A shoulder pod: an armoured saddle with an arm socket at each end (front and back)."""
+def shell_profile(points, steps):
+    """Catmull-Rom curve through the four (height, radius) points, ends repeated: the game's
+    shell_profile."""
+    p = lambda i: points[max(0, min(3, i))]
+    out = []
+    for span in range(3):
+        p0, p1, p2, p3 = p(span - 1), p(span), p(span + 1), p(span + 2)
+        for k in range(steps):
+            t = k / steps
+            def c(a, b, c_, d):
+                return 0.5 * (2 * b + (c_ - a) * t + (2 * a - 5 * b + 4 * c_ - d) * t * t
+                              + (3 * b - a - 3 * c_ + d) * t * t * t)
+            out.append((c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])))
+    out.append(tuple(points[3]))
+    return out
+
+
+class Smooth:
+    """Indexed, smooth-shaded triangles per material (for curved surfaces)."""
+
+    def __init__(self):
+        self.parts = {}
+
+    def grid(self, material, rows, flip=False):
+        """A quad grid from rows of (position, normal); rows run along the surface."""
+        pos, nrm, idx = self.parts.setdefault(material, ([], [], []))
+        base = len(pos)
+        width = len(rows[0])
+        for row in rows:
+            for p, n in row:
+                pos.append(p)
+                nrm.append(n)
+        for i in range(len(rows) - 1):
+            for j in range(width - 1):
+                a = base + i * width + j
+                b, c, d = a + 1, a + width, a + width + 1
+                idx.extend([a, c, b, b, c, d] if not flip else [a, b, c, b, d, c])
+
+
+def shell_quarter(part):
+    """A smooth curved quarter: outer face (armor), inner face (dark), edges (trim)."""
+    shape = part["shape"]
+    t = shape["thickness_m"]
+    a0, a1 = shape["arc_deg"]
+    prof = shell_profile(shape["profile_m"], 16)
+    arcs = [a0 + (a1 - a0) * k / 48 for k in range(49)]
+
+    def point(deg, y, r):
+        phi = math.radians(deg)
+        return [-r * math.sin(phi), y, r * math.cos(phi)]
+
+    # Profile normals in the (r, y) plane from neighbouring samples.
+    normals2 = []
+    for i, (y, r) in enumerate(prof):
+        y0, r0 = prof[max(0, i - 1)]
+        y1, r1 = prof[min(len(prof) - 1, i + 1)]
+        dy, dr = y1 - y0, r1 - r0
+        l = math.hypot(dy, dr) or 1
+        normals2.append((-dy / l, dr / l))  # (outward radial, up)
+
+    def surface(side):
+        rows = []
+        for (y, r), (nr, ny) in zip(prof, normals2):
+            row = []
+            for deg in arcs:
+                phi = math.radians(deg)
+                radial = [-math.sin(phi), 0, math.cos(phi)]
+                rr = r + side * nr * t / 2
+                yy = y + side * ny * t / 2
+                n = [radial[0] * nr * side, ny * side, radial[2] * nr * side]
+                row.append((point(deg, yy, rr), n))
+            rows.append(row)
+        return rows
+
+    m = Smooth()
+    m.grid("armor", surface(1), flip=True)
+    m.grid("dark", surface(-1))
+    # Edges: the rim (top), the hem (bottom), and the two seams.
+    outer, inner = surface(1), surface(-1)
+    for rows, mat in (([outer[0], inner[0]], "trim"), ([inner[-1], outer[-1]], "trim")):
+        up = [0, 1 if rows[0] is outer[0] else -1, 0]
+        m.grid(mat, [[(p, up) for p, _ in row] for row in rows])
+    for j, sign in ((0, -1), (len(arcs) - 1, 1)):
+        phi = math.radians(arcs[j])
+        side_n = [-math.cos(phi) * sign, 0, -math.sin(phi) * sign]
+        rows = [[(outer[i][j][0], side_n), (inner[i][j][0], side_n)] for i in range(len(prof))]
+        m.grid("trim", rows, flip=(sign > 0))
+    return m
+
+
+def saddle(h):
+    """A shoulder saddle: an armoured block with a socket at each end for a shell arm."""
     hx, hy, hz = h
     m = Model()
-    m.add("armor", *bevel_box([hx, hy * 0.75, hz * 0.8], 0.22, centre=(0, hy * 0.25, 0),
-                              taper=(1.0, 0.85)))
-    for s in (-1, 1):
-        m.add("dark", *prism(hx * 0.5, hz * 0.12, 8, 2, centre=(0, -hy * 0.35, s * hz * 0.88),
+    m.add("armor", *bevel_box([hx, hy, hz], 0.15, taper=(1.0, 0.9)))
+    for s_ in (-1, 1):
+        m.add("dark", *prism(hx * 0.45, hy * 0.6, 8, 1, centre=(0, hy * 0.7, s_ * hz * 0.85),
                              rotate=math.pi / 8))
-    m.add("trim", *box([hx * 0.9, 0.06, hz * 0.7], centre=(0, hy * 0.98, 0)))
-    return m
-
-
-def shell_mount(h):
-    hx, hy, hz = h
-    m = Model()
-    m.add("dark", *bevel_box([hx, hy, hz], 0.1))
-    m.add("armor", *bevel_box([hx * 0.7, hy * 0.5, hz * 0.7], 0.08, centre=(0, -hy * 0.6, 0)))
-    return m
-
-
-def shell_facet(h):
-    """One flat facet of a half-shell: an armour plate whose side edges are chamfered so
-    neighbouring facets close into a faceted curve; raised panels outside (+Z), a dark ribbed
-    frame inside, a trim band along the top."""
-    hx, hy, hz = h
-    m = Model()
-
-    def close_edges(p):
-        # Narrow the inner side so the facets meet at the curve's facet angle (45°).
-        if p[2] < 0:
-            p[0] *= 1.0 - (-p[2] / hz) * 0.12
-        return p
-
-    m.add("armor", *bevel_box([hx, hy, hz * 0.6], 0.12, squash=close_edges))
-    for row in (0.6, 0.05, -0.5):
-        m.add("armor", *bevel_box([hx * 0.78, hy * 0.2, 0.1], 0.07,
-                                  centre=(0, row * hy, hz * 0.65)))
-    m.add("trim", *box([hx * 0.85, 0.12, 0.08], centre=(0, hy * 0.9, hz * 0.62)))
-    m.add("trim", *box([hx * 0.85, 0.08, 0.06], centre=(0, -hy * 0.92, hz * 0.62)))
-    for x in (-hx * 0.5, 0.0, hx * 0.5):
-        m.add("dark", *box([0.1, hy * 0.85, 0.12], centre=(x, 0, -hz * 0.62)))
+    m.add("trim", *box([hx * 0.9, 0.05, hz * 0.5], centre=(0, hy * 0.98, 0)))
     return m
 
 
@@ -393,12 +452,9 @@ MODELS = {
     "frame.hinge": hinge_x,
     "bastion.arm_rotor": rotor_y,
     "bastion.arm_hinge": hinge_x,
-    "bastion.shoulder_pod": shoulder_pod,
-    "bastion.boom_short": boom,
-    "bastion.boom_stub": boom,
-    "bastion.shell_mount": shell_mount,
-    "bastion.shell_facet_upper": shell_facet,
-    "bastion.shell_facet_lower": shell_facet,
+    "bastion.saddle": saddle,
+    "bastion.arm_beam": boom,
+    "bastion.shell_quarter": shell_quarter,
     "thruster.main.medium": engine,
 }
 
@@ -432,8 +488,12 @@ def triangles(model):
     return out
 
 
-def glb(model):
-    tris = triangles(model)
+def glb_smooth(model):
+    return glb(None, {m: v for m, v in model.parts.items()})
+
+
+def glb(model, tris=None):
+    tris = tris if tris is not None else triangles(model)
     binary = bytearray()
     views, accessors, primitives, materials = [], [], [], []
     for material, (pos, nrm, idx) in sorted(tris.items()):
@@ -494,7 +554,9 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     stale = []
     for name, part in sorted(parts.items()):
-        data = glb(MODELS[name](size_of(part)))
+        builder = MODELS[name]
+        built = builder(part) if builder is shell_quarter else builder(size_of(part))
+        data = glb_smooth(built) if isinstance(built, Smooth) else glb(built)
         path = OUT / f"{name}.glb"
         if check:
             if not path.exists() or path.read_bytes() != data:

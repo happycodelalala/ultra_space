@@ -69,6 +69,29 @@ pub fn shape_mesh(shape: Shape) -> Mesh {
             Cylinder::new(radius_m as f32, length_m as f32).into()
         }
         Shape::Sphere { radius_m } => Sphere::new(radius_m as f32).mesh().ico(3).expect("valid"),
+        // A procedural shell without a model: its collision tiles.
+        Shape::Shell { .. } => {
+            let mut mesh: Option<Mesh> = None;
+            for t in shape.tiles() {
+                let tile: Mesh = Cuboid::new(
+                    t.half.x as f32 * 2.0,
+                    t.half.y as f32 * 2.0,
+                    t.half.z as f32 * 2.0,
+                )
+                .into();
+                let tile = tile.transformed_by(
+                    Transform::from_translation(t.centre.as_vec3())
+                        .with_rotation(t.rotation.as_quat()),
+                );
+                match &mut mesh {
+                    Some(m) => {
+                        let _ = m.merge(&tile);
+                    }
+                    None => mesh = Some(tile),
+                }
+            }
+            mesh.unwrap_or_else(|| Cuboid::new(1.0, 1.0, 1.0).into())
+        }
     }
 }
 
@@ -386,6 +409,7 @@ fn spawn_plumes(
                             }
                             Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
                             Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
+                            Shape::Shell { .. } => (0.5, 0.5),
                         };
                         let nozzle_y = -length / 2.0;
                         node.spawn((PlumeMount, transform, Visibility::default()))

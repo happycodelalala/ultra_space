@@ -12,6 +12,7 @@ pub mod design;
 pub mod flight;
 pub mod gait;
 pub mod ground;
+pub mod interference;
 pub mod joints;
 pub mod mass;
 pub mod physics;

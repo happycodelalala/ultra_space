@@ -12,6 +12,7 @@ import {
   clampJoint,
   halfExtents,
   lowestPoint,
+  shapeBoxes,
   massOf,
   partsOf,
   poseAngles,
@@ -155,6 +156,17 @@ function model(name) {
 /// The placeholder for a part without a model (vehicle_visual.rs shape_mesh).
 function placeholder(def) {
   const s = def.shape;
+  if (s.type === "shell") {
+    // A procedural shell without a model: its tiles.
+    const group = new THREE.Group();
+    for (const t of shapeBoxes(s)) {
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(...t.half.map((h) => 2 * h)), kindMaterial(def.kind));
+      tile.position.set(...t.centre);
+      tile.quaternion.set(...t.rotation);
+      group.add(tile);
+    }
+    return group;
+  }
   let geometry;
   if (s.type === "box") geometry = new THREE.BoxGeometry(...s.size_m);
   else if (s.type === "cylinder") geometry = new THREE.CylinderGeometry(s.radius_m, s.radius_m, s.length_m, 24);
@@ -219,15 +231,17 @@ async function build() {
     object.quaternion.set(...p.rotation);
     object.userData.partIndex = i;
     state.groupNodes[state.articulation.partGroup[i]].add(object);
-    // Overlays in the same group: collision box and attach nodes.
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(...halfExtents(p.def.shape).map((h) => 2 * h)),
-      new THREE.MeshBasicMaterial({ color: 0x4fd1ff, wireframe: true, transparent: true, opacity: 0.5 }),
-    );
-    box.position.copy(object.position);
-    box.quaternion.copy(object.quaternion);
-    box.userData.overlay = "boxes";
-    state.groupNodes[state.articulation.partGroup[i]].add(box);
+    // Overlays in the same group: collision boxes (a shell's tiles) and attach nodes.
+    for (const b of shapeBoxes(p.def.shape)) {
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(...b.half.map((h) => 2 * h)),
+        new THREE.MeshBasicMaterial({ color: 0x4fd1ff, wireframe: true, transparent: true, opacity: 0.5 }),
+      );
+      box.position.set(...b.centre).applyQuaternion(object.quaternion).add(object.position);
+      box.quaternion.copy(object.quaternion).multiply(new THREE.Quaternion(...b.rotation));
+      box.userData.overlay = "boxes";
+      state.groupNodes[state.articulation.partGroup[i]].add(box);
+    }
     for (const node of p.def.attach_nodes ?? []) {
       const dir = new THREE.Vector3(...node.direction).applyQuaternion(object.quaternion);
       const at = new THREE.Vector3(...node.position_m).applyQuaternion(object.quaternion).add(object.position);

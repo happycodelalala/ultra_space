@@ -357,6 +357,10 @@ fn shape_size(shape: sim_vehicle::Shape) -> f64 {
         sim_vehicle::Shape::Box { size_m } => size_m.iter().cloned().fold(0.0, f64::max) / 2.0,
         sim_vehicle::Shape::Cylinder { radius_m, length_m } => radius_m.max(length_m / 2.0),
         sim_vehicle::Shape::Sphere { radius_m } => radius_m,
+        sim_vehicle::Shape::Shell { .. } => {
+            let (mid, half) = shape.bounds();
+            (half + mid.abs()).max_element()
+        }
     }
 }
 

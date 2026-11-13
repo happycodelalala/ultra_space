@@ -1,5 +1,5 @@
 {
-  "description": "Parts of the Bastion, an original heavy frame: four shell arms on shoulder pods carry faceted quarter-shells that close into a cocoon.",
+  "description": "Parts of the Bastion, an original heavy frame: shoulder saddles carry four shell arms that hang curved quarter-shells around the body.",
   "parts": [
     {
       "id": "bastion.arm_rotor",
@@ -9,9 +9,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          1.0,
+          0.8,
           0.5,
-          1.0
+          0.8
         ]
       },
       "joint": {
@@ -75,9 +75,9 @@
       "shape": {
         "type": "box",
         "size_m": [
-          0.9,
+          0.7,
           0.5,
-          0.9
+          0.7
         ]
       },
       "joint": {
@@ -134,51 +134,51 @@
       }
     },
     {
-      "id": "bastion.shoulder_pod",
-      "name": "Bastion Shoulder Pod",
+      "id": "bastion.saddle",
+      "name": "Bastion Shoulder Saddle",
       "kind": "structure",
-      "mass_kg": 1200,
+      "mass_kg": 1500,
       "shape": {
         "type": "box",
         "size_m": [
-          1.4,
-          0.8,
-          2.4
+          1.5,
+          0.5,
+          2.8
         ]
       },
       "attach_nodes": [
         {
           "id": "front",
           "position_m": [
-            0,
-            -0.2,
+            0.0,
+            0.45,
             -1.2
           ],
           "direction": [
-            0.1047,
-            -0.807,
-            -0.5812
+            0.6673,
+            0.7275,
+            0.1594
           ],
           "size": "medium"
         },
         {
           "id": "back",
           "position_m": [
-            0,
-            -0.2,
+            0.0,
+            0.45,
             1.2
           ],
           "direction": [
-            0.0861,
-            -0.6635,
-            0.7433
+            0.676,
+            0.7369,
+            0.0054
           ],
           "size": "medium"
         }
       ],
-      "description": "Sits on a shoulder and carries two shell arms, one reaching down the front, one down the back.",
+      "description": "Bolted on a shoulder block: carries a front and a back shell arm, their loads going down the shoulder into the torso.",
       "form": {
-        "model": "bastion.shoulder_pod",
+        "model": "bastion.saddle",
         "material_slots": [
           "armor"
         ],
@@ -186,16 +186,16 @@
       }
     },
     {
-      "id": "bastion.boom_short",
-      "name": "Bastion Shell Arm Boom (short)",
+      "id": "bastion.arm_beam",
+      "name": "Bastion Shell Arm Beam",
       "kind": "structure",
-      "mass_kg": 800,
+      "mass_kg": 900,
       "shape": {
         "type": "box",
         "size_m": [
-          0.8,
-          1.0,
-          0.8
+          0.5,
+          2.1,
+          0.5
         ]
       },
       "attach_nodes": [
@@ -203,7 +203,7 @@
           "id": "top",
           "position_m": [
             0,
-            0.5,
+            1.05,
             0
           ],
           "direction": [
@@ -217,7 +217,7 @@
           "id": "bottom",
           "position_m": [
             0,
-            -0.5,
+            -1.05,
             0
           ],
           "direction": [
@@ -228,9 +228,9 @@
           "size": "medium"
         }
       ],
-      "description": "The main beam of a lower shell arm.",
+      "description": "The beam of a shell arm, from the shoulder up over the head to the hinge its shell hangs from.",
       "form": {
-        "model": "bastion.boom_short",
+        "model": "bastion.arm_beam",
         "material_slots": [
           "armor"
         ],
@@ -238,51 +238,55 @@
       }
     },
     {
-      "id": "bastion.boom_stub",
-      "name": "Bastion Shell Arm Stub",
+      "id": "bastion.shell_quarter_front_left",
+      "name": "Bastion Shell Quarter (front left)",
       "kind": "structure",
-      "mass_kg": 400,
+      "mass_kg": 5000,
       "shape": {
-        "type": "box",
-        "size_m": [
-          0.8,
-          0.4,
-          0.8
-        ]
+        "type": "shell",
+        "profile_m": [
+          [
+            5.4,
+            1.5
+          ],
+          [
+            2.4,
+            5.0
+          ],
+          [
+            -4.0,
+            4.9
+          ],
+          [
+            -9.0,
+            4.4
+          ]
+        ],
+        "arc_deg": [
+          -43.5,
+          43.5
+        ],
+        "thickness_m": 0.35
       },
       "attach_nodes": [
         {
-          "id": "top",
+          "id": "hang",
           "position_m": [
-            0,
-            0.2,
-            0
+            0.0153,
+            5.619,
+            1.3249
           ],
           "direction": [
-            0,
-            1,
-            0
-          ],
-          "size": "medium"
-        },
-        {
-          "id": "bottom",
-          "position_m": [
-            0,
-            -0.2,
-            0
-          ],
-          "direction": [
-            0,
-            -1,
-            0
+            0.3591,
+            -0.7275,
+            0.5846
           ],
           "size": "medium"
         }
       ],
-      "description": "A short first beam of a lower shell arm.",
+      "description": "The front-left curved quarter of the cocoon (a surface of revolution: domed over the head with a vent ring at the crown, widest at the shoulders, tapering to mid-thigh; 3-degree seam gaps), hung from its arm's open hinge just above its crown (it swings out from the top like a lid).",
       "form": {
-        "model": "bastion.boom_stub",
+        "model": "bastion.shell_quarter",
         "material_slots": [
           "armor"
         ],
@@ -290,37 +294,55 @@
       }
     },
     {
-      "id": "bastion.shell_mount",
-      "name": "Bastion Shell Mount",
+      "id": "bastion.shell_quarter_front_right",
+      "name": "Bastion Shell Quarter (front right)",
       "kind": "structure",
-      "mass_kg": 600,
+      "mass_kg": 5000,
       "shape": {
-        "type": "box",
-        "size_m": [
-          1.2,
-          0.4,
-          1.2
-        ]
+        "type": "shell",
+        "profile_m": [
+          [
+            5.4,
+            1.5
+          ],
+          [
+            2.4,
+            5.0
+          ],
+          [
+            -4.0,
+            4.9
+          ],
+          [
+            -9.0,
+            4.4
+          ]
+        ],
+        "arc_deg": [
+          -43.5,
+          43.5
+        ],
+        "thickness_m": 0.35
       },
       "attach_nodes": [
         {
-          "id": "base",
+          "id": "hang",
           "position_m": [
-            0,
-            0.2,
-            0
+            -0.0153,
+            5.619,
+            1.3249
           ],
           "direction": [
-            0,
-            1,
-            0
+            -0.3591,
+            -0.7275,
+            0.5846
           ],
           "size": "medium"
         }
       ],
-      "description": "The bracket a shell's facets are fixed to, at the end of a shell arm.",
+      "description": "The front-right curved quarter of the cocoon (a surface of revolution: domed over the head with a vent ring at the crown, widest at the shoulders, tapering to mid-thigh; 3-degree seam gaps), hung from its arm's open hinge just above its crown (it swings out from the top like a lid).",
       "form": {
-        "model": "bastion.shell_mount",
+        "model": "bastion.shell_quarter",
         "material_slots": [
           "armor"
         ],
@@ -328,22 +350,55 @@
       }
     },
     {
-      "id": "bastion.shell_facet_upper",
-      "name": "Bastion Shell Facet (upper)",
+      "id": "bastion.shell_quarter_back_left",
+      "name": "Bastion Shell Quarter (back left)",
       "kind": "structure",
-      "mass_kg": 1400,
+      "mass_kg": 5000,
       "shape": {
-        "type": "box",
-        "size_m": [
-          3.827,
-          8.6,
-          0.5
-        ]
+        "type": "shell",
+        "profile_m": [
+          [
+            5.4,
+            1.5
+          ],
+          [
+            2.4,
+            5.0
+          ],
+          [
+            -4.0,
+            4.9
+          ],
+          [
+            -9.0,
+            4.4
+          ]
+        ],
+        "arc_deg": [
+          -43.5,
+          43.5
+        ],
+        "thickness_m": 0.35
       },
-      "attach_nodes": [],
-      "description": "One of four flat facets of an upper half-shell (5.0 m radius); a curve built from flat plates.",
+      "attach_nodes": [
+        {
+          "id": "hang",
+          "position_m": [
+            0.0019,
+            5.6529,
+            1.2981
+          ],
+          "direction": [
+            -0.4818,
+            -0.7369,
+            0.4742
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The back-left curved quarter of the cocoon (a surface of revolution: domed over the head with a vent ring at the crown, widest at the shoulders, tapering to mid-thigh; 3-degree seam gaps), hung from its arm's open hinge just above its crown (it swings out from the top like a lid).",
       "form": {
-        "model": "bastion.shell_facet_upper",
+        "model": "bastion.shell_quarter",
         "material_slots": [
           "armor"
         ],
@@ -351,22 +406,55 @@
       }
     },
     {
-      "id": "bastion.shell_facet_lower",
-      "name": "Bastion Shell Facet (lower)",
+      "id": "bastion.shell_quarter_back_right",
+      "name": "Bastion Shell Quarter (back right)",
       "kind": "structure",
-      "mass_kg": 1200,
+      "mass_kg": 5000,
       "shape": {
-        "type": "box",
-        "size_m": [
-          3.215,
-          8.0,
-          0.5
-        ]
+        "type": "shell",
+        "profile_m": [
+          [
+            5.4,
+            1.5
+          ],
+          [
+            2.4,
+            5.0
+          ],
+          [
+            -4.0,
+            4.9
+          ],
+          [
+            -9.0,
+            4.4
+          ]
+        ],
+        "arc_deg": [
+          -43.5,
+          43.5
+        ],
+        "thickness_m": 0.35
       },
-      "attach_nodes": [],
-      "description": "One of four flat facets of an lower half-shell (4.2 m radius); a curve built from flat plates.",
+      "attach_nodes": [
+        {
+          "id": "hang",
+          "position_m": [
+            -0.0019,
+            5.6529,
+            1.2981
+          ],
+          "direction": [
+            0.4818,
+            -0.7369,
+            0.4742
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "The back-right curved quarter of the cocoon (a surface of revolution: domed over the head with a vent ring at the crown, widest at the shoulders, tapering to mid-thigh; 3-degree seam gaps), hung from its arm's open hinge just above its crown (it swings out from the top like a lid).",
       "form": {
-        "model": "bastion.shell_facet_lower",
+        "model": "bastion.shell_quarter",
         "material_slots": [
           "armor"
         ],

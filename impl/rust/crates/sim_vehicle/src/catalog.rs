@@ -235,6 +235,157 @@ pub enum Shape {
     Sphere {
         radius_m: f64,
     },
+    /// A curved shell: part of a surface of revolution about the part's Y axis. Its side
+    /// profile is a smooth curve through four points (height, radius), top to bottom; it spans
+    /// the azimuths `arc_deg` (0 along +Z, 90 along −X) and is `thickness_m` thick. A
+    /// procedural shape: collisions use tiles that follow the curve ([`Shape::tiles`]).
+    Shell {
+        profile_m: [[f64; 2]; 4],
+        arc_deg: [f64; 2],
+        thickness_m: f64,
+    },
+}
+
+/// A flat box piece of a shape's collision surface: centre and rotation in part axes, half
+/// extents (X along the surface's width, Y along its height, Z its thickness).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tile {
+    pub centre: DVec3,
+    pub rotation: glam::DQuat,
+    pub half: DVec3,
+}
+
+/// Steps per profile span (between two of the four profile points) for tiles and models.
+pub const SHELL_PROFILE_STEPS: usize = 6;
+/// Largest azimuth step of a shell's tiles (degrees).
+pub const SHELL_ARC_STEP_DEG: f64 = 15.0;
+
+/// A shell's side profile sampled top to bottom: (height, radius) on a Catmull-Rom curve
+/// through the four points (end points repeated), `steps` samples per span. The game's model
+/// generator (tools/gen-models.py) and the design viewer use the same curve.
+pub fn shell_profile(points: [[f64; 2]; 4], steps: usize) -> Vec<[f64; 2]> {
+    let p = |i: isize| points[i.clamp(0, 3) as usize];
+    let mut out = Vec::new();
+    for span in 0..3isize {
+        let (p0, p1, p2, p3) = (p(span - 1), p(span), p(span + 1), p(span + 2));
+        for k in 0..steps {
+            let t = k as f64 / steps as f64;
+            let (t2, t3) = (t * t, t * t * t);
+            let c = |a: f64, b: f64, c: f64, d: f64| {
+                0.5 * (2.0 * b
+                    + (c - a) * t
+                    + (2.0 * a - 5.0 * b + 4.0 * c - d) * t2
+                    + (3.0 * b - a - 3.0 * c + d) * t3)
+            };
+            out.push([c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])]);
+        }
+    }
+    out.push(points[3]);
+    out
+}
+
+/// A point of a shell's mid-surface at azimuth `deg` and profile sample (height, radius).
+fn shell_point(deg: f64, [y, r]: [f64; 2]) -> DVec3 {
+    let phi = deg.to_radians();
+    DVec3::new(-r * phi.sin(), y, r * phi.cos())
+}
+
+impl Shape {
+    /// The collision tiles of a procedural shape (empty for the simple shapes, which collide
+    /// as themselves).
+    pub fn tiles(&self) -> Vec<Tile> {
+        let Shape::Shell {
+            profile_m,
+            arc_deg,
+            thickness_m,
+        } = *self
+        else {
+            return Vec::new();
+        };
+        let profile = shell_profile(profile_m, SHELL_PROFILE_STEPS);
+        let span = arc_deg[1] - arc_deg[0];
+        let n = ((span.abs() / SHELL_ARC_STEP_DEG).ceil() as usize).max(1);
+        let mut tiles = Vec::new();
+        for i in 0..n {
+            let (a, b) = (
+                arc_deg[0] + span * i as f64 / n as f64,
+                arc_deg[0] + span * (i + 1) as f64 / n as f64,
+            );
+            for w in profile.windows(2) {
+                let (top, bottom) = (w[0], w[1]);
+                let corners = [
+                    shell_point(a, top),
+                    shell_point(b, top),
+                    shell_point(a, bottom),
+                    shell_point(b, bottom),
+                ];
+                let centre = corners.iter().sum::<DVec3>() / 4.0;
+                let across = (corners[1] + corners[3] - corners[0] - corners[2]) / 2.0;
+                let down = (corners[2] + corners[3] - corners[0] - corners[1]) / 2.0;
+                let x = across.normalize();
+                let y = (-down - x * (-down).dot(x)).normalize();
+                let mut z = x.cross(y);
+                let radial = DVec3::new(centre.x, 0.0, centre.z);
+                let (x, z) = if z.dot(radial) < 0.0 {
+                    z = -z;
+                    (-x, z)
+                } else {
+                    (x, z)
+                };
+                tiles.push(Tile {
+                    centre,
+                    rotation: glam::DQuat::from_mat3(&glam::DMat3::from_cols(x, y, z)).normalize(),
+                    half: DVec3::new(
+                        across.length() / 2.0,
+                        down.length() / 2.0,
+                        thickness_m / 2.0,
+                    ),
+                });
+            }
+        }
+        tiles
+    }
+
+    /// The box around the shape in part axes: centre and half extents.
+    pub fn bounds(&self) -> (DVec3, DVec3) {
+        match *self {
+            Shape::Box { size_m } => (DVec3::ZERO, DVec3::from(size_m) / 2.0),
+            Shape::Cylinder { radius_m, length_m } => {
+                (DVec3::ZERO, DVec3::new(radius_m, length_m / 2.0, radius_m))
+            }
+            Shape::Sphere { radius_m } => (DVec3::ZERO, DVec3::splat(radius_m)),
+            Shape::Shell { .. } => {
+                let (mut lo, mut hi) = (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN));
+                for t in self.tiles() {
+                    for sx in [-1.0, 1.0] {
+                        for sy in [-1.0, 1.0] {
+                            for sz in [-1.0, 1.0] {
+                                let c = t.centre + t.rotation * (t.half * DVec3::new(sx, sy, sz));
+                                lo = lo.min(c);
+                                hi = hi.max(c);
+                            }
+                        }
+                    }
+                }
+                ((lo + hi) / 2.0, (hi - lo) / 2.0)
+            }
+        }
+    }
+
+    /// The centre of mass of the shape in part axes (uniform: the shell's area-weighted
+    /// middle; the simple shapes' centres).
+    pub fn centroid(&self) -> DVec3 {
+        let tiles = self.tiles();
+        if tiles.is_empty() {
+            return DVec3::ZERO;
+        }
+        let area: f64 = tiles.iter().map(|t| t.half.x * t.half.y).sum();
+        tiles
+            .iter()
+            .map(|t| t.centre * (t.half.x * t.half.y))
+            .sum::<DVec3>()
+            / area
+    }
 }
 
 impl Default for Shape {
@@ -449,6 +600,16 @@ fn validate(p: &PartDef) -> Vec<String> {
         Shape::Box { size_m } => size_m.iter().all(|&s| positive(s)),
         Shape::Cylinder { radius_m, length_m } => positive(radius_m) && positive(length_m),
         Shape::Sphere { radius_m } => positive(radius_m),
+        Shape::Shell {
+            profile_m,
+            arc_deg,
+            thickness_m,
+        } => {
+            positive(thickness_m)
+                && profile_m.iter().all(|[y, r]| y.is_finite() && *r >= 0.0)
+                && profile_m.windows(2).all(|w| w[0][0] > w[1][0])
+                && arc_deg[1] > arc_deg[0]
+        }
     };
     if !shape_ok(p.shape) || p.collider.is_some_and(|c| !shape_ok(c)) {
         problems.push(format!("{}: shape dimensions must be positive", p.id));

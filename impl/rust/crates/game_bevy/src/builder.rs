@@ -172,6 +172,10 @@ fn half_extent(def: &PartDef, dir: DVec3) -> f64 {
             radius_m * (1.0 - d.y * d.y).sqrt() + length_m / 2.0 * d.y
         }
         sim_vehicle::Shape::Sphere { radius_m } => radius_m,
+        sim_vehicle::Shape::Shell { .. } => {
+            let (mid, half) = def.shape.bounds();
+            half.dot(d) + mid.dot(dir.normalize_or_zero())
+        }
     }
 }
 
@@ -681,6 +685,10 @@ fn shape_half(shape: sim_vehicle::Shape) -> DVec3 {
             DVec3::new(radius_m, length_m / 2.0, radius_m)
         }
         sim_vehicle::Shape::Sphere { radius_m } => DVec3::splat(radius_m),
+        sim_vehicle::Shape::Shell { .. } => {
+            let (mid, half) = shape.bounds();
+            half + mid.abs()
+        }
     }
 }
 

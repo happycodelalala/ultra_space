@@ -13,6 +13,11 @@ pub struct MassProperties {
     pub inertia: DMat3,
 }
 
+/// Where a placed part's mass is centred (vehicle frame): its shape's centroid.
+fn centre_of(p: &VehiclePart) -> DVec3 {
+    p.position + p.rotation * p.def.shape.centroid()
+}
+
 /// Inertia tensor of a uniform solid shape about its own center, in its local axes.
 pub fn shape_inertia(shape: Shape, mass: f64) -> DMat3 {
     let diag = match shape {
@@ -27,6 +32,15 @@ pub fn shape_inertia(shape: Shape, mass: f64) -> DMat3 {
             DVec3::new(side, mass * r * r / 2.0, side)
         }
         Shape::Sphere { radius_m: r } => DVec3::splat(0.4 * mass * r * r),
+        // A shell: as a box of its bounds (about its own centre of mass, near enough).
+        Shape::Shell { .. } => {
+            let size = shape.bounds().1 * 2.0;
+            DVec3::new(
+                size.y * size.y + size.z * size.z,
+                size.x * size.x + size.z * size.z,
+                size.x * size.x + size.y * size.y,
+            ) * (mass / 12.0)
+        }
     };
     DMat3::from_diagonal(diag)
 }
@@ -40,7 +54,7 @@ impl MassProperties {
         }
         let center_of_mass = parts
             .iter()
-            .map(|p| p.position * p.def.mass_kg)
+            .map(|p| centre_of(p) * p.def.mass_kg)
             .sum::<DVec3>()
             / mass;
         let mut inertia = DMat3::ZERO;
@@ -49,7 +63,7 @@ impl MassProperties {
             let r = DMat3::from_quat(p.rotation);
             let local = shape_inertia(p.def.shape, m);
             // Rotate into vehicle axes, then shift to the center of mass (parallel axis theorem).
-            let d = p.position - center_of_mass;
+            let d = centre_of(p) - center_of_mass;
             let shift = (DMat3::IDENTITY * d.length_squared() - outer(d, d)) * m;
             inertia += r * local * r.transpose() + shift;
         }
