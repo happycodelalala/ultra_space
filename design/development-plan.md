@@ -425,6 +425,9 @@ builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 - The developer brought jointed parts, walking and part models forward (3.10–3.12) to get a
   testable mech. 3.10 jointed parts and poses and 3.11 animated walking are done: the heavy
   frame walks, turns and stops standing on Windows.
+- The Bastion (an original design on the heavy frame's walking body): four manipulator arms
+  with three-jaw clamps on a shoulder yoke, six hinged armour slabs that close into a six-sided
+  shell, poses for arms and shell; it walks and stops standing on Windows.
 - Each was checked on Windows through the test queue.
 - Next: 3.12 part models, then 3.13 save and load, 3.14 per-ship cruise and 3.15 review.
 - Known gaps: stats size measures part centres; the lander parts are overpowered (~10 g);
