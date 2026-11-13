@@ -1,0 +1,29 @@
+# Animated walking (task 3.11). Run with ULTRA_SPACE_START_ALTITUDE=1500. Spawn the heavy frame,
+# board it, start walking with M, walk forward over the hills, turn right, then stop. Look for:
+# the legs stepping in turn (one foot lifted, the other planted), feet on the ground (not
+# sinking in or floating), the body level at standing height over slopes, the turn; HUD
+# "WALKING"; log "walking: ..." then "walking off"; after stopping it stands where it is.
+0.5  press Z
+1    wait landed 20
+2    press F
+3    hold Shift 0.3
+3.1  press G                 # choose the heavy frame
+4    press G                 # spawn it ahead
+5    hold W 2.5              # walk up to it
+7.5  press F                 # board it
+8    hold MouseRight 1.5     # chase camera round to its side
+8    mouse 10 2 1.5
+10   shot 01-standing.png
+10.5 press M                 # walk mode
+11   hold W 14               # walk forward
+13   shot 02-step.png
+13.4 shot 03-step.png
+13.8 shot 04-step.png
+20   shot 05-walking.png
+25   hold D 6                # turn right while walking
+25   hold W 6
+28   shot 06-turning.png
+31.5 shot 07-turned.png
+32   press M                 # stop: back to flight, standing
+35   shot 08-stopped.png
+35.5 quit

@@ -653,6 +653,7 @@ pub fn flight_system(
             Has<ArcadeFlight>,
             Has<Frozen>,
             Option<&crate::joints::JointState>,
+            Has<crate::gait::Walking>,
         ),
         With<Vehicle>,
     >,
@@ -681,6 +682,7 @@ pub fn flight_system(
         arcade,
         frozen,
         joints,
+        walking,
     ) in &mut vehicles
     {
         if let Some(j) = joints {
@@ -706,8 +708,8 @@ pub fn flight_system(
             telemetry.in_contact = true;
             continue;
         }
-        if arcade || cruise.is_some_and(Cruise::is_cruising) {
-            // Moved by arcade flight or the cruise drive; still there for others to hit.
+        if arcade || walking || cruise.is_some_and(Cruise::is_cruising) {
+            // Moved by arcade flight, its legs or the cruise drive; still there for others to hit.
             let com = body.mass.center_of_mass;
             scene.place_kinematic(object.id, body, &RigidState::from_origin(&local.state, com));
             continue;
@@ -813,6 +815,7 @@ pub fn add_flight_systems(schedule: &mut Schedule) {
             // Walkers first: they move against the ground and vehicles as the last physics step
             // left them, then turn with the planet like everything else this tick.
             crate::walker::walker_system,
+            crate::gait::walking_system,
             crate::joints::joint_system,
             flight_system,
             arcade_system,

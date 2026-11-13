@@ -114,6 +114,34 @@
           "type": "number"
         }
       }
+    },
+    "gait": {
+      "type": "object",
+      "description": "How the vehicle walks (task 3.11): its legs by part id and the walking parameters.",
+      "additionalProperties": false,
+      "required": ["legs", "step_length_m", "step_height_m", "speed_m_s", "turn_rate_deg_s", "stance"],
+      "properties": {
+        "legs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hip", "knee", "foot"],
+            "properties": {
+              "hip": {"type": "string", "description": "Hip joint part id."},
+              "knee": {"type": "string", "description": "Knee joint part id."},
+              "ankle": {"type": "string", "description": "Ankle joint part id (keeps the sole level)."},
+              "foot": {"type": "string", "description": "Foot part id."}
+            }
+          }
+        },
+        "step_length_m": {"type": "number", "exclusiveMinimum": 0},
+        "step_height_m": {"type": "number", "minimum": 0},
+        "speed_m_s": {"type": "number", "exclusiveMinimum": 0},
+        "turn_rate_deg_s": {"type": "number", "minimum": 0},
+        "stance": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Standing hip-to-ankle distance as a fraction of the leg's length."}
+      }
     }
   }
 }

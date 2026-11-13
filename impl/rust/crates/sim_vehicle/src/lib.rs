@@ -10,6 +10,7 @@ pub mod catalog;
 pub mod cruise;
 pub mod design;
 pub mod flight;
+pub mod gait;
 pub mod ground;
 pub mod joints;
 pub mod mass;

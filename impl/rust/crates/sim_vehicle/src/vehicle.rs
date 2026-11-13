@@ -17,6 +17,8 @@ pub struct Vehicle {
     pub parts: Vec<VehiclePart>,
     /// Named joint poses from the design (task 3.10).
     pub poses: Vec<crate::design::NamedPose>,
+    /// How it walks, if it has legs (task 3.11).
+    pub gait: Option<crate::gait::GaitDef>,
 }
 
 impl Vehicle {
@@ -26,6 +28,7 @@ impl Vehicle {
             name: design.name.clone(),
             parts: design.parts.clone(),
             poses: design.poses.clone(),
+            gait: design.gait.clone(),
         }
     }
 }

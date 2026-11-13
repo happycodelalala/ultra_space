@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
+use sim_vehicle::gait::Walking;
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
     OnRails, Vehicle, VehicleBody,
@@ -53,6 +54,7 @@ impl Plugin for ShipPlugin {
                         full_stop_key,
                         arcade_key,
                         pose_key,
+                        walk_key,
                         pilot_input,
                     )
                         .chain()
@@ -466,9 +468,6 @@ fn full_stop_key(
     info!("full stop ({reference:?} reference)");
 }
 
-/// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
-/// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
-/// turning it off hands the current velocity back to Newtonian flight.
 /// P: the controlled vehicle steps through its design's poses (task 3.10): each named joint
 /// turns toward its angle, every other joint back to rest.
 fn pose_key(
@@ -515,6 +514,65 @@ fn pose_key(
         }
         info!("pose: {}", pose.name);
     }
+}
+
+/// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
+/// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
+/// turning it off hands the current velocity back to Newtonian flight.
+/// Walking starts only this slow (m/s relative to the ground), and with the vehicle's origin no
+/// higher above the ground than its size plus this (m).
+const WALK_START_SPEED: f64 = 2.0;
+const WALK_START_MARGIN: f64 = 3.0;
+
+/// M: a vehicle with legs (a design `gait`, task 3.11) starts or stops walking. It starts only
+/// when standing on the ground (landed, or low and slow); W/S walk, A/D turn. Stopping hands it
+/// back to flight where it stands.
+fn walk_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
+    mut sim: ResMut<Sim>,
+) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyM) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
+        return;
+    };
+    if e.contains::<Walking>() {
+        e.remove::<Walking>();
+        if let Some(mut control) = e.get_mut::<FlightControl>() {
+            control.desired_velocity = None;
+        }
+        info!("walking off: flight");
+        return;
+    }
+    if e.get::<Vehicle>().is_none_or(|v| v.gait.is_none()) {
+        info!("this vehicle has no legs to walk on");
+        return;
+    }
+    let size = e.get::<VehicleBody>().map_or(0.0, |b| b.size);
+    let standing = e.get::<FlightTelemetry>().is_some_and(|tel| {
+        tel.in_contact
+            || (tel.ground_altitude < size + WALK_START_MARGIN
+                && tel.relative_velocity.length() < WALK_START_SPEED)
+    });
+    if !standing {
+        info!("walking needs the ground: land first");
+        return;
+    }
+    e.remove::<ArcadeFlight>();
+    e.remove::<OnRails>();
+    e.insert(Walking::default());
+    info!("walking: W/S walk, A/D turn, M to stop");
 }
 
 fn arcade_key(
@@ -670,7 +728,13 @@ fn cursor_lock(
 // Camera
 // ---------------------------------------------------------------------------------------------
 
-/// Current state and flight data of the player ship, if it exists.
+/// Whether the player ship is walking, and its walking speed.
+pub fn player_walking_speed(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
+    let loc = sim.objects.location(ship.id)?;
+    let world = &sim.regions.get(loc.region)?.world;
+    world.get::<Walking>(loc.entity).map(|w| w.speed)
+}
+
 /// Whether the player ship is in arcade flight, and its held speed.
 pub fn player_arcade_speed(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
     let loc = sim.objects.location(ship.id)?;

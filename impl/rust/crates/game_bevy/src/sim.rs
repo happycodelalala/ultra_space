@@ -43,6 +43,8 @@ pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
     sim.objects.register_transferable::<sim_vehicle::Walker>();
     sim.objects.register_transferable::<sim_vehicle::Frozen>();
     sim.objects
+        .register_transferable::<sim_vehicle::gait::Walking>();
+    sim.objects
         .register_transferable::<sim_vehicle::joints::JointState>();
     sim.objects
         .register_transferable::<sim_vehicle::WalkerControl>();

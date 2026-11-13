@@ -14,6 +14,7 @@ use sim_vehicle::builder::{
 };
 use sim_vehicle::design::{NamedPose, check_join, design_json};
 use sim_vehicle::flight::{BodyEnv, FlightPlan, RigidState, plan_flight};
+use sim_vehicle::gait::{GaitDef, LegDef};
 use sim_vehicle::{
     FlightControl, FlightTelemetry, PartCatalog, PartDef, PhysicsScene, Vehicle, VehicleBody,
     VehicleDesign, VehiclePart,
@@ -88,7 +89,7 @@ fn assemble() -> Vehicle {
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "forearm_right");
 
-    // Legs: thigh, shin and foot on the left hip, mirrored.
+    // Legs: thigh, shin and foot on the left hip (hinged at hip, knee and ankle), mirrored.
     let i = join(&mut v, "waist", "hip_left", "frame.hinge", "base");
     rename(&mut v, i, "hip_joint_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
@@ -105,7 +106,11 @@ fn assemble() -> Vehicle {
     rename(&mut v, i, "shin_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "shin_right");
-    let i = join(&mut v, "shin_left", "bottom", "frame.foot", "top");
+    let i = join(&mut v, "shin_left", "bottom", "frame.hinge", "base");
+    rename(&mut v, i, "ankle_joint_left");
+    place_symmetric(&mut v, i, Symmetry::Mirror);
+    rename_last(&mut v, "ankle_joint_right");
+    let i = join(&mut v, "ankle_joint_left", "end", "frame.foot", "top");
     rename(&mut v, i, "foot_left");
     place_symmetric(&mut v, i, Symmetry::Mirror);
     rename_last(&mut v, "foot_right");
@@ -194,6 +199,21 @@ fn assemble() -> Vehicle {
         pose("binders_open", binders),
         pose("crouch", crouch),
     ];
+    // Walking (task 3.11).
+    let leg = |side: &str| LegDef {
+        hip: format!("hip_joint_{side}"),
+        knee: format!("knee_joint_{side}"),
+        ankle: Some(format!("ankle_joint_{side}")),
+        foot: format!("foot_{side}"),
+    };
+    v.gait = Some(GaitDef {
+        legs: vec![leg("left"), leg("right")],
+        step_length_m: 4.0,
+        step_height_m: 1.0,
+        speed_m_s: 3.0,
+        turn_rate_deg_s: 20.0,
+        stance: 0.9,
+    });
     v
 }
 
@@ -201,9 +221,9 @@ fn assemble() -> Vehicle {
 fn the_heavy_frame_assembles_into_a_valid_balanced_design() {
     let v = assemble();
     // Torso, head, waist; 2 × (shoulder, upper arm, forearm, thigh, shin, foot); backpack;
-    // 4 binders, 4 engines, 8 pods; 2 thigh engines; gyro; 12 hinges (shoulders, elbows,
-    // hips, knees, binders).
-    assert_eq!(v.parts.len(), 3 + 12 + 1 + 4 + 4 + 8 + 2 + 1 + 12);
+    // 4 binders, 4 engines, 8 pods; 2 thigh engines; gyro; 14 hinges (shoulders, elbows,
+    // hips, knees, ankles, binders).
+    assert_eq!(v.parts.len(), 3 + 12 + 1 + 4 + 4 + 8 + 2 + 1 + 14);
     for (i, p) in v.parts.iter().enumerate().skip(1) {
         let parent = p.parent.unwrap();
         assert!(parent < i);
@@ -315,6 +335,7 @@ fn the_design_file_is_this_design() {
         .expect("content/data/vehicles/heavy_frame.json (refresh with --ignored)");
     let saved = Vehicle::from_design(&file);
     let built = assemble();
+    assert_eq!(saved.gait, built.gait, "refresh with --ignored");
     assert_eq!(
         saved.parts.len(),
         built.parts.len(),
@@ -349,7 +370,7 @@ fn the_heavy_frame_moves_its_joints() {
     let body = VehicleBody::of(&v).unwrap();
     let a = &body.articulation;
     // The root plus one rigid group per hinge.
-    assert_eq!(a.groups.len(), 13);
+    assert_eq!(a.groups.len(), 15);
     let mut state = sim_vehicle::joints::JointState::rest(a);
     let set = |state: &mut sim_vehicle::joints::JointState, pose: &str| {
         let pose = v.poses.iter().find(|p| p.name == pose).unwrap();
@@ -390,5 +411,123 @@ fn the_heavy_frame_moves_its_joints() {
     assert!(
         rest.dot(engine) < 0.95,
         "engine turned with its binder: {rest:?} -> {engine:?}"
+    );
+}
+
+#[test]
+fn the_heavy_frame_walks_over_hills_and_turns() {
+    use sim_vehicle::flight::{RegionTerrain, region_env};
+    use sim_vehicle::gait::{Walking, resolve_legs, walk_tick};
+
+    let v = assemble();
+    let body = VehicleBody::of(&v).unwrap();
+    let gait = v.gait.clone().unwrap();
+    let legs = resolve_legs(&v, &body, &gait).expect("legs resolve");
+    assert_eq!(legs.len(), 2);
+    let sys = sim_core::StarSystem::from_path(content().join("star_systems/halcyon.json")).unwrap();
+    let i = sys.bodies.iter().position(|b| b.id == "meridian").unwrap();
+    let terrain = RegionTerrain(sim_planet::Terrain::of(&sys.bodies[i]).map(Arc::new));
+    let env_at = |t: f64| region_env(&sys, i, t, Some(&terrain));
+    let env = env_at(0.0);
+    // Somewhere on land, on a slope.
+    let up = sim_planet::fibonacci_directions(20_000)
+        .map(|d| env.surface_rotation * d)
+        .find(|&d| {
+            let p = d * env.radius;
+            env.ground_height(p) > 100.0 && env.ground_normal(p).dot(d) < 0.995
+        })
+        .unwrap();
+    let north = up.cross(DVec3::Y.cross(up)).normalize();
+    let rotation = DQuat::from_mat3(&glam::DMat3::from_cols(north.cross(up), up, -north));
+    let ground = env.radius + env.ground_height(up * env.radius);
+    let mut s = sim_core::frames::FrameState {
+        position: up * (ground + 12.0),
+        rotation,
+        velocity: env.spin.cross(up * ground),
+        angular_velocity: env.spin,
+    };
+    let mut walking = Walking::default();
+    let mut joints = sim_vehicle::joints::JointState::rest(&body.articulation);
+    let mut control = FlightControl {
+        translate: DVec3::NEG_Z, // W
+        ..Default::default()
+    };
+    let dt = 1.0 / 30.0;
+    let foot_parts: Vec<usize> = gait
+        .legs
+        .iter()
+        .map(|l| v.parts.iter().position(|p| p.name == l.foot).unwrap())
+        .collect();
+    let surface_start = env.surface_rotation.inverse() * s.position;
+    let heading_start = env.surface_rotation.inverse() * (s.rotation * DVec3::NEG_Z);
+    let (mut lowest, mut highest) = (f64::MAX, f64::MIN);
+    let mut worst_planted = 0.0f64;
+    let mut steps = 0;
+    for tick in 0..(30 * 40) {
+        let t = f64::from(tick + 1) * dt;
+        if tick == 30 * 30 {
+            control.translate = DVec3::new(1.0, 0.0, -0.3); // turn right, slowly forward
+        }
+        let env = env_at(t);
+        let before: Vec<bool> = walking.feet.iter().map(|f| f.step.is_some()).collect();
+        assert!(walk_tick(
+            &mut s,
+            &mut walking,
+            &mut joints,
+            &body,
+            &legs,
+            &gait,
+            &control,
+            &env,
+            dt
+        ));
+        for (k, foot) in walking.feet.iter().enumerate() {
+            if foot.step.is_some() && !before.get(k).copied().unwrap_or(false) {
+                steps += 1;
+            }
+            if foot.step.is_none() {
+                // A planted foot's sole is on the ground.
+                let part = &v.parts[foot_parts[k]];
+                let sole_rest = part.position - DVec3::Y * 0.5;
+                let sole = s.position
+                    + s.rotation
+                        * joints.poses[body.articulation.part_group[foot_parts[k]]]
+                            .apply(sole_rest);
+                let height = sole.length() - env.radius - env.ground_height(sole);
+                worst_planted = worst_planted.max(height.abs());
+            }
+        }
+        for (g, group) in body.articulation.groups.iter().enumerate() {
+            if let Some(j) = group.joint {
+                assert!(
+                    (j.clamp(joints.angles[g]) - joints.angles[g]).abs() < 1e-9,
+                    "joint {g} within its limits: {}",
+                    joints.angles[g].to_degrees()
+                );
+            }
+        }
+        let h = s.position.length() - env.radius;
+        lowest = lowest.min(h);
+        highest = highest.max(h);
+    }
+    let env = env_at(40.0);
+    let surface_end = env.surface_rotation.inverse() * s.position;
+    let heading_end = env.surface_rotation.inverse() * (s.rotation * DVec3::NEG_Z);
+    let travelled = surface_start.distance(surface_end);
+    let turned = heading_start.angle_between(heading_end).to_degrees();
+    println!(
+        "travelled {travelled:.0} m, climbed {:.1} m, turned {turned:.0} deg, {steps} steps, planted feet within {worst_planted:.2} m",
+        highest - lowest
+    );
+    assert!(
+        travelled > 70.0,
+        "walked about 3 m/s for 30 s: {travelled:.0} m"
+    );
+    assert!(highest - lowest > 2.0, "over uneven ground");
+    assert!(turned > 90.0, "turned: {turned:.0} deg");
+    assert!(steps > 30, "it stepped: {steps}");
+    assert!(
+        worst_planted < 0.3,
+        "planted feet on the ground: {worst_planted:.2} m"
     );
 }

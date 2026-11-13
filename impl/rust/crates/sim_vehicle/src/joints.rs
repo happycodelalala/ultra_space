@@ -180,16 +180,19 @@ impl JointState {
 }
 
 /// Moves every jointed vehicle's joints toward their targets for one tick (and gives jointed
-/// vehicles their joint state); when they move, the thrust allocator follows the new poses.
+/// vehicles their joint state); when they move (or walking, which sets them directly, ends), the
+/// thrust allocator follows the new poses.
 pub fn joint_system(
     mut commands: Commands,
     clock: Res<sim_core::objects::SimClock>,
+    mut stopped_walking: RemovedComponents<crate::gait::Walking>,
     mut vehicles: Query<(
         Entity,
         &mut crate::vehicle::VehicleBody,
         Option<&mut JointState>,
     )>,
 ) {
+    let stopped: std::collections::HashSet<Entity> = stopped_walking.read().collect();
     for (entity, mut body, state) in &mut vehicles {
         if !body.articulation.is_jointed() {
             continue;
@@ -200,7 +203,7 @@ pub fn joint_system(
             commands.entity(entity).insert(rest);
             continue;
         };
-        if state.advance(&body.articulation, clock.dt) {
+        if state.advance(&body.articulation, clock.dt) || stopped.contains(&entity) {
             body.allocator = body.posed_allocator(&state.poses);
         }
     }

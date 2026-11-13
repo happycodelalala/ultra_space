@@ -26,6 +26,8 @@ struct DesignFile {
     /// Named joint poses: pose name -> joint part id -> angle (degrees).
     #[serde(default)]
     poses: std::collections::BTreeMap<String, std::collections::BTreeMap<String, f64>>,
+    #[serde(default)]
+    gait: Option<crate::gait::GaitDef>,
 }
 
 /// A named set of joint angles (degrees, by joint part name).
@@ -119,6 +121,7 @@ pub struct VehicleDesign {
     pub description: String,
     pub parts: Vec<VehiclePart>,
     pub poses: Vec<NamedPose>,
+    pub gait: Option<crate::gait::GaitDef>,
 }
 
 #[derive(Debug)]
@@ -266,6 +269,24 @@ impl VehicleDesign {
                 }
             }
         }
+        if let Some(gait) = &file.gait {
+            let is = |name: &str, joint: bool| {
+                parts
+                    .iter()
+                    .any(|p| p.name == name && (!joint || p.def.joint.is_some()))
+            };
+            for leg in &gait.legs {
+                let joints = [Some(&leg.hip), Some(&leg.knee), leg.ankle.as_ref()];
+                for joint in joints.into_iter().flatten() {
+                    if !is(joint, true) {
+                        problems.push(format!("{}: gait names {joint:?}, not a joint", file.id));
+                    }
+                }
+                if !is(&leg.foot, false) {
+                    problems.push(format!("{}: gait foot {:?} is no part", file.id, leg.foot));
+                }
+            }
+        }
         if !problems.is_empty() {
             return Err(DesignError::Invalid(problems));
         }
@@ -283,6 +304,7 @@ impl VehicleDesign {
             description: file.description,
             parts,
             poses,
+            gait: file.gait,
         })
     }
 }
@@ -359,10 +381,9 @@ pub fn design_json(
         let comma = if i + 1 < n { "," } else { "" };
         lines.push(format!("    {{{}}}{comma}", fields.join(", ")));
     }
-    if vehicle.poses.is_empty() {
-        lines.push("  ]".into());
-    } else {
-        lines.push("  ],".into());
+    lines.push("  ]".into());
+    if !vehicle.poses.is_empty() {
+        *lines.last_mut().expect("parts") += ",";
         lines.push("  \"poses\": {".into());
         let m = vehicle.poses.len();
         for (k, pose) in vehicle.poses.iter().enumerate() {
@@ -379,6 +400,13 @@ pub fn design_json(
             ));
         }
         lines.push("  }".into());
+    }
+    if let Some(gait) = &vehicle.gait {
+        *lines.last_mut().expect("parts") += ",";
+        lines.push(format!(
+            "  \"gait\": {}",
+            serde_json::to_string(gait).expect("gait")
+        ));
     }
     lines.push("}".into());
     lines.join("\n") + "\n"
