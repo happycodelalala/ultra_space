@@ -582,7 +582,7 @@
     },
     {
       "id": "bastion.limb",
-      "name": "Bastion Limb",
+      "name": "Bastion Upper Arm",
       "kind": "structure",
       "mass_kg": 3500,
       "shape": {
@@ -623,7 +623,7 @@
           "size": "large"
         }
       ],
-      "description": "An arm segment (upper arm or forearm): structural spine, armour shells and the rams that work the joint below.",
+      "description": "An upper arm: structural spine, armour and the actuators that work the elbow.",
       "form": {
         "model": "bastion.limb",
         "material_slots": [
@@ -633,8 +633,60 @@
       }
     },
     {
+      "id": "bastion.forearm",
+      "name": "Bastion Forearm",
+      "kind": "structure",
+      "mass_kg": 3500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.8,
+          3.6,
+          1.8
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.8,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.8,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A forearm: the arm segment below the elbow, under heavy armour that guards the wrist drive and the hand.",
+      "form": {
+        "model": "bastion.forearm",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
       "id": "bastion.leg",
-      "name": "Bastion Leg",
+      "name": "Bastion Thigh",
       "kind": "structure",
       "mass_kg": 7000,
       "shape": {
@@ -675,9 +727,61 @@
           "size": "large"
         }
       ],
-      "description": "A leg segment (thigh or shin): structural spine, armour with a knee guard and the twin rams that work the joint below.",
+      "description": "A thigh: structural spine, heavy armour over the hip side, and the actuators that work the knee.",
       "form": {
         "model": "bastion.leg",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "bastion"
+      }
+    },
+    {
+      "id": "bastion.shin",
+      "name": "Bastion Shin",
+      "kind": "structure",
+      "mass_kg": 7000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.6,
+          5.0,
+          2.6
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            2.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -2.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A shin: the leg segment below the knee, its armour widening to the ankle over the foot actuators, with the knee guard.",
+      "form": {
+        "model": "bastion.shin",
         "material_slots": [
           "armor"
         ],

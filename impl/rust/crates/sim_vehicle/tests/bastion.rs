@@ -247,12 +247,19 @@ fn assemble() -> Vehicle {
         "elbow_joint",
         any,
     );
-    b.pair("elbow_joint", "end", "bastion.limb", "top", "forearm", any);
+    b.pair(
+        "elbow_joint",
+        "end",
+        "bastion.forearm",
+        "top",
+        "forearm",
+        any,
+    );
     b.pair("forearm", "bottom", "bastion.hand", "wrist", "hand", any);
     b.pair("waist", "hip_left", "frame.hinge", "base", "hip_joint", any);
     b.pair("hip_joint", "end", "bastion.leg", "top", "thigh", any);
     b.pair("thigh", "bottom", "frame.hinge", "base", "knee_joint", any);
-    b.pair("knee_joint", "end", "bastion.leg", "top", "shin", any);
+    b.pair("knee_joint", "end", "bastion.shin", "top", "shin", any);
     b.pair("shin", "bottom", "frame.hinge", "base", "ankle_joint", any);
     b.pair("ankle_joint", "end", "bastion.foot", "top", "foot", any);
 
