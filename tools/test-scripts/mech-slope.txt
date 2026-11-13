@@ -1,0 +1,20 @@
+# Mechs stand by themselves (task 3.11). Run with ULTRA_SPACE_START_ALTITUDE=1500. Spawn the
+# Bastion and board it: it stands on its legs on its own (HUD "STANDING"), level, each foot on
+# the ground at its own height; then walk forward while turning, and stop. Look for: no
+# toppling after spawning, feet on the ground, the body level, the part models (blocky
+# armour, bronze trim).
+0.5  press Z
+1    wait landed 40
+2    press F
+3    hold Shift 0.3
+3.1  press G                 # rover -> Bastion
+4    press G                 # spawn it ahead
+5    hold W 4                # walk up to it
+9.5  press F                 # board it
+12   shot 01-standing.png
+14   hold W 8                # walk
+14   hold D 4                # turning
+20   shot 02-walking.png
+26   shot 03-stopped.png
+30   shot 04-standing-later.png
+30.5 quit

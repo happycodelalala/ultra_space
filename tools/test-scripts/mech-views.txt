@@ -1,0 +1,47 @@
+# Review shots of the Bastion from around it (for design review). Run with
+# ULTRA_SPACE_START_ALTITUDE=1500. Spawn and board it, hide the HUD, then photograph it from
+# eight directions around (yaw 0 = behind, 180 = front) at a slight downward angle, from above
+# and from low; then with the arms deployed and with the shell closed, from the front three
+# quarters. Look for: proportions, silhouette, how the part models read, gaps or overlaps.
+0.5  press Z
+1    wait landed 40
+2    press F
+3    hold Shift 0.3
+3.1  press G                 # rover -> Bastion
+4    press G                 # spawn it ahead
+5    hold W 4                # walk up to it
+9.5  press F                 # board it
+10.5 press H                 # hide the HUD
+11   orbit 180 -10
+13   shot 01-front.png
+13.5 orbit 225 -10
+15   shot 02-front-left.png
+15.5 orbit 270 -10
+17   shot 03-left.png
+17.5 orbit 315 -10
+19   shot 04-back-left.png
+19.5 orbit 0 -10
+21   shot 05-back.png
+21.5 orbit 45 -10
+23   shot 06-back-right.png
+23.5 orbit 90 -10
+25   shot 07-right.png
+25.5 orbit 135 -10
+27   shot 08-front-right.png
+27.5 orbit 160 -60
+29   shot 09-above.png
+29.5 orbit 200 15
+31   shot 10-low-front.png
+31.5 press P                 # arms deployed
+32   orbit 150 -15
+36   shot 11-arms-deployed.png
+36.5 press P                 # arms grab
+40   shot 12-arms-grab.png
+40.5 press P                 # arms stowed
+41   press P                 # shell closed
+46   shot 13-shell-closed.png
+46.5 orbit 330 -15
+48   shot 14-shell-closed-back.png
+48.5 press P                 # shell open
+53   shot 15-shell-open.png
+53.5 quit
