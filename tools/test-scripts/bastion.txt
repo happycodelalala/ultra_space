@@ -24,10 +24,9 @@
 28.5 shot 05-shell-closed.png
 29   press P                 # shell open
 33   shot 06-shell-open.png
-33.5 press M                 # walk
 34   hold W 6
 38   shot 07-walking.png
-40.5 press M                 # stop on both feet
+40.5 press M                 # legs off: stops on both feet, then plain physics
 41   press H                 # HUD back
 42   shot 08-stopping.png
 45   shot 09-stopped.png

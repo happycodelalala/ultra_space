@@ -141,7 +141,14 @@ pub struct Walking {
     pub speed: f64,
     pub feet: Vec<Foot>,
     pub stopping: bool,
+    /// The body's vertical speed on its legs (m/s, the suspension's state).
+    pub lift_rate: f64,
 }
+
+/// Keeps a legged vehicle off its legs: it doesn't stand or walk by itself on the ground (plain
+/// physics), until removed.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct LegsOff;
 
 /// What a tick of walking ended with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,6 +158,8 @@ pub enum WalkStep {
     Stopped,
     /// No ground under the feet: back to flight.
     NoGround,
+    /// The pilot thrusts up: back to flight.
+    TakeOff,
 }
 
 /// How long a step takes (s).
@@ -161,6 +170,12 @@ const ACCELERATION: f64 = 3.0;
 const MAX_SOLE_PITCH: f64 = 0.35;
 /// Walking ends when the ground is this much further below the feet than standing (m).
 const LOST_GROUND: f64 = 3.0;
+/// The legs' suspension: natural frequency (rad/s), critically damped.
+const SUSPENSION: f64 = 5.0;
+/// How fast the body straightens up after a tilted landing (rad/s).
+const UPRIGHT_RATE: f64 = 1.5;
+/// Upward stick beyond this takes off.
+const TAKE_OFF_STICK: f64 = 0.5;
 
 fn upright(forward: DVec3, up: DVec3) -> DQuat {
     let f = (forward - up * forward.dot(up)).normalize_or(up.any_orthonormal_vector());
@@ -197,6 +212,9 @@ pub fn walk_tick(
     let sole_depth = legs.iter().map(|l| -l.sole.y).fold(0.0, f64::max);
     let stand = sole_depth - leg_length * (1.0 - gait.stance);
 
+    if !walking.stopping && control.translate.y > TAKE_OFF_STICK {
+        return WalkStep::TakeOff;
+    }
     // Ride the turning ground, then turn and move.
     let spin = DQuat::from_scaled_axis(env.spin * dt);
     state.position = spin * state.position;
@@ -214,13 +232,42 @@ pub fn walk_tick(
     let forward_level = (forward - up * forward.dot(up)).normalize_or(forward);
     state.position += forward_level * walking.speed * dt;
     let ground = ground_at(env, state.position);
-    if state.position.length() - ground.length() > stand + LOST_GROUND {
+    let height = state.position.length() - ground.length();
+    if height > stand + LOST_GROUND {
         return WalkStep::NoGround;
     }
-    state.position = ground.normalize() * (ground.length() + stand);
+    // Suspension: the body rides at standing height over the mean ground under it and its
+    // planted feet, sprung (critically damped) rather than snapped, and never higher than the
+    // legs reach from the lowest foot.
+    let mut target = ground.length() + stand;
+    let planted: Vec<f64> = walking
+        .feet
+        .iter()
+        .filter(|f| f.step.is_none())
+        .map(|f| (to_inertial * f.planted).length())
+        .collect();
+    if !planted.is_empty() {
+        let mean = (planted.iter().sum::<f64>() + ground.length()) / (planted.len() + 1) as f64;
+        let lowest = planted.iter().copied().fold(f64::MAX, f64::min);
+        target = (mean + stand).min(lowest + sole_depth - 0.05);
+    }
+    let radius = state.position.length();
+    let accel = SUSPENSION * SUSPENSION * (target - radius) - 2.0 * SUSPENSION * walking.lift_rate;
+    walking.lift_rate += accel * dt;
+    let radius = radius + walking.lift_rate * dt;
+    state.position = ground.normalize() * radius;
     let up = state.position.normalize();
-    state.rotation = upright(forward_level, up);
-    state.velocity = env.spin.cross(state.position) + forward_level * walking.speed;
+    // Straighten up (after a tilted landing) at a limited rate.
+    let level = upright(forward_level, up);
+    let off = state.rotation.angle_between(level);
+    let step = UPRIGHT_RATE * dt;
+    state.rotation = if off <= step {
+        level
+    } else {
+        state.rotation.slerp(level, step / off).normalize()
+    };
+    state.velocity =
+        env.spin.cross(state.position) + forward_level * walking.speed + up * walking.lift_rate;
     state.angular_velocity = env.spin;
 
     // The body's pose: vehicle rest frame -> inertial.
@@ -319,6 +366,44 @@ pub fn walk_tick(
         WalkStep::Stopped
     } else {
         WalkStep::Walking
+    }
+}
+
+/// A legged vehicle on the ground slower than this (m/s) stands on its legs.
+const STAND_SPEED: f64 = 3.0;
+
+/// Puts legged vehicles that touch the ground slowly on their legs (spawned, landed, or stopped
+/// after walking): they stand and walk instead of resting on their feet as a rigid body, which
+/// topples on slopes. Not while held in the builder, in arcade flight or cruise, with the legs
+/// switched off, or with the pilot thrusting up. Runs before [`walking_system`].
+#[allow(clippy::type_complexity)]
+pub fn stand_system(
+    mut commands: Commands,
+    vehicles: Query<
+        (
+            Entity,
+            &Vehicle,
+            &FlightControl,
+            &FlightTelemetry,
+            Option<&crate::cruise::Cruise>,
+        ),
+        (
+            Without<Walking>,
+            Without<LegsOff>,
+            Without<crate::flight::Frozen>,
+            Without<crate::arcade::ArcadeFlight>,
+        ),
+    >,
+) {
+    for (entity, vehicle, control, telemetry, cruise) in &vehicles {
+        if vehicle.gait.is_some()
+            && telemetry.in_contact
+            && telemetry.relative_velocity.length() < STAND_SPEED
+            && control.translate.y <= TAKE_OFF_STICK
+            && !cruise.is_some_and(crate::cruise::Cruise::is_cruising)
+        {
+            commands.entity(entity).insert(Walking::default());
+        }
     }
 }
 

@@ -9,6 +9,7 @@ mod capture;
 mod debug_overlay;
 mod hud;
 mod inspector;
+mod part_models;
 mod planet_maps;
 mod script;
 mod ship;

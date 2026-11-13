@@ -14,7 +14,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
-use sim_vehicle::gait::Walking;
+use sim_vehicle::gait::{LegsOff, Walking};
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
     OnRails, Vehicle, VehicleBody,
@@ -519,18 +519,15 @@ fn pose_key(
 /// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
 /// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
 /// turning it off hands the current velocity back to Newtonian flight.
-/// Walking starts only this slow (m/s relative to the ground), and with the vehicle's origin no
-/// higher above the ground than its size plus this (m).
-const WALK_START_SPEED: f64 = 2.0;
-const WALK_START_MARGIN: f64 = 3.0;
-
-/// M: a vehicle with legs (a design `gait`, task 3.11) starts or stops walking. It starts only
-/// when standing on the ground (landed, or low and slow); W/S walk, A/D turn. Stopping slows it,
-/// brings its feet under it and then hands it back to flight where it stands.
+/// M: switches a legged vehicle's legs (a design `gait`, task 3.11) off and on. With legs on
+/// (the default), it stands on them whenever it is on the ground and slow, and W/S walk, A/D
+/// turn, Space takes off. With legs off it stops on both feet and is a plain rigid body.
 fn walk_key(
     keys: Res<ButtonInput<KeyCode>>,
     pilot: Res<PilotState>,
     ship: Option<Res<PlayerShip>>,
+    mut notice: ResMut<crate::hud::Notice>,
+    real: Res<Time<Real>>,
     mut sim: ResMut<Sim>,
 ) {
     if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyM) {
@@ -547,41 +544,27 @@ fn walk_key(
     let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
         return;
     };
-    if let Some(mut walking) = e.get_mut::<Walking>() {
-        // Stops, brings its feet under it, then hands back to flight (or walks on).
-        walking.stopping = !walking.stopping;
-        let stopping = walking.stopping;
-        if let Some(mut control) = e.get_mut::<FlightControl>() {
-            control.desired_velocity = None;
-        }
-        info!(
-            "{}",
-            if stopping {
-                "walking off: stopping on both feet"
-            } else {
-                "walking on"
-            }
-        );
-        return;
-    }
+    let now = real.elapsed_secs_f64();
     if e.get::<Vehicle>().is_none_or(|v| v.gait.is_none()) {
-        info!("this vehicle has no legs to walk on");
+        notice.show("This vehicle has no legs", now);
         return;
     }
-    let size = e.get::<VehicleBody>().map_or(0.0, |b| b.size);
-    let standing = e.get::<FlightTelemetry>().is_some_and(|tel| {
-        tel.in_contact
-            || (tel.ground_altitude < size + WALK_START_MARGIN
-                && tel.relative_velocity.length() < WALK_START_SPEED)
-    });
-    if !standing {
-        info!("walking needs the ground: land first");
-        return;
+    let text = if e.contains::<LegsOff>() {
+        e.remove::<LegsOff>();
+        "Legs on: stands and walks on the ground (W/S walk, A/D turn, Space takes off)"
+    } else {
+        e.insert(LegsOff);
+        if let Some(mut walking) = e.get_mut::<Walking>() {
+            // Stops on both feet, then hands over to plain physics.
+            walking.stopping = true;
+        }
+        "Legs off: a rigid body on its feet (M: legs on)"
+    };
+    if let Some(mut control) = e.get_mut::<FlightControl>() {
+        control.desired_velocity = None;
     }
-    e.remove::<ArcadeFlight>();
-    e.remove::<OnRails>();
-    e.insert(Walking::default());
-    info!("walking: W/S walk, A/D turn, M to stop");
+    info!("{text}");
+    notice.show(text, now);
 }
 
 fn arcade_key(

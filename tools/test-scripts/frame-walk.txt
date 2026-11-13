@@ -16,7 +16,6 @@
 9.5  press F                 # board it
 11.5 press H                 # hide the HUD (legs visible)
 12   shot 01-standing.png
-12.5 press M                 # walk mode
 13   hold W 14               # walk forward
 15   shot 02-step.png
 15.4 shot 03-step.png
@@ -26,7 +25,7 @@
 27   hold W 6
 30   shot 06-turning.png
 33.5 shot 07-turned.png
-34   press M                 # stop: back to flight, standing
+34   press M                 # legs off: stops on both feet, then plain physics
 37   shot 08-stopped.png
 42   shot 09-stopped-later.png
 42.5 quit

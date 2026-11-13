@@ -815,6 +815,7 @@ pub fn add_flight_systems(schedule: &mut Schedule) {
             // Walkers first: they move against the ground and vehicles as the last physics step
             // left them, then turn with the planet like everything else this tick.
             crate::walker::walker_system,
+            crate::gait::stand_system,
             crate::gait::walking_system,
             crate::joints::joint_system,
             flight_system,

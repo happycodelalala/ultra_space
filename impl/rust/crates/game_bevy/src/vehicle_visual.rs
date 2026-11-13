@@ -42,6 +42,8 @@ pub enum PartMaterial {
     Hull,
     Glass,
     Dark,
+    /// Accent plates and stripes on part models.
+    Trim,
 }
 
 pub fn part_material(kind: PartKind) -> PartMaterial {
@@ -85,26 +87,37 @@ pub fn merged_group_meshes(
     groups: &[usize],
 ) -> Vec<(usize, PartMaterial, Mesh)> {
     let mut merged: Vec<(usize, PartMaterial, Mesh)> = Vec::new();
+    let models = crate::part_models::part_models();
     for (part, &group) in parts.iter().zip(groups) {
-        let material = part_material(part.def.kind);
         let transform = Transform::from_translation(part.position.as_vec3())
             .with_rotation(part.rotation.as_quat());
-        let mut mesh = shape_mesh(part.def.shape);
-        if part.def.wheel.is_some() {
-            // A tyre turns about its axle (the part's X); the cylinder mesh stands along Y.
-            mesh = mesh.rotated_by(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
-        }
-        let mesh = mesh.transformed_by(transform);
-        match merged
-            .iter_mut()
-            .find(|(g, m, _)| *g == group && *m == material)
-        {
-            Some((_, _, into)) => {
-                if let Err(e) = into.merge(&mesh) {
-                    warn!("can't merge a part mesh: {e}");
+        // The part's model (one mesh per material), else its placeholder shape.
+        let pieces: Vec<(PartMaterial, Mesh)> =
+            match part.def.form.as_ref().and_then(|f| models.get(&f.model)) {
+                Some(model) => model.clone(),
+                None => {
+                    let mut mesh = shape_mesh(part.def.shape);
+                    if part.def.wheel.is_some() {
+                        // A tyre turns about its axle (the part's X); the cylinder mesh stands
+                        // along Y.
+                        mesh = mesh.rotated_by(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
+                    }
+                    vec![(part_material(part.def.kind), mesh)]
                 }
+            };
+        for (material, mesh) in pieces {
+            let mesh = mesh.transformed_by(transform);
+            match merged
+                .iter_mut()
+                .find(|(g, m, _)| *g == group && *m == material)
+            {
+                Some((_, _, into)) => {
+                    if let Err(e) = into.merge(&mesh) {
+                        warn!("can't merge a part mesh: {e}");
+                    }
+                }
+                None => merged.push((group, material, mesh)),
             }
-            None => merged.push((group, material, mesh)),
         }
     }
     merged
@@ -118,7 +131,7 @@ type GroupMeshes = Vec<(usize, PartMaterial, Mesh)>;
 pub struct VehicleMeshes {
     ready: HashMap<u64, Vec<(usize, PartMaterial, Handle<Mesh>)>>,
     pending: HashMap<u64, Task<GroupMeshes>>,
-    materials: Option<[Handle<StandardMaterial>; 3]>,
+    materials: Option<[Handle<StandardMaterial>; 4]>,
 }
 
 impl VehicleMeshes {
@@ -141,7 +154,7 @@ impl VehicleMeshes {
         which: PartMaterial,
         materials: &mut Assets<StandardMaterial>,
     ) -> Handle<StandardMaterial> {
-        let [hull, glass, dark] = self.materials.get_or_insert_with(|| {
+        let [hull, glass, dark, trim] = self.materials.get_or_insert_with(|| {
             [
                 materials.add(StandardMaterial {
                     base_color: Color::srgb(0.62, 0.64, 0.68),
@@ -161,12 +174,19 @@ impl VehicleMeshes {
                     perceptual_roughness: 0.5,
                     ..default()
                 }),
+                materials.add(StandardMaterial {
+                    base_color: Color::srgb(0.72, 0.55, 0.28),
+                    metallic: 0.5,
+                    perceptual_roughness: 0.4,
+                    ..default()
+                }),
             ]
         });
         match which {
             PartMaterial::Hull => hull.clone(),
             PartMaterial::Glass => glass.clone(),
             PartMaterial::Dark => dark.clone(),
+            PartMaterial::Trim => trim.clone(),
         }
     }
 }
@@ -561,12 +581,19 @@ mod tests {
         let design =
             VehicleDesign::from_path(content.join("vehicles/kestrel.json"), &catalog).unwrap();
         let merged = merged_meshes(&design.parts);
-        assert_eq!(merged.len(), 3);
-        // Every part's vertices are in there.
+        // Hull, glass, dark, and trim from the engine's model.
+        assert_eq!(merged.len(), 4);
+        // Every part's vertices are in there (its model's, else its placeholder shape's).
+        let models = crate::part_models::part_models();
         let expected: usize = design
             .parts
             .iter()
-            .map(|p| shape_mesh(p.def.shape).count_vertices())
+            .map(
+                |p| match p.def.form.as_ref().and_then(|f| models.get(&f.model)) {
+                    Some(model) => model.iter().map(|(_, m)| m.count_vertices()).sum(),
+                    None => shape_mesh(p.def.shape).count_vertices(),
+                },
+            )
             .sum();
         let total: usize = merged.iter().map(|(_, m)| m.count_vertices()).sum();
         assert_eq!(total, expected);

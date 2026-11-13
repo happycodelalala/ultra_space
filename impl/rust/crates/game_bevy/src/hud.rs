@@ -366,8 +366,13 @@ fn update_hud(
         let cruise = player_cruise_status(sim, ship, system);
         let arcade = player_arcade_speed(sim, ship)
             .map_or(String::new(), |s| format!("  ARCADE {}", speed(s)))
-            + &player_walking_speed(sim, ship)
-                .map_or(String::new(), |s| format!("  WALKING {}", speed(s)));
+            + &player_walking_speed(sim, ship).map_or(String::new(), |s| {
+                if s.abs() < 0.05 {
+                    "  STANDING".to_string()
+                } else {
+                    format!("  WALKING {}", speed(s))
+                }
+            });
         let state_flags = format!(
             "{}{}{}{}",
             if telemetry.on_rails { "  ON RAILS" } else { "" },
@@ -381,7 +386,7 @@ fn update_hud(
              SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | Z stop | N arcade | M walk | J cruise{} | V view | O orbits | H HUD | F3 debug",
+             T assist | X brake | Z stop | N arcade | M legs | J cruise{} | V view | O orbits | H HUD | F3 debug",
                 body.name.to_uppercase(),
                 speed(relative.length()),
                 speed(relative.dot(up)),
