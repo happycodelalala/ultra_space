@@ -274,6 +274,11 @@ fn setup_settlements(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let system = &universe.0;
+    // Debug (performance comparisons): `ULTRA_SPACE_NO_SETTLEMENTS=1` draws none.
+    if std::env::var_os("ULTRA_SPACE_NO_SETTLEMENTS").is_some() {
+        info!("debug: settlements not drawn");
+        return;
+    }
     let Some(dir) = buildings_dir() else {
         return;
     };
