@@ -223,6 +223,30 @@ Measured on Windows (round q0051, quiet machine): flying at the biggest town fro
 - **Meeting people:** looking at someone shows their name and role (and their culture's look);
   conversation comes with dialogue (Batch 9).
 
+**As built (task 4.7):** characters are assembled offline like the kits
+(`tools/build-characters.sh`, recipes in `content/data/clothing_sets/`) from three CC0
+Quaternius packs on one 65-bone skeleton: the base character's head (vertices weighted to the
+head and neck) and hair with an outfit for the Hollin (peasant men and women, ranger-clad
+guards), the base body with a coverall painted on by bone (suit, gloves, boots) for the
+Compact (blue-grey; wardens orange). Every model carries the shared animations from the
+Universal Animation Library (idle, walk, run, work, use, carry, sit, talk), textures at
+512 px, 2–4.5 MB each. The packs stay outside the repo (`assets/third_party/README.md`). The
+game loads them with Bevy's glTF loader, one animation graph per character.
+
+**As built (task 4.8):** `sim_society::people` and `game_bevy::people`. When a settlement's
+buildings appear, one in 25 of its people (8 to 64) is promoted in its role shares, living in
+the dwellings nearest the centre, with a name and a workplace by role (smiths at the smithy,
+farmers by the barns and mills, merchants at the stalls, Keelwardens in the shrine, growers in
+the greenhouses, pilots at the pads...). They are placed where their day has them, then follow
+it by the settlement's local solar time: home 22:00–7:30, at midday and for supper, work
+7:30–12 and 13–17:30, the square 19–22, each shifted by up to ±25 minutes; walking the street
+graph (shortest way) at 1.35 m/s, hidden indoors, side-stepping each other, waiting for the
+player; those over 120 m from the player step a quarter as often. Each is drawn as a character
+who takes their role, with the animation for what they do (outdoor work by role: use, carry,
+talk or work). Leaving demotes them. In a Windows round the town's square fills at 20:00 and
+empties for work at 9:00; flying in at ~300 m/s while the town fills had no hitch beyond the
+end screenshot.
+
 ## 7. Player-facing
 
 - Entering a settlement shows its name, faction and culture; the inspector shows its state and
