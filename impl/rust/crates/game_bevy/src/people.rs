@@ -220,11 +220,26 @@ fn animation(activity: Activity, role: &str) -> &'static str {
     }
 }
 
+/// Local solar time at a settlement (fraction of its day, 0 midnight) at universe time `t`.
+fn local_day(universe: &Universe, site: &crate::settlements::Site, t: f64) -> f64 {
+    let system = &universe.0;
+    let c = site.layout.center;
+    local_solar_fraction(
+        &system.frames,
+        system.bodies[site.body].surface_frame,
+        system.star().inertial_frame,
+        (-c.z).atan2(c.x),
+        UniverseTime::from_nanos((t.max(0.0) * 1e9) as u64),
+    )
+}
+
 /// Promotes people where a settlement's buildings are shown, demotes them when they go.
 fn stream_people(
     mut commands: Commands,
     characters: Option<ResMut<Characters>>,
     draw: Option<Res<SettlementDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
 ) {
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
@@ -242,13 +257,14 @@ fn stream_people(
                 let Some(kit) = draw.kits.0.get(&site.layout.kit) else {
                     continue;
                 };
-                let crowd = Crowd::promote(
+                let mut crowd = Crowd::promote(
                     &site.settlement,
                     &site.layout,
                     kit,
                     &site.naming,
                     promoted(site.settlement.population),
                 );
+                crowd.settle(local_day(&universe, site, render.0));
                 let mut entities = Vec::with_capacity(crowd.people.len());
                 for (k, person) in crowd.people.iter().enumerate() {
                     let h = mix(site.seed ^ (k as u64 + 1).wrapping_mul(0x9e37_79b9));
@@ -315,21 +331,11 @@ fn update_people(
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
     };
-    let system = &universe.0;
     let dt = f64::from(time.delta_secs()).min(0.25);
     for (i, shown) in characters.shown.iter_mut() {
         let site = &draw.sites[*i];
-        let body = &system.bodies[site.body];
         let r = site.terrain.radius;
-        // Local solar time at the settlement.
-        let c = site.layout.center;
-        let day = local_solar_fraction(
-            &system.frames,
-            body.surface_frame,
-            system.star().inertial_frame,
-            (-c.z).atan2(c.x),
-            UniverseTime::from_nanos((render.0.max(0.0) * 1e9) as u64),
-        );
+        let day = local_day(&universe, site, render.0);
         // The player: the camera, on the settlement's plane, if within a few hundred metres.
         let cam = crate::settlements::camera_on(&universe, &camera, site.body, render.0);
         let off = site.basis.inverse() * (cam - site.origin);

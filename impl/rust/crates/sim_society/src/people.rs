@@ -242,8 +242,15 @@ impl Crowd {
                 })
                 .collect()
         };
+        // Homes among the dwellings nearest the centre (the part of a big town the player is
+        // in), twice as many as people.
         let mut homes = with_use("home");
         homes.extend(with_use("shop"));
+        homes.sort_by(|&a, &b| {
+            let d = |i: usize| DVec2::new(layout.buildings[i].x, layout.buildings[i].z).length();
+            d(a).total_cmp(&d(b))
+        });
+        homes.truncate((2 * count).max(1));
         // The square: the well (medieval) or the middle of the colony.
         let centre = with_use("square").first().map_or(DVec2::ZERO, |&i| {
             DVec2::new(layout.buildings[i].x, layout.buildings[i].z)
@@ -303,6 +310,33 @@ impl Crowd {
             graph,
             doors,
             ticks: 0,
+        }
+    }
+
+    /// Puts everyone where their day has them at local time `day` (on promotion: people
+    /// are found about their business, not all setting out from home).
+    pub fn settle(&mut self, day: f64) {
+        for (i, p) in self.people.iter_mut().enumerate() {
+            let place = schedule((day + p.offset).rem_euclid(1.0));
+            let (at, activity) = match place {
+                Place::Home => (self.doors.get(p.home).copied(), Activity::Inside),
+                Place::Work if p.works_inside => {
+                    (self.doors.get(p.work).copied(), Activity::Inside)
+                }
+                Place::Work => (self.doors.get(p.work).copied(), Activity::Working),
+                Place::Square => (
+                    Some(p.gathering),
+                    if i % 3 == 0 {
+                        Activity::Idle
+                    } else {
+                        Activity::Talking
+                    },
+                ),
+            };
+            p.position = at.unwrap_or(p.position);
+            p.place = Some(place);
+            p.path.clear();
+            p.activity = activity;
         }
     }
 
@@ -371,14 +405,14 @@ impl Crowd {
             for (j, &o) in positions.iter().enumerate() {
                 if j != i && o.distance(p.position) < PERSONAL && (o - p.position).dot(step) > 0.0 {
                     let right = DVec2::new(-step.y, step.x).normalize_or_zero();
-                    step += right * WALK_SPEED * dt * 0.5;
+                    step += right * step.length() * 0.5;
                 }
             }
             if step.length_squared() > 1e-9 {
                 p.heading = step.x.atan2(step.y);
             }
             p.position += step;
-            if p.position.distance(p.path[0]) < 0.4 {
+            if p.position.distance(p.path[0]) < 0.6 {
                 p.path.remove(0);
             }
         }

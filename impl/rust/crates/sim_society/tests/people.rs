@@ -68,6 +68,15 @@ fn people_live_out_the_day_in_a_town_and_the_colony() {
         let again = Crowd::promote(s, layout, kit, naming, 64);
         assert_eq!(crowd.people, again.people);
 
+        // Promoted in the evening: already at the square.
+        let mut evening = again.clone();
+        evening.settle(0.84);
+        let there = count(&evening, Activity::Idle) + count(&evening, Activity::Talking);
+        assert!(
+            there >= 50,
+            "{}: {there} at the square on promotion at 20:00",
+            s.name
+        );
         // Night: everyone home and indoors.
         run(&mut crowd, 0.05, 0.08, 400.0);
         assert_eq!(count(&crowd, Activity::Inside), 64, "{}: night", s.name);
