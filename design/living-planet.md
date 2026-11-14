@@ -41,15 +41,18 @@ All in `content/data/` with JSON schemas; generated records follow the same form
 
 - **Culture profile:** id, name, **tech tier** (Stone Age, Ancient, Medieval, Early Modern,
   Industrial, Modern, Spacefaring, Interstellar), **polity** (band, tribe, chiefdom, realm,
-  empire, city-state, republic, nation, charter colony, federation), government in words, values and taboos, attitude to outsiders, **naming rules** (syllable sets and
+  empire, city-state, republic, nation, charter colony, federation), government in words,
+  values and taboos, attitude to outsiders, **naming rules** (syllable sets and
   patterns for people, places and factions), **building kit**, **clothing set** and palette,
   **settlement style** (layout rules, sizes), roles its people take (farmer, smith, guard,
   priest; technician, pilot, scientist, medic), and its lore (history summary, beliefs).
 - **Faction:** id, name, culture, government, seat (a settlement), colours, relations with
   every other faction (−100 hostile … +100 allied), lore.
-- **Settlement:** id, name, faction, kind (hamlet, village, town; outpost, colony, port),
-  place (a direction on the body), founding date, layout seed, and its state: population by
-  role, stocks (food, goods), mood. Its lore line comes from the content director.
+- **Settlement:** id, name, faction, **size class** and **roles** (the settlement hierarchy,
+  §8b; as built in 4.3 a single kind: hamlet, village, town; outpost, colony, port), the word
+  its culture uses for it, place (a direction on the body, or an orbit for a station),
+  founding date, layout seed, and its state: population by role, stocks (food, goods), mood.
+  Its lore line comes from the content director.
 - **Person (notable or met):** name (culture's naming rules), role, home, age; created lazily
   when the player meets someone, and kept once named.
 
@@ -328,10 +331,38 @@ chiefdom; a city-state packs its people into one city and its fields; a charter 
 young-colony pattern at any tier). What one people calls another ("barbarians", "sky-folk")
 belongs to its lore, written by the content director, not to the tiers.
 
-Between the settlements of the denser patterns, a **decoration layer** placed from the seed
-(not simulated) keeps the land from feeling empty: farmsteads, shrines, mills, field patterns
-every 1–1.5 km in settled land (their people count toward the nearest village), roads joining
-the settlements, and travellers and carts on the roads near the player.
+**The settlement hierarchy.** A settlement's size and its purpose are separate, as tech tier
+and polity are, and neither is named for one era. Sizes follow geography's settlement
+hierarchy, the same for every culture and tier; they drive the systems (spacing, layout scale,
+what is simulated, level of detail) and never show on screen:
+
+| Size class | People | Stone Age | Ancient, Medieval | Early Modern, Industrial, Modern | Spacefaring, Interstellar |
+|---|---|---|---|---|---|
+| **Dwelling** | 1–3 households | hunting camp, shelter | farmstead, croft, shepherd's hut | farm, ranch, cabin, rail halt | hab module, relay post, survey camp |
+| **Hamlet** | up to ~100 | camp, band site | hamlet | settlement, company row | outpost, site |
+| **Village** | 100–500 | village of huts | village | village, mining camp | settlement, base |
+| **Town** | 500–5,000 | hill fort, gathering place | town, burgh, market town | town, mill town | colony town, port |
+| **City** | 5,000–100,000 | (rare: an earthwork city) | city, walled city | city | city, spaceport |
+| **Metropolis** | over 100,000 | — | (rare: an imperial capital) | metropolis, conurbation | arcology |
+| **Megalopolis** | millions | — | — | megalopolis | arcology cluster, ecumenopolis |
+
+- **Roles** say what a settlement is for, on top of its size, any number of them: seat or
+  capital, port (sea or space), fort, market, mine, farm, temple or monastery, research,
+  outpost (a post without settled families), enclave (in a wasteland), arcology, station (a
+  settlement whose place is an orbit). Roles choose buildings and people's work.
+- **The word shown** comes from the culture: its tech tier gives the defaults in the table,
+  and its lore (the content director) its own words: a Hollish town is a "hold", the Compact's
+  capital "the Landing", a Stone Age village whatever that people calls it. The word can
+  change with the chronicle (§8c): a village grown into a town, a ruined city now "the old
+  walls".
+- **Dwellings** are the decoration layer: placed from the seed, not simulated (their people
+  count toward the nearest hamlet or village), and of their era (a hunting camp, a farmstead
+  or a relay post by who lives there). Every 1–1.5 km in settled land, with roads joining the
+  settlements and travellers on the roads near the player, they keep the land between
+  settlements from feeling empty.
+- As built (4.3), `SettlementKind` mixes size and purpose (a colony is a town that is a
+  capital and a port; an outpost is a hamlet with the outpost role); the density task replaces
+  it with size class and roles.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,
@@ -391,7 +422,8 @@ distance, buildings near). Gameplay above the settlement (armies, trade, politic
 counties and provinces of 20–50 settlements.
 
 **Scope.** Next: the density task for Meridian's two patterns (medieval and young colony):
-counts from area, the decoration layer and roads, lazy layouts, batched distant forms. The
+counts from area, size classes and roles, the dwellings and roads, lazy layouts, batched
+distant forms. The
 other tiers' patterns, conditions and stations come with the batches
 that first need them (development plan §7.1).
 
