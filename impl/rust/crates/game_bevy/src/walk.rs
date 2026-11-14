@@ -27,8 +27,7 @@ const EXIT_MAX_SPEED: f64 = 2.0;
 /// Where the walker appears: this far to the ship's right of its widest part, on the ground
 /// (m).
 const EXIT_OFFSET: f64 = 3.0;
-/// Boarding reach from the nearest of a vehicle's parts (m; from the part's outside, roughly:
-/// its centre less half its largest dimension).
+/// Boarding reach from the nearest of a vehicle's parts (m; from the part's bounding box).
 const BOARD_REACH: f64 = 12.0;
 /// A vehicle counts as ahead when it is within about 60° of where the walker faces.
 const BOARD_FACING: f64 = 0.5;
@@ -360,12 +359,16 @@ fn spawn_rover_key(
 /// Distance from `here` to the nearest of a vehicle's parts (m), so big vehicles can be reached
 /// from the ground (a frame's torso is 13 m up).
 pub fn nearest_part(state: &sim_core::frames::FrameState, vehicle: &Vehicle, here: DVec3) -> f64 {
+    // In vehicle axes, the distance to each part's bounding box (in the part's axes; parts at
+    // their rest placement).
+    let local = state.rotation.inverse() * (here - state.position);
     vehicle
         .parts
         .iter()
         .map(|p| {
-            let centre = (state.position + state.rotation * p.position - here).length();
-            (centre - shape_size(p.def.shape)).max(0.0)
+            let (mid, half) = p.def.shape.bounds();
+            let q = p.rotation.inverse() * (local - p.position) - mid;
+            (q.abs() - half).max(DVec3::ZERO).length()
         })
         .fold(f64::MAX, f64::min)
 }
