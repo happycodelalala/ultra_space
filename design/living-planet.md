@@ -290,15 +290,98 @@ land is far emptier than a lived-in one (medieval villages stood 2–5 km apart)
 town of 1,900 is a small patch, from 25 km up no settlement can be seen at all. The views
 differ mainly in curvature (300 km reads as a small world from 25 km up).
 
-**Recommendation:** keep 600 km (orbit at 2.3 km/s, room for 10–25 realms) and make density
-the lever instead: settlement counts from the home region's area (villages every 5–8 km, a
-few hundred settlements per people; layouts and people are already made only near the
-player, and the aggregate step of all 32 settlements costs 0.01 ms), plus hamlets, farms and
-fields between them so the land between towns isn't empty. That is a change of scope for a
-later task, to be agreed first.
+**Decided (2026-11-14):** planet size is not one global choice. In a universe of many planets,
+size is data per body and varies freely (universe design §1); Meridian stays at 600 km as the
+baseline. What makes a world feel lived in is its settlement density, which comes from each
+culture's settlement pattern and the land's area, not from the radius (§8b).
+
+## 8b. Settlement patterns and density
+
+Decided 2026-11-14 (design ahead: only the patterns Meridian uses are implemented now).
+
+**Three densities, three costs.** What the player *sees* decides whether a world feels vacant;
+the *simulated population* is numbers in the aggregate simulation (cheap at any size); people
+and buildings *in detail* are expensive but exist only near the player and are capped. So the
+world can be dense to the eye and large in numbers while the expensive part stays bounded.
+
+**Settlement patterns by tech tier.** Each culture profile carries a settlement pattern (data,
+read by one generator): the share of its region it settles, spacing and size ranges per
+settlement tier, its urban share, road type, and how much of its people live off the ground.
+Typical values for the same ~15,000 km² of territory (a realm of about 70 km radius):
+
+| Tier | How they settle | Spacing (villages / towns / cities) | Largest places | People per km² | Population | Feel |
+|---|---|---|---|---|---|---|
+| Tribal, barbarian | Camps and small villages, some seasonal; hill forts as proto-towns | 8–12 km / none / 1–2 hill forts | 1,000–3,000 | 3–8 | 50–100k | Wild land, smoke on the horizon, trails rather than roads |
+| Medieval | Villages, market towns, walled cities, fields between | 4–5 km / 20–30 km / 80–150 km | 10–30k | ~20 | ~300k | Settled countryside, a village every few minutes |
+| Industrial | Fewer, bigger villages; many towns; cities with factories, mines, railways | 3–4 km / 10–15 km / 40–60 km | 50k–500k | 50–150 | 1–2 M | Smokestacks and rail lines; cities seen from orbit |
+| Spacefaring homeworld | A few dense arcologies and spaceports, research and agricultural stations, the land left wild; most people in orbit | arcologies 150–300 km, outposts between | 20–100k on the ground | 1–5 on the ground | 20–80k on the ground, many more on stations | Pristine nature with islands of high tech; a sky full of stations |
+| Young colony (the Compact) | A landing-site town and outposts | outposts 30–50 km | 2–5k | < 1 | 5–10k | A frontier: everything new and far apart |
+
+Between the settlements of the denser patterns, a **decoration layer** placed from the seed
+(not simulated) keeps the land from feeling empty: farmsteads, shrines, mills, field patterns
+every 1–1.5 km in settled land (their people count toward the nearest village), roads joining
+the settlements, and travellers and carts on the roads near the player.
+
+**A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
+the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,
+wrecks and resource sites, where exploration lives. Per realm: about 700 villages (avg 250
+people), 30 towns (avg 2,500), 1–3 cities (10–30k): about 290,000 people. For the planet:
+
+| | 10 realms | 12 realms | 15 realms |
+|---|---|---|---|
+| Cities | ~20 | ~24 | ~36 |
+| Towns | ~300 | ~360 | ~450 |
+| Villages | ~7,000 | ~8,400 | ~10,500 |
+| Population | ~2.9 M | ~3.5 M | ~4.4 M |
+
+That is ~19 people per km² inside a realm (medieval countryside held 20–40) and ~2.6 over all
+land. Settling all usable land would mean ~35,000 villages and 15–17 M people and leave
+nothing wild to explore, so settled shares stay at 10–20%. The number of cities is its own
+choice: more developed or more urban cultures have more and bigger towns and cities, and
+capitals may reach 50–100k.
+
+**Conditions.** A condition is an overlay on a region of a planet, on any tier: a
+**wasteland** (nuclear, chemical or biological), and later war-torn land, plague, famine. A
+wasteland brings:
+- **hazard zones**: radiation or poison over the terrain and climate, changing the biomes and
+  harming walkers and vehicles;
+- **enclaves**: a few fortified, domed or walled cities 100 km or more apart, heavily guarded
+  and short of resources;
+- **between them**: scavenger camps, wrecks, and the **ruins of the old pattern** (generated
+  from the earlier tier's layout, then decayed), holding what the survivors can't reach;
+- under 1 person per km², most of them in the enclaves.
+
+Conditions come two ways, and both use the same representation:
+- **From history (generated):** a planet's lore (from the content director) can record a
+  catastrophe; generation then lays the earlier pattern, applies the condition, ruins and
+  depopulates by its severity, and places the survivors' pattern on top, all deterministic
+  from the seed.
+- **During play:** wars between factions, disasters and the player's own actions can create
+  a condition. It is then a *saved* overlay (like the terrain deltas): zones with a kind,
+  severity and start date; settlements caught in it change state (damaged, abandoned, ruined)
+  in the aggregate simulation, and their layouts decay accordingly when next generated
+  (layout seed plus damage). Hazards fade over game years by their kind.
+
+**Space-age populations live mostly on stations.** A station is a settlement in orbit
+(ships-stations-interiors §3.4) and uses the same aggregate simulation (food, goods, mood,
+people by role); its interior is generated and populated near the player like a town.
+
+**Cost.** The aggregate simulation scales with settlements, not people: ~10,000 settlements
+for a planet (an industrial world has fewer and bigger, a tribal one more and tiny) are
+~10 MB of records and ~10 ms per step, needed once per game hour, split by region over the
+cores. Detail stays bounded: layouts, buildings and people are made only within a few
+kilometres (generation on approach, on workers, like terrain tiles, rather than all at load);
+distant forms are batched per terrain tile, and night lights seen from orbit come from a
+baked map per realm. Big industrial cities need one more level of detail (districts at a
+distance, buildings near). Gameplay above the settlement (armies, trade, politics) works on
+counties and provinces of 20–50 settlements.
+
+**Scope.** Next: the density task for Meridian's two patterns (medieval and young colony):
+counts from area, the decoration layer and roads, lazy layouts, batched distant forms. Tribal,
+industrial and spacefaring-homeworld patterns, conditions and stations come with the batches
+that first need them (development plan §7.1).
 
 ## 9. Open questions
 
-- Planet size (300, 600 or 1000 km): decided at the end of the batch with settlements on the
-  ground (universe design §1).
+- Planet size: decided (§8a); sizes vary per planet.
 - How cultures interact (trade, uplift, conflict): Batches 7 and 9.

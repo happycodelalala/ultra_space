@@ -32,12 +32,10 @@ What a 600 km, 1g planet gives:
   asteroids, higher on super-earths.
 - Smaller planets look like toys (close horizon, visible curvature); bigger ones need denser
   content to avoid feeling empty.
-- *Provisional:* 600 km stays the baseline. The size decision is **deferred** (2026-11-12): the
-  developer will judge it once there is content at planet scale. Revisit points:
-  - the first settlements on Meridian (Batch 4, living-planet.md)
-  - real travel between systems (Batch 7)
-  - towns and cities (Batch 9)
-  - ground battles (Batch 10)
+- **Decided (2026-11-14):** planet size is data per body and varies across the universe;
+  there is no single answer. Meridian stays at 600 km as the baseline home world. How full a
+  world feels comes from its settlement density, set by each culture's settlement pattern and
+  the land's area (living-planet.md §8b), not from its radius.
   `ULTRA_SPACE_BODY_RADIUS=<body>:<km>` compares sizes on the same planet. Radius is data per
   body, so it can change freely until Checkpoint A; after that, resizing a planet with saved
   bases needs a save migration (or applies to new planets only).
