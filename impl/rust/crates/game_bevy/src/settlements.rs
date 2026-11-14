@@ -46,6 +46,10 @@ const NIGHT_GLOW: f32 = 6.0;
 
 pub struct SettlementsPlugin;
 
+/// Streaming and placing settlements (people follow it).
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SettlementSet;
+
 impl Plugin for SettlementsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Running), setup_settlements)
@@ -54,6 +58,7 @@ impl Plugin for SettlementsPlugin {
                 (stream_settlements, place_settlements)
                     .chain()
                     .after(CameraSet)
+                    .in_set(SettlementSet)
                     .in_set(InGame),
             );
     }
@@ -66,27 +71,33 @@ struct Model {
     wall: [f32; 3],
 }
 
-struct Site {
-    body: usize,
+pub(crate) struct Site {
+    pub(crate) body: usize,
     /// Centre on the ground (surface frame, m) and the tangent frame's rotation there.
-    origin: DVec3,
-    basis: DQuat,
+    pub(crate) origin: DVec3,
+    pub(crate) basis: DQuat,
     /// Distance from the centre to the farthest building (m).
     extent: f64,
-    root: Entity,
-    near: Option<Vec<Entity>>,
-    layout: Layout,
+    pub(crate) root: Entity,
+    /// Its buildings, while the camera is near.
+    pub(crate) near: Option<Vec<Entity>>,
+    pub(crate) layout: Layout,
+    /// Its people: the culture's clothing set, people by role, and a seed for choices.
+    pub(crate) clothing: String,
+    pub(crate) roles: Vec<(String, u32)>,
+    pub(crate) seed: u64,
+    pub(crate) terrain: std::sync::Arc<sim_planet::Terrain>,
 }
 
 #[derive(Resource)]
-struct SettlementDraw {
+pub(crate) struct SettlementDraw {
     kits: std::sync::Arc<Kits>,
     models: HashMap<(String, usize), Model>,
     material: Handle<StandardMaterial>,
     /// Lights: warm lanterns (medieval) and white lamps (colony).
     lanterns: Handle<StandardMaterial>,
     lamps: Handle<StandardMaterial>,
-    sites: Vec<Site>,
+    pub(crate) sites: Vec<Site>,
 }
 
 /// The bytes of glTF buffer view `view` in the binary chunk `blob`.
@@ -301,7 +312,10 @@ fn setup_settlements(
     let mut sites = Vec::new();
     let mut buildings = 0;
     for (body, region) in sim.0.regions.iter().enumerate() {
-        let Some(layouts) = region.world.get_resource::<RegionLayouts>() else {
+        let (Some(layouts), Some(society)) = (
+            region.world.get_resource::<RegionLayouts>(),
+            region.world.get_resource::<sim_society::RegionSociety>(),
+        ) else {
             continue;
         };
         let kits = kits.get_or_insert_with(|| layouts.kits.clone());
@@ -313,7 +327,7 @@ fn setup_settlements(
         else {
             continue;
         };
-        for layout in &layouts.layouts {
+        for (layout, settlement) in layouts.layouts.iter().zip(&society.settlements) {
             let Some(kit) = kits.0.get(&layout.kit) else {
                 continue;
             };
@@ -370,6 +384,13 @@ fn setup_settlements(
                 root,
                 near: None,
                 layout: layout.clone(),
+                clothing: society.society.cultures[settlement.culture]
+                    .profile
+                    .clothing
+                    .clone(),
+                roles: settlement.roles.clone(),
+                seed: settlement.layout_seed,
+                terrain: terrain.clone(),
             };
             // The distant form and the lights.
             let (far, lights) = distant_meshes(&site, kit, &models, radius);
@@ -774,6 +795,17 @@ pub fn start_near(
         .max_by_key(|s| s.population)?;
     let (east, south) = tangent_frame(s.direction);
     let r = terrain.radius;
+    // The first spot from `distance` outward with no building within 12 m (not on a roof).
+    let clear = |d: f64| {
+        let up = (s.direction * r + south * d).normalize();
+        terrain
+            .foundations()
+            .is_none_or(|f| f.structures_near(up, 12.0).next().is_none())
+    };
+    let distance = (0..200)
+        .map(|k| distance + 5.0 * f64::from(k))
+        .find(|&d| clear(d))
+        .unwrap_or(distance);
     let up = (s.direction * r + south * distance).normalize();
     let ground = terrain.surface_height(up, 1.0);
     // On the ground: the ship's lowest point a little above it (it settles on its legs).

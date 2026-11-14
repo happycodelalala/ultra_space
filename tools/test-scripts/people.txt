@@ -1,0 +1,18 @@
+# People in a settlement (task 4.7). Run with ULTRA_SPACE_START_NEAR=<town|colony>,20,0,day:
+# the ship lands in the first clear spot at least 20 m south of the centre, facing it. Step out
+# and walk toward the centre, where some of its people stand on the streets: look for both
+# cultures' clothing (Hollish peasants and guards; the Compact's coveralls), animated (idle,
+# working, talking, walking in place), feet on the ground, nothing stretched or in a T-pose.
+0.5  wait landed 20
+2    press F                 # step out
+4    shot 01-stepped-out.png
+5    hold W 4                # walk toward the centre
+9.5  shot 02-walking-in.png
+10   mouse 6 0 1             # look right
+12   shot 03-right.png
+13   mouse -12 0 1.5         # and left
+15.5 shot 04-left.png
+16   mouse 6 0 0.8
+16   hold W 3
+20   shot 05-closer.png
+21   quit

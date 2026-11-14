@@ -10,6 +10,7 @@ mod debug_overlay;
 mod hud;
 mod inspector;
 mod part_models;
+mod people;
 mod planet_maps;
 mod save;
 mod script;
@@ -46,6 +47,12 @@ fn main() {
                     }),
                     ..default()
                 })
+                .set(bevy::asset::AssetPlugin {
+                    // Characters load through Bevy's glTF loader from the game's assets.
+                    file_path: universe::assets_root()
+                        .map_or_else(|| "assets".into(), |p| p.to_string_lossy().into_owned()),
+                    ..default()
+                })
                 .set(LogPlugin {
                     filter: LOG_FILTER.into(),
                     custom_layer: log_file_layer,
@@ -76,6 +83,7 @@ fn main() {
             builder::BuilderPlugin,
             save::SavePlugin,
             settlements::SettlementsPlugin,
+            people::PeoplePlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

@@ -253,6 +253,24 @@ pub fn with_radius_override(json: &str, spec: &str) -> Result<String, String> {
     Ok(value.to_string())
 }
 
+/// The root of the assets Bevy loads (characters): `ULTRA_SPACE_ASSETS`, else an `assets`
+/// folder with `characters/` next to the executable (exported) or the repo's `assets/export`,
+/// found from the executable or the working directory upward.
+pub fn assets_root() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("ULTRA_SPACE_ASSETS") {
+        return Some(PathBuf::from(dir));
+    }
+    let starts = [std::env::current_exe().ok(), std::env::current_dir().ok()];
+    starts.into_iter().flatten().find_map(|start| {
+        start.ancestors().find_map(|dir| {
+            ["assets", "assets/export"]
+                .iter()
+                .map(|sub| dir.join(sub))
+                .find(|d| d.join("characters").is_dir())
+        })
+    })
+}
+
 /// The building kits' folder: `ULTRA_SPACE_BUILDINGS`, else `assets/buildings` (exported) or
 /// `assets/export/buildings` (repo) next to the executable or the working directory or any of
 /// their parents.

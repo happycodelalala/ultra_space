@@ -32,3 +32,5 @@ town-night  | settlements.txt | ULTRA_SPACE_START_NEAR=town,900,250,night ULTRA_
 colony-night | settlements.txt | ULTRA_SPACE_START_NEAR=colony,900,250,night ULTRA_SPACE_CHASE_ORBIT=0,-15 | visual | the colony at midnight: white street lamps on the grid, lanterns at doors
 settlement-flyin | settlement-flyin.txt | ULTRA_SPACE_START_NEAR=town,30000,700,day ULTRA_SPACE_CHASE_ORBIT=0,-6 | perf | flying at the town at ~300 m/s from 30 km: no frame over 50 ms (script summary); end shot shows the town ahead
 settlement-flyin-bare | settlement-flyin.txt | ULTRA_SPACE_START_NEAR=town,30000,700,day ULTRA_SPACE_CHASE_ORBIT=0,-6 ULTRA_SPACE_NO_SETTLEMENTS=1 | perf | the fly-in with no settlements drawn: the baseline for settlement-flyin's frame times
+people-town | people.txt | ULTRA_SPACE_START_NEAR=town,20,0,day | visual | on foot by the town square: Hollish people in peasant and ranger clothing, animated (idle, work, talk, walk in place), standing on the ground
+people-colony | people.txt | ULTRA_SPACE_START_NEAR=colony,20,0,day | visual | on foot in the colony: the Compact's people in coveralls (blue-grey, wardens orange), animated, standing on the ground
