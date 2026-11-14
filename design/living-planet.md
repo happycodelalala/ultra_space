@@ -254,6 +254,15 @@ end screenshot.
 - Day and night visibly change what people do.
 - Save and load keep each settlement's state.
 
+**As built (task 4.9):** `game_bevy::meeting`. Entering a settlement (the camera inside its
+extent; leaving needs 200 m more) shows a banner for 6 s: its name, "a Hollish town of the
+Gostkod March, its seat", its people (logged). The inspector (F4) adds the settlement the camera
+is in or nearest within 3 km: kind, faction, seat, founding, live people, food and goods (in
+days) and mood from the aggregate simulation, people by role in the culture's words (chapman,
+reave's man, Keelwarden...), its description and landmark. Looking at someone (the person
+nearest the middle of the view within 30 m, not behind a building: the line of sight is tested
+against the buildings' boxes) shows "name, role (culture)" under the crosshair.
+
 ## 8. Budgets
 
 | Item | Budget |
