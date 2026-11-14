@@ -28,6 +28,30 @@ decision, architecture, development batches) before starting non-trivial work.
   (development plan §7 and §7.1). Don't build infrastructure ahead of its first real use, and
   ask before expanding a task's scope.
 
+## Two tracks: game and design
+
+Work runs on two tracks, each on its own branch and worktree (and its own sessions):
+
+- **Game track** (main checkout, `~/code/ultra_space`): engine and gameplay, `impl/rust/`,
+  system design docs, performance, Windows test rounds.
+- **Design track** (`~/code/ultra_space-design`, branch `design/*`): vehicles, mechs, ships,
+  capital ships, buildings and objects: `tools/blender/`, `assets/export/models/`, the design
+  data in `content/data/parts/` and `content/data/vehicles/` (and their builder tests, e.g.
+  `sim_vehicle/tests/bastion.rs`), vehicle design docs (`design/bastion.md`), the palette and
+  the viewer (`impl/viewer/`). Review in the design viewer with screenshots
+  (`tools/viewer-shots.sh`); **no game test rounds** while iterating. Plan and backlog:
+  `design/design-track.md`.
+- **The handoff** between them is fixed: the part and vehicle schemas, the model format
+  (glb, metres, part axes, material slot names, COLOR_0 occlusion, TEXCOORD_0 metres), the
+  palette slots and the joint/pose data. Changing any of it touches both tracks: agree it
+  first and change both sides together.
+- **Importing designs into the game:** the design branch merges at milestones, after
+  `tools/ci.sh` passes (it checks models, schemas and the design tests: interference in every
+  pose and move, balance, lift); the game branch takes it in by merging, and an occasional
+  test round shows it in the game.
+- The game keeps the last imported designs as placeholders meanwhile; don't edit design files
+  on the game track (or engine code on the design track) except for the handoff.
+
 ## Units and coordinates
 
 - **Meters, seconds, radians.** World and frame positions are `f64` (`DVec3`, `DQuat`).
