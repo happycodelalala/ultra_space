@@ -89,6 +89,30 @@ fn main() {
             if s.seat { "  (seat)" } else { "" }
         );
     }
+    for (ci, c) in society.cultures.iter().enumerate() {
+        let mine: Vec<_> = settlements.iter().filter(|s| s.culture == ci).collect();
+        let mut kinds: Vec<String> = Vec::new();
+        for k in [
+            SettlementKind::Colony,
+            SettlementKind::Port,
+            SettlementKind::Town,
+            SettlementKind::Village,
+            SettlementKind::Outpost,
+            SettlementKind::Hamlet,
+        ] {
+            let n = mine.iter().filter(|s| s.kind == k).count();
+            if n > 0 {
+                kinds.push(format!("{n} {}", k.name()));
+            }
+        }
+        println!(
+            "{}: {} settlements ({}), {} people",
+            c.profile.name,
+            mine.len(),
+            kinds.join(", "),
+            mine.iter().map(|s| s.population).sum::<u32>()
+        );
+    }
     for f in &society.fallbacks {
         println!("fallback: {f}");
     }

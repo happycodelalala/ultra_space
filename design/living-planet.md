@@ -94,8 +94,8 @@ contiguous); the first faction's wedge holds the best site (the Compact's hub). 
 best site near the middle of its wedge: a town (Hollin), the colony hub or the port (Compact);
 the rest are villages and hamlets, or outposts, sized by their sites. Place names never use
 another kind's word ("Port …" only for a port). Lore comes from pools by culture and kind
-(`settlement/<culture>/<kind>/*`). On Meridian: the Hollin's 24 settlements (about 9,000 people)
-on the farmland of their region, three towns as seats; the Compact's hub (about 4,800 people),
+(`settlement/<culture>/<kind>/*`). On Meridian: the Hollin's 24 settlements (3 towns, 9 villages, 12 hamlets; about 8,600 people)
+on the farmland of their region, three towns as seats; the Compact's hub (about 4,800 people; 7,400 in all),
 port and six outposts on open ground. `cargo run --release -p sim_society --example
 settlement_map` draws them on the biome map (`sim_planet::map`). Relations don't yet depend on
 how close factions are; that comes with the simulation of relations (4.4).
