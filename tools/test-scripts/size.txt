@@ -1,0 +1,10 @@
+# Planet size with settlements (task 4.10). Run with ULTRA_SPACE_BODY_RADIUS=meridian:<km> and
+# ULTRA_SPACE_START_NEAR=town,<distance>,<height>,day in arcade flight: what the land looks like
+# around the biggest Hollish town at each size (curvature, horizon, how far the next
+# settlements are, how full the land feels).
+2    shot 01-ahead.png
+3    orbit 90 -10
+5    shot 02-side.png
+6    orbit 180 -10
+8    shot 03-behind.png
+9    quit
