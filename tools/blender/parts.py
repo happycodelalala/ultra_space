@@ -190,3 +190,4 @@ def beam(m, h, part):
 import parts_arm  # noqa: E402,F401
 import parts_body  # noqa: E402,F401
 import parts_shell  # noqa: E402,F401
+import parts_titan  # noqa: E402,F401

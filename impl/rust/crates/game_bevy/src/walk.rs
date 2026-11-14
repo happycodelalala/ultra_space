@@ -383,14 +383,23 @@ pub fn reach(vehicle: &Vehicle) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// How far a vehicle's parts reach out from its origin across its X-Z plane (m; each part
-/// counted as a ball of half its largest dimension).
+/// How far a vehicle's parts reach out from its origin across its X-Z plane (m; the corners
+/// of each part's bounding box, parts at rest).
 fn horizontal_extent(vehicle: &Vehicle) -> f64 {
-    vehicle
-        .parts
-        .iter()
-        .map(|p| DVec3::new(p.position.x, 0.0, p.position.z).length() + shape_size(p.def.shape))
-        .fold(0.0, f64::max)
+    let mut far = 0.0f64;
+    for p in &vehicle.parts {
+        let (mid, half) = p.def.shape.bounds();
+        for k in 0..8 {
+            let corner = DVec3::new(
+                if k & 1 == 0 { -half.x } else { half.x },
+                if k & 2 == 0 { -half.y } else { half.y },
+                if k & 4 == 0 { -half.z } else { half.z },
+            );
+            let q = p.position + p.rotation * (mid + corner);
+            far = far.max(DVec3::new(q.x, 0.0, q.z).length());
+        }
+    }
+    far
 }
 
 /// Half the largest dimension of a part shape (m).

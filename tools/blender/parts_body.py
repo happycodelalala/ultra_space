@@ -23,7 +23,7 @@ def ridge(m, p, q, out, base=0.08, height=0.22, mat="trim", trim=0.1):
            + [p + out * height + d * height * 0.5, q + out * height - d * height * 0.3], mat, bevel=0.004)
 
 
-@builder("bastion.torso", "frame.torso")
+@builder("frame.torso")
 def torso(m, h, part):
     """The torso, heavy industrial: a dark frame under thick sculpted armour. Two chest plates
     flank the reactor housing, the core glowing behind its radial cooling fins; rounded
@@ -109,7 +109,7 @@ def torso(m, h, part):
     m.hazard(lb + V((-hx * 0.5, hy * 0.33, hz * 0.15)), lb + V((hx * 0.5, hy * 0.33, hz * 0.15)), Z, 0.12, 0.35)
 
 
-@builder("bastion.head", "frame.head")
+@builder("frame.head")
 def head(m, h, part):
     """The head, an armoured helmet on its neck servo: the brow juts over a recessed visor slit
     across the front, lit from within by the main optics; the jaw guard below it; a servo
@@ -278,7 +278,7 @@ def limb_body(m, h, kind):
             (0.5, -0.78, -1.12))], "armor", **round_)
 
 
-@builder("bastion.limb", "frame.limb")
+@builder("frame.limb")
 def upper_arm(m, h, part):
     """An upper arm: a hexagonal spine of dark frame metal between octagonal pin bosses (pins
     held by retainers); in front a keeled graphite base under two thick ceramic plates;
@@ -287,21 +287,21 @@ def upper_arm(m, h, part):
     limb_body(m, h, "upper_arm")
 
 
-@builder("bastion.forearm")
+@builder("frame.forearm")
 def forearm(m, h, part):
     """A forearm: as an upper arm, heavier toward the wrist: a gauntlet of thick armour over
     the wrist drive and a spur guarding the back of the elbow."""
     limb_body(m, h, "forearm")
 
 
-@builder("bastion.leg", "frame.leg")
+@builder("frame.leg")
 def thigh(m, h, part):
     """A thigh: as an upper arm, bulkier, its armour widest at the hip, where flared plates
     cover the hip joint."""
     limb_body(m, h, "thigh")
 
 
-@builder("bastion.shin")
+@builder("frame.shin")
 def shin(m, h, part):
     """A shin: the knee guard over the joint above, swept to a point; armour widening toward
     the ankle, calf armour over the actuators' lower ends at the back, and an ankle guard."""

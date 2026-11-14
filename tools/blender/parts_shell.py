@@ -7,6 +7,7 @@ from pathlib import Path
 import bmesh
 from mech import V, X, Y, Z, along, frame
 from parts import builder, design_units
+from parts_titan import Batch, R, beacon
 
 
 def catmull(points, steps):
@@ -102,7 +103,8 @@ BLISTER = 2.0
 # The bulge keeps its full depth this far either side of the middle (degrees).
 LENS_FLAT = 28.0
 ENGINE_SOCKETS = [(-0.3, (-31.0, 31.0)), (1.9, (-31.0, 31.0))]
-BANDS_BELOW_TOP = [4.6, 2.75, 2.45, -1.5, -6.0, -10.5]
+# Panel rows: about this tall (design units; 3.6 m real).
+ROW = 0.8
 
 
 def lens(t):
@@ -128,51 +130,56 @@ def blister(t):
 
 
 def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside, surface=None):
-    """The armour plates over a quarter's bulge: bands down the curve (raised bands overlap
-    their neighbours), three columns of two facets, a graphite band at the shoulder line,
-    a second plate lapped on each of the larger panels (no bolts showing: they fix from inside). `inside(y_hi, y_lo, d0, d1)` splits each
-    panel into the pieces this model draws (the quarter outside the drone bay, the bay
-    cover inside it). Returns the pieces at the hem."""
+    """The armour over a quarter's bulge, plated like a hull: rows of panels about 3.5 m
+    (real) tall, two to a facet across (about 3.5 m wide at the bulge), 0.4 m gaps, each a
+    little proud of or sunk from its neighbours; a band in the second paint at the shoulder
+    line. `inside(y_hi, y_lo, d0, d1)` splits each panel into the pieces this model draws
+    (the quarter outside the drone bay, the bay cover inside it). Returns the pieces at the
+    hem."""
     sharp = 4.0
     outer = surface or lens(t)
-    bands = [top] + BANDS_BELOW_TOP + [bottom]
-    gap_deg = 0.9
-    cols = [(a0 + 2 * fdeg * k, a0 + 2 * fdeg * (k + 1)) for k in range(3)]
     hem = []
-    for i, (y_hi, y_lo) in enumerate(zip(bands, bands[1:])):
+    rows = [top]
+    y = top
+    for edge in (2.75, 2.45):
+        n = max(1, round((y - edge) / ROW))
+        rows += [y - (y - edge) * (k + 1) / n for k in range(n)]
+        y = edge
+    n = max(1, round((y - bottom) / ROW))
+    rows += [y - (y - bottom) * (k + 1) / n for k in range(n)]
+    gap_deg = 0.3
+    for i, (y_hi, y_lo) in enumerate(zip(rows, rows[1:])):
         shoulder = abs(y_hi - 2.75) < 1e-6
-        raised = i % 2 == 0 and not shoulder
-        lap = 0.14 if raised else 0.0
-        hi = min(top, y_hi + lap) - (0.03 if y_hi < top and not raised else 0)
-        lo = max(bottom, y_lo - lap) + (0.03 if y_lo > bottom and not raised else 0)
-        lift = 0.2 if raised else 0.06
-        spans = [(-43.5, 43.5)] if shoulder else cols
-        for c0, c1 in spans:
+        hi = y_hi - (0.05 if y_hi < top else 0)
+        lo = y_lo + (0.05 if y_lo > bottom else 0)
+        # Panels one or two half-facets wide, staggered row to row like hull strakes.
+        edges = [a0]
+        k = i % 2
+        while edges[-1] < a1 - 1e-6:
+            r = (math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1.0
+            step = 2 if (r > 0.45 and not shoulder) else 1
+            if k == 0 and i % 2:
+                step = 1
+            k += step
+            edges.append(min(a1, a0 + fdeg / 2 * k))
+        for j, (c0, c1) in enumerate(zip(edges, edges[1:])):
             g0 = gap_deg if c0 > a0 + 1e-6 else 0.1
             g1 = gap_deg if c1 < a1 - 1e-6 else 0.1
+            r = (math.sin(i * 39.346 + j * 11.135) * 24634.6345) % 1.0
+            lift = 0.06 + (0.03 if r > 0.7 else 0.0)
+            mat = "armor2" if shoulder or 0.5 < r < 0.55 else "armor"
             for ph, pl_, d0, d1 in inside(hi, lo, c0 + g0, c1 - g1):
-                rows = resample(prof, ph, pl_, 0.5 if shoulder else 0.8)
-                if shoulder:
-                    skin(m, rows, d0, d1, lambda d, y: outer(d, y) - 0.06,
-                         lambda d, y: outer(d, y) + 0.06, "armor2", facets=(a0, fdeg), angle=sharp,
-                         bevel=0.008)
-                    continue
-                panel = skin(m, rows, d0, d1, lambda d, y: outer(d, y) - 0.06,
-                             lambda d, y, k=lift: outer(d, y) + k, "armor", bevel=0.07,
+                rws = resample(prof, ph, pl_, 0.5)
+                panel = skin(m, rws, d0, d1, lambda d, y: outer(d, y) - 0.06,
+                             lambda d, y, k=lift: outer(d, y) + k, mat, bevel=0.03,
                              facets=(a0, fdeg), angle=sharp)
                 if pl_ <= bottom + 1e-6:
                     hem.append(panel)
-                # A second plate lapped on the panel.
-                if ph - pl_ > 1.6 and d1 - d0 > 8:
-                    r_mid = resample(prof, (ph + pl_) / 2 + 0.01, (ph + pl_) / 2 - 0.01)[0][1]
-                    ins = math.degrees(0.4 / r_mid)
-                    sub = resample(prof, ph - 0.45, pl_ + (0.45 if pl_ > bottom + 1e-6 else 1.6), 0.8)
-                    e0, e1 = d0 + ins, d1 - ins
-                    plate = skin(m, sub, e0, e1, lambda d, y, k=lift: outer(d, y) + k - 0.04,
-                                 lambda d, y, k=lift: outer(d, y) + k + 0.12, "armor2", bevel=0.06,
-                                 facets=(a0, fdeg), angle=sharp)
-                    if pl_ <= bottom + 1e-6:
-                        hem.append(plate)
+        # A structural rib (a frame inside, its flange showing) every fourth row.
+        if i % 4 == 3 and y_lo > bottom + 0.3:
+            for ph, pl_, d0, d1 in inside(y_lo + 0.12, y_lo - 0.12, a0 + 0.1, a1 - 0.1):
+                skin(m, resample(prof, ph, pl_, 0.24), d0, d1, lambda d, y: outer(d, y) - 0.06,
+                     lambda d, y: outer(d, y) + 0.16, "armor2", bevel=0.03, facets=(a0, fdeg), angle=sharp)
     return hem
 
 
@@ -273,15 +280,21 @@ def shell_quarter(m, h, part):
     # A steel edge band along the hem (it takes the knocks), lifting eyes near the top.
     skin(m, resample(prof, bottom + 0.35, bottom, 0.35), a0 + 0.3, a1 - 0.3, inner_face - 0.02,
          lambda d, y: outer(d, y) + 0.1, "metal", facets=(a0, fdeg), angle=sharp, bevel=0.01)
-    for d in (-14.0, 14.0):
-        y = top - 1.6
+    # Red beacons along the top and at the hem's outer corners; amber approach lights round
+    # the drone bay's rim, for drones coming home.
+    bt = Batch(m)
+    for d, y in ((0.0, top - 0.25), (a0 + 3.0, top - 1.2), (a1 - 3.0, top - 1.2), (a0 + 3.0, bottom + 0.6),
+                 (a1 - 3.0, bottom + 0.6)):
         r = resample(prof, y + 0.01, y - 0.01)[0][1]
-        n = point(d, 0, 1)
-        m.lift_eye(point(d, y, r + outer(d, y) + 0.2), n, Y, 0.16)
-    for d in (a0 + fdeg, a1 - fdeg):
-        y = bottom + 0.5
-        r = resample(prof, y + 0.01, y - 0.01)[0][1]
-        m.lamp(point(d, y, r + outer(d, y) + 0.2), point(d, 0, 1), 0.07)
+        beacon(bt, point(d, y, r + outer(d, y) + 0.2), 0.9)
+    for d in (-BAY_DEG - 1.2, BAY_DEG + 1.2):
+        for k in range(8):
+            y = BAY_TOP - 0.5 - k * (BAY_TOP - BAY_BOTTOM - 1.0) / 7
+            r = resample(prof, y + 0.01, y - 0.01)[0][1]
+            p = point(d, y, r + outer(d, y) + 0.14)
+            n = point(d, 0, 1)
+            bt.box((R(0.8), R(0.8), R(0.5)), frame(p, w=n, v=Y), "light")
+    bt.done()
     # Carrier pad.
     for node in part.get("attach_nodes", []):
         p, d = V(node["position_m"]), V(node["direction"]).normalized()

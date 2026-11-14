@@ -55,10 +55,12 @@ pub enum PartMaterial {
     Glass,
     /// Lamps (emissive).
     Light,
+    /// Red warning beacons on a giant frame's extremities (emissive).
+    Beacon,
 }
 
 impl PartMaterial {
-    pub const ALL: [PartMaterial; 9] = [
+    pub const ALL: [PartMaterial; 10] = [
         PartMaterial::Hull,
         PartMaterial::Armor2,
         PartMaterial::Metal,
@@ -68,6 +70,7 @@ impl PartMaterial {
         PartMaterial::Trim,
         PartMaterial::Glass,
         PartMaterial::Light,
+        PartMaterial::Beacon,
     ];
 
     /// Its name in the palette and in part models.
@@ -82,6 +85,7 @@ impl PartMaterial {
             PartMaterial::Trim => "trim",
             PartMaterial::Glass => "glass",
             PartMaterial::Light => "light",
+            PartMaterial::Beacon => "beacon",
         }
     }
 

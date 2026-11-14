@@ -96,6 +96,22 @@
       ],
       "emissive_strength": 5.0,
       "about": "reactor core, visor and floodlights"
+    },
+    "beacon": {
+      "color": [
+        1.0,
+        0.08,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        1.0,
+        0.08,
+        0.05
+      ],
+      "emissive_strength": 8.0,
+      "about": "red warning beacons on a giant frame's extremities (masts, shoulders, shell tops)"
     }
   }
 }
