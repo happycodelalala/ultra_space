@@ -153,7 +153,8 @@
         "step_height_m": {"type": "number", "minimum": 0},
         "speed_m_s": {"type": "number", "exclusiveMinimum": 0},
         "turn_rate_deg_s": {"type": "number", "minimum": 0},
-        "stance": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Standing hip-to-ankle distance as a fraction of the leg's length."}
+        "stance": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Standing hip-to-ankle distance as a fraction of the leg's length."},
+        "step_time_s": {"type": "number", "exclusiveMinimum": 0, "default": 0.55, "description": "How long a step takes (s); longer for longer legs (about the square root of the leg's length)."}
       }
     }
   }

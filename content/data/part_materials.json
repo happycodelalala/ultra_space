@@ -3,99 +3,99 @@
   "materials": {
     "armor": {
       "color": [
-        0.78,
-        0.77,
-        0.73
+        0.17,
+        0.21,
+        0.13
       ],
-      "metallic": 0.05,
-      "roughness": 0.35,
-      "about": "armour plates: pale ceramic composite"
+      "metallic": 0.1,
+      "roughness": 0.55,
+      "about": "armour plates: dark military green, satin"
     },
     "armor2": {
       "color": [
-        0.2,
-        0.21,
-        0.22
+        0.22,
+        0.25,
+        0.18
       ],
-      "metallic": 0.4,
-      "roughness": 0.38,
-      "about": "second plates: graphite composite, keels, mounts"
+      "metallic": 0.12,
+      "roughness": 0.5,
+      "about": "second (lapped) armour plates: a lighter dark military green, satin"
     },
     "metal": {
       "color": [
-        0.3,
-        0.33,
-        0.32
+        0.34,
+        0.35,
+        0.36
       ],
       "metallic": 1.0,
-      "roughness": 0.28,
-      "about": "actuator sleeves and machined frame metal"
+      "roughness": 0.38,
+      "about": "machined steel: flanges, bearings, clamps; dark grey steel"
     },
     "chrome": {
       "color": [
+        0.78,
         0.8,
-        0.84,
-        0.82
+        0.8
       ],
       "metallic": 1.0,
-      "roughness": 0.1,
-      "about": "polished actuator rods and pins"
+      "roughness": 0.15,
+      "about": "actuator rods and pins"
     },
     "dark": {
       "color": [
-        0.11,
-        0.12,
-        0.12
+        0.17,
+        0.18,
+        0.19
       ],
       "metallic": 0.85,
-      "roughness": 0.32,
-      "about": "skeletal frame: dark living metal"
+      "roughness": 0.42,
+      "about": "machinery: frame, housings, servos, rams, heat sinks; dark metallic grey"
     },
     "rubber": {
       "color": [
-        0.035,
-        0.035,
-        0.04
+        0.06,
+        0.06,
+        0.06
       ],
       "metallic": 0.0,
-      "roughness": 0.85,
-      "about": "grip pads and seals"
+      "roughness": 0.9,
+      "about": "dust boots, hoses, grip pads, seals"
     },
     "trim": {
       "color": [
-        0.1,
-        0.3,
-        0.27
+        0.92,
+        0.7,
+        0.1
       ],
-      "metallic": 0.6,
-      "roughness": 0.35,
-      "about": "anodised accent"
+      "metallic": 0.05,
+      "roughness": 0.55,
+      "about": "hazard yellow (warning stripes at pinch points)"
     },
     "glass": {
       "color": [
-        0.02,
-        0.07,
-        0.05
+        0.05,
+        0.08,
+        0.07
       ],
       "metallic": 0.0,
-      "roughness": 0.04,
-      "about": "sensor lenses and viewports"
+      "roughness": 0.05,
+      "about": "vision blocks and optics"
     },
     "light": {
       "color": [
-        0.35,
         1.0,
-        0.68
+        0.58,
+        0.18
       ],
       "metallic": 0.0,
       "roughness": 0.5,
       "emissive": [
-        0.35,
         1.0,
-        0.68
+        0.58,
+        0.18
       ],
-      "emissive_strength": 6.0,
-      "about": "optics, sensor lenses and marker lamps"
+      "emissive_strength": 5.0,
+      "about": "reactor core, visor and floodlights"
     }
   }
 }

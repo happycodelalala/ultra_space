@@ -6,7 +6,7 @@ from pathlib import Path
 
 import bmesh
 from mech import V, X, Y, Z, along, frame
-from parts import builder
+from parts import builder, design_units
 
 
 def catmull(points, steps):
@@ -92,8 +92,8 @@ def skin(m, rows, d0, d1, inner, outer, mat, bevel=0.012, step_deg=1.5, angle=35
 
 
 # A quarter's shape (the bay cover is built in its axes, from its curve).
-QUARTER = next(p for p in json.loads((Path(__file__).resolve().parents[2] / "content/data/parts/bastion.json")
-                                     .read_text())["parts"] if p["id"] == "bastion.shell_quarter_front_left")
+QUARTER = design_units(next(p for p in json.loads((Path(__file__).resolve().parents[2] / "content/data/parts/bastion.json")
+                                     .read_text())["parts"] if p["id"] == "bastion.shell_quarter_front_left"))
 # The drone bay in a quarter's bulge (azimuths, heights; matches bastion.bay_cover) and the
 # lift engines' sockets in its inner skin (rows of height and azimuths; the design's layout).
 BAY_DEG, BAY_TOP, BAY_BOTTOM = 24.0, 5.0, -10.0
@@ -130,13 +130,13 @@ def blister(t):
 def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside, surface=None):
     """The armour plates over a quarter's bulge: bands down the curve (raised bands overlap
     their neighbours), three columns of two facets, a graphite band at the shoulder line,
-    raised chevron plates on the larger panels. `inside(y_hi, y_lo, d0, d1)` splits each
+    a second plate lapped on each of the larger panels (no bolts showing: they fix from inside). `inside(y_hi, y_lo, d0, d1)` splits each
     panel into the pieces this model draws (the quarter outside the drone bay, the bay
     cover inside it). Returns the pieces at the hem."""
     sharp = 4.0
     outer = surface or lens(t)
     bands = [top] + BANDS_BELOW_TOP + [bottom]
-    gap_deg = 0.45
+    gap_deg = 0.9
     cols = [(a0 + 2 * fdeg * k, a0 + 2 * fdeg * (k + 1)) for k in range(3)]
     hem = []
     for i, (y_hi, y_lo) in enumerate(zip(bands, bands[1:])):
@@ -158,30 +158,21 @@ def armour(m, prof, t, a0, a1, fdeg, top, bottom, inside, surface=None):
                          bevel=0.008)
                     continue
                 panel = skin(m, rows, d0, d1, lambda d, y: outer(d, y) - 0.06,
-                             lambda d, y, k=lift: outer(d, y) + k, "armor", bevel=0.01,
+                             lambda d, y, k=lift: outer(d, y) + k, "armor", bevel=0.07,
                              facets=(a0, fdeg), angle=sharp)
                 if pl_ <= bottom + 1e-6:
                     hem.append(panel)
-                # A raised plate inset on the panel, cut to a chevron pointing down.
+                # A second plate lapped on the panel.
                 if ph - pl_ > 1.6 and d1 - d0 > 8:
                     r_mid = resample(prof, (ph + pl_) / 2 + 0.01, (ph + pl_) / 2 - 0.01)[0][1]
                     ins = math.degrees(0.4 / r_mid)
                     sub = resample(prof, ph - 0.45, pl_ + (0.45 if pl_ > bottom + 1e-6 else 1.6), 0.8)
                     e0, e1 = d0 + ins, d1 - ins
                     plate = skin(m, sub, e0, e1, lambda d, y, k=lift: outer(d, y) + k - 0.04,
-                                 lambda d, y, k=lift: outer(d, y) + k + 0.09, "armor", bevel=0.012,
+                                 lambda d, y, k=lift: outer(d, y) + k + 0.12, "armor2", bevel=0.06,
                                  facets=(a0, fdeg), angle=sharp)
                     if pl_ <= bottom + 1e-6:
                         hem.append(plate)
-                    dm = (e0 + e1) / 2
-                    ylo, rlo = sub[-1]
-                    o = outer(dm, ylo) + lift
-                    w = math.radians(e1 - e0) / 2 * (rlo + o)
-                    hg = min(1.1, w * 0.55)
-                    place = frame(point(dm, ylo, rlo + o), u=point(dm + 90, 0, 1), v=Y)
-                    for sx in (-1, 1):
-                        tri = [(sx * 1.6 * w, 1.6 * hg), (-sx * 0.2 * w, -0.2 * hg), (sx * 1.6 * w, -hg)]
-                        m.cut(plate, m.extrude(tri, 1.0, place, bevel=0, cutter=True))
     return hem
 
 
@@ -279,16 +270,14 @@ def shell_quarter(m, h, part):
     for y0, y1 in ((BAY_TOP + 0.15, BAY_TOP), (BAY_BOTTOM, BAY_BOTTOM - 0.15)):
         skin(m, resample(prof, y0, y1, 0.15), -BAY_DEG, BAY_DEG, inner_face + 0.15,
              lambda d, y: outer(d, y) + 0.06, "dark", facets=(a0, fdeg), angle=sharp)
-    keel(m, prof, t, top, bottom, lambda y: not (BAY_BOTTOM - 0.2 < y < BAY_TOP + 0.2))
-    # Hem cut into points: a V notch at every column boundary.
-    rb = resample(prof, bottom + 0.01, bottom - 0.01)[0][1]
-    for d in (a0, a0 + 2 * fdeg, a0 + 4 * fdeg, a1):
-        half = math.radians(fdeg) * rb
-        c = point(d, bottom, rb)
-        pl = frame(c, u=point(d + 90, 0, 1), v=Y)
-        cutter = m.extrude([(-half, -0.5), (half, -0.5), (0, 1.3)], 3.0, pl, bevel=0, cutter=True)
-        for ob in hem:
-            m.cut(ob, cutter)
+    # A steel edge band along the hem (it takes the knocks), lifting eyes near the top.
+    skin(m, resample(prof, bottom + 0.35, bottom, 0.35), a0 + 0.3, a1 - 0.3, inner_face - 0.02,
+         lambda d, y: outer(d, y) + 0.1, "metal", facets=(a0, fdeg), angle=sharp, bevel=0.01)
+    for d in (-14.0, 14.0):
+        y = top - 1.6
+        r = resample(prof, y + 0.01, y - 0.01)[0][1]
+        n = point(d, 0, 1)
+        m.lift_eye(point(d, y, r + outer(d, y) + 0.2), n, Y, 0.16)
     for d in (a0 + fdeg, a1 - fdeg):
         y = bottom + 0.5
         r = resample(prof, y + 0.01, y - 0.01)[0][1]
@@ -322,8 +311,27 @@ def bay_cover(m, h, part, quarter=None):
     skin(m, rows, -BAY_DEG + 0.2, BAY_DEG - 0.2, lambda d, y: face(d, y) - lid,
          lambda d, y: face(d, y) - 0.06, "dark", facets=(a0, fdeg), angle=4.0)
     armour(m, prof, t, a0, a1, fdeg, top, bottom, inside_bay, surface=face)
-    keel(m, prof, t, top, bottom, lambda y: BAY_BOTTOM + 0.2 < y < BAY_TOP + 0.2,
-         raise_=lambda y: face(0.0, y) - lens(t)(0.0, y))
+    # The door's lower edge swings out: a hazard band along it, latches above it, and a grab
+    # handle to open it by hand.
+    y = BAY_BOTTOM + 0.3
+    r = resample(prof, y + 0.01, y - 0.01)[0][1]
+    step = 8.0
+    d = -BAY_DEG + 1.0
+    while d < BAY_DEG - 1.5:
+        e = min(d + step, BAY_DEG - 1.0)
+        mid = (d + e) / 2
+        lift = 0.25
+        m.hazard(point(d, y, r + face(d, y) + lift), point(e, y, r + face(e, y) + lift), point(mid, 0, 1),
+                 0.35, 0.6, 0.04)
+        d = e
+    for d in (-12.0, 0.0, 12.0):
+        y = BAY_BOTTOM + 1.0
+        r = resample(prof, y + 0.01, y - 0.01)[0][1]
+        n = point(d, 0, 1)
+        m.latch(point(d, y, r + face(d, y) + 0.12), n, Y, 0.16)
+    y = BAY_BOTTOM + 1.9
+    r = resample(prof, y + 0.01, y - 0.01)[0][1]
+    m.rail(point(-3.0, y, r + face(0, y) + 0.12), point(3.0, y, r + face(0, y) + 0.12), point(0, 0, 1), 0.14)
 
 
 @builder("bastion.lift_engine", "thruster.main.medium")

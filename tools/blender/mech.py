@@ -310,6 +310,211 @@ class Model:
         self.cyl(p, p + n * 0.04, r * 1.4, "dark", 8, bevel=0.005, segments=1)
         self.cyl(p + n * 0.04, p + n * 0.07, r, "light", 8)
 
+    # Near-future military hardware --------------------------------------------------------
+
+    def bolt(self, p, normal, size=0.04, mat="dark"):
+        """A flush fastener: a countersunk head barely proud of the plate (add-on armour is
+        fastened on: field-replaceable)."""
+        p, n = vec(p), vec(normal).normalized()
+        self.cyl(p - n * 0.01, p + n * 0.012, size * 0.7, mat, 8)
+        self.cyl(p + n * 0.012, p + n * 0.016, size * 0.3, "metal", 6)
+
+    def bolt_row(self, a, b, normal, count, size=0.04, mat="dark"):
+        a, b = vec(a), vec(b)
+        for k in range(count):
+            self.bolt(a.lerp(b, (k + 0.5) / count), normal, size, mat)
+
+    def corner_bolts(self, centre, normal, up, width, height, size=0.04, inset=0.12):
+        """Flush fasteners at the four corners of an add-on module."""
+        c, n = vec(centre), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                self.bolt(c + a * sx * (width / 2 - inset) + u * sy * (height / 2 - inset), n, size)
+
+    def lift_eye(self, p, normal, along_=X, size=0.14):
+        """A recessed lift point (a crane's hook or a tie-down takes it): a flush steel socket
+        plate with a bar across its pocket."""
+        p, n = vec(p), vec(normal).normalized()
+        a = vec(along_)
+        a = (a - n * a.dot(n)).normalized()
+        self.box((size * 2.0, size * 1.4, 0.03), place=frame(p + n * 0.01, u=a, w=n), mat="metal", bevel=0.006,
+                 segments=1)
+        self.box((size * 1.3, size * 0.75, 0.03), place=frame(p + n * 0.027, u=a, w=n), mat="dark", bevel=0.004,
+                 segments=1)
+        w = n.cross(a).normalized()
+        self.cyl(p + n * 0.035 - a * size * 0.6, p + n * 0.035 + a * size * 0.6, size * 0.12, "metal", 8)
+        del w
+
+    def boot(self, a, b, r, folds=6):
+        """A rubber dust boot (bellows) over an actuator's rod: keeps grit off the seal."""
+        a, b = vec(a), vec(b)
+        length = (b - a).length
+        prof = [(0, 0)]
+        for k in range(folds * 2 + 1):
+            prof.append((r if k % 2 else r * 0.78, length * k / (folds * 2)))
+        prof.append((0, length))
+        self.lathe(prof, along(a, b), "rubber", 12, angle=60.0)
+
+    def ram(self, a, b, r, extension=0.4, hint=None, booted=True):
+        """A hydraulic actuator from `a` to `b`: the barrel with its end cap and the hose port,
+        the rod under a rubber dust boot, eyes on their pins."""
+        a, b = vec(a), vec(b)
+        place = along(a, b, hint)
+        length = (b - a).length
+        eye = r * 1.1
+        y0 = eye * 0.8
+        y1 = y0 + (length - 2 * eye) * (1 - extension * 0.5)
+        self.lathe([(0, y0), (r * 0.8, y0), (r, y0 + r * 0.3), (r, y1 - r * 0.2), (r * 0.85, y1), (0, y1)], place,
+                   "dark", 12, angle=40.0)
+        rod_end = place @ V((0, length - eye * 0.7, 0))
+        self.cyl(place @ V((0, y1, 0)), rod_end, r * 0.38, "chrome", 12)
+        if booted:
+            self.boot(place @ V((0, y1, 0)), place @ V((0, y1 + (length - eye - y1) * 0.85, 0)), r * 0.7)
+        u = (place.to_3x3() @ X).normalized()
+        w = (place.to_3x3() @ Z).normalized()
+        port = place @ V((0, y0 + r * 0.8, 0))
+        self.cyl(port + w * r * 0.9, port + w * r * 1.35, r * 0.25, "metal", 6)
+        for y in (0.0, length):
+            c = place @ V((0, y, 0))
+            self.cyl(c - u * eye * 0.5, c + u * eye * 0.5, eye * 0.75, "dark", 12, bevel=eye * 0.08, segments=1)
+            self.cyl(c - u * eye * 0.62, c + u * eye * 0.62, eye * 0.3, "metal", 8)
+        return place
+
+    def rail(self, a, b, normal, standoff=0.07, r=0.025):
+        """A low-profile handhold (for the crew): a bar close to the surface on two short feet."""
+        a, b, n = vec(a), vec(b), vec(normal).normalized()
+        self.cyl(a + n * standoff, b + n * standoff, r, "metal", 8)
+        for p in (a, b):
+            self.cyl(p, p + n * (standoff + r), r * 1.1, "dark", 8)
+
+    def rungs(self, top, bottom, normal, across, count, width=0.4):
+        """Fold-flat steps up a surface (for the crew climbing to the hatch): each a short
+        plate on a hinge, folded up flush."""
+        top, bottom, n, a = vec(top), vec(bottom), vec(normal).normalized(), vec(across).normalized()
+        u = a.cross(n).normalized()
+        for k in range(count):
+            p = top.lerp(bottom, k / max(1, count - 1))
+            self.box((width, 0.14, 0.035), place=frame(p + n * 0.02, u=a, v=u), mat="dark", bevel=0.008, segments=1)
+            self.cyl(p - a * width * 0.5 - u * 0.07 + n * 0.02, p + a * width * 0.5 - u * 0.07 + n * 0.02, 0.018,
+                     "metal", 8)
+
+    def periscope(self, c, normal, up, width=0.32):
+        """An electro-optical / infrared camera module: a faceted housing, its lens and the IR
+        illuminator beside it."""
+        c, n = vec(c), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        h, d = width * 0.6, width * 0.5
+        self.hull([c + a * sx * width / 2 + u * y + n * z for sx in (-1, 1)
+                   for y, z in ((0, 0), (h, 0), (h * 0.85, d), (h * 0.15, d))], "armor2", bevel=0.008)
+        lens = c + u * h * 0.5 + n * d - a * width * 0.12
+        self.cyl(lens - n * 0.01, lens + n * 0.02, width * 0.18, "glass", 16)
+        ir = c + u * h * 0.5 + n * d + a * width * 0.25
+        self.cyl(ir - n * 0.01, ir + n * 0.012, width * 0.07, "light", 8)
+
+    def grille(self, target, centre, normal, up, width, height, slats=6, depth=0.14):
+        """A cooling vent set flush in a panel: angled louvres in a recess (they shed rain and
+        hide the hot interior from view)."""
+        c, n = vec(centre), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        self.cut_box(target, (width, height, depth * 2), place=frame(c, u=a, v=u))
+        for k in range(slats):
+            y = -height / 2 + (k + 0.5) * height / slats
+            self.box((width * 0.98, height / slats * 0.92, 0.025),
+                     place=frame(c + u * y - n * depth * 0.45, u=a, v=(u + n * 1.1).normalized()), mat="dark",
+                     bevel=0.004, segments=1)
+
+    def antenna(self, base, normal, length=1.2):
+        """A short whip antenna (line-of-sight radio) on its base."""
+        b, n = vec(base), vec(normal).normalized()
+        self.cyl(b, b + n * 0.06, 0.06, "dark", 8, bevel=0.01, segments=1)
+        self.cyl(b + n * 0.06, b + n * length, 0.012, "dark", 6)
+
+    def blade_antenna(self, base, normal, along_, height=0.35, length=0.5):
+        """A blade antenna (datalink, navigation): a swept fin, low and robust."""
+        b, n = vec(base), vec(normal).normalized()
+        a = vec(along_)
+        a = (a - n * a.dot(n)).normalized()
+        w = n.cross(a).normalized()
+        self.hull([b + a * x + w * s * 0.02 for x in (-length / 2, length / 2) for s in (-1, 1)]
+                  + [b + a * (length * 0.15) + n * height + w * s * 0.012 for s in (-1, 1)], "dark", bevel=0.004)
+
+    def latch(self, p, normal, up, size=0.1):
+        """A flush panel latch: a recessed lever."""
+        p, n = vec(p), vec(normal).normalized()
+        u = vec(up)
+        u = (u - n * u.dot(n)).normalized()
+        a = u.cross(n)
+        self.box((size, size * 0.5, 0.02), place=frame(p + n * 0.005, u=a, v=u), mat="dark", bevel=0.004,
+                 segments=1)
+        self.box((size * 0.7, size * 0.18, 0.012), place=frame(p + n * 0.016, u=a, v=u), mat="metal",
+                 bevel=0.003, segments=1)
+
+    def clamp(self, p, direction, normal, r):
+        """A hose clamp holding a line to the structure."""
+        p, d, n = vec(p), vec(direction).normalized(), vec(normal).normalized()
+        self.box((r * 3.0, r * 0.8, r * 2.6), place=frame(p - n * r * 0.4, u=n.cross(d), v=d), mat="metal",
+                 bevel=r * 0.1, segments=1)
+
+    def stack(self, base, normal, r=0.14, height=0.7):
+        """A low-profile exhaust diffuser: a flat outlet with louvres turning the exhaust down
+        and back (cooled and spread, a smaller heat signature)."""
+        b, n = vec(base), vec(normal).normalized()
+        a = X if abs(n.x) < 0.9 else Z
+        u = n.cross(a).normalized()
+        a = u.cross(n)
+        self.hull([b + a * sx * r * 2.2 + u * sy * r * 1.2 + n * z for sx in (-1, 1) for sy in (-1, 1)
+                   for z in (0, r * 0.8)], "dark", bevel=0.01)
+        for k in range(4):
+            y = (-0.75 + k * 0.5) * r * 1.2
+            self.box((r * 4.0, r * 0.4, 0.02), place=frame(b + u * y + n * r * 0.82, u=a, v=(u - n * 0.8).normalized()),
+                     mat="metal", bevel=0.003, segments=1)
+
+    def hazard(self, a, b, normal, width=0.18, stripe=0.22, thick=0.02):
+        """A hazard band from `a` to `b` on a face (`normal` out of it): a yellow strip with
+        diagonal black stripes over it, marking a pinch point or a moving edge."""
+        a, b, n = vec(a), vec(b), vec(normal).normalized()
+        d = b - a
+        length = d.length
+        u = d.normalized()
+        w = n.cross(u).normalized()
+        c = a + u * (length / 2)
+        self.hull([c + u * x + w * y + n * z for x in (-length / 2, length / 2) for y in (-width / 2, width / 2)
+                   for z in (0.0, thick)], "trim", bevel=0.0)
+        count = max(1, int(length / stripe))
+        step = length / count
+        for k in range(count):
+            x0 = -length / 2 + k * step + step * 0.1
+            pts = [(x0, -width / 2), (x0 + step * 0.5, -width / 2), (x0 + step * 0.5 + width * 0.6, width / 2),
+                   (x0 + width * 0.6, width / 2)]
+            pts = [(max(-length / 2, min(length / 2, x)), y) for x, y in pts]
+            if pts[1][0] - pts[0][0] < 1e-3 and pts[2][0] - pts[3][0] < 1e-3:
+                continue
+            self.hull([c + u * x + w * y + n * z for x, y in pts for z in (thick * 0.5, thick * 1.4)], "dark",
+                      bevel=0.0)
+
+    def servo(self, a, b, r, mat="dark", bolts=10):
+        """A heavy servo drum from `a` to `b`: a housing with a steel flange and a bolt circle on
+        its outer face."""
+        a, b = vec(a), vec(b)
+        place = self.drum(a, b, r, mat, 16, hint=X if abs((b - a).normalized().x) < 0.9 else Y)
+        d = (b - a).normalized()
+        self.cyl(b - d * 0.02, b + d * 0.05, r * 0.82, "metal", 16, bevel=0.01, segments=1)
+        u = d.orthogonal().normalized()
+        w = d.cross(u)
+        for k in range(bolts):
+            t = 2 * math.pi * k / bolts
+            p = b + d * 0.05 + (u * math.cos(t) + w * math.sin(t)) * r * 0.66
+            self.cyl(p, p + d * 0.04, r * 0.07, "dark", 6, bevel=0.005, segments=1)
+        self.cyl(b + d * 0.05, b + d * 0.1, r * 0.3, "dark", 12, bevel=0.01, segments=1)
+        return place
+
     def sensor(self, centre, normal, up, count=3, r=0.05, mat="armor2"):
         """A sensor cluster: lenses in a row on a faceted mount, each with a glowing iris."""
         c, n = vec(centre), vec(normal).normalized()
@@ -444,15 +649,15 @@ def bake_ao(objects, distance=0.6, samples=48):
     bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
 
 
-def write_glb(objects, path, colours):
-    """Writes the objects as one glTF mesh: a primitive per material with positions,
-    normals and the baked occlusion as COLOR_0."""
+def write_glb(objects, path, colours, scale=1.0):
+    """Writes the objects, scaled by `scale`, as one glTF mesh: a primitive per material with
+    positions, normals and the baked occlusion as COLOR_0."""
     prims = {}
     for o in objects:
         me = o.data
         me.calc_loop_triangles()
-        m = o.matrix_world
-        nm = m.to_3x3().inverted().transposed()
+        nm = o.matrix_world.to_3x3().inverted().transposed()
+        m = Matrix.Scale(scale, 4) @ o.matrix_world
         ao = me.color_attributes.get("ao")
         normals = smooth_normals(me, min(35.0, o.get("angle", 35.0)))
         name = me.materials[0].name if me.materials else "armor"

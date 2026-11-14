@@ -30,8 +30,11 @@ const START_BODY: &str = "meridian";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
-/// Chase camera offset behind and above the ship (vehicle axes).
+/// Chase camera offset behind and above the ship (vehicle axes), for a vehicle up to
+/// CHASE_SIZE across; larger ones push it out in proportion.
 const CHASE_OFFSET: DVec3 = DVec3::new(0.0, 5.0, 24.0);
+/// The vehicle reach (m, from its origin) CHASE_OFFSET suits.
+const CHASE_SIZE: f64 = 20.0;
 const COCKPIT_EYE: DVec3 = DVec3::new(0.0, 0.5, -5.2);
 
 pub struct ShipPlugin;
@@ -768,6 +771,7 @@ pub fn player_ship_state(
 
 fn follow_ship(
     pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
     tracked: Res<ShipRenderState>,
     universe: Res<Universe>,
     sim: Res<Sim>,
@@ -788,13 +792,21 @@ fn follow_ship(
         return;
     };
     let state = object.state;
+    let size = ship
+        .and_then(|ship| {
+            let loc = sim.0.objects.location(ship.id)?;
+            let world = &sim.0.regions.get(loc.region)?.world;
+            world.get::<Vehicle>(loc.entity).map(crate::walk::reach)
+        })
+        .unwrap_or(0.0);
+    let chase = (size / CHASE_SIZE).max(1.0);
     let (offset, rotation) = match pilot.view {
         ShipView::Chase => {
             let orbit =
                 DQuat::from_rotation_y(pilot.orbit.0) * DQuat::from_rotation_x(pilot.orbit.1);
             let look = DQuat::from_rotation_x(-0.12);
             (
-                state.rotation * orbit * CHASE_OFFSET,
+                state.rotation * orbit * CHASE_OFFSET * chase,
                 state.rotation * orbit * look,
             )
         }

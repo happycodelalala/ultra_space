@@ -41,6 +41,14 @@ pub struct GaitDef {
     /// How bent the legs are when standing: hip-to-ankle distance as a fraction of the leg's
     /// length (1 = straight).
     pub stance: f64,
+    /// How long a step takes (s): longer for longer legs (a step's time goes with the square
+    /// root of the leg's length).
+    #[serde(default = "default_step_time")]
+    pub step_time_s: f64,
+}
+
+fn default_step_time() -> f64 {
+    0.55
 }
 
 /// A leg resolved against the vehicle's parts (rest frame, vehicle axes).
@@ -158,8 +166,6 @@ pub enum WalkStep {
     TakeOff,
 }
 
-/// How long a step takes (s).
-const STEP_TIME: f64 = 0.55;
 /// Walking acceleration (m/s²).
 const ACCELERATION: f64 = 3.0;
 /// Steepest slope the soles follow (radians).
@@ -284,7 +290,7 @@ pub fn walk_tick(
     }
     let stepping = walking.feet.iter().any(|f| f.step.is_some());
     // Where each foot would like to be: under the vehicle, a little ahead when moving.
-    let lead = forward_level * walking.speed * STEP_TIME * 0.5;
+    let lead = forward_level * walking.speed * gait.step_time_s * 0.5;
     let mut started = stepping;
     // Stopping: feet come closer under the hips before standing.
     let near = if walking.stopping { 0.15 } else { 0.4 };
@@ -295,7 +301,7 @@ pub fn walk_tick(
         let home = ground_at(env, to_world(under) + lead);
         match foot.step {
             Some((from, to, t)) => {
-                let t = (t + dt / STEP_TIME).min(1.0);
+                let t = (t + dt / gait.step_time_s).min(1.0);
                 if t >= 1.0 {
                     foot.planted = to;
                     foot.step = None;

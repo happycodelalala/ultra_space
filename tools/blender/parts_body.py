@@ -25,110 +25,122 @@ def ridge(m, p, q, out, base=0.08, height=0.22, mat="trim", trim=0.1):
 
 @builder("bastion.torso", "frame.torso")
 def torso(m, h, part):
-    """The torso and cockpit. A faceted chest of dark frame metal under thick ceramic plates
-    that overhang it: the two upper plates either side of the keel are the crew hatch (they
-    part along it; the crew sees through the head's sensors, so there are no windows); the
-    keel deflects hits off the cockpit. Graphite flank plates carry heat vents, and a high
-    collar guards the neck joint. Chevron lames layer down the abdomen, flexed by a sealed
-    actuator each side. On the back, the reactor housing vents through finned louvres between
-    two radiator fins."""
+    """The torso, heavy industrial: a dark frame under thick sculpted armour. Two chest plates
+    flank the reactor housing, the core glowing behind its radial cooling fins; rounded
+    abdomen bands with the frame and two flex pistons showing between them; a high armoured
+    collar round the neck joint; hazard stripes at the pinch point between chest and abdomen;
+    floodlights at the upper corners; servo drums for the shoulders. On the back, the heat
+    sink (a bank of fins) with two exhaust ports."""
     hx, hy, hz = h
 
     def P(x, y, z):
         return V((x * hx, y * hy, z * hz))
 
-    O = P(0, 0.3, 0)
-    # Core: tapering from the shoulders to the waist.
+    round_ = dict(bevel=0.1, segments=3, angle=35.0)
     m.hull([P(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
-            for y, wx, wz in ((0.9, 0.8, 0.72), (0.1, 0.74, 0.74), (-0.94, 0.42, 0.6))], "dark", bevel=0.02)
-    Kt, Km, Kl = P(0, 0.96, -0.8), P(0, 0.5, -0.97), P(0, 0.02, -0.88)
-    St = {s: P(s * 0.84, 0.96, -0.64) for s in (-1, 1)}
-    Sm = {s: P(s * 0.96, 0.48, -0.76) for s in (-1, 1)}
-    Sl = {s: P(s * 0.8, 0.0, -0.72) for s in (-1, 1)}
-    Bt = {s: P(s * 0.9, 0.96, 0.6) for s in (-1, 1)}
-    Bl = {s: P(s * 0.88, -0.04, 0.6) for s in (-1, 1)}
-    m.hull([Kt, Km, Kl] + [d[s] for d in (St, Sm, Sl, Bt, Bl) for s in (-1, 1)], "dark", bevel=0.02)
+            for y, wx, wz in ((0.9, 0.8, 0.55), (0.1, 0.74, 0.7), (-0.94, 0.45, 0.6))], "dark", bevel=0.03)
+    # Chest plates, sculpted, either side of the reactor.
     for s in (-1, 1):
-        # Hatch plates and the plates below them.
-        m.facet([Kt, St[s], Sm[s], Km], 0.26, inset=0.05, outward=O)
-        m.facet([Km, Sm[s], Sl[s], Kl], 0.22, inset=0.07, outward=O)
-        # Top plates.
-        m.facet([Kt, St[s], Bt[s], P(0, 0.96, 0.6)], 0.1, inset=0.1, outward=O, mat="armor2")
-        # Flank plate with heat vents, below the shoulder bearing.
-        top_f, top_b = P(s * 0.95, 0.28, -0.72), P(s * 0.9, 0.28, 0.6)
-        plate, c, n = m.facet([top_f, Sl[s], Bl[s], top_b], 0.2, inset=0.06, outward=O, mat="armor2")
-        m.vent(plate, c, n, Y, hz * 0.7, hy * 0.18, fins=4, depth=0.12)
-        # High collar.
-        m.hull([P(s * x, y, z) for x, y, z in ((0.3, 0.97, -0.6), (0.62, 0.97, -0.5), (0.3, 0.97, -0.3),
-                                                (0.62, 0.97, -0.2), (0.34, 1.08, -0.48), (0.56, 1.06, -0.3))],
-               "armor", bevel=0.008)
-    # Chest flares: armour sweeping out and up at the shoulders (they cover the shoulder
-    # bearings from the front) and the torso narrowing to the waist below them: a V.
-    for s in (-1, 1):
-        m.hull([P(s * x, y, z) for x, y, z in ((0.8, 0.98, -0.68), (1.07, 1.04, -0.56), (1.04, 0.62, -0.8),
-                                                (0.88, 0.42, -0.84), (0.8, 0.98, -0.3), (1.05, 1.02, -0.3),
-                                                (1.0, 0.55, -0.45))], "armor", bevel=0.01)
-    ridge(m, Kt, Km, (0, 0.35, -1), 0.1, 0.24)
-    ridge(m, Km, Kl, (0, -0.3, -1), 0.1, 0.2)
-    # Abdomen lames: chevrons, each over the next.
-    Oa = P(0, -0.5, 0)
+        m.hull([P(s * x, y, z) for x, y, z in (
+            (0.25, 0.94, -0.62), (0.92, 0.94, -0.5), (0.98, 0.5, -0.7), (0.85, 0.12, -0.72), (0.28, 0.08, -0.86),
+            (0.55, 0.55, -1.0), (0.28, 0.94, -0.2), (0.92, 0.94, -0.2), (0.95, 0.12, -0.3), (0.28, 0.08, -0.3))],
+            "armor", **round_)
+    # Reactor housing and its glowing core behind radial fins.
+    rc = P(0, 0.5, -0.9)
+    fwd = V((0, 0.1, -1)).normalized()
+    rr = hx * 0.24
+    m.lathe([(rr * 0.6, -0.25), (rr, -0.25), (rr * 1.08, -0.1), (rr * 1.08, 0.08), (rr * 0.9, 0.12),
+             (rr * 0.75, 0.12), (rr * 0.75, -0.05), (rr * 0.6, -0.05)], along(rc, rc + fwd), "metal", 24,
+            closed=True, angle=40.0)
+    m.cyl(rc - fwd * 0.2, rc - fwd * 0.05, rr * 0.75, "light", 24)
+    for k in range(12):
+        t = 2 * math.pi * k / 12
+        u = V((math.cos(t), math.sin(t), 0))
+        u = (u - fwd * u.dot(fwd)).normalized()
+        m.box((0.03, rr * 0.62, 0.14), place=frame(rc + u * rr * 0.42, u=fwd.cross(u), v=u), mat="dark", bevel=0)
+    m.cyl(rc - fwd * 0.04, rc + fwd * 0.04, rr * 0.18, "dark", 12, bevel=0.01, segments=1)
+    # Hazard stripes at the pinch point under the chest.
+    m.hazard(P(-0.5, 0.06, -0.84), P(0.5, 0.06, -0.84), V((0, -0.2, -1)).normalized(), 0.2, 0.4)
+    # Abdomen bands, rounded, the frame and two flex pistons between them.
     for k in range(3):
-        y0 = -0.06 - k * 0.27
-        w = 0.56 - 0.07 * k
-        z = -0.8 + 0.05 * k
-        pts = [P(-w, y0, z), P(w, y0, z), P(w * 0.92, y0 - 0.2, z + 0.02), P(0, y0 - 0.34, z - 0.02),
-               P(-w * 0.92, y0 - 0.2, z + 0.02)]
-        m.facet(pts, 0.13, inset=0.0, outward=Oa, mat="armor" if k != 1 else "armor2")
+        y0 = -0.14 - k * 0.27
+        w = 0.42 - 0.05 * k
+        m.box((2 * hx * w, hy * 0.2, hz * 0.5), at=P(0, y0 - 0.06, -0.55 + 0.04 * k), mat="armor" if k != 1 else "armor2",
+              bevel=0.1, segments=3)
     for s in (-1, 1):
-        m.piston(P(s * 0.52, 0.0, -0.66), P(s * 0.46, -0.84, -0.58), hx * 0.05, extension=0.35, hint=(0, 0, 1))
-    # Shoulder bearings.
+        m.ram(P(s * 0.56, 0.05, -0.62), P(s * 0.44, -0.86, -0.58), hx * 0.07, extension=0.35, hint=(0, 0, 1),
+              booted=False)
+    # Trapezius slabs either side of the neck joint, floodlights in their front edges.
     for s in (-1, 1):
-        m.drum(P(s * 0.8, 0.57, 0), P(s * 1.0, 0.57, 0), hy * 0.3, "dark", 8, hint=(0, 1, 0))
-    # Reactor housing with its vent, radiator fins.
-    reactor = m.hull([P(sx * wx, y, z) for sx in (-1, 1) for y in (-0.62, 0.72)
-                      for wx, z in ((0.48, 0.6), (0.32, 0.98))]
-                     + [P(0, -0.8, 0.8), P(0, 0.86, 0.8)], "armor2", bevel=0.01)
-    m.vent(reactor, P(0, 0.05, 0.98), Z, Y, hx * 0.5, hy * 0.9, fins=8, depth=0.14)
+        m.hull([P(s * x, y, z) for x, y, z in ((0.24, 0.9, -0.62), (0.9, 0.9, -0.55), (0.24, 0.9, 0.62),
+                                                (0.9, 0.9, 0.6), (0.3, 1.04, -0.5), (0.7, 1.0, -0.45),
+                                                (0.3, 1.04, 0.5), (0.7, 1.0, 0.48))], "armor2", **round_)
+        m.lamp(P(s * 0.55, 0.96, -0.6), V((0, 0.15, -1)).normalized(), 0.09)
+    # Shoulder servos.
     for s in (-1, 1):
-        fin = [(0.55 * hz, 0.05 * hy), (0.55 * hz, 0.92 * hy), (1.06 * hz, 1.04 * hy), (0.86 * hz, 0.12 * hy)]
-        pl = frame((s * 0.6 * hx, 0, 0), u=(0, 0, -s), v=(0, 1, 0))
-        m.plate([(-z, y) for z, y in fin] if s > 0 else fin, 0.07, pl, "armor", chamfer=0.03)
-    # Neck collar.
-    m.lathe([(hx * 0.36, hy * 0.95), (hx * 0.46, hy * 0.95), (hx * 0.46, hy * 1.0), (hx * 0.42, hy * 1.05),
-             (hx * 0.36, hy * 1.05)], frame(), "dark", 8, closed=True, angle=20.0)
+        m.servo(P(s * 0.8, 0.57, 0), P(s * 1.0, 0.57, 0), hy * 0.32, "dark", 12)
+    # Sternum plate over the reactor, flank plates under the shoulder servos.
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in ((0.3, 0.92, -0.72), (0.3, 0.74, -0.86),
+                                                               (0.22, 0.92, -0.5), (0.22, 0.74, -0.6))],
+           "armor2", bevel=0.05, segments=2)
+    for s in (-1, 1):
+        m.hull([P(s * x, y, z) for x, y, z in ((0.8, 0.3, -0.5), (0.8, 0.3, 0.5), (0.66, -0.6, -0.5),
+                                                (0.66, -0.6, 0.5), (0.9, 0.25, -0.4), (0.9, 0.25, 0.4),
+                                                (0.74, -0.55, -0.4), (0.74, -0.55, 0.4))], "armor", **round_)
+    # Back: two armoured shoulder blades either side of the heat sink (a bank of fins), the
+    # lower back plate below with two exhaust ports.
+    for s in (-1, 1):
+        m.hull([P(s * x, y, z) for x, y, z in ((0.3, 0.9, 0.62), (0.92, 0.9, 0.52), (0.95, 0.15, 0.62),
+                                                (0.3, 0.05, 0.7), (0.6, 0.5, 0.86), (0.3, 0.9, 0.3),
+                                                (0.92, 0.9, 0.2), (0.95, 0.15, 0.3), (0.3, 0.05, 0.3))],
+               "armor", **round_)
+    sink = P(0, 0.48, 0.74)
+    m.box((hx * 0.56, hy * 0.82, hz * 0.14), at=sink, mat="metal", bevel=0.03, segments=2)
+    for k in range(7):
+        x = (-0.5 + k / 6) * hx * 0.48
+        m.box((0.05, hy * 0.74, hz * 0.3), at=sink + V((x, 0, hz * 0.12)), mat="dark", bevel=0.005, segments=1)
+    lb = P(0, -0.45, 0.66)
+    m.box((hx * 1.05, hy * 0.75, hz * 0.3), at=lb, mat="armor2", bevel=0.1, segments=3)
+    for s in (-1, 1):
+        e = lb + V((s * 0.28 * hx, -0.05 * hy, hz * 0.15))
+        m.lathe([(0.1, 0), (0.2, 0), (0.2, 0.1), (0.17, 0.13), (0.1, 0.13)], along(e, e + Z), "metal", 16,
+                closed=True, angle=40.0)
+        m.cyl(e - Z * 0.05, e + Z * 0.02, 0.1, "dark", 16)
+    m.hazard(lb + V((-hx * 0.5, hy * 0.33, hz * 0.15)), lb + V((hx * 0.5, hy * 0.33, hz * 0.15)), Z, 0.12, 0.35)
 
 
 @builder("bastion.head", "frame.head")
 def head(m, h, part):
-    """The sensor head on its neck bearing: a pointed ceramic helm over a dark faceted face;
-    the visor (the main wide-angle optic) lit in the gap between them and a three-lens
-    rangefinder array in the face; a blade antenna on the crest and two swept antennas."""
+    """The head, an armoured helmet on its neck servo: the brow juts over a recessed visor slit
+    across the front, lit from within by the main optics; the jaw guard below it; a servo
+    either side (the sensor pods turn on them); floodlights under the brow and a low crest."""
     hx, hy, hz = h
-    k = 1.18  # the head stands larger than its collision box, grown up from the neck
+    k = 1.18
 
     def P(x, y, z):
         return V((x * hx * k, (-1 + (y + 1) * k) * hy, z * hz * k))
 
-    m.drum(P(0, -1.0, 0), P(0, -0.7, 0), hx * 0.5, "dark", 8, hint=(1, 0, 0))
-    m.hull([P(s * 0.6, 0.62, 0.65) for s in (-1, 1)] + [P(s * 0.42, 0.5, -0.5) for s in (-1, 1)]
-           + [P(0, 0.7, 0.15), P(0, 0.34, -1.0)] + [P(s * 0.88, 0.02, -0.05) for s in (-1, 1)]
-           + [P(s * 0.72, 0.0, 0.78) for s in (-1, 1)] + [P(s * 0.34, 0.02, -0.86) for s in (-1, 1)],
-           "armor", bevel=0.01)
-    m.hull([P(s * 0.32, -0.06, -0.8) for s in (-1, 1)] + [P(s * 0.32, -0.56, -0.8) for s in (-1, 1)]
-           + [P(s * 0.8, -0.06, -0.05) for s in (-1, 1)] + [P(s * 0.6, -0.64, 0.1) for s in (-1, 1)]
-           + [P(s * 0.74, -0.06, 0.7) for s in (-1, 1)] + [P(s * 0.52, -0.72, 0.6) for s in (-1, 1)],
-           "dark", bevel=0.01)
-    m.hull([P(s * x * 0.985, y, z * 0.985) for s in (-1, 1) for y in (-0.07, 0.03)
-            for x, z in ((0.33, -0.83), (0.84, -0.05), (0.7, 0.6))], "light", bevel=0.0)
-    m.sensor(P(0, -0.3, -0.8), -Z, Y, 3, r=hx * k * 0.075)
-    crest = [P(0, y, z) for y, z in ((0.5, -0.45), (0.68, 0.25), (0.96, 0.98), (0.58, 0.6))]
-    m.plate([(-c.z, c.y) for c in crest], 0.07, frame((-0.035, 0, 0), u=(0, 0, -1), v=(0, 1, 0)), "armor2",
-            chamfer=0.025)
+    round_ = dict(bevel=0.08, segments=3, angle=35.0)
+    m.servo(P(0, -1.0, 0), P(0, -0.72, 0), hx * 0.55, "dark", 10)
+    # Dark core: fills the band between helmet and jaw round the sides and back.
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for y in (-0.3, 0.15)
+            for x, z in ((0.66, 0.55), (0.7, -0.45), (0.42, -0.74))], "dark", bevel=0.01)
+    # Helmet: brow jutting forward over the visor.
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
+        (0.75, 0.0, 0.75), (0.8, 0.0, -0.5), (0.5, -0.02, -0.98), (0.7, 0.55, 0.65), (0.62, 0.6, -0.45),
+        (0.38, 0.42, -0.92), (0.3, 0.7, 0.2))], "armor", **round_)
+    # Jaw guard.
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
+        (0.7, -0.22, 0.6), (0.72, -0.22, -0.45), (0.42, -0.22, -0.8), (0.6, -0.7, 0.5), (0.52, -0.72, -0.42),
+        (0.26, -0.62, -0.72))], "armor2", **round_)
+    # Visor slit, recessed under the brow.
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for y in (-0.16, -0.04)
+            for x, z in ((0.42, -0.78), (0.64, -0.5))], "light", bevel=0.0)
     for s in (-1, 1):
-        ear = [(c.z, c.y) for c in (P(0, y, z) for y, z in ((0.12, -0.15), (0.24, 0.3), (0.55, 1.02),
-                                                               (-0.12, 0.4)))]
-        pl = frame((s * 0.8 * hx * k, 0, 0), u=(0, 0, -s), v=(0, 1, 0))
-        m.plate([(-z, y) for z, y in ear] if s > 0 else ear, 0.05, pl, "dark", chamfer=0.02)
+        m.servo(P(s * 0.74, -0.3, 0.05), P(s * 0.9, -0.3, 0.05), hy * k * 0.22, "dark", 8)
+        m.lamp(P(s * 0.62, -0.05, -0.72), V((s * 0.3, 0, -1)).normalized(), 0.05)
+    m.hull([P(sx * 0.05, y, z) for sx in (-1, 1) for y, z in ((0.68, -0.3), (0.7, 0.5))]
+           + [P(0, 0.82, 0.3), P(0, 0.78, -0.1)], "armor2", bevel=0.01)
 
 
 @builder("bastion.waist", "frame.waist")
@@ -190,78 +202,80 @@ def shoulder(m, h, part):
 
 def limb_body(m, h, kind):
     """An arm or leg segment (`kind`: upper_arm, forearm, thigh or shin); the joint above at
-    +Y, the one below at -Y, front -Z."""
+    +Y, the one below at -Y, front -Z. Heavy industrial: a dark frame between servo hubs,
+    thick rounded armour front and back with a dark gap between the layers, the hydraulic
+    rams that work the joint below out in the open along the sides, chrome rods showing,
+    their hoses bundled down the back."""
     hx, hy, hz = h
     yb = hy * 0.84
     rb = min(hx, hz) * 0.5
-    # Armour width (wider than the frame it covers), at the top and at the bottom.
     wt, wb = {"upper_arm": (1.0, 0.95), "forearm": (1.05, 1.1), "thigh": (1.04, 1.0),
               "shin": (1.0, 1.12)}[kind]
+    round_ = dict(bevel=min(0.09, hx * 0.18), segments=3, angle=35.0)
 
     def F(x, y, z):
         w = wb + (wt - wb) * (y + 1) / 2
         return V((x * hx * w, y * hy, z * hz))
 
-    # Spine.
+    # Frame.
     cx, cz = hx * 0.42, hz * 0.5
     sec = [(cx, 0), (cx * 0.6, cz), (-cx * 0.6, cz), (-cx, 0), (-cx * 0.6, -cz), (cx * 0.6, -cz)]
     m.hull([(x * (1.0 if y > 0 else 0.8), y, z) for x, z in sec for y in (-yb, yb)], "dark", bevel=0.01)
-    # Pin bosses: the joint's hub between two faceted cheeks.
+    # Servo hubs at both joints.
     for s in (-1, 1):
         y = s * yb
-        m.drum((-hx * 0.45, y, 0), (hx * 0.45, y, 0), rb, "metal", 8, hint=(0, 0, 1))
+        m.drum((-hx * 0.45, y, 0), (hx * 0.45, y, 0), rb, "metal", 12, hint=(0, 0, 1))
         for sx in (-1, 1):
-            m.drum((sx * hx * 0.47, y, 0), (sx * hx * 0.8, y, 0), rb * 0.86, "dark", 8, hint=(0, 0, 1))
-            m.cap((sx * hx * 0.8, y, 0), X * sx, rb * 0.5)
-    # Front armour: a keeled graphite base with a thick ceramic plate either side of the keel.
-    top_y = 0.3 if kind == "shin" else 0.6
-    top_k, bot_k = F(0, top_y, -0.98), F(0, -0.46, -1.02)
-    top_s = {s: F(s * 0.74, top_y + 0.04, -0.78) for s in (-1, 1)}
-    bot_s = {s: F(s * 0.62, -0.5, -0.84) for s in (-1, 1)}
-    m.hull([top_k, bot_k] + [d[s] for d in (top_s, bot_s) for s in (-1, 1)]
-           + [F(s * w, y, -0.42) for s in (-1, 1) for y, w in ((top_y - 0.04, 0.9), (-0.5, 0.75))], "armor2",
-           bevel=0.01)
-    O = F(0, 0, 0)
-    for s in (-1, 1):
-        m.facet([top_k, top_s[s], bot_s[s], bot_k], 0.18, inset=0.05, outward=O)
-    ridge(m, top_k, bot_k, (0, 0, -1), 0.07, 0.18)
-    # Side plates, following the armour's width.
-    thick = {"upper_arm": 0.3, "forearm": 0.42, "thigh": 0.4, "shin": 0.36}[kind]
-    for s in (-1, 1):
-        x0 = hx * 0.5
-        side = [(-0.55 * hz, 0.6 * hy), (0.5 * hz, 0.5 * hy), (0.55 * hz, -0.5 * hy), (-0.55 * hz, -0.6 * hy)]
-        # The plate's outer face leans out toward the wider end.
-        pl = frame((s * x0, 0, 0), u=(0, 0, -s), v=(s * (wb - wt) * hx * 0.25, hy, 0))
-        m.plate([(-z, y) for z, y in side] if s > 0 else side, hx * thick, pl, "armor2", chamfer=0.05)
-    # Back: two sealed actuators (they work the joint below) either side of their cable.
-    rr = min(hx, hz) * 0.13
-    zr = cz + rr * 1.3
+            m.servo((sx * hx * 0.45, y, 0), (sx * hx * 0.78, y, 0), rb * 0.9, "dark", 8)
+    # Front armour: a thick plate curved across, and a second one lapped over its lower half;
+    # the back armour the same, shallower.
+    top_y = 0.3 if kind == "shin" else 0.62
+
+    def curved(y0, y1, z_in, z_out, w0=0.8, w1=0.8, front=-1):
+        pts = []
+        for y, w in ((y0, w0), (y1, w1)):
+            for x, f in ((0.0, 1.0), (0.4, 0.96), (0.68, 0.82), (0.86, 0.55)):
+                for sx in ((1,) if x == 0 else (-1, 1)):
+                    pts.append(F(sx * x * w / 0.86, y, front * (z_in + (z_out - z_in) * f)))
+            for sx in (-1, 1):
+                pts.append(F(sx * w, y, front * z_in))
+        return pts
+
+    m.hull(curved(top_y, -0.1, 0.42, 1.0, 0.8, 0.74), "armor", **round_)
+    m.hull(curved(0.0, -0.58, 0.45, 1.06, 0.76, 0.68), "armor2", **round_)
+    m.hull(curved(0.55, -0.5, 0.42, 0.93, 0.72, 0.66, front=1), "armor", **round_)
+    # Rams out along the sides, chrome rods down to the joint below.
+    rr = min(hx, hz) * 0.14
     for sx in (-1, 1):
-        m.piston((sx * hx * 0.3, hy * 0.62, zr), (sx * hx * 0.3, -hy * 0.72, zr), rr, extension=0.42,
-                 hint=(1, 0, 0))
-    m.cable([(0, hy * 0.6, cz + rr * 0.5), (0, -hy * 0.6, cz + rr * 0.5)], rr * 0.6)
+        x = sx * hx * 0.66
+        m.ram((x, hy * 0.6, -hz * 0.1), (x, -hy * 0.7, -hz * 0.05), rr, extension=0.55, hint=(0, 0, 1),
+              booted=False)
+    # Hose bundle down the back, in clamps, out of the armour at both ends.
+    zc = hz * 0.98
+    for dx in (-1, 0, 1):
+        m.cable([(dx * rr * 0.7, hy * 0.72, cz), (dx * rr * 0.7, hy * 0.55, zc),
+                 (dx * rr * 0.7, -hy * 0.5, zc), (dx * rr * 0.7, -hy * 0.7, cz)], rr * 0.32)
+    for yy in (0.3, -0.25):
+        m.clamp(V((0, yy * hy, zc)), Y, Z, rr * 1.1)
     if kind == "forearm":
-        # Elbow guard: a spur over the back of the elbow, the joint above.
-        m.hull([F(s * 0.55, y, 0.55) for s in (-1, 1) for y in (0.45, 0.98)]
-               + [F(0, 1.02, 1.2), F(0, 0.4, 1.0), F(0, 0.9, 1.1)], "armor", bevel=0.008)
-        # Gauntlet: armour over the wrist drive, the joint below.
-        m.hull([F(s * 1.0, y, z) for s in (-1, 1) for y in (-0.15, -0.9) for z in (-0.6, 0.6)]
-               + [F(s * 0.8, -0.05, z) for s in (-1, 1) for z in (-0.5, 0.5)], "armor", bevel=0.01)
+        # Gauntlet over the wrist drive, a hazard band at its pinch edge.
+        m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
+            (1.0, -0.2, -0.65), (1.0, -0.2, 0.6), (1.0, -0.9, -0.65), (1.0, -0.9, 0.6), (0.8, -0.05, -0.5),
+            (0.8, -0.05, 0.45))], "armor", **round_)
+        m.hazard(F(-0.8, -0.8, -0.66), F(0.8, -0.8, -0.66), -Z, hy * 0.08, 0.3)
     if kind == "thigh":
-        # Hip-side armour flaring over the top joint.
-        m.hull([F(s * 1.02, y, z) for s in (-1, 1) for y in (0.2, 0.75) for z in (-0.7, 0.55)]
-               + [F(s * 0.85, 0.98, z) for s in (-1, 1) for z in (-0.55, 0.4)], "armor", bevel=0.01)
+        # Hip armour flaring over the top joint.
+        m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
+            (1.02, 0.2, -0.7), (1.02, 0.2, 0.55), (1.02, 0.75, -0.7), (1.02, 0.75, 0.55), (0.85, 0.98, -0.55),
+            (0.85, 0.98, 0.4))], "armor", **round_)
     if kind == "shin":
-        # Knee guard over the joint above, swept to a point; calf armour over the actuators'
-        # lower ends, widening to the ankle; an ankle guard.
-        m.hull([F(s * 0.7, 0.5, -0.66) for s in (-1, 1)] + [F(s * 0.5, 1.04, -0.62) for s in (-1, 1)]
-               + [F(0, 0.86, -1.1), F(0, 0.35, -1.0)]
-               + [F(s * 0.55, y, -0.45) for s in (-1, 1) for y in (0.45, 1.0)], "armor", bevel=0.008)
-        m.hull([F(s * w, y, z) for s in (-1, 1) for y, w, z in ((0.2, 0.62, 0.5), (-0.75, 0.85, 0.5),
-                                                                (0.1, 0.55, 0.92), (-0.68, 0.8, 1.0))]
-               + [F(0, -0.45, 1.1)], "armor", bevel=0.008)
-        m.hull([F(s * 0.95, y, z) for s in (-1, 1) for y in (-0.62, -0.98) for z in (-0.95, -0.4)]
-               + [F(0, -0.78, -1.15)], "armor2", bevel=0.008)
+        # Knee cap, big and rounded, over the joint above; the knee's pinch edge striped; an
+        # ankle guard.
+        m.hull(curved(1.04, 0.38, 0.5, 1.12, 0.6, 0.74), "armor2", **round_)
+        m.hazard(F(-0.4, 0.33, -1.0), F(0.4, 0.33, -1.0), V((0, -0.2, -1)).normalized(), hy * 0.05, 0.3)
+        m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
+            (0.95, -0.62, -0.95), (0.95, -0.62, -0.4), (0.95, -0.98, -0.95), (0.95, -0.98, -0.4),
+            (0.5, -0.78, -1.12))], "armor", **round_)
 
 
 @builder("bastion.limb", "frame.limb")
@@ -427,7 +441,7 @@ def drone_pod(m, h, part):
     m.lamp((0, r * 0.95, hz * 0.7), Y, 0.04)
 
 
-@builder("frame.gyro")
+@builder("frame.gyro", "bastion.gyro")
 def gyro(m, h, part):
     """A reaction-wheel unit: a faceted housing with stiffening bands round the wheel."""
     r = h.x

@@ -1,4 +1,4 @@
-//! The Bastion: an original heavy frame (~24 m, ~240 t) carried in a cocoon of four curved
+//! The Bastion: an original giant frame (~100 m tall) carried in a cocoon of four curved
 //! quarter-shells, each on a shell arm. Each arm: a shoulder hinge on a saddle, a
 //! long link up under the dome, an elbow folding the arm into a V, a long forearm back down to
 //! a wrist at the quarter's upper middle, and the carrier the quarter is fixed to; the forearm
@@ -33,7 +33,7 @@ fn content() -> PathBuf {
 }
 
 const NAME: &str = "Bastion";
-const DESCRIPTION: &str = "An original heavy frame, about 24 m tall, in a cocoon of four thick \
+const DESCRIPTION: &str = "An original giant frame, about 100 m tall, in a cocoon of four thick \
      curved quarter-shells. Each quarter rides on a long shell arm from a shoulder housing (link, \
      elbow, telescoping forearm, wrist), hides a long folding leg with a grapple along its \
      inside, carries four gimballed lift engines and has a drone bay in its bulge under a \
@@ -48,7 +48,7 @@ const QUARTERS: [(&str, f64); 2] = [("front", 135.0), ("back", 45.0)];
 fn fold_direction(quarter: &str) -> f64 {
     if quarter == "front" { 1.0 } else { -1.0 }
 }
-/// Folding-leg segments after the drop (7.3 m, then 6.3 m each), side by side when folded (an
+/// Folding-leg segments after the drop (32.85 m, then 28.35 m each), side by side when folded (an
 /// odd number: the last hangs down, so the grapple stows at the stack's open lower end).
 const LEG_SEGMENTS: usize = 5;
 /// The folded leg lies in a plane leaning in toward the hem with the shell's inner face, this
@@ -56,40 +56,40 @@ const LEG_SEGMENTS: usize = 5;
 const FOLD_LEAN_DEG: f64 = 11.8;
 
 /// The cocoon wraps around this vertical axis (vehicle frame, x = 0).
-const SHELL_AXIS_Z: f64 = 0.3;
+const SHELL_AXIS_Z: f64 = 1.35;
 /// Where the shoulder saddles sit (left; on top of the shoulder block, clear of the torso).
-const SADDLE_AT: DVec3 = DVec3::new(-4.0, 2.9, 0.0);
+const SADDLE_AT: DVec3 = DVec3::new(-18.0, 13.05, 0.0);
 /// Overlap allowed between parts that aren't joined (m): the seams between neighbouring
 /// quarters.
-const TOLERANCE: f64 = 0.05;
+const TOLERANCE: f64 = 0.225;
 /// The lift engines inside each quarter: two rows at these heights (m), each with an engine
 /// this far either side of the quarter's middle (degrees): a block of two either side of the
 /// carrier and the folded leg's drop, below the shell arm's shoulder and clear of the forearm.
-const LIFT_ENGINES: [(f64, f64); 2] = [(-0.3, 31.0), (1.9, 31.0)];
+const LIFT_ENGINES: [(f64, f64); 2] = [(-1.35, 31.0), (8.55, 31.0)];
 /// The drone bay cover's hinge in its quarter's axes: height, and distance from the cocoon's
 /// axis (just outside the shell's outer face; matches `bastion.bay_cover`'s hinge node).
-const BAY_HINGE: (f64, f64) = (5.0, 6.095);
+const BAY_HINGE: (f64, f64) = (22.5, 27.4275);
 /// How far the bay covers open in the "bays" pose (degrees).
 const BAY_OPEN_DEG: f64 = 75.0;
 /// How deep the engine mounts sit in the shell, past its inner face (m).
-const ENGINE_RECESS: f64 = 0.55;
+const ENGINE_RECESS: f64 = 2.475;
 /// The wrist the quarter turns on: at this height on its upper middle (m).
-const WRIST_HEIGHT: f64 = 2.4;
+const WRIST_HEIGHT: f64 = 10.8;
 /// How far inside the shell's inner face the wrist sits (m).
-const WRIST_INSET: f64 = 1.3;
+const WRIST_INSET: f64 = 5.85;
 /// How the arms hang when standing: shoulder and elbow turned forward, and the arm out to the
 /// side (degrees).
 const ARM_STANCE: (f64, f64, f64) = (6.0, 22.0, 9.0);
-/// The forearm extensions the pose searches try (m; the slide runs 0 to 2.5).
-const ARM_REACH: [f64; 3] = [0.0, 1.25, 2.5];
+/// The forearm extensions the pose searches try (m; the slide runs 0 to 11.25).
+const ARM_REACH: [f64; 3] = [0.0, 5.625, 11.25];
 /// How far from the cocoon's axis the walking pose holds a quarter's middle (m): the front
 /// pair further out than the back pair, which stays closer to support the back.
 fn held_out(quarter: &str) -> f64 {
-    if quarter == "front" { 13.0 } else { 10.0 }
+    if quarter == "front" { 58.5 } else { 45.0 }
 }
 /// How far the flying pose lets the back pair out at most (m); the front pair goes as far as
 /// it reaches.
-const FLY_BACK_OUT: f64 = 11.0;
+const FLY_BACK_OUT: f64 = 49.5;
 
 /// Outward direction of the left side at azimuth `deg`: 0 behind (+Z), 90 left (−X), 180 in
 /// front (−Z).
@@ -260,7 +260,7 @@ fn assemble() -> Vehicle {
     b.pair(
         "shoulder_roll",
         "end",
-        "frame.hinge",
+        "bastion.hinge",
         "base",
         "shoulder_joint",
         any,
@@ -276,7 +276,7 @@ fn assemble() -> Vehicle {
     b.pair(
         "upper_arm",
         "bottom",
-        "frame.hinge",
+        "bastion.hinge",
         "base",
         "elbow_joint",
         any,
@@ -290,11 +290,32 @@ fn assemble() -> Vehicle {
         any,
     );
     b.pair("forearm", "bottom", "bastion.hand", "wrist", "hand", any);
-    b.pair("waist", "hip_left", "frame.hinge", "base", "hip_joint", any);
+    b.pair(
+        "waist",
+        "hip_left",
+        "bastion.hinge",
+        "base",
+        "hip_joint",
+        any,
+    );
     b.pair("hip_joint", "end", "bastion.leg", "top", "thigh", any);
-    b.pair("thigh", "bottom", "frame.hinge", "base", "knee_joint", any);
+    b.pair(
+        "thigh",
+        "bottom",
+        "bastion.hinge",
+        "base",
+        "knee_joint",
+        any,
+    );
     b.pair("knee_joint", "end", "bastion.shin", "top", "shin", any);
-    b.pair("shin", "bottom", "frame.hinge", "base", "ankle_joint", any);
+    b.pair(
+        "shin",
+        "bottom",
+        "bastion.hinge",
+        "base",
+        "ankle_joint",
+        any,
+    );
     b.pair("ankle_joint", "end", "bastion.foot", "top", "foot", any);
 
     // The wrist sits this far from the axis: inside the shell's upper middle.
@@ -571,7 +592,7 @@ fn assemble() -> Vehicle {
     }
 
     // The gyro inside the torso.
-    let gyro = b.part("frame.gyro");
+    let gyro = b.part("bastion.gyro");
     let i = attach_to_surface(&mut b.v, &gyro, 0, DVec3::ZERO, DQuat::IDENTITY).unwrap();
     b.v.parts[i].name = "gyro".into();
 
@@ -584,11 +605,12 @@ fn assemble() -> Vehicle {
     };
     b.v.gait = Some(GaitDef {
         legs: vec![leg("left"), leg("right")],
-        step_length_m: 4.0,
-        step_height_m: 1.0,
-        speed_m_s: 3.0,
-        turn_rate_deg_s: 20.0,
+        step_length_m: 18.0,
+        step_height_m: 4.5,
+        speed_m_s: 6.4,
+        turn_rate_deg_s: 10.0,
         stance: 0.9,
+        step_time_s: 1.2,
     });
     b.v
 }
@@ -792,7 +814,7 @@ fn tilt_up(v: &Vehicle, a: &Articulation, start: &[f64]) -> Vec<f64> {
                 } else {
                     radius(at).min(FLY_BACK_OUT)
                 };
-                out - 0.3 * at.y + 4.0 * flat.dot(corner)
+                out - 0.3 * at.y + 18.0 * flat.dot(corner)
             },
         );
     }
@@ -870,7 +892,7 @@ fn reach_out(
             let (end, root) = (at(tip), at(shell));
             let flat = DVec3::new(end.x, 0.0, end.z - SHELL_AXIS_Z);
             // Out along the diagonal, a little below the quarter at most.
-            flat.dot(corner) - 0.3 * (end.y - (root.y - 4.0)).abs()
+            flat.dot(corner) - 0.3 * (end.y - (root.y - 18.0)).abs()
         };
         // Swung clear: reachable from fly, leaving for stand; best aimed first.
         let mut clear = Vec::new();
@@ -1129,7 +1151,7 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
                 up.angle_between(DVec3::Y).to_degrees()
             );
             assert!(
-                off.length() < 0.06 && up.dot(DVec3::Y) > 0.9995,
+                off.length() < 0.27 && up.dot(DVec3::Y) > 0.9995,
                 "{q} {side}"
             );
         }
@@ -1143,7 +1165,7 @@ fn the_bastion_assembles_into_a_valid_balanced_design() {
         .map(|p| p.def.shape.bounds().1.y * 2.0)
         .sum();
     println!("a leg's segments add up to {reach:.0} m");
-    assert!(reach > 35.0, "{reach}");
+    assert!(reach > 157.5, "{reach}");
 }
 
 #[test]
@@ -1218,7 +1240,7 @@ fn every_pose_and_every_move_p_makes_is_free_of_interference() {
         let back = radius(quarter_at(&v, a, "back", "left", &t));
         println!("{name}: front {front:.1} m, back {back:.1} m from the axis");
         assert!(
-            front > back + 1.0,
+            front > back + 4.5,
             "{name}: front {front:.1} m not further than back {back:.1} m"
         );
     }
@@ -1229,7 +1251,7 @@ fn every_pose_and_every_move_p_makes_is_free_of_interference() {
             let closed = radius(quarter_at(&v, a, q, side, &rest));
             let held = radius(quarter_at(&v, a, q, side, &pose(&v, a, "stand")));
             println!("stand {q} {side}: middle {closed:.1} m -> {held:.1} m from the axis");
-            assert!(held > closed + 1.5, "stand: {q} {side} held out");
+            assert!(held > closed + 6.75, "stand: {q} {side} held out");
         }
     }
 }
@@ -1262,7 +1284,7 @@ fn the_legs_stride_clear_of_the_held_out_quarters() {
     let north = up.cross(DVec3::Y.cross(up)).normalize();
     let ground = env.radius + env.ground_height(up * env.radius);
     let mut s = sim_core::frames::FrameState {
-        position: up * (ground + 16.0),
+        position: up * (ground + 72.0),
         rotation: DQuat::from_mat3(&DMat3::from_cols(north.cross(up), up, -north)),
         velocity: env.spin.cross(up * ground),
         angular_velocity: env.spin,
@@ -1386,7 +1408,7 @@ fn the_bastion_walks_and_stops_standing() {
     let rotation = DQuat::from_mat3(&DMat3::from_cols(north.cross(up), up, -north));
     let ground = env.radius + env.ground_height(up * env.radius);
     let mut s = sim_core::frames::FrameState {
-        position: up * (ground + 16.0),
+        position: up * (ground + 72.0),
         rotation,
         velocity: env.spin.cross(up * ground),
         angular_velocity: env.spin,

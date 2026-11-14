@@ -150,12 +150,13 @@ def main():
             sys.exit(1)
         start = time.time()
         mech.clear()
-        part = defs[name]
+        scale = parts.model_scale(defs[name])
+        part = parts.design_units(defs[name])
         model = mech.Model(name)
         parts.BUILDERS[name](model, parts.half_size(part), part)
         objects = mech.freeze(model)
         mech.bake_ao(objects)
-        tris = mech.write_glb(objects, OUT / f"{name}.glb", palette)
+        tris = mech.write_glb(objects, OUT / f"{name}.glb", palette, scale)
         total += tris
         print(f"build-models: {name}: {tris} triangles, {time.time() - start:.1f} s")
         if preview_dir:

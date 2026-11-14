@@ -3,6 +3,7 @@
 (attach nodes, joint axis). Every model is an original design, built from what the part does.
 """
 
+import json
 import math
 
 from mathutils import Vector
@@ -18,6 +19,36 @@ def builder(*names):
             BUILDERS[n] = f
         return f
     return register
+
+
+# The Bastion (about 100 m tall) is modelled at 1/BASTION_SCALE: its builders work in the
+# units it was first designed in (a 22 m frame), and the export scales the model up to the
+# part's size. Its details are sized for the model units.
+BASTION_SCALE = 4.5
+
+
+def model_scale(part):
+    """How much the export scales the model built for `part` (see `design_units`)."""
+    return BASTION_SCALE if part["id"].startswith("bastion.") else 1.0
+
+
+def design_units(part):
+    """`part` with its lengths divided by its model scale: what its builder works with."""
+    k = model_scale(part)
+    if k == 1.0:
+        return part
+    part = json.loads(json.dumps(part))
+    shape = part["shape"]
+    for key in ("radius_m", "length_m", "thickness_m"):
+        if key in shape:
+            shape[key] /= k
+    if "size_m" in shape:
+        shape["size_m"] = [v / k for v in shape["size_m"]]
+    if "profile_m" in shape:
+        shape["profile_m"] = [[a / k, b / k] for a, b in shape["profile_m"]]
+    for n in part.get("attach_nodes", []):
+        n["position_m"] = [v / k for v in n["position_m"]]
+    return part
 
 
 def half_size(part):
@@ -48,7 +79,7 @@ def extent(h, d):
          "bastion.bend_front_right", "bastion.bend_back_left", "bastion.bend_back_right",
          "bastion.elbow_front_left", "bastion.elbow_front_right", "bastion.elbow_back_left",
          "bastion.elbow_back_right", "bastion.engine_mount", "bastion.engine_gimbal",
-         "bastion.bay_hinge", "bastion.arm_roll")
+         "bastion.bay_hinge", "bastion.arm_roll", "bastion.hinge")
 def hinge(m, h, part):
     """A heavy hinge. A faceted mount plate on the parent; two armoured cheeks carry the pin
     down past the pivot (the end node, where the joint turns) to a spur that covers the

@@ -213,6 +213,7 @@ fn assemble() -> Vehicle {
         step_height_m: 1.0,
         speed_m_s: 3.0,
         turn_rate_deg_s: 20.0,
+        step_time_s: 0.55,
         stance: 0.9,
     });
     v

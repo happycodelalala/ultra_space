@@ -24,9 +24,11 @@ use crate::universe::{InGame, Universe};
 /// The ship can be left when touching the ground, or this low and this slow relative to it.
 const EXIT_MAX_ALTITUDE: f64 = 30.0;
 const EXIT_MAX_SPEED: f64 = 2.0;
-/// Where the walker appears: this far to the ship's right (m).
-const EXIT_OFFSET: f64 = 6.0;
-/// Boarding reach from the nearest of a vehicle's parts (m).
+/// Where the walker appears: this far to the ship's right of its widest part, on the ground
+/// (m).
+const EXIT_OFFSET: f64 = 3.0;
+/// Boarding reach from the nearest of a vehicle's parts (m; from the part's outside, roughly:
+/// its centre less half its largest dimension).
 const BOARD_REACH: f64 = 12.0;
 /// A vehicle counts as ahead when it is within about 60° of where the walker faces.
 const BOARD_FACING: f64 = 0.5;
@@ -219,8 +221,24 @@ fn exit_or_board(
     let up = s.position.normalize();
     let right = s.rotation * DVec3::X;
     let side = (right - up * right.dot(up)).normalize_or(up.any_orthonormal_vector());
-    let position = s.position + side * EXIT_OFFSET + up * 1.0;
-    let env = sim_vehicle::flight::body_env(system, ship_loc.region, t);
+    let Some(extent) = sim
+        .regions
+        .get(ship_loc.region)
+        .and_then(|r| r.world.get::<Vehicle>(ship_loc.entity))
+        .map(horizontal_extent)
+    else {
+        return;
+    };
+    let beside = (s.position + side * (extent + EXIT_OFFSET)).normalize();
+    let env = sim_vehicle::flight::region_env(
+        system,
+        ship_loc.region,
+        t,
+        sim.regions
+            .get(ship_loc.region)
+            .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>()),
+    );
+    let position = beside * (env.radius + env.ground_height(beside * env.radius) + 1.0);
     let ground_velocity = env.spin.cross(position);
     let mut state =
         ObjectState::at_rest(ship_frame, position, upright(s.rotation * DVec3::NEG_Z, up));
@@ -308,14 +326,12 @@ fn spawn_rover_key(
         return;
     };
     // Far enough ahead for its size, its lowest part just above the ground.
-    let (lowest, reach) = vehicle.parts.iter().fold((0.0f64, 0.0f64), |(lo, r), p| {
-        let size = shape_size(p.def.shape);
-        (
-            lo.min(p.position.y - size),
-            r.max(p.position.length() + size),
-        )
-    });
-    let distance = ROVER_DISTANCE.max(reach + 4.0);
+    let lowest = vehicle
+        .parts
+        .iter()
+        .map(|p| p.position.y - shape_size(p.def.shape))
+        .fold(0.0f64, f64::min);
+    let distance = ROVER_DISTANCE.max(horizontal_extent(&vehicle) + 4.0);
     let system = &universe.0;
     let sim = &mut sim.0;
     let Some((region, state)) = spot_ahead(sim, system, on_foot.id, distance, 0.5 - lowest) else {
@@ -347,8 +363,31 @@ pub fn nearest_part(state: &sim_core::frames::FrameState, vehicle: &Vehicle, her
     vehicle
         .parts
         .iter()
-        .map(|p| (state.position + state.rotation * p.position - here).length())
+        .map(|p| {
+            let centre = (state.position + state.rotation * p.position - here).length();
+            (centre - shape_size(p.def.shape)).max(0.0)
+        })
         .fold(f64::MAX, f64::min)
+}
+
+/// How far a vehicle's parts reach out from its origin (m; each part counted as a ball of half
+/// its largest dimension).
+pub fn reach(vehicle: &Vehicle) -> f64 {
+    vehicle
+        .parts
+        .iter()
+        .map(|p| p.position.length() + shape_size(p.def.shape))
+        .fold(0.0, f64::max)
+}
+
+/// How far a vehicle's parts reach out from its origin across its X-Z plane (m; each part
+/// counted as a ball of half its largest dimension).
+fn horizontal_extent(vehicle: &Vehicle) -> f64 {
+    vehicle
+        .parts
+        .iter()
+        .map(|p| DVec3::new(p.position.x, 0.0, p.position.z).length() + shape_size(p.def.shape))
+        .fold(0.0, f64::max)
 }
 
 /// Half the largest dimension of a part shape (m).
