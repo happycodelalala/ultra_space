@@ -34,6 +34,11 @@ pub struct Designs(pub std::collections::BTreeMap<String, VehicleDesign>);
 #[derive(Resource)]
 pub struct Catalog(pub PartCatalog);
 
+/// The content director (living-planet.md): generated text and choices, answered from the
+/// recorded responses in `content/lore/` until the LLM gateway.
+#[derive(Resource, Clone)]
+pub struct Lore(pub Arc<ai_gateway::ContentDirector>);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -66,6 +71,9 @@ struct Loaded {
     vehicle: Vehicle,
     designs: Designs,
     catalog: PartCatalog,
+    lore: Arc<ai_gateway::ContentDirector>,
+    /// Each society generated: body, people, settlements.
+    societies: Vec<(usize, u32, usize)>,
     seconds: f64,
 }
 
@@ -102,13 +110,20 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         .0
         .get(START_DESIGN)
         .ok_or(format!("no {START_DESIGN} design"))?;
-    let sim = build_sim(system.clone());
+    let mut sim = build_sim(system.clone());
+    // The peoples of every body (generated from the data, the seeds and the director).
+    let provider =
+        ai_gateway::ReplayProvider::load_dir(dir.join("lore")).map_err(|e| e.to_string())?;
+    let lore = Arc::new(ai_gateway::ContentDirector::new(Box::new(provider)));
+    let societies = sim_society::aggregate::install(&mut sim, &lore);
     Ok(Loaded {
         system,
         sim,
         vehicle: Vehicle::from_design(design),
         designs,
         catalog,
+        lore,
+        societies,
         seconds: start.elapsed().as_secs_f64(),
     })
 }
@@ -156,11 +171,18 @@ fn finish_loading(
                 loaded.seconds * 1e3,
                 waited * 1e3
             );
-            commands.insert_resource(Universe(loaded.system));
+            commands.insert_resource(Universe(loaded.system.clone()));
             commands.insert_resource(crate::sim::Sim(loaded.sim));
             commands.insert_resource(StartingVehicle(loaded.vehicle));
             commands.insert_resource(loaded.designs);
             commands.insert_resource(Catalog(loaded.catalog));
+            for (body, people, settlements) in &loaded.societies {
+                info!(
+                    "society of {}: {settlements} settlements, {people} people",
+                    loaded.system.bodies[*body].name
+                );
+            }
+            commands.insert_resource(Lore(loaded.lore));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }

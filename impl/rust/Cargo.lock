@@ -2816,6 +2816,7 @@ dependencies = [
 name = "game_bevy"
 version = "0.1.0"
 dependencies = [
+ "ai_gateway",
  "bevy",
  "glam 0.33.12",
  "gltf",
@@ -2823,6 +2824,7 @@ dependencies = [
  "serde_json",
  "sim_core",
  "sim_planet",
+ "sim_society",
  "sim_vehicle",
 ]
 
@@ -5158,6 +5160,7 @@ name = "sim_society"
 version = "0.1.0"
 dependencies = [
  "ai_gateway",
+ "bevy_ecs",
  "glam 0.33.12",
  "serde",
  "serde_json",

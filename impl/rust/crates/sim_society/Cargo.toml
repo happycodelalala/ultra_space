@@ -12,6 +12,7 @@ ai_gateway.workspace = true
 sim_core.workspace = true
 sim_planet.workspace = true
 glam.workspace = true
+bevy_ecs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

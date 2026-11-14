@@ -111,6 +111,23 @@ A few seconds per step, cheap, parallel by region, at any time warp:
 - **Factions:** relations drift slowly towards what cultures and borders suggest. (Wars,
   trade and migration come later.)
 
+**As built (task 4.4):** `sim_society::aggregate`. Per person per game day: farmers make 3 food,
+herders and fishers 2.4, Compact growers 7.5 (hydroponics: a colony grows most of its food in a
+few hands); smiths, wrights and engineers 3 goods, technicians 2, labourers 0.5; everyone eats
+1 food and uses 0.3 goods. Hollish yields scale with the site's soil (0.5–1.3). Food spoils
+0.5 % a day, goods wear 0.1 %, both capped at 400 days. Mood (0–1) follows food (60 days
+stored is plenty) and goods (30 days) with a 20-day lag; it falls to 0.1 when food runs out.
+Population grows 3 % × (mood − 0.6) a year (about 1.2 % when content) and falls 8 % a year
+in a famine; growth goes to the roles short of the culture's shares, losses in proportion.
+Relations drift toward their targets over about 120 days: the generated value less friction
+between seats within 400 km (up to 25 across cultures, 10 within one), swung ±8 month to
+month. A `RegionSociety` resource holds each body's society in its region and steps every tick
+by the tick's game days (time warp included); a step of all 32 settlements on Meridian costs
+about 0.01 ms. Over ten game years the Hollin grow from about 8,600 to 9,700 and the Compact
+from 7,400 to 7,700. Saves keep each settlement's state (by id) and each pair's relation (by
+faction ids); a save without them starts every society fresh. The game generates societies
+while loading, from the recorded responses exported with it (`content/lore`).
+
 ## 5. Settlements on the ground
 
 - **Tangent-plane grid** (overview §7): each settlement has a local frame at its centre,

@@ -16,7 +16,7 @@ use sim_vehicle::save::{SaveFile, capture, restore};
 use crate::ship::{PilotState, PlayerShip, ShipRenderState, ShipView};
 use crate::sim::Sim;
 use crate::terrain::{Terrains, replace_terrain};
-use crate::universe::{Catalog, InGame, Universe};
+use crate::universe::{Catalog, InGame, Lore, Universe};
 use crate::walk::{OnFoot, WalkerRenderState};
 
 /// The quick save's name.
@@ -60,6 +60,7 @@ fn quick_save_load(
     keys: Res<ButtonInput<KeyCode>>,
     universe: Res<Universe>,
     catalog: Res<Catalog>,
+    lore: Res<Lore>,
     ship: Option<Res<PlayerShip>>,
     on_foot: Option<Res<OnFoot>>,
     mut pilot: ResMut<PilotState>,
@@ -95,6 +96,8 @@ fn quick_save_load(
             orbit: pilot.orbit,
         };
         file.player = serde_json::to_value(player).expect("player record");
+        file.society = serde_json::to_value(sim_society::aggregate::capture(&sim.0, system))
+            .expect("society record");
         let text = match write_save(&path, &file) {
             Ok(()) => {
                 info!("saved {} objects to {}", file.objects.len(), path.display());
@@ -120,7 +123,19 @@ fn quick_save_load(
             return;
         }
     };
-    let report = restore(&mut sim.0, system, &catalog.0, &file);
+    let mut report = restore(&mut sim.0, system, &catalog.0, &file);
+    // Societies: their saved state, or (a save from before them) a fresh start.
+    match serde_json::from_value::<Vec<sim_society::aggregate::SavedSociety>>(file.society.clone())
+    {
+        Ok(saved) if !file.society.is_null() => {
+            report
+                .problems
+                .extend(sim_society::aggregate::restore(&mut sim.0, system, &saved));
+        }
+        _ => {
+            sim_society::aggregate::install(&mut sim.0, &lore.0);
+        }
+    }
     for p in &report.problems {
         warn!("load: {p}");
     }

@@ -23,11 +23,13 @@ pub struct SimSet;
 
 pub struct SimPlugin;
 
-/// Builds the simulation for a star system: one region per body, each running vehicle flight.
+/// Builds the simulation for a star system: one region per body, each running vehicle flight
+/// and its society (living-planet.md).
 /// Runs on the loading worker (`universe`), not the main thread.
 pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
     let mut sim = Simulation::for_star_system(system, |_, schedule| {
         sim_vehicle::flight::add_flight_systems(schedule);
+        sim_society::aggregate::add_society_systems(schedule);
     });
     // Components that travel with objects between regions.
     sim.objects.register_transferable::<sim_vehicle::Vehicle>();
