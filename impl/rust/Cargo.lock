@@ -2818,6 +2818,7 @@ dependencies = [
  "bevy",
  "glam 0.33.12",
  "gltf",
+ "serde",
  "serde_json",
  "sim_core",
  "sim_planet",

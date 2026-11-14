@@ -211,6 +211,17 @@ ships-stations-interiors §6, first real use:
   may also be reset freely (development plan §7.1).
 - Tests: save → load round trip restores the same states, parts and deltas; golden files start
   at Checkpoint A.
+- **As built (task 3.13):** the simulation's part is `sim_vehicle::save` (engine-independent):
+  objects in ID order with their region by body id and frame by name (not indices, so content
+  can add bodies), vehicles as their instance design JSON plus assist mode, arcade speed, legs
+  off and joint angles/targets/queue; walkers; each body's pads; universe time; the allocator's
+  next ID. Loading replaces every object, re-derives bodies, allocators and colliders, and
+  reports what it dropped: unknown parts with everything attached to them, pose angles of
+  dropped joints, a gait that lost a leg, unknown bodies or frames. Telemetry, cruise and
+  walking state restart (a standing mech goes back onto its legs by itself). JSON floats round
+  trip exactly (`float_roundtrip`), so a loaded world saves bit for bit the same. The game
+  adds the player (ship, on foot, view), rebuilds terrain tiles whose pads changed, and binds
+  F5/F9 to `saves/quick.json`. The save list menu comes with the first menus (Batch 4).
 
 ## 7. Jointed parts, walking and part models (tasks 3.10–3.12)
 

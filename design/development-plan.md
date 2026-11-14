@@ -417,21 +417,23 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
-**Status (2026-11-13):** 3.1–3.11 done on branch `batch3/builder` (not merged).
+**Status (2026-11-14):** 3.1–3.13 done on branch `batch3/builder` (not merged).
 - 3.1–3.9: rapier physics per region, terrain collision patches, the new part and design format
   with landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
   the builder (keys and mouse picking, symmetry, sections, stats and balance warnings) and new
   vehicles from scratch.
-- The developer brought jointed parts, walking and part models forward (3.10–3.12) to get a
-  testable mech. 3.10 jointed parts and poses and 3.11 animated walking are done: the heavy
-  frame walks, turns and stops standing on Windows.
-- The Bastion (an original design on the heavy frame's walking body): four manipulator arms
-  with three-jaw clamps on a shoulder yoke, six hinged armour slabs that close into a six-sided
-  shell, poses for arms and shell; it walks and stops standing on Windows.
-- Each was checked on Windows through the test queue.
-- Next: 3.12 part models, then 3.13 save and load, 3.14 per-ship cruise and 3.15 review.
+- 3.10–3.12 (brought forward): jointed parts and poses (with staged moves and sliders),
+  animated walking (the heavy frame and the Bastion walk, turn and stop standing), part models
+  built in Blender with a shared palette, baked occlusion and a hull detail shader (real-size
+  plate seams), and support for 100 m vehicles (camera, spawning, boarding, stepping out, step
+  time).
+- Vehicle and building design now runs on its own track (AGENTS.md, design/design-track.md);
+  the Bastion in the game is a placeholder until its redesign is imported.
+- 3.13: save and load (F5/F9 quick save, round-trip tests).
+- Next: 3.14 per-ship cruise, then 3.15 review.
 - Known gaps: stats size measures part centres; the lander parts are overpowered (~10 g);
-  wheels don't spin or move with their suspension; soles don't roll to side slopes.
+  wheels don't spin or move with their suspension; soles don't roll to side slopes; frame rate
+  with the Bastion fell to ~22 fps (left until its redesign); no save list menu yet.
 
 ### 7.1 When the object system is built
 

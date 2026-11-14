@@ -118,6 +118,12 @@ impl Simulation {
         ticks
     }
 
+    /// Sets universe time (loading a save); warp goes back to 1×.
+    pub fn set_universe_time(&mut self, time: UniverseTime) {
+        self.universe_time = time;
+        self.time_warp = 1;
+    }
+
     /// Current universe time (advances by one tick duration × time warp per tick).
     pub fn universe_time(&self) -> UniverseTime {
         self.universe_time

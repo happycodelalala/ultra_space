@@ -1,0 +1,24 @@
+# Save and load (task 3.13). Run with ULTRA_SPACE_START_ALTITUDE=1500. Land, flatten a pad (K),
+# quick save (F5) in the ship; then change the world: step out, spawn a rover (G), board it and
+# drive off. Quick load (F9) puts everything back: in the ship on the pad, no rover, the pad
+# still there. Look for: log "saved 1 objects", "boarded the Rover", "loaded 1 objects ... (0
+# problems)"; 03-loaded.png matches 01-saved.png (ship on the flattened ground, no rover);
+# stepping out after the load works.
+0.5  press Z                 # stop relative to the ground
+1    wait landed 20
+2    press K                 # flatten a pad under the ship (a terrain delta)
+5    wait landed 10
+6    press F5                # quick save
+6.5  shot 01-saved.png
+7    press F                 # step out
+8    press G                 # a rover appears ahead
+9    hold W 2                # walk up to it
+11.5 press F                 # board it
+13   hold W 3                # drive off
+16.5 shot 02-changed.png
+17   press F9                # quick load
+19   shot 03-loaded.png
+20   wait landed 10
+21   press F                 # step out onto the pad
+23   shot 04-out-after-load.png
+24   quit

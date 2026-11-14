@@ -128,6 +128,13 @@ impl Terrain {
         t
     }
 
+    /// This terrain with its pads replaced by `pads` (a loaded save's deltas).
+    pub fn with_pads(&self, pads: Vec<Pad>) -> Terrain {
+        let mut t = self.clone();
+        t.pads = pads;
+        t
+    }
+
     pub fn pads(&self) -> &[Pad] {
         &self.pads
     }

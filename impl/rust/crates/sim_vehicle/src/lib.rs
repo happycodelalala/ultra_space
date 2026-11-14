@@ -16,6 +16,7 @@ pub mod interference;
 pub mod joints;
 pub mod mass;
 pub mod physics;
+pub mod save;
 pub mod vehicle;
 pub mod walker;
 pub mod wheels;

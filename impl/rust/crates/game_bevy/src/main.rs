@@ -11,6 +11,7 @@ mod hud;
 mod inspector;
 mod part_models;
 mod planet_maps;
+mod save;
 mod script;
 mod ship;
 mod sim;
@@ -69,7 +70,11 @@ fn main() {
             walk::WalkPlugin,
             warmup::WarmupPlugin,
         ))
-        .add_plugins((vehicle_visual::VehicleVisualPlugin, builder::BuilderPlugin))
+        .add_plugins((
+            vehicle_visual::VehicleVisualPlugin,
+            builder::BuilderPlugin,
+            save::SavePlugin,
+        ))
         .add_systems(Startup, log_startup)
         .run();
 }

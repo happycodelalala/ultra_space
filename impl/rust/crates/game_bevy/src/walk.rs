@@ -63,7 +63,7 @@ pub struct OnFoot {
 
 /// The walker's state for rendering, interpolated between ticks.
 #[derive(Resource, Default)]
-struct WalkerRenderState {
+pub struct WalkerRenderState {
     previous: Option<(f64, ObjectState)>,
     current: Option<(f64, ObjectState)>,
     state: Option<ObjectState>,
