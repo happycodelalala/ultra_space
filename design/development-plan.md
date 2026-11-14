@@ -417,24 +417,44 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
-**Status (2026-11-14):** 3.1–3.14 done on branch `batch3/builder` (not merged).
-- 3.1–3.9: rapier physics per region, terrain collision patches, the new part and design format
-  with landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
+**Status:** done on branch `batch3/builder`. The 3.15 review (2026-11-14, a full scripted
+round on Windows, q0046–q0047) passed:
+- **Build and fly or drive from parts in the world:** a rover and a lander built from scratch,
+  boarded, driven and flown; the builder's place, remove, undo, redo, symmetry and sections.
+- **Land on legs and wheels:** the Kestrel lands and stays put, from 3 km and from orbit (orbit to
+  the ground in about 5 minutes, then stepping out); the rover drives on its wheels.
+- **Walk the heavy frame with jointed limbs:** poses, walking, turning and stopping standing;
+  mechs stand by themselves on slopes.
+- **Save and load everything:** F5 / F9 put the world back (objects, states, poses, pads,
+  time); round-trip tests.
+- **No frame over 50 ms entering or leaving the builder:** three enter / change / leave cycles,
+  run alone: 0 frames over 50 ms, worst 33 ms.
+- **300 parts per tick:** flying 18 µs against the Kestrel's 10 µs; landed 96 µs against 20 µs
+  (the gap noted at 3.4; both far inside the 33 ms tick).
+- CI passes.
+
+What Batch 3 built:
+- 3.1–3.9: rapier physics per region, terrain collision patches, the part and design format with
+  landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
   the builder (keys and mouse picking, symmetry, sections, stats and balance warnings) and new
   vehicles from scratch.
-- 3.10–3.12 (brought forward): jointed parts and poses (with staged moves and sliders),
-  animated walking (the heavy frame and the Bastion walk, turn and stop standing), part models
-  built in Blender with a shared palette, baked occlusion and a hull detail shader (real-size
-  plate seams), and support for 100 m vehicles (camera, spawning, boarding, stepping out, step
-  time).
+- 3.10–3.12 (brought forward): jointed parts and poses (staged moves, sliders), animated
+  walking, part models built in Blender with a shared palette, baked occlusion and a hull
+  detail shader, and support for 100 m vehicles.
+- 3.13 save and load; 3.14 per-ship cruise characteristics from the drive's rating and the
+  ship's mass.
 - Vehicle and building design now runs on its own track (AGENTS.md, design/design-track.md);
-  the Bastion in the game is a placeholder until its redesign is imported.
-- 3.13: save and load (F5/F9 quick save, round-trip tests).
-- 3.14: per-ship cruise characteristics from the drive's rating and the ship's mass (load).
-- Next: 3.15 review.
-- Known gaps: stats size measures part centres; the lander parts are overpowered (~10 g);
-  wheels don't spin or move with their suspension; soles don't roll to side slopes; frame rate
-  with the Bastion fell to ~22 fps (left until its redesign); no save list menu yet.
+  the Bastion in the game is a placeholder until its redesign is imported. The builder lists
+  the general parts first, then each design family's.
+
+Known gaps for later:
+- builder stats measure part centres, not extents; the lander parts are overpowered (~10 g)
+- wheels don't spin or move with their suspension; soles don't roll to side slopes
+- a landed 300-part ship costs ~5× the Kestrel per tick (fine at this size)
+- the descent test now has one or two frames just over 50 ms (Batch 2 had none)
+- the Bastion's frame rate fell to ~22 fps after its stance change and is back to 66–89 fps in
+  this round, for reasons not pinned down
+- no save list menu yet (with the first menus, Batch 4); fuel and power come in Batch 4
 
 ### 7.1 When the object system is built
 
