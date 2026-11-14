@@ -52,6 +52,20 @@ All in `content/data/` with JSON schemas; generated records follow the same form
 - **Person (notable or met):** name (culture's naming rules), role, home, age; created lazily
   when the player meets someone, and kept once named.
 
+**As built (task 4.2):** a body's `peoples` in the star system data name a culture, its home
+region (latitude, longitude and an angular radius, so it fits any body size) and its numbers of
+factions and settlements. On Meridian the Hollin live around 20°N 3°E (radius 14°; 3 factions,
+24 settlements) and the Compact around 9°N 77°E (radius 9°; 2 factions, 8 settlements), the
+western and eastern parts of the large central continent. `sim_society::generate` builds the
+society from that, the director's profiles and the body's seed: factions (names from the
+culture's faction patterns, colours from its palette, settlements shared out), faction lore from
+pools (`faction/<culture>/*`, with `{faction}`, `{people}` and `{culture}` filled in), and
+starting relations: factions of one culture from 30 (a wary people) to 50 (a curious one),
+between cultures from both attitudes, each pair ±15. Names are drawn syllable by syllable and
+redrawn when hard to say (three vowels or four consonants in a row, a tripled letter, longer
+than ten letters; places at most eleven with their ending). `cargo run -p sim_society --example
+society` prints a body's society.
+
 ## 3. Generation (top-down, lazy)
 
 1. **Cultures on the planet:** the star system data names which cultures live on a body and

@@ -5160,6 +5160,7 @@ dependencies = [
  "ai_gateway",
  "serde",
  "serde_json",
+ "sim_core",
 ]
 
 [[package]]

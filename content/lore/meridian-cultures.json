@@ -15,10 +15,10 @@
         "attitude": "wary",
         "history": "Some nine hundred years ago a ship came down burning over the western hills of Meridian. Those who lived through the Fall kept what they could carry and lost the rest: within three generations the machines had stopped, and within ten no one knew how they had worked. The survivors' children cleared the river valleys, learned which plants of Meridian feed and which kill, and built the first holds of timber and stone around the Keel.\n\nThe holds grew into reaveships, fought over the best valleys, and swore the Great Oath at the first Moot to stop the wars. Hollish life is slow and old: plough and mill, market day and Moot, harvest rites at the Keel shrine. Only lately have lights been seen moving in the sky again, and some Keelwardens say the Makers have come back.",
         "naming": {
-          "onsets": ["b", "br", "c", "d", "dr", "f", "g", "h", "k", "l", "m", "r", "s", "st", "th", "w", "wy"],
-          "nuclei": ["a", "e", "i", "o", "u", "ae", "ea", "y"],
-          "codas": ["", "", "n", "l", "r", "d", "th", "ck", "m", "s", "rn", "ld"],
-          "syllables": [1, 3],
+          "onsets": ["b", "br", "c", "d", "dr", "f", "g", "h", "k", "l", "m", "r", "s", "st", "th", "w"],
+          "nuclei": ["a", "a", "e", "e", "i", "o", "u", "ae", "ea"],
+          "codas": ["", "n", "l", "r", "d", "th", "ck", "m", "s", "rn", "ld", "nd", "st", "rk", "wen", "ric", "mund"],
+          "syllables": [1, 2],
           "place_endings": ["ford", "stead", "holm", "by", "wick", "mere", "ham", "ton", "dale", "thorp"],
           "place_patterns": ["{name}{ending}", "{name}{ending}", "{name}{ending}", "Old {name}{ending}", "{name} Cross"],
           "faction_patterns": ["The Reaveship of {name}", "{name} Hold", "The {name} March"]

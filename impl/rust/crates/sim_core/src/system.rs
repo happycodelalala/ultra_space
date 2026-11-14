@@ -54,6 +54,8 @@ struct BodyFile {
     #[serde(default)]
     climate: Option<ClimateFile>,
     #[serde(default)]
+    peoples: Vec<PeopleData>,
+    #[serde(default)]
     description: String,
 }
 
@@ -163,6 +165,28 @@ pub struct Atmosphere {
     pub color: [f64; 3],
 }
 
+/// A people living on a body (living-planet.md §3): which culture (its profile comes from the
+/// content director, `culture/<culture>`), its home region, and how many factions and
+/// settlements it has. Interpreted by `sim_society`.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeopleData {
+    pub culture: String,
+    pub home: HomeRegion,
+    pub factions: u32,
+    pub settlements: u32,
+}
+
+/// A region on a body's surface: a centre (latitude and longitude, degrees; longitude east
+/// from the surface frame's +X) and an angular radius (degrees, so it fits any body size).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HomeRegion {
+    pub latitude_deg: f64,
+    pub longitude_deg: f64,
+    pub radius_deg: f64,
+}
+
 /// Parameters of a solid body's terrain (interpreted by `sim_planet`). SI units.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainData {
@@ -238,6 +262,8 @@ pub struct Body {
     pub appearance: Appearance,
     pub terrain: Option<TerrainData>,
     pub climate: Option<ClimateData>,
+    /// Peoples living there (living-planet.md).
+    pub peoples: Vec<PeopleData>,
     pub description: String,
     /// Non-rotating frame following the orbit.
     pub inertial_frame: FrameId,
@@ -583,6 +609,26 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
             )
             .map_err(|e| SystemError::Invalid(vec![e.to_string()]))?;
 
+        if !b.peoples.is_empty() && b.terrain.is_none() {
+            problems.push(format!("{}: peoples need a body with terrain", b.id));
+        }
+        for p in &b.peoples {
+            let h = p.home;
+            if !(-90.0..=90.0).contains(&h.latitude_deg)
+                || !(h.radius_deg > 0.0 && h.radius_deg <= 90.0)
+            {
+                problems.push(format!(
+                    "{}: {}'s home region is out of range",
+                    b.id, p.culture
+                ));
+            }
+            if p.factions == 0 || p.settlements < p.factions {
+                problems.push(format!(
+                    "{}: {} needs at least one faction and a settlement per faction",
+                    b.id, p.culture
+                ));
+            }
+        }
         bodies[i] = Some(Body {
             id: b.id.clone(),
             name: b.name.clone(),
@@ -622,6 +668,7 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                 pole_temperature_c: c.pole_temperature_c,
                 moisture: c.moisture,
             }),
+            peoples: b.peoples.clone(),
             description: b.description.clone(),
             inertial_frame,
             surface_frame,

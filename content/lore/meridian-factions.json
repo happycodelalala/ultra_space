@@ -1,0 +1,61 @@
+{
+  "description": "Recorded content-director responses for Meridian's factions (task 4.2), written the way the LLM would answer. Factions are generated, so their keys are pools (faction/<culture>/*), each faction getting one by its key; {faction}, {people} and {culture} are filled in by the game with the generated names.",
+  "responses": [
+    {
+      "request": {"kind": "faction_lore", "key": "faction/hollin/*"},
+      "response": {
+        "motto": "The oath holds.",
+        "description": "{faction} holds the broad river meadows: the richest grain land of {people}, and the most fought over. Its reaves are proud of their old oaths and quick to remind the Moot of them.",
+        "history": "When the first holds swore the Great Oath, the founder of {faction} was the last to kneel and the first to keep it. Since then its reaves have twice been chosen High Reave, and it has never once broken its word, a boast its neighbours find tiresome."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/hollin/*"},
+      "response": {
+        "motto": "Iron and the plough.",
+        "description": "{faction} lies in the hills nearest the Keel. Its people dig the only iron worth the name and forge it, and its Keelwardens are the oldest and strictest of all {culture} shrines.",
+        "history": "{faction} grew rich on its mines and holy on its shrines. Its reaves have always claimed to guard the road to the Keel for all {people}, and have always charged for the privilege."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/hollin/*"},
+      "response": {
+        "motto": "Where the rivers meet, the wise meet.",
+        "description": "{faction} sits where the trade roads cross: its market towns are the busiest of {people}, its chapmen travel furthest, and its reave hosts the Moot every seven harvests.",
+        "history": "{faction} won its place not by the sword but by the market: every hold needed its salt and cloth, and every quarrel came to its fairs to be settled. Lately its chapmen bring back strange goods traded at the edge of the eastern plains, and nobody asks too closely where they came from."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/hollin/*"},
+      "response": {
+        "motto": "We watch the eastern sky.",
+        "description": "{faction} holds the eastern marches of {people}, thinly settled hill farms and watchtowers facing the plains where the new lights came down.",
+        "history": "For centuries {faction} was a backwater of herders and hunters. Since the lights began to cross the eastern sky its towers have been manned day and night, and its reave has asked the Moot for more spears than it has ever needed before."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/compact/*"},
+      "response": {
+        "motto": "Survey, settle, report.",
+        "description": "{faction} runs the {culture} colony's survey and science: mapping Meridian from orbit and the ground, testing its soil and life, and keeping the records the Charter requires.",
+        "history": "{faction} was the expedition's survey department when the Meridian Venture arrived, and it still thinks of itself as the reason the colony exists. Its surveyors were the first to see the Hollish villages, and the first to argue for watching them before meeting them."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/compact/*"},
+      "response": {
+        "motto": "Keep the lights on.",
+        "description": "{faction} builds and keeps the colony running: power, water, air, landers and the outposts on the far side of the plains. Practical people who measure progress in kilowatts and harvests.",
+        "history": "{faction} was formed from the Venture's engineering crew, who built the first shelters on the plains in the colony's first winter. It holds the most seats on the Board, and it is the department most impatient with the quarantine: the Hollish hills hold iron, timber and water the colony needs."
+      }
+    },
+    {
+      "request": {"kind": "faction_lore", "key": "faction/compact/*"},
+      "response": {
+        "motto": "First, do no harm.",
+        "description": "{faction} keeps the Charter's quarantine and runs the Contact Office: studying Hollish speech and custom from a distance, licensing the few traders who cross, and arguing at every Board meeting about what the colony owes the people over the hills.",
+        "history": "{faction} began as a committee after the first sighting of Hollish villages and became a department when the committee would not stop meeting. Its wardens are the only {culture} officers most Hollin have ever seen."
+      }
+    }
+  ]
+}
