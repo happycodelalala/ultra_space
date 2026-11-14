@@ -158,7 +158,10 @@ fn entering(
                 st.name.to_uppercase(),
                 article(&s.culture.1),
                 st.kind.name(),
-                s.faction,
+                // "of the Gostkod March" mid-sentence.
+                s.faction
+                    .strip_prefix("The ")
+                    .map_or(s.faction.clone(), |f| format!("the {f}")),
                 st.population
             );
         }
@@ -277,13 +280,68 @@ fn inspect(
     }
 }
 
-/// Names the person nearest the middle of the view.
+/// Whether a building stands between surface-frame points `a` and `b`.
+fn blocked(foundations: &sim_planet::Foundations, a: DVec3, b: DVec3) -> bool {
+    let mid = (0.5 * (a + b)).normalize();
+    for (_, s) in foundations.structures_near(mid, 0.5 * a.distance(b)) {
+        // Slab test in the box's own axes.
+        let inv = s.rotation.inverse();
+        let (o, d) = (inv * (a - s.center), inv * (b - a));
+        let (mut t0, mut t1) = (0.0f64, 1.0f64);
+        let mut hit = true;
+        for k in 0..3 {
+            let (o, d, h) = (o[k], d[k], s.half[k]);
+            if d.abs() < 1e-9 {
+                if o.abs() > h {
+                    hit = false;
+                    break;
+                }
+            } else {
+                let (u, v) = ((-h - o) / d, (h - o) / d);
+                t0 = t0.max(u.min(v));
+                t1 = t1.min(u.max(v));
+                if t0 > t1 {
+                    hit = false;
+                    break;
+                }
+            }
+        }
+        if hit {
+            return true;
+        }
+    }
+    false
+}
+
+/// Names the person nearest the middle of the view (not behind a building).
+#[allow(clippy::too_many_arguments)]
 fn look_at(
+    draw: Option<Res<SettlementDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
     cameras: Query<&GlobalTransform, With<MainCamera>>,
     people: Query<(&GlobalTransform, &InheritedVisibility, &PersonLabel)>,
     mut label: Query<(&mut Text, &mut Visibility), With<LookLabel>>,
 ) {
     let Ok(cam) = cameras.single() else { return };
+    // Render space (camera-relative, anchor axes) to the camera body's surface frame.
+    let system = &universe.0;
+    let body = draw
+        .as_ref()
+        .and_then(|d| d.sites.first())
+        .map_or(camera.anchor, |s| s.body);
+    let surface = system.frames.state_in(
+        system.bodies[camera.anchor].inertial_frame,
+        system.bodies[body].surface_frame,
+        render.0,
+    );
+    let to_surface =
+        |v: Vec3| surface.rotation.inverse() * (v.as_dvec3() + camera.offset - surface.position);
+    let foundations = draw
+        .as_ref()
+        .and_then(|d| d.sites.first())
+        .and_then(|s| s.terrain.foundations().cloned());
     let (origin, forward) = (cam.translation(), cam.forward().as_vec3());
     let mut best: Option<(f32, &str)> = None;
     for (t, visible, l) in &people {
@@ -298,7 +356,12 @@ fn look_at(
             continue;
         }
         let off = (d - forward * along).length();
-        if off < LOOK_WIDTH && best.is_none_or(|b| along < b.0) {
+        if off < LOOK_WIDTH
+            && best.is_none_or(|b| along < b.0)
+            && !foundations
+                .as_ref()
+                .is_some_and(|f| blocked(f, to_surface(origin), to_surface(chest)))
+        {
             best = Some((along, &l.0));
         }
     }
@@ -324,6 +387,33 @@ fn look_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_building_blocks_the_line_of_sight() {
+        use sim_planet::{Foundations, PlacedBox, Site, tangent_frame};
+        let r = 600_000.0;
+        let c = DVec3::new(0.3, 0.8, 0.2).normalize();
+        let site = Site::with_boxes(
+            c,
+            Vec::new(),
+            vec![PlacedBox {
+                center: DVec3::new(0.0, 103.0, -20.0),
+                yaw: 0.4,
+                half: DVec3::new(5.0, 3.0, 4.0),
+            }],
+            4.0,
+            r,
+        );
+        let f = Foundations::new(vec![site]);
+        let (e, s) = tangent_frame(c);
+        // A point x east, z south, h above the reference radius.
+        let at = |x: f64, z: f64, h: f64| (c * r + e * x + s * z).normalize() * (r + h);
+        // Through the building (north of the eye, 1.6 m up at its floor height of 100 m)…
+        assert!(blocked(&f, at(0.0, 0.0, 101.6), at(0.0, -40.0, 101.6)));
+        // …past its side, and over its roof.
+        assert!(!blocked(&f, at(20.0, 0.0, 101.6), at(20.0, -40.0, 101.6)));
+        assert!(!blocked(&f, at(0.0, 0.0, 110.0), at(0.0, -40.0, 110.0)));
+    }
 
     #[test]
     fn articles_follow_the_adjective() {
