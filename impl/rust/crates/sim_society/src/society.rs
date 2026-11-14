@@ -7,7 +7,7 @@ use serde_json::json;
 use sim_core::StarSystem;
 use sim_core::system::PeopleData;
 
-use crate::lore::{Attitude, CultureProfile, FactionLore, NamingRules, Role, TechTier};
+use crate::lore::{Attitude, CultureProfile, FactionLore, NamingRules, Polity, Role, TechTier};
 use crate::names;
 use crate::rng::Rng;
 
@@ -190,6 +190,7 @@ fn plain_profile(id: &str) -> CultureProfile {
         name: format!("the {id} people"),
         adjective: id.into(),
         tech_tier: TechTier::Medieval,
+        polity: Polity::Tribe,
         government: "Village elders.".into(),
         values: vec![],
         taboos: vec![],

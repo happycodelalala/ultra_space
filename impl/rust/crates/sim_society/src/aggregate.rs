@@ -41,7 +41,7 @@ fn food_per_day(role: &str) -> f64 {
 /// Goods a person in this role produces per game day (a person uses [`GOODS_USE`]).
 fn goods_per_day(role: &str) -> f64 {
     match role {
-        "smith" | "carpenter" | "crafter" | "engineer" => 3.0,
+        "smith" | "carpenter" | "crafter" | "potter" | "engineer" => 3.0,
         "technician" | "worker" => 2.0,
         "laborer" => 0.5,
         _ => 0.0,

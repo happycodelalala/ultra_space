@@ -9,21 +9,40 @@
 use ai_gateway::Validate;
 use serde::{Deserialize, Serialize};
 
+/// What a people can make, in historical order (living-planet.md §8b). Neutral names after
+/// the eras; how a people is organised is its [`Polity`], and what one people calls another
+/// ("barbarians", "sky-folk") belongs to its lore.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TechTier {
-    Tribal,
+    /// Stone tools, fire, first farming, villages of huts.
+    StoneAge,
+    /// Bronze and iron, writing, walled cities.
+    Ancient,
+    /// Castles, mills, guilds.
     Medieval,
+    /// Gunpowder, printing, ocean-going ships.
+    EarlyModern,
+    /// Steam to early electricity: factories, railways.
     Industrial,
+    /// Electric, atomic, digital: cities of millions, aircraft.
+    Modern,
+    /// Between planets: landers, stations, colonies.
     Spacefaring,
+    /// Between stars.
+    Interstellar,
 }
 
 impl TechTier {
     /// Roles people of this tier can take.
     pub fn roles(self) -> &'static [&'static str] {
         match self {
-            Self::Tribal => &[
+            Self::StoneAge => &[
                 "hunter", "gatherer", "crafter", "elder", "healer", "warrior",
+            ],
+            Self::Ancient => &[
+                "farmer", "herder", "fisher", "laborer", "smith", "potter", "merchant", "soldier",
+                "priest", "scribe", "noble",
             ],
             Self::Medieval => &[
                 "farmer",
@@ -38,11 +57,38 @@ impl TechTier {
                 "healer",
                 "noble",
             ],
+            Self::EarlyModern => &[
+                "farmer",
+                "herder",
+                "fisher",
+                "laborer",
+                "smith",
+                "carpenter",
+                "merchant",
+                "sailor",
+                "soldier",
+                "priest",
+                "scholar",
+                "noble",
+            ],
             Self::Industrial => &[
                 "farmer", "worker", "engineer", "merchant", "clerk", "soldier", "doctor",
                 "teacher", "official",
             ],
-            Self::Spacefaring => &[
+            Self::Modern => &[
+                "farmer",
+                "worker",
+                "engineer",
+                "merchant",
+                "clerk",
+                "soldier",
+                "doctor",
+                "teacher",
+                "official",
+                "scientist",
+                "pilot",
+            ],
+            Self::Spacefaring | Self::Interstellar => &[
                 "technician",
                 "engineer",
                 "scientist",
@@ -62,7 +108,7 @@ impl TechTier {
         match self {
             Self::Medieval => &["medieval_village"],
             Self::Spacefaring => &["colony_standin"],
-            Self::Tribal | Self::Industrial => &[],
+            _ => &[],
         }
     }
 
@@ -71,9 +117,29 @@ impl TechTier {
         match self {
             Self::Medieval => &["medieval_commoner"],
             Self::Spacefaring => &["colony_workwear"],
-            Self::Tribal | Self::Industrial => &[],
+            _ => &[],
         }
     }
+}
+
+/// How a people is organised, independent of its tech tier (a Stone Age chiefdom, an Ancient
+/// tribal confederation, a Spacefaring charter colony). It adjusts the settlement pattern: an
+/// empire has bigger capitals than a chiefdom.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Polity {
+    Band,
+    Tribe,
+    Chiefdom,
+    /// A kingdom or realm of lords.
+    Realm,
+    Empire,
+    CityState,
+    Republic,
+    Nation,
+    /// A colony under a charter (a company's or a government's).
+    CharterColony,
+    Federation,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +188,8 @@ pub struct CultureProfile {
     /// The adjective ("Hollish").
     pub adjective: String,
     pub tech_tier: TechTier,
+    pub polity: Polity,
+    /// How it is governed, in words.
     pub government: String,
     pub values: Vec<String>,
     pub taboos: Vec<String>,

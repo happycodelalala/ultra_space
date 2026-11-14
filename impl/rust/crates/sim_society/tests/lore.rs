@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use ai_gateway::{ContentDirector, ContentRequest, ReplayProvider, Source, Validate};
 use serde_json::json;
-use sim_society::{CodexEntry, CultureProfile, TechTier};
+use sim_society::{CodexEntry, CultureProfile, Polity, TechTier};
 
 fn director() -> ContentDirector {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/lore");
@@ -35,6 +35,8 @@ fn both_cultures_come_from_the_recorded_responses_and_follow_the_rules() {
     let (hollin, compact) = (hollin.value, compact.value);
     assert_eq!(hollin.tech_tier, TechTier::Medieval);
     assert_eq!(compact.tech_tier, TechTier::Spacefaring);
+    assert_eq!(hollin.polity, Polity::Realm);
+    assert_eq!(compact.polity, Polity::CharterColony);
     assert_eq!(hollin.building_kit, "medieval_village");
     assert_eq!(compact.building_kit, "colony_standin");
     hollin.validate().unwrap();
@@ -77,4 +79,32 @@ fn a_profile_that_breaks_the_rules_falls_back() {
         "{:?}",
         a.source
     );
+}
+
+#[test]
+fn tech_tiers_are_named_after_eras_in_order_and_each_has_roles() {
+    let tiers = [
+        ("stone_age", TechTier::StoneAge),
+        ("ancient", TechTier::Ancient),
+        ("medieval", TechTier::Medieval),
+        ("early_modern", TechTier::EarlyModern),
+        ("industrial", TechTier::Industrial),
+        ("modern", TechTier::Modern),
+        ("spacefaring", TechTier::Spacefaring),
+        ("interstellar", TechTier::Interstellar),
+    ];
+    for (k, &(name, tier)) in tiers.iter().enumerate() {
+        assert_eq!(serde_json::to_value(tier).unwrap(), json!(name));
+        assert!(tier.roles().len() >= 6, "{name}");
+        if k > 0 {
+            assert!(
+                tiers[k - 1].1 < tier,
+                "{name} comes after {}",
+                tiers[k - 1].0
+            );
+        }
+    }
+    // No tier is named for a judgement of the people.
+    assert!(serde_json::from_value::<TechTier>(json!("tribal")).is_err());
+    assert!(serde_json::from_value::<TechTier>(json!("barbarian")).is_err());
 }

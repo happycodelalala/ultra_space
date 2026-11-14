@@ -6,7 +6,7 @@ Dyson Sphere Program, X4 and Kerbal Space Program.
 **Core pillars**
 
 - Visit procedurally generated planets with cultures at different social stages
-  (tribal, medieval, industrial, spacefaring).
+  (Stone Age, Ancient, Medieval, Early Modern, Industrial, Modern, Spacefaring, Interstellar).
 - Play on foot (first person), or drive or pilot player-built vehicles: rovers, mechs,
   airships and spaceships.
 - Build settlements, cities, factories and factions across planets and star systems.
@@ -111,7 +111,9 @@ Ship and station building levels, interiors and design compilation:
 Cultures are **data-driven**, not hand-built:
 
 - A **civilization profile** defines:
-  - tech tier (tribal, medieval, industrial, spacefaring)
+  - tech tier (Stone Age, Ancient, Medieval, Early Modern, Industrial, Modern, Spacefaring,
+    Interstellar) and polity (band, tribe, chiefdom, realm, empire, city-state, republic,
+    nation, charter colony, federation); living-planet.md §8b
   - architecture kit
   - weapon and item tables
   - government type

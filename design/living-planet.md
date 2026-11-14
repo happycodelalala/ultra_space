@@ -39,8 +39,9 @@ keeps them under quarantine) and codex entries for both and the Keel.
 
 All in `content/data/` with JSON schemas; generated records follow the same formats.
 
-- **Culture profile:** id, name, **tech tier** (tribal, medieval, industrial, spacefaring),
-  government, values and taboos, attitude to outsiders, **naming rules** (syllable sets and
+- **Culture profile:** id, name, **tech tier** (Stone Age, Ancient, Medieval, Early Modern,
+  Industrial, Modern, Spacefaring, Interstellar), **polity** (band, tribe, chiefdom, realm,
+  empire, city-state, republic, nation, charter colony, federation), government in words, values and taboos, attitude to outsiders, **naming rules** (syllable sets and
   patterns for people, places and factions), **building kit**, **clothing set** and palette,
   **settlement style** (layout rules, sizes), roles its people take (farmer, smith, guard,
   priest; technician, pilot, scientist, medic), and its lore (history summary, beliefs).
@@ -311,11 +312,21 @@ Typical values for the same ~15,000 km² of territory (a realm of about 70 km ra
 
 | Tier | How they settle | Spacing (villages / towns / cities) | Largest places | People per km² | Population | Feel |
 |---|---|---|---|---|---|---|
-| Tribal, barbarian | Camps and small villages, some seasonal; hill forts as proto-towns | 8–12 km / none / 1–2 hill forts | 1,000–3,000 | 3–8 | 50–100k | Wild land, smoke on the horizon, trails rather than roads |
+| Stone Age | Camps and small villages, some seasonal; hill forts as proto-towns | 8–12 km / none / 1–2 hill forts | 1,000–3,000 | 3–8 | 50–100k | Wild land, smoke on the horizon, trails rather than roads |
+| Ancient | Farming villages, walled towns, a few city-states | 5–7 km / 30–40 km / 120–150 km | 5–30k | ~10 | ~150k | Fields round walled hills, temples on the skyline |
 | Medieval | Villages, market towns, walled cities, fields between | 4–5 km / 20–30 km / 80–150 km | 10–30k | ~20 | ~300k | Settled countryside, a village every few minutes |
+| Early Modern | Villages, many market towns, port cities | 3–5 km / 15–20 km / 60–80 km | 50–200k | 30–60 | 0.5–1 M | Roads busy with carts, harbours with tall ships, star forts |
 | Industrial | Fewer, bigger villages; many towns; cities with factories, mines, railways | 3–4 km / 10–15 km / 40–60 km | 50k–500k | 50–150 | 1–2 M | Smokestacks and rail lines; cities seen from orbit |
+| Modern | Most people in cities and their suburbs; farms large and few | farms, towns 8–10 km / cities 30–50 km | 1–10 M | 100–300 | 2–5 M | Highways and sprawl, lit coastlines at night |
 | Spacefaring homeworld | A few dense arcologies and spaceports, research and agricultural stations, the land left wild; most people in orbit | arcologies 150–300 km, outposts between | 20–100k on the ground | 1–5 on the ground | 20–80k on the ground, many more on stations | Pristine nature with islands of high tech; a sky full of stations |
+| Interstellar | As the spacefaring homeworld, with still fewer on the ground; parks, monuments, ruins of earlier eras | arcologies 300 km and more | 50–200k on the ground | < 1 on the ground | most of the people in orbit and other systems | A garden world under a sky of traffic |
 | Young colony (the Compact) | A landing-site town and outposts | outposts 30–50 km | 2–5k | < 1 | 5–10k | A frontier: everything new and far apart |
+
+Tiers are named after the eras, for what a people can make; how they are organised is their
+**polity**, which adjusts the pattern (an empire has bigger capitals and more towns than a
+chiefdom; a city-state packs its people into one city and its fields; a charter colony is the
+young-colony pattern at any tier). What one people calls another ("barbarians", "sky-folk")
+belongs to its lore, written by the content director, not to the tiers.
 
 Between the settlements of the denser patterns, a **decoration layer** placed from the seed
 (not simulated) keeps the land from feeling empty: farmsteads, shrines, mills, field patterns
@@ -367,7 +378,7 @@ Conditions come two ways, and both use the same representation:
 people by role); its interior is generated and populated near the player like a town.
 
 **Cost.** The aggregate simulation scales with settlements, not people: ~10,000 settlements
-for a planet (an industrial world has fewer and bigger, a tribal one more and tiny) are
+for a planet (an industrial world has fewer and bigger, a Stone Age one more and tiny) are
 ~10 MB of records and ~10 ms per step, needed once per game hour, split by region over the
 cores. Detail stays bounded: layouts, buildings and people are made only within a few
 kilometres (generation on approach, on workers, like terrain tiles, rather than all at load);
@@ -377,8 +388,8 @@ distance, buildings near). Gameplay above the settlement (armies, trade, politic
 counties and provinces of 20–50 settlements.
 
 **Scope.** Next: the density task for Meridian's two patterns (medieval and young colony):
-counts from area, the decoration layer and roads, lazy layouts, batched distant forms. Tribal,
-industrial and spacefaring-homeworld patterns, conditions and stations come with the batches
+counts from area, the decoration layer and roads, lazy layouts, batched distant forms. The
+other tiers' patterns, conditions and stations come with the batches
 that first need them (development plan §7.1).
 
 ## 9. Open questions

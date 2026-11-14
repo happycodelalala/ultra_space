@@ -26,7 +26,8 @@ pub mod society;
 pub use aggregate::{RegionSociety, SettlementState};
 pub use layout::{Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout};
 pub use lore::{
-    Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Role, SettlementLore, TechTier,
+    Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Polity, Role, SettlementLore,
+    TechTier,
 };
 pub use people::{Activity, Crowd, Person};
 pub use settlements::{Settlement, SettlementKind, generate_settlements};

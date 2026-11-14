@@ -45,12 +45,13 @@
     "culture_profile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "adjective", "tech_tier", "government", "values", "taboos", "religion", "attitude", "history", "naming", "building_kit", "clothing", "palette", "roles"],
+      "required": ["id", "name", "adjective", "tech_tier", "polity", "government", "values", "taboos", "religion", "attitude", "history", "naming", "building_kit", "clothing", "palette", "roles"],
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
         "name": {"$ref": "#/$defs/text"},
         "adjective": {"$ref": "#/$defs/text"},
-        "tech_tier": {"enum": ["tribal", "medieval", "industrial", "spacefaring"]},
+        "tech_tier": {"enum": ["stone_age", "ancient", "medieval", "early_modern", "industrial", "modern", "spacefaring", "interstellar"], "description": "What the people can make (living-planet.md §8b)."},
+        "polity": {"enum": ["band", "tribe", "chiefdom", "realm", "empire", "city_state", "republic", "nation", "charter_colony", "federation"], "description": "How the people is organised, independent of the tech tier."},
         "government": {"$ref": "#/$defs/text"},
         "values": {"$ref": "#/$defs/texts"},
         "taboos": {"$ref": "#/$defs/texts"},
