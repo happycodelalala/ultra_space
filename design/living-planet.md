@@ -189,6 +189,26 @@ while loading, from the recorded responses exported with it (`content/lore`).
   along their walls. Both come with the region's terrain (`Terrain::foundations`), so physics,
   the walker and the drawn terrain agree. The `layout_map` example draws layouts from above.
 
+**As built (task 4.6):** `game_bevy::settlements`. Each settlement of the body has a root
+entity in its tangent frame, placed camera-relative each frame. Within 1.2 km of its edge (off
+again beyond 1.5 km) its buildings are spawned as kit models: their colours (Kenney's palette
+texture or plain material colours) are baked into vertex colours when loaded, so every building
+shares one material and identical buildings batch into instanced draws. Elsewhere, out to
+250 km, a merged mesh of boxes stands in (each building's bounds in its roof and wall colours,
+reaching 3 m into the ground to hide the coarser distant terrain), so nothing pops in. Streets
+are ribbons on the ground (4 m dirt lanes and a paved square for the Hollin, 6 m concrete for
+the colony). Lights are small glowing lanterns at every door (warm) and lamps on 6 m posts at
+the colony's street corners (white); their glow follows the sun's height at the nearest
+settlement (none by day, full from 7° below the horizon). Layouts were tidied for the view
+from above: lanes end in a junction when they reach another street (no crossings), streets
+serving no building are dropped, and trees grow in groves beside the settlement. Debug:
+`ULTRA_SPACE_START_NEAR=<name|kind>[,distance[,height[,day|dusk|night]]]` starts near a
+settlement at a chosen time of day (in arcade flight when in the air);
+`ULTRA_SPACE_NO_SETTLEMENTS=1` draws none (for comparisons).
+Measured on Windows (round q0051, quiet machine): flying at the biggest town from 30 km at
+~300 m/s, 18.4 ms a frame on average against 17.4 ms with no settlements drawn, one frame over
+50 ms in each.
+
 ## 6. People near the player
 
 - **Promotion:** within about 2 km a settlement's buildings appear and some of its people
