@@ -5,6 +5,7 @@
 //! gameplay.
 
 pub mod climate;
+pub mod map;
 pub mod mesh;
 pub mod noise;
 pub mod quadtree;

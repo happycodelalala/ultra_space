@@ -5158,9 +5158,11 @@ name = "sim_society"
 version = "0.1.0"
 dependencies = [
  "ai_gateway",
+ "glam 0.33.12",
  "serde",
  "serde_json",
  "sim_core",
+ "sim_planet",
 ]
 
 [[package]]

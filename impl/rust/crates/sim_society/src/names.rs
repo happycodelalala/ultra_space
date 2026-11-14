@@ -81,6 +81,39 @@ pub fn place(rules: &NamingRules, rng: &mut Rng) -> String {
         .replace("{ending}", &ending)
 }
 
+/// Words that place patterns use to mark a kind of settlement.
+const KIND_WORDS: [&str; 6] = ["Port", "Outpost", "Station", "Town", "Village", "Hamlet"];
+
+/// A place name for a kind of settlement: a pattern naming that kind (`kind_word`, e.g. "Port")
+/// or one naming no kind at all, never one naming another kind (an outpost isn't a "Port").
+pub fn place_for(rules: &NamingRules, kind_word: &str, rng: &mut Rng) -> String {
+    let marks = |p: &str, w: &str| p.split(|c: char| !c.is_alphanumeric()).any(|t| t == w);
+    let own: Vec<String> = rules
+        .place_patterns
+        .iter()
+        .filter(|p| marks(p, kind_word))
+        .cloned()
+        .collect();
+    let plain: Vec<String> = rules
+        .place_patterns
+        .iter()
+        .filter(|p| !KIND_WORDS.iter().any(|w| marks(p, w)))
+        .cloned()
+        .collect();
+    let patterns = if !own.is_empty() {
+        own.into_iter().chain(plain).collect()
+    } else if !plain.is_empty() {
+        plain
+    } else {
+        rules.place_patterns.clone()
+    };
+    let narrowed = NamingRules {
+        place_patterns: patterns,
+        ..rules.clone()
+    };
+    place(&narrowed, rng)
+}
+
 /// A faction name from the rules' faction patterns, around the word `name`.
 pub fn faction(rules: &NamingRules, name: &str, rng: &mut Rng) -> String {
     rng.pick(&rules.faction_patterns).replace("{name}", name)

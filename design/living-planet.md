@@ -82,6 +82,24 @@ society` prints a body's society.
 5. **Lazy detail:** layouts, buildings and people are made only when the player comes near,
    always the same from the layout seed.
 
+**As built (task 4.3):** `sim_society::generate_settlements` scores points of an even spread
+over the sphere inside each home region by the body's own terrain and climate: no sea, coast's
+edge (below 5 m), slopes over 8°, ice or rock; the medieval people weigh soil (grassland best,
+then forest), a mild climate, moisture, nearness to the coast and flatness; the colony mostly
+flatness and open ground. The edge of the home region counts less. Sites are taken best first,
+with a little chance and each keeping its own distance (0.6–1.4 × a spacing from the region's
+size and the count), so they scatter rather than form a lattice. Faction territories are
+wedges around the people's centre in bearing order, sized to each faction's share (always
+contiguous); the first faction's wedge holds the best site (the Compact's hub). Each seat is the
+best site near the middle of its wedge: a town (Hollin), the colony hub or the port (Compact);
+the rest are villages and hamlets, or outposts, sized by their sites. Place names never use
+another kind's word ("Port …" only for a port). Lore comes from pools by culture and kind
+(`settlement/<culture>/<kind>/*`). On Meridian: the Hollin's 24 settlements (about 9,000 people)
+on the farmland of their region, three towns as seats; the Compact's hub (about 4,800 people),
+port and six outposts on open ground. `cargo run --release -p sim_society --example
+settlement_map` draws them on the biome map (`sim_planet::map`). Relations don't yet depend on
+how close factions are; that comes with the simulation of relations (4.4).
+
 ## 4. Aggregate simulation (every settlement, always)
 
 A few seconds per step, cheap, parallel by region, at any time warp:

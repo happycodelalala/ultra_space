@@ -477,7 +477,7 @@ loop, so the planet has places and people and its size can be decided with them.
 | 4.10 | **Planet size with settlements:** compare Meridian at 300, 600 and 1000 km with settlements on it (`ULTRA_SPACE_BODY_RADIUS`) | The developer decides the size (universe design §1) |
 | 4.11 | **Batch review** | Exit criteria met |
 
-**Status (2026-11-14):** 4.1–4.2 done on branch `batch4/living-planet`.
+**Status (2026-11-14):** 4.1–4.3 done on branch `batch4/living-planet`.
 
 **Exit criteria:** flying over Meridian, both cultures' settlements are visible and sensibly
 placed; land at a medieval village and at a colony and walk among people going about their
