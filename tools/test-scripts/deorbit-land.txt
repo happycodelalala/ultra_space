@@ -9,7 +9,7 @@
 80   shot 04.png
 100  shot 05.png
 120  shot 06.png
-121  wait landed 120
+121  wait landed 240         # the full descent takes about 4-5 minutes in all
 122  shot 07-landed.png
 123  press F
 125  shot 08-out.png
