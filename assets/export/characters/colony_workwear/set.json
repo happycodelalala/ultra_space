@@ -1,0 +1,56 @@
+{
+  "id": "colony_workwear",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "man",
+      "model": "man.glb",
+      "roles": [
+        "technician",
+        "engineer",
+        "scientist",
+        "grower",
+        "medic",
+        "pilot",
+        "administrator",
+        "trader",
+        "laborer"
+      ],
+      "height_m": 1.778
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "technician",
+        "engineer",
+        "scientist",
+        "grower",
+        "medic",
+        "pilot",
+        "administrator",
+        "trader",
+        "laborer"
+      ],
+      "height_m": 1.742
+    },
+    {
+      "id": "warden",
+      "model": "warden.glb",
+      "roles": [
+        "security"
+      ],
+      "height_m": 1.778
+    }
+  ]
+}

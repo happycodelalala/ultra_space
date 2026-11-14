@@ -2,8 +2,10 @@
 """Validates content data files against their JSON Schemas.
 
 Mapping: content/data/<kind>s/*.json is checked against content/schemas/<kind>.schema.json
-(e.g. data/star_systems/halcyon.json -> schemas/star_system.schema.json). Cross-field rules
-(parents exist, moons fit their parent, ...) are checked by the game's loaders and tests.
+(e.g. data/star_systems/halcyon.json -> schemas/star_system.schema.json), and the recorded
+content-director responses content/lore/*.json against schemas/lore.schema.json. Cross-field
+rules (parents exist, moons fit their parent, roles fit the tech tier, ...) are checked by the
+game's loaders and tests.
 """
 import json
 import sys
@@ -21,10 +23,11 @@ ROOT = Path(__file__).resolve().parent.parent / "content"
 def main() -> int:
     errors = []
     checked = 0
-    for folder in sorted((ROOT / "data").iterdir()):
-        if not folder.is_dir():
-            continue
-        kind = folder.name[:-1] if folder.name.endswith("s") else folder.name
+    folders = [(f, f.name[:-1] if f.name.endswith("s") else f.name)
+               for f in sorted((ROOT / "data").iterdir()) if f.is_dir()]
+    if (ROOT / "lore").is_dir():
+        folders.append((ROOT / "lore", "lore"))
+    for folder, kind in folders:
         schema_path = ROOT / "schemas" / f"{kind}.schema.json"
         files = sorted(folder.glob("*.json"))
         if not files:

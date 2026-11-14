@@ -125,7 +125,8 @@ dependencies = [
 name = "ai_gateway"
 version = "0.1.0"
 dependencies = [
- "sim_core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2815,6 +2816,7 @@ dependencies = [
 name = "game_bevy"
 version = "0.1.0"
 dependencies = [
+ "ai_gateway",
  "bevy",
  "glam 0.33.12",
  "gltf",
@@ -2822,6 +2824,7 @@ dependencies = [
  "serde_json",
  "sim_core",
  "sim_planet",
+ "sim_society",
  "sim_vehicle",
 ]
 
@@ -5150,6 +5153,19 @@ version = "0.1.0"
 dependencies = [
  "glam 0.33.12",
  "sim_core",
+]
+
+[[package]]
+name = "sim_society"
+version = "0.1.0"
+dependencies = [
+ "ai_gateway",
+ "bevy_ecs",
+ "glam 0.33.12",
+ "serde",
+ "serde_json",
+ "sim_core",
+ "sim_planet",
 ]
 
 [[package]]

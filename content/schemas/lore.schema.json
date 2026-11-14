@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lore.schema.json",
+  "title": "Recorded content-director responses",
+  "description": "content/lore/*.json: responses the replay provider serves until the LLM gateway (living-planet.md §1). A key is exact, or a pattern ending in '*' whose responses form a pool picked by the request key. Responses must match the shape for their kind (the game's own types in sim_society::lore, which also check rules such as roles fitting the tech tier).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["responses"],
+  "properties": {
+    "description": {"type": "string"},
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request", "response"],
+        "properties": {
+          "request": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "key"],
+            "properties": {
+              "kind": {"enum": ["culture_profile", "faction_lore", "settlement_lore", "codex"]},
+              "key": {"type": "string", "minLength": 1}
+            }
+          },
+          "response": {"type": "object"}
+        },
+        "allOf": [
+          {"if": {"properties": {"request": {"properties": {"kind": {"const": "culture_profile"}}}}},
+           "then": {"properties": {"response": {"$ref": "#/$defs/culture_profile"}}}},
+          {"if": {"properties": {"request": {"properties": {"kind": {"const": "faction_lore"}}}}},
+           "then": {"properties": {"response": {"$ref": "#/$defs/faction_lore"}}}},
+          {"if": {"properties": {"request": {"properties": {"kind": {"const": "settlement_lore"}}}}},
+           "then": {"properties": {"response": {"$ref": "#/$defs/settlement_lore"}}}},
+          {"if": {"properties": {"request": {"properties": {"kind": {"const": "codex"}}}}},
+           "then": {"properties": {"response": {"$ref": "#/$defs/codex"}}}}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+    "culture_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "adjective", "tech_tier", "polity", "government", "values", "taboos", "religion", "attitude", "history", "naming", "building_kit", "clothing", "palette", "roles"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "name": {"$ref": "#/$defs/text"},
+        "adjective": {"$ref": "#/$defs/text"},
+        "tech_tier": {"enum": ["stone_age", "ancient", "medieval", "early_modern", "industrial", "modern", "spacefaring", "interstellar"], "description": "What the people can make (living-planet.md §8b)."},
+        "polity": {"enum": ["band", "tribe", "chiefdom", "realm", "empire", "city_state", "republic", "nation", "charter_colony", "federation"], "description": "How the people is organised, independent of the tech tier."},
+        "government": {"$ref": "#/$defs/text"},
+        "values": {"$ref": "#/$defs/texts"},
+        "taboos": {"$ref": "#/$defs/texts"},
+        "religion": {"$ref": "#/$defs/text"},
+        "attitude": {"enum": ["welcoming", "curious", "wary", "hostile"]},
+        "history": {"$ref": "#/$defs/text"},
+        "naming": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["onsets", "nuclei", "codas", "syllables", "place_endings", "place_patterns", "faction_patterns"],
+          "properties": {
+            "onsets": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            "nuclei": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            "codas": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            "syllables": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}},
+            "place_endings": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+            "place_patterns": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "\\{name\\}"}},
+            "faction_patterns": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "\\{name\\}"}}
+          }
+        },
+        "building_kit": {"$ref": "#/$defs/text"},
+        "clothing": {"$ref": "#/$defs/text"},
+        "palette": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number", "minimum": 0, "maximum": 1}}},
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "share"],
+            "properties": {
+              "id": {"type": "string"},
+              "name": {"$ref": "#/$defs/text"},
+              "share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+            }
+          }
+        }
+      }
+    },
+    "faction_lore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["motto", "description", "history"],
+      "properties": {"motto": {"$ref": "#/$defs/text"}, "description": {"$ref": "#/$defs/text"}, "history": {"$ref": "#/$defs/text"}}
+    },
+    "settlement_lore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "landmark"],
+      "properties": {"description": {"$ref": "#/$defs/text"}, "landmark": {"$ref": "#/$defs/text"}}
+    },
+    "codex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "body"],
+      "properties": {"title": {"$ref": "#/$defs/text"}, "body": {"$ref": "#/$defs/text"}}
+    }
+  }
+}

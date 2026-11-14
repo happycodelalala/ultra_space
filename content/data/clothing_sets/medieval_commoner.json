@@ -1,0 +1,118 @@
+{
+  "id": "medieval_commoner",
+  "name": "Medieval commoners (placeholder)",
+  "description": "The Hollin's people: Quaternius base characters (head and hair) in the Modular Character Outfits - Fantasy peasant and ranger outfits (CC0), with the shared animations. Placeholders until the design track's own characters.",
+  "characters": [
+    {
+      "id": "man",
+      "body": "male",
+      "outfit": "Male_Peasant",
+      "hair": [
+        "Hair_SimpleParted"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter",
+        "merchant",
+        "healer",
+        "priest",
+        "noble"
+      ],
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "man_bearded",
+      "body": "male",
+      "outfit": "Male_Peasant",
+      "hair": [
+        "Hair_Buzzed",
+        "Hair_Beard"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter",
+        "merchant",
+        "priest"
+      ],
+      "hair_colour": [
+        0.45,
+        0.28,
+        0.12
+      ]
+    },
+    {
+      "id": "woman",
+      "body": "female",
+      "outfit": "Female_Peasant",
+      "hair": [
+        "Hair_Long"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "merchant",
+        "healer",
+        "priest",
+        "noble"
+      ],
+      "hair_colour": [
+        0.55,
+        0.38,
+        0.18
+      ]
+    },
+    {
+      "id": "woman_buns",
+      "body": "female",
+      "outfit": "Female_Peasant",
+      "hair": [
+        "Hair_Buns"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "laborer",
+        "carpenter",
+        "merchant",
+        "healer"
+      ],
+      "hair_colour": [
+        0.12,
+        0.08,
+        0.06
+      ]
+    },
+    {
+      "id": "guard",
+      "body": "male",
+      "outfit": "Male_Ranger",
+      "hair": [],
+      "roles": [
+        "guard"
+      ]
+    },
+    {
+      "id": "guard_woman",
+      "body": "female",
+      "outfit": "Female_Ranger",
+      "hair": [],
+      "roles": [
+        "guard"
+      ]
+    }
+  ]
+}

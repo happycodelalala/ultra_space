@@ -9,10 +9,13 @@ mod capture;
 mod debug_overlay;
 mod hud;
 mod inspector;
+mod meeting;
 mod part_models;
+mod people;
 mod planet_maps;
 mod save;
 mod script;
+mod settlements;
 mod ship;
 mod sim;
 mod sky;
@@ -45,6 +48,12 @@ fn main() {
                     }),
                     ..default()
                 })
+                .set(bevy::asset::AssetPlugin {
+                    // Characters load through Bevy's glTF loader from the game's assets.
+                    file_path: universe::assets_root()
+                        .map_or_else(|| "assets".into(), |p| p.to_string_lossy().into_owned()),
+                    ..default()
+                })
                 .set(LogPlugin {
                     filter: LOG_FILTER.into(),
                     custom_layer: log_file_layer,
@@ -74,6 +83,9 @@ fn main() {
             vehicle_visual::VehicleVisualPlugin,
             builder::BuilderPlugin,
             save::SavePlugin,
+            settlements::SettlementsPlugin,
+            people::PeoplePlugin,
+            meeting::MeetingPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

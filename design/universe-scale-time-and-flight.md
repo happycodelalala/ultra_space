@@ -32,11 +32,10 @@ What a 600 km, 1g planet gives:
   asteroids, higher on super-earths.
 - Smaller planets look like toys (close horizon, visible curvature); bigger ones need denser
   content to avoid feeling empty.
-- *Provisional:* 600 km stays the baseline. The size decision is **deferred** (2026-11-12): the
-  developer will judge it once there is content at planet scale. Revisit points:
-  - real travel between systems (Batch 6)
-  - settlements (Batch 8)
-  - ground battles (Batch 9)
+- **Decided (2026-11-14):** planet size is data per body and varies across the universe;
+  there is no single answer. Meridian stays at 600 km as the baseline home world. How full a
+  world feels comes from its settlement density, set by each culture's settlement pattern and
+  the land's area (living-planet.md §8b), not from its radius.
   `ULTRA_SPACE_BODY_RADIUS=<body>:<km>` compares sizes on the same planet. Radius is data per
   body, so it can change freely until Checkpoint A; after that, resizing a planet with saved
   bases needs a save migration (or applies to new planets only).
@@ -155,12 +154,12 @@ rules compute the results.**
 | Names, descriptions, myths | Survivability (heat, cold, pressure, air) for gameplay |
 
 Planet types include gas giants, planets with atmospheres, and bare airless worlds. Until LLM
-generation (Batch 7), parameters are written by hand in the same data format.
+generation (Batch 8), parameters are written by hand in the same data format.
 
 ## 6. First star system: Halcyon (hand-made)
 
 A fixed test bed with one body per feature to exercise, in the same data format the procedural
-generator and LLM will produce later. Procedural systems come in Batch 6. These are the names
+generator and LLM will produce later. Procedural systems come in Batch 7. These are the names
 outsiders use; each culture may name its own world differently.
 
 | Body | Type | Radius | Tests |
@@ -180,7 +179,7 @@ outsiders use; each culture may name its own world differently.
 |---|---|
 | Final planet size ranges | Batch 2, comparing sizes on foot |
 | Cruise drive as unlockable technology or standard | Technology tree design |
-| Interstellar jump duration and escape rules | Batch 6 (living galaxy) and combat design |
-| Combat flight behavior and balance | Batch 5 (combat core) |
+| Interstellar jump duration and escape rules | Batch 7 (living galaxy) and combat design |
+| Combat flight behavior and balance | Batch 6 (combat core) |
 | Shared time warp in multiplayer | If multiplayer is pursued |
-| Time skips: sleeping, idling, hibernation | Survival and NPC design (Batches 4 and 8) |
+| Time skips: sleeping, idling, hibernation | Survival and NPC design (Batches 5 and 9) |

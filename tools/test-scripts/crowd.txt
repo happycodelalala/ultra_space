@@ -1,0 +1,14 @@
+# People with schedules (task 4.8). Run with ULTRA_SPACE_START_NEAR=<town|colony>,30,6,<hour>
+# ULTRA_SPACE_CHASE_ORBIT=25,-18: hovering 6 m up, 30 m south of the centre, at that local
+# hour. Watch the people for 40 s: at 9:00 walking to and working at their places (smiths at
+# the smithy, farmers by the barns, merchants at the stalls), at 20:00 gathered at the square
+# talking; walking along the streets (not through houses), feet on the ground, turning to
+# where they go; nobody about at night.
+1    shot 01.png
+10   shot 02.png
+18   orbit 160 -25
+20   shot 03-other-side.png
+30   orbit 25 -45
+32   shot 04-from-above.png
+40   shot 05.png
+41   quit

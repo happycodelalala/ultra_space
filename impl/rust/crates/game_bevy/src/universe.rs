@@ -34,6 +34,11 @@ pub struct Designs(pub std::collections::BTreeMap<String, VehicleDesign>);
 #[derive(Resource)]
 pub struct Catalog(pub PartCatalog);
 
+/// The content director (living-planet.md): generated text and choices, answered from the
+/// recorded responses in `content/lore/` until the LLM gateway.
+#[derive(Resource, Clone)]
+pub struct Lore(pub Arc<ai_gateway::ContentDirector>);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -66,6 +71,11 @@ struct Loaded {
     vehicle: Vehicle,
     designs: Designs,
     catalog: PartCatalog,
+    lore: Arc<ai_gateway::ContentDirector>,
+    /// Each society generated: body, people, settlements.
+    societies: Vec<(usize, u32, usize)>,
+    /// Settlement layouts: buildings placed, and the time taken (ms).
+    layouts: (usize, f64),
     seconds: f64,
 }
 
@@ -102,13 +112,49 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         .0
         .get(START_DESIGN)
         .ok_or(format!("no {START_DESIGN} design"))?;
-    let sim = build_sim(system.clone());
+    let mut sim = build_sim(system.clone());
+    // The peoples of every body (generated from the data, the seeds and the director).
+    let provider =
+        ai_gateway::ReplayProvider::load_dir(dir.join("lore")).map_err(|e| e.to_string())?;
+    let lore = Arc::new(ai_gateway::ContentDirector::new(Box::new(provider)));
+    let societies = sim_society::aggregate::install(&mut sim, &lore);
+    // Their settlements on the ground: layouts from the building kits, and the foundations
+    // under them in each body's terrain (physics and drawing share it).
+    let laid = Instant::now();
+    let kits = match buildings_dir() {
+        Some(dir) => sim_society::Kits::load_dir(&dir)?,
+        None => {
+            warn!("building kits not found: settlements have no buildings");
+            sim_society::Kits::default()
+        }
+    };
+    let mut buildings = 0;
+    for (i, foundations) in sim_society::layout::install(&mut sim, Arc::new(kits)) {
+        let Some(region) = sim.regions.get_mut(i).map(|r| &mut r.world) else {
+            continue;
+        };
+        if let Some(l) = region.get_resource::<sim_society::RegionLayouts>() {
+            buildings += l.buildings();
+        }
+        let terrain = region
+            .get_resource::<sim_vehicle::flight::RegionTerrain>()
+            .and_then(|t| t.0.clone());
+        if let Some(t) = terrain {
+            region.insert_resource(sim_vehicle::flight::RegionTerrain(Some(Arc::new(
+                t.with_foundations(foundations),
+            ))));
+        }
+    }
+    let layouts = (buildings, laid.elapsed().as_secs_f64() * 1e3);
     Ok(Loaded {
         system,
         sim,
         vehicle: Vehicle::from_design(design),
         designs,
         catalog,
+        lore,
+        societies,
+        layouts,
         seconds: start.elapsed().as_secs_f64(),
     })
 }
@@ -156,11 +202,22 @@ fn finish_loading(
                 loaded.seconds * 1e3,
                 waited * 1e3
             );
-            commands.insert_resource(Universe(loaded.system));
+            commands.insert_resource(Universe(loaded.system.clone()));
             commands.insert_resource(crate::sim::Sim(loaded.sim));
             commands.insert_resource(StartingVehicle(loaded.vehicle));
             commands.insert_resource(loaded.designs);
             commands.insert_resource(Catalog(loaded.catalog));
+            for (body, people, settlements) in &loaded.societies {
+                info!(
+                    "society of {}: {settlements} settlements, {people} people",
+                    loaded.system.bodies[*body].name
+                );
+            }
+            info!(
+                "settlements laid out: {} buildings in {:.0} ms",
+                loaded.layouts.0, loaded.layouts.1
+            );
+            commands.insert_resource(Lore(loaded.lore));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }
@@ -194,6 +251,42 @@ pub fn with_radius_override(json: &str, spec: &str) -> Result<String, String> {
     body["radius_km"] = serde_json::json!(km);
     info!("debug: {} radius set to {km} km", id.trim());
     Ok(value.to_string())
+}
+
+/// The root of the assets Bevy loads (characters): `ULTRA_SPACE_ASSETS`, else an `assets`
+/// folder with `characters/` next to the executable (exported) or the repo's `assets/export`,
+/// found from the executable or the working directory upward.
+pub fn assets_root() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("ULTRA_SPACE_ASSETS") {
+        return Some(PathBuf::from(dir));
+    }
+    let starts = [std::env::current_exe().ok(), std::env::current_dir().ok()];
+    starts.into_iter().flatten().find_map(|start| {
+        start.ancestors().find_map(|dir| {
+            ["assets", "assets/export"]
+                .iter()
+                .map(|sub| dir.join(sub))
+                .find(|d| d.join("characters").is_dir())
+        })
+    })
+}
+
+/// The building kits' folder: `ULTRA_SPACE_BUILDINGS`, else `assets/buildings` (exported) or
+/// `assets/export/buildings` (repo) next to the executable or the working directory or any of
+/// their parents.
+pub fn buildings_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("ULTRA_SPACE_BUILDINGS") {
+        return Some(PathBuf::from(dir));
+    }
+    let starts = [std::env::current_exe().ok(), std::env::current_dir().ok()];
+    starts.into_iter().flatten().find_map(|start| {
+        start.ancestors().find_map(|dir| {
+            ["assets/buildings", "assets/export/buildings"]
+                .iter()
+                .map(|sub| dir.join(sub))
+                .find(|d| d.is_dir())
+        })
+    })
 }
 
 /// Finds the `content/` folder: `ULTRA_SPACE_CONTENT`, or a `content/` folder next to the

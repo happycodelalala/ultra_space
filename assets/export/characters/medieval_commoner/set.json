@@ -1,0 +1,92 @@
+{
+  "id": "medieval_commoner",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "man",
+      "model": "man.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter",
+        "merchant",
+        "healer",
+        "priest",
+        "noble"
+      ],
+      "height_m": 1.802
+    },
+    {
+      "id": "man_bearded",
+      "model": "man_bearded.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter",
+        "merchant",
+        "priest"
+      ],
+      "height_m": 1.778
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "merchant",
+        "healer",
+        "priest",
+        "noble"
+      ],
+      "height_m": 1.74
+    },
+    {
+      "id": "woman_buns",
+      "model": "woman_buns.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "laborer",
+        "carpenter",
+        "merchant",
+        "healer"
+      ],
+      "height_m": 1.742
+    },
+    {
+      "id": "guard",
+      "model": "guard.glb",
+      "roles": [
+        "guard"
+      ],
+      "height_m": 1.837
+    },
+    {
+      "id": "guard_woman",
+      "model": "guard_woman.glb",
+      "roles": [
+        "guard"
+      ],
+      "height_m": 1.761
+    }
+  ]
+}

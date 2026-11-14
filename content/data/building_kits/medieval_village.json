@@ -1,0 +1,29 @@
+{
+  "id": "medieval_village",
+  "name": "Medieval village (placeholder)",
+  "description": "The Hollin's buildings, assembled from Kenney's Fantasy Town Kit (CC0) until the design track's own kit. Houses are recipes (cells of 3 m, storeys of 3 m); the rest are pieces placed by hand. Fronts (doors) face +Z.",
+  "source": "kenney-fantasy-town",
+  "unit_m": 3.0,
+  "buildings": [
+    {"id": "cottage", "uses": ["home"], "recipe": {"house": {"width": 2, "depth": 2, "storeys": 1, "walls": "wood"}}},
+    {"id": "house", "uses": ["home"], "recipe": {"house": {"width": 2, "depth": 3, "storeys": 1, "walls": "wood", "chimney": true}}},
+    {"id": "stone_house", "uses": ["home"], "recipe": {"house": {"width": 2, "depth": 3, "storeys": 1, "walls": "stone", "chimney": true}}},
+    {"id": "longhouse", "uses": ["home", "farm"], "recipe": {"house": {"width": 2, "depth": 5, "storeys": 1, "walls": "wood"}}},
+    {"id": "townhouse", "uses": ["home", "shop"], "recipe": {"house": {"width": 2, "depth": 3, "storeys": 2, "walls": "mixed", "chimney": true}}},
+    {"id": "hall", "uses": ["hall"], "recipe": {"house": {"width": 2, "depth": 6, "storeys": 2, "walls": "stone", "chimney": true, "banners": true}}},
+    {"id": "inn", "uses": ["inn"], "recipe": {"house": {"width": 2, "depth": 4, "storeys": 2, "walls": "mixed", "chimney": true, "lanterns": true}}},
+    {"id": "smithy", "uses": ["smithy"], "recipe": {"house": {"width": 2, "depth": 2, "storeys": 1, "walls": "stone", "chimney": true}}},
+    {"id": "barn", "uses": ["farm"], "recipe": {"house": {"width": 2, "depth": 4, "storeys": 1, "walls": "wood", "roof": "low"}}},
+    {"id": "shrine", "uses": ["shrine"], "recipe": {"house": {"width": 2, "depth": 3, "storeys": 1, "walls": "stone", "tower": 3}}},
+    {"id": "watermill", "uses": ["mill"], "recipe": {"house": {"width": 2, "depth": 2, "storeys": 1, "walls": "wood"},
+      "pieces": [{"piece": "watermill", "at": [1.45, 0.9, 0], "rot": 0}]}},
+    {"id": "windmill", "uses": ["mill"], "recipe": {"house": {"width": 1, "depth": 1, "storeys": 3, "walls": "stone", "tower": 0},
+      "pieces": [{"piece": "windmill", "at": [0, 2.6, 0.75], "rot": 90}]}},
+    {"id": "well", "uses": ["square"], "recipe": {"pieces": [{"piece": "fountain-round", "at": [0, 0, 0], "rot": 0}]}},
+    {"id": "stall_red", "uses": ["market"], "recipe": {"pieces": [{"piece": "stall-red", "at": [0, 0, 0], "rot": 0}]}},
+    {"id": "stall_green", "uses": ["market"], "recipe": {"pieces": [{"piece": "stall-green", "at": [0, 0, 0], "rot": 0}]}},
+    {"id": "tree", "uses": ["tree"], "recipe": {"pieces": [{"piece": "tree-high", "at": [0, 0, 0], "rot": 0}]}},
+    {"id": "tree_crooked", "uses": ["tree"], "recipe": {"pieces": [{"piece": "tree-crooked", "at": [0, 0, 0], "rot": 0}]}},
+    {"id": "cart", "uses": ["prop"], "recipe": {"pieces": [{"piece": "cart", "at": [0, 0, 0], "rot": 0}]}}
+  ]
+}

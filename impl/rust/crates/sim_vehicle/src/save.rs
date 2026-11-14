@@ -47,6 +47,10 @@ pub struct SaveFile {
     /// The game's own section (who the player controls, the camera).
     #[serde(default)]
     pub player: serde_json::Value,
+    /// Every body's society state (`sim_society::aggregate`), filled in by the game; a save
+    /// without it starts each society fresh.
+    #[serde(default)]
+    pub society: serde_json::Value,
 }
 
 /// One object: identity, where it is, and what it is.
@@ -285,6 +289,7 @@ pub fn capture(sim: &Simulation, system: &StarSystem) -> SaveFile {
         objects,
         terrain,
         player: serde_json::Value::Null,
+        society: serde_json::Value::Null,
     }
 }
 

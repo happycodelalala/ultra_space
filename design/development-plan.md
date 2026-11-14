@@ -88,7 +88,7 @@ have 10–100× effects, more than the language difference. The deciding factor 
 | Less mature 3D animation, UI and asset tooling | Asset packs, Mixamo animations, vertex animation textures for crowds, egui for tools |
 | Frequent Bevy API changes | Pin one Bevy version; upgrade deliberately between batches, never mid-batch; check docs and source for the pinned version |
 | Slower Rust compiles | Dynamic linking in dev builds, a fast linker, a small crate per subsystem |
-| Extra tooling work | Batches 2–4 estimated **~20–30% longer** than with Godot |
+| Extra tooling work | Batches 2–5 estimated **~20–30% longer** than with Godot |
 
 ---
 
@@ -294,22 +294,23 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **1** | **Space-scale core** | Frame tree, floating origin, orbits on rails, the hand-made Halcyon system with raymarched distant planets, star field and nebula skybox, universe and game clocks, fly a simple ship between planets with a placeholder cruise drive (see 7.2) | 1.5–2.5 mo |
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
-| **4** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
+| **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
+| **5** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
-| **5** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
-| **6** | **Living galaxy** | Multiple star systems simulated in parallel, tiered simulation, economy, factions, trade ships, galaxy map | 2–4 mo |
-| **7** | **LLM gateway + first content** | AI gateway with Anthropic/OpenAI/replay adapters, caching, validation, budgets, fallbacks; generated culture profiles; galaxy and system history; codex text | 1–2 mo |
-| **8** | **Cultures and people** | Settlements from building kits, NPC schedules, notable characters with LLM dialogue, director-generated quests | 3–4 mo |
-| **9** | **Medieval warfare** | Directional melee, mounts, formation AI, 200+ soldier battles (GPU crowd animation), campaign-map battle promotion, auto-resolve | 3–5 mo |
+| **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
+| **7** | **Living galaxy** | Multiple star systems simulated in parallel, tiered simulation, economy, factions, trade ships, galaxy map | 2–4 mo |
+| **8** | **LLM gateway + first content** | AI gateway with Anthropic/OpenAI/replay adapters, caching, validation, budgets, fallbacks; generated culture profiles; galaxy and system history; codex text | 1–2 mo |
+| **9** | **Cultures and people** | Settlements from building kits, NPC schedules, notable characters with LLM dialogue, director-generated quests | 3–4 mo |
+| **10** | **Medieval warfare** | Directional melee, mounts, formation AI, 200+ soldier battles (GPU crowd animation), campaign-map battle promotion, auto-resolve | 3–5 mo |
 | | ⭐ **Checkpoint B** | **A full game loop:** explore, build, trade, talk, fight wars | |
-| **10** | **Mixed-tech and orbital** | Morale and doctrine AI, supply limits, orbital strikes, layered battles | 2–3 mo |
-| **11** | **Capital ships** | Ship interiors, hull walking, bridge stations, EVA, boarding, hangars | 3–4 mo |
-| **12** | **Breadth and polish** | Mechs, airships, sieges, diplomacy, more tech tiers, performance, modding, release prep | ongoing |
+| **11** | **Mixed-tech and orbital** | Morale and doctrine AI, supply limits, orbital strikes, layered battles | 2–3 mo |
+| **12** | **Capital ships** | Ship interiors, hull walking, bridge stations, EVA, boarding, hangars | 3–4 mo |
+| **13** | **Breadth and polish** | Mechs, airships, sieges, diplomacy, more tech tiers, performance, modding, release prep | ongoing |
 
 **Honest total:** roughly 3–4+ years to Checkpoint B and 4–5+ years to the full vision, part
 of it in early access. Checkpoint A should come within roughly the first year.
 
-Until Batch 7, earlier systems use a simple placeholder interface for generated text
+Until Batch 8, earlier systems use a simple placeholder interface for generated text
 (names, codex entries), so they plug into the AI gateway later without changes.
 
 ### 7.2 Batch 1 tasks
@@ -454,7 +455,51 @@ Known gaps for later:
 - the descent test now has one or two frames just over 50 ms (Batch 2 had none)
 - the Bastion's frame rate fell to ~22 fps after its stance change and is back to 66–89 fps in
   this round, for reasons not pinned down
-- no save list menu yet (with the first menus, Batch 4); fuel and power come in Batch 4
+- no save list menu yet (with the first menus, Batch 5); fuel and power come in Batch 5
+
+### 7.5 Batch 4 tasks
+
+Decisions behind these tasks: [living-planet.md](living-planet.md). Brought forward on
+2026-11-14 (a first slice of what were Batches 6–8, now 7–9), before the survival-builder
+loop, so the planet has places and people and its size can be decided with them.
+
+| # | Task | Done when |
+|---|---|---|
+| 4.1 | **Content director with recorded responses:** the request interface for generated text and choices (culture profiles, faction and settlement lore, codex text) in `ai_gateway`, a replay provider answering from `content/lore/`, validation against schemas, the cache key; the two cultures' profiles and lore written as recorded responses | A request returns its recorded, validated response; an unknown request falls back to a plain default; tests |
+| 4.2 | **Cultures and factions:** data and schemas (culture profile, faction, relations), naming rules and a name generator, the two cultures and their factions on Meridian in the star system data | Names read as each culture's; schema checks; tests |
+| 4.3 | **Settlement generation:** sites scored by the planet's climate and terrain in each culture's home region, spacing by size, factions dividing them, names and lore; shown on the planet map | Settlements land in sensible places (flat, dry, near water; the colony on open ground); deterministic; a map with both cultures' settlements |
+| 4.4 | **Aggregate simulation:** food, goods, population and mood per settlement, faction relations drifting; parallel by region; settlement state in saves | Populations grow and shrink believably over game days, at any time warp; save and load keep them; < 1 ms per step |
+| 4.5 | **Building kits and layouts:** the medieval kit (CC0 village and town packs) and a stand-in colony kit imported with their licences; layouts on a tangent grid per culture style; foundations flatten the terrain (with a spatial index for many flattened spots); building collision | Layouts look like a village and a colony from above; the walker and vehicles stop at walls; terrain sampling stays fast |
+| 4.6 | **Settlements on screen:** buildings drawn instanced near the player, a simplified form at a distance (no popping), lights at night | Flying in from orbit, settlements appear smoothly; lit at night; no frame over 50 ms |
+| 4.7 | **Animated people:** CC0 humanoids on one skeleton, dressed per culture, with the shared animation set (walk, run, idle, work, sit), skinned and animated in the game | A few characters walk, idle and work in place, both cultures' clothing |
+| 4.8 | **People with schedules:** promotion near the player from counts by role and demotion on leaving; daily schedules by local time (home, work, meals, gathering); walking the street graph, keeping clear of each other and the player; level of detail | People go about their day and change activity with day and night; ≤ 64 per settlement; no frame over 50 ms when a settlement fills |
+| 4.9 | **Meeting the world:** entering a settlement shows its name, faction and culture; the inspector shows its state and lore; looking at a person shows name and role | Visible in a test round |
+| 4.10 | **Planet size with settlements:** compare Meridian at 300, 600 and 1000 km with settlements on it (`ULTRA_SPACE_BODY_RADIUS`) | The developer decides the size (universe design §1) |
+| 4.11 | **Batch review** | Exit criteria met |
+
+**Status (2026-11-14):** 4.1–4.11 done on branch `batch4/living-planet`, waiting for the
+developer's go-ahead to merge. 4.10 decided: sizes vary per planet, Meridian stays at 600 km;
+density comes from settlement patterns (living-planet.md §8b). The 4.11 review (Windows rounds
+q0049–q0060): both cultures' settlements are visible from the air (distant forms out to
+250 km, lit at night) and sit on sensible ground; at the biggest Hollish town and the
+Compact's colony people walk the streets to work in the morning and fill the town square in
+the evening; entering shows the banner, the inspector the live state and lore, looking at
+someone their name and role; populations change over game days and survive save and load;
+flying in at ~300 m/s while a town streams in and fills with people had no frame over 50 ms
+(one at the end screenshot); the earlier tests (smoke, landing, walk, pad, rover, bump,
+save-load, deorbit-land) still pass, descent with one 53 ms frame; CI passes. Known for later:
+- **density**: 24 + 8 settlements leave the land between them empty; next comes the density
+  task for Meridian's two patterns (living-planet.md §8b);
+- the Kenney and Quaternius stand-ins (bright cartoon palette, the colony's identical domes,
+  coveralls) until the design track's kits and characters;
+- towns have no walls or gates and no fields yet; trees are single models;
+- people don't sit (no benches), carry nothing and don't talk to the player (Batch 9).
+
+**Exit criteria:** flying over Meridian, both cultures' settlements are visible and sensibly
+placed; land at a medieval village and at a colony and walk among people going about their
+day, changing with day and night; entering shows names, factions and cultures; populations
+change over game days and survive save and load; no frame over 50 ms when settlements stream
+in or fill with people; CI passes.
 
 ### 7.1 When the object system is built
 
@@ -468,7 +513,8 @@ guesses.
 | **1** Space-scale core | `ObjectId` and the object registry (objects moving between region worlds keep their identity); frame-relative state; one region per body with transfers at tick boundaries; **vehicles made of parts** (part catalog, designs, instances), mass properties and thrust allocation; background region building; in-game inspector | Moving the ship between regions needs a stable identity; a ship built from parts from day one means the Batch 3 builder extends the flight model instead of replacing it. Design: [objects-vehicles-physics.md](objects-vehicles-physics.md) |
 | **2** Seamless planet | Procedural keys and terrain deltas; streaming rules (gradual spawning, prefetch from travel); **hitch-budget stress test** (orbit → surface, no frame over 50 ms) | Terrain is the first procedural content and the first big streaming load |
 | **3** Vehicle builder | Builder UI editing a vehicle instance's parts; attachment graph; object records and the **first versioned save file** with a format version and migration hook | The first thing worth saving is a vehicle the player built. Builder levels, data format additions and design compilation: [ships-stations-interiors.md](ships-stations-interiors.md) |
-| **4** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
+| **4** Living planet | Culture, faction and settlement records (generated from seeds, so untouched ones aren't saved); settlement state (population, stocks) and met people in saves; people promoted from counts near the player and demoted back | The first population: the simulation must keep places alive whether or not the player is there ([living-planet.md](living-planet.md)) |
+| **5** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
 | ⭐ **Checkpoint A** | **Save format frozen:** golden save files and strict migrations start with the first public build | Before this, no player has a save, so the format may be reset freely |
 | **5+** | Quest references by `ObjectId`, NPC ownership, unique items with generated histories | Combat, factions, quests and LLM content need them |
 

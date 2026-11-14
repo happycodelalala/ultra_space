@@ -1,0 +1,15 @@
+# Meeting people (task 4.9). Run with ULTRA_SPACE_START_NEAR=town,24,2,20: hovering 2 m up at
+# the south edge of the town square at 20:00, when people gather there. Step out and look
+# about: the person in the middle of the view is named (name, role in the culture's word,
+# culture) under the crosshair.
+1    press F                 # step out
+3    shot 01-out.png
+4    mouse 2 0 0.3
+5    shot 02.png
+6    mouse -4 0 0.3
+7    shot 03.png
+8    hold W 1.5              # a few steps in
+10   shot 04.png
+11   mouse 3 0 0.3
+12   shot 05.png
+13   quit

@@ -1,0 +1,107 @@
+{
+  "description": "Recorded content-director responses for Meridian's two cultures (task 4.1): their profiles and codex entries, written the way the LLM would answer. The replay provider serves them until the LLM gateway (Batch 8).",
+  "responses": [
+    {
+      "request": {"kind": "culture_profile", "key": "culture/hollin"},
+      "response": {
+        "id": "hollin",
+        "name": "the Hollin",
+        "adjective": "Hollish",
+        "tech_tier": "medieval",
+        "polity": "realm",
+        "government": "Feudal reaveships: each reave holds a stretch of land and its villages by oath to a High Reave, who is chosen by the reaves at the Moot every seven harvests.",
+        "values": ["kin and the hearth", "the oath given before witnesses", "a good harvest shared", "remembering the Fall"],
+        "taboos": ["entering the sealed heart of the Keel", "breaking bread with an oathbreaker", "burning seed grain", "speaking the Old Words aloud outside the shrines"],
+        "religion": "The Keel faith. The wreck their ancestors fell from the sky in lies half-buried in the hills; the Hollin call it the Keel and hold it holy. Its keepers, the Keelwardens, guard the old metal, read the faded markings as scripture, and teach that the Makers will one day come back down the same road the ancestors fell.",
+        "attitude": "wary",
+        "history": "Some nine hundred years ago a ship came down burning over the western hills of Meridian. Those who lived through the Fall kept what they could carry and lost the rest: within three generations the machines had stopped, and within ten no one knew how they had worked. The survivors' children cleared the river valleys, learned which plants of Meridian feed and which kill, and built the first holds of timber and stone around the Keel.\n\nThe holds grew into reaveships, fought over the best valleys, and swore the Great Oath at the first Moot to stop the wars. Hollish life is slow and old: plough and mill, market day and Moot, harvest rites at the Keel shrine. Only lately have lights been seen moving in the sky again, and some Keelwardens say the Makers have come back.",
+        "naming": {
+          "onsets": ["b", "br", "c", "d", "dr", "f", "g", "h", "k", "l", "m", "r", "s", "st", "th", "w"],
+          "nuclei": ["a", "a", "e", "e", "i", "o", "u", "ae", "ea"],
+          "codas": ["", "n", "l", "r", "d", "th", "ck", "m", "s", "rn", "ld", "nd", "st", "rk", "wen", "ric", "mund"],
+          "syllables": [1, 2],
+          "place_endings": ["ford", "stead", "holm", "by", "wick", "mere", "ham", "ton", "dale", "thorp"],
+          "place_patterns": ["{name}{ending}", "{name}{ending}", "{name}{ending}", "Old {name}{ending}", "{name} Cross"],
+          "faction_patterns": ["The Reaveship of {name}", "{name} Hold", "The {name} March"]
+        },
+        "building_kit": "medieval_village",
+        "clothing": "medieval_commoner",
+        "palette": [[0.56, 0.42, 0.28], [0.36, 0.42, 0.26], [0.62, 0.56, 0.45], [0.48, 0.18, 0.14]],
+        "roles": [
+          {"id": "farmer", "name": "farmer", "share": 0.38},
+          {"id": "herder", "name": "herder", "share": 0.1},
+          {"id": "fisher", "name": "fisher", "share": 0.07},
+          {"id": "laborer", "name": "hand", "share": 0.12},
+          {"id": "smith", "name": "smith", "share": 0.05},
+          {"id": "carpenter", "name": "wright", "share": 0.05},
+          {"id": "merchant", "name": "chapman", "share": 0.06},
+          {"id": "guard", "name": "reave's man", "share": 0.08},
+          {"id": "priest", "name": "Keelwarden", "share": 0.04},
+          {"id": "healer", "name": "wise one", "share": 0.03},
+          {"id": "noble", "name": "reave", "share": 0.02}
+        ]
+      }
+    },
+    {
+      "request": {"kind": "culture_profile", "key": "culture/compact"},
+      "response": {
+        "id": "compact",
+        "name": "the Compact",
+        "adjective": "Compact",
+        "tech_tier": "spacefaring",
+        "polity": "charter_colony",
+        "government": "A chartered colony run by its Board of Stewards under the Meridian Survey Charter; settlements elect a site steward, departments report to the Board, and the Charter can only be changed by a two-thirds vote of all colonists.",
+        "values": ["the Charter and due procedure", "knowing before acting", "keeping the colony alive", "fair shares of air, water and work"],
+        "taboos": ["breaking quarantine", "taking native artefacts without a survey permit", "falsifying a log", "leaving a crewmate outside alone"],
+        "religion": "Mostly secular. Many colonists keep the Founders' Day vigil for the crew of the survey ship that brought them, and a quiet minority belongs to the Pathfinder congregations, who see the stars as a road the species is meant to walk.",
+        "attitude": "curious",
+        "history": "The survey ship Meridian Venture reached Halcyon sixty-two years ago carrying four thousand colonists in cold sleep under a charter to survey, settle and report. Orbital survey found a habitable world, and found that it was already inhabited: villages, fields and roads, and in the western hills the broken hull of a ship far older than their own.\n\nThe Compact landed on the eastern plains, away from the Hollin, and has argued ever since about what it owes them. The Contact Office studies Hollish speech and customs from a distance and lets a few traders through; the Board keeps the quarantine. Two generations in, the colony feeds itself, builds its own landers and is beginning to wonder whether the people over the hills are strangers or family.",
+        "naming": {
+          "onsets": ["k", "t", "v", "n", "s", "r", "l", "m", "z", "ch", "j", "p", "d", "h"],
+          "nuclei": ["a", "i", "o", "e", "u", "ai", "ei"],
+          "codas": ["", "", "n", "r", "s", "l", "x", "v"],
+          "syllables": [2, 3],
+          "place_endings": [""],
+          "place_patterns": ["{name} Station", "{name} Base", "Outpost {name}", "Port {name}", "{name} Field"],
+          "faction_patterns": ["The {name} Division", "{name} Survey Office", "The {name} Directorate"]
+        },
+        "building_kit": "colony_standin",
+        "clothing": "colony_workwear",
+        "palette": [[0.86, 0.86, 0.82], [0.95, 0.55, 0.15], [0.2, 0.3, 0.42], [0.3, 0.34, 0.36]],
+        "roles": [
+          {"id": "technician", "name": "technician", "share": 0.22},
+          {"id": "engineer", "name": "engineer", "share": 0.14},
+          {"id": "scientist", "name": "surveyor", "share": 0.14},
+          {"id": "grower", "name": "grower", "share": 0.14},
+          {"id": "medic", "name": "medic", "share": 0.06},
+          {"id": "pilot", "name": "pilot", "share": 0.08},
+          {"id": "security", "name": "warden", "share": 0.08},
+          {"id": "administrator", "name": "steward", "share": 0.06},
+          {"id": "trader", "name": "contact trader", "share": 0.04},
+          {"id": "laborer", "name": "crew", "share": 0.04}
+        ]
+      }
+    },
+    {
+      "request": {"kind": "codex", "key": "codex/culture/hollin"},
+      "response": {
+        "title": "The Hollin",
+        "body": "The Hollin farm the river valleys of Meridian's western continent in timber-and-stone villages ruled by sworn lords, the reaves. They descend from the survivors of a ship that fell nine centuries ago and remember it only as the Fall; its wreck, the Keel, is the centre of their faith. They are wary of strangers but bound by their oaths, and an outsider who swears before witnesses and keeps their word will find the Hollin hospitable."
+      }
+    },
+    {
+      "request": {"kind": "codex", "key": "codex/culture/compact"},
+      "response": {
+        "title": "The Meridian Survey Compact",
+        "body": "The Compact is a chartered colony of some seven thousand people on Meridian's eastern plains, founded sixty-two years ago by the survey ship Meridian Venture. It is governed by a Board of Stewards under its Charter, grows its own food, builds its own landers and keeps the Hollin under a strict quarantine that its own Contact Office is pushing to lift."
+      }
+    },
+    {
+      "request": {"kind": "codex", "key": "codex/place/the-keel"},
+      "response": {
+        "title": "The Keel",
+        "body": "A starship hull, broken in three, lies half-buried in the western hills where it came down nine centuries ago. The Hollin hold it sacred and their Keelwardens let no one into its sealed heart. Compact surveyors who have seen it from orbit say its design is older than any in their records, and no one yet knows where it came from."
+      }
+    }
+  ]
+}
