@@ -82,16 +82,17 @@ pub(crate) struct Site {
     /// Its buildings, while the camera is near.
     pub(crate) near: Option<Vec<Entity>>,
     pub(crate) layout: Layout,
-    /// Its people: the culture's clothing set, people by role, and a seed for choices.
+    /// Its people: the culture's clothing set and a seed for choices.
     pub(crate) clothing: String,
-    pub(crate) roles: Vec<(String, u32)>,
     pub(crate) seed: u64,
     pub(crate) terrain: std::sync::Arc<sim_planet::Terrain>,
+    pub(crate) settlement: sim_society::Settlement,
+    pub(crate) naming: sim_society::NamingRules,
 }
 
 #[derive(Resource)]
 pub(crate) struct SettlementDraw {
-    kits: std::sync::Arc<Kits>,
+    pub(crate) kits: std::sync::Arc<Kits>,
     models: HashMap<(String, usize), Model>,
     material: Handle<StandardMaterial>,
     /// Lights: warm lanterns (medieval) and white lamps (colony).
@@ -388,9 +389,13 @@ fn setup_settlements(
                     .profile
                     .clothing
                     .clone(),
-                roles: settlement.roles.clone(),
                 seed: settlement.layout_seed,
                 terrain: terrain.clone(),
+                settlement: settlement.clone(),
+                naming: society.society.cultures[settlement.culture]
+                    .profile
+                    .naming
+                    .clone(),
             };
             // The distant form and the lights.
             let (far, lights) = distant_meshes(&site, kit, &models, radius);
@@ -603,7 +608,7 @@ fn street_mesh(site: &Site, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
 }
 
 /// The camera's position in the surface frame of `body` at the render time.
-fn camera_on(universe: &Universe, camera: &SpaceCamera, body: usize, t: f64) -> DVec3 {
+pub(crate) fn camera_on(universe: &Universe, camera: &SpaceCamera, body: usize, t: f64) -> DVec3 {
     let system = &universe.0;
     let anchor = system.bodies[camera.anchor].inertial_frame;
     let s = system
@@ -763,7 +768,7 @@ fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
 }
 
 /// Debug start (tasks 4.6–4.9): `ULTRA_SPACE_START_NEAR=<settlement name or kind>[,<distance
-/// m>[,<height m>[,day|dusk|night]]]` starts the ship `distance` m (default 300) south of that
+/// m>[,<height m>[,day|dusk|night|<local hour>]]]` starts the ship `distance` m (default 300) south of that
 /// settlement (by name, or the biggest of a kind such as `town` or `colony`), `height` m
 /// (default 0: on the ground) above the ground there, level, nose toward it, keeping still over
 /// the ground. With a time of day, the universe time is first moved to when the sun stands so
@@ -795,17 +800,22 @@ pub fn start_near(
         .max_by_key(|s| s.population)?;
     let (east, south) = tangent_frame(s.direction);
     let r = terrain.radius;
-    // The first spot from `distance` outward with no building within 12 m (not on a roof).
+    // Landing: the first spot from `distance` outward with no building within 12 m (not on a
+    // roof).
     let clear = |d: f64| {
         let up = (s.direction * r + south * d).normalize();
         terrain
             .foundations()
             .is_none_or(|f| f.structures_near(up, 12.0).next().is_none())
     };
-    let distance = (0..200)
-        .map(|k| distance + 5.0 * f64::from(k))
-        .find(|&d| clear(d))
-        .unwrap_or(distance);
+    let distance = if height > 0.0 {
+        distance
+    } else {
+        (0..200)
+            .map(|k| distance + 5.0 * f64::from(k))
+            .find(|&d| clear(d))
+            .unwrap_or(distance)
+    };
     let up = (s.direction * r + south * distance).normalize();
     let ground = terrain.surface_height(up, 1.0);
     // On the ground: the ship's lowest point a little above it (it settles on its legs).
@@ -813,7 +823,10 @@ pub fn start_near(
     let surface = up * (r + ground + lift);
     let north = up.cross(east).normalize();
     let t = match when.as_deref() {
-        Some(w) => time_of_day(system, body, up, w),
+        Some(w) => match w.parse::<f64>() {
+            Ok(hour) => at_local_hour(system, body, up, hour),
+            Err(_) => time_of_day(system, body, up, w),
+        },
         None => sim.universe_time().as_secs_f64(),
     };
     let frame = system.frames.state_in(
@@ -832,6 +845,39 @@ pub fn start_near(
         s.kind.name()
     );
     Some((state, t, height > 0.0))
+}
+
+/// The first universe time (s) when it is `hour` (local solar time) at surface direction `up`.
+fn at_local_hour(system: &StarSystem, body: usize, up: DVec3, hour: f64) -> f64 {
+    let b = &system.bodies[body];
+    let longitude = (-up.z).atan2(up.x);
+    let fraction = |t: f64| {
+        sim_core::time::local_solar_fraction(
+            &system.frames,
+            b.surface_frame,
+            system.star().inertial_frame,
+            longitude,
+            sim_core::time::UniverseTime::from_nanos((t * 1e9) as u64),
+        )
+    };
+    let spin = system
+        .frames
+        .state_in(b.inertial_frame, b.surface_frame, 0.0)
+        .angular_velocity
+        .length()
+        .max(1e-9);
+    let day = std::f64::consts::TAU / spin * 1.1;
+    let want = (hour / 24.0).rem_euclid(1.0);
+    (0..=2880)
+        .map(|k| day * f64::from(k) / 2880.0)
+        .min_by(|&a, &b| {
+            let d = |t: f64| {
+                let x = (fraction(t) - want).abs();
+                x.min(1.0 - x)
+            };
+            d(a).total_cmp(&d(b))
+        })
+        .unwrap_or(0.0)
 }
 
 /// The first universe time (s) in the body's first day when the sun at surface direction `up`

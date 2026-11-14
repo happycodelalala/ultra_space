@@ -8,6 +8,7 @@
 //!   and climate), whose, what kind, and how many people in which roles.
 //! - [`layout`]: each settlement's buildings and streets from its culture's building kit, and
 //!   the foundations that level the ground under them.
+//! - [`people`]: the people promoted near the player, living out their day on the streets.
 //! - [`aggregate`]: every settlement's food, goods, mood and people, and faction relations,
 //!   stepping in each body's region at any time warp.
 //!
@@ -17,6 +18,7 @@ pub mod aggregate;
 pub mod layout;
 pub mod lore;
 pub mod names;
+pub mod people;
 pub mod rng;
 pub mod settlements;
 pub mod society;
@@ -26,5 +28,6 @@ pub use layout::{Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate
 pub use lore::{
     Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Role, SettlementLore, TechTier,
 };
+pub use people::{Activity, Crowd, Person};
 pub use settlements::{Settlement, SettlementKind, generate_settlements};
 pub use society::{Culture, Faction, Society, generate};
