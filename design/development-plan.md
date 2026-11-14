@@ -477,7 +477,22 @@ loop, so the planet has places and people and its size can be decided with them.
 | 4.10 | **Planet size with settlements:** compare Meridian at 300, 600 and 1000 km with settlements on it (`ULTRA_SPACE_BODY_RADIUS`) | The developer decides the size (universe design §1) |
 | 4.11 | **Batch review** | Exit criteria met |
 
-**Status (2026-11-14):** 4.1–4.9 done on branch `batch4/living-planet`.
+**Status (2026-11-14):** 4.1–4.11 done on branch `batch4/living-planet`, waiting for the
+developer's go-ahead to merge and the 4.10 size decision. The 4.11 review (Windows rounds
+q0049–q0060): both cultures' settlements are visible from the air (distant forms out to
+250 km, lit at night) and sit on sensible ground; at the biggest Hollish town and the
+Compact's colony people walk the streets to work in the morning and fill the town square in
+the evening; entering shows the banner, the inspector the live state and lore, looking at
+someone their name and role; populations change over game days and survive save and load;
+flying in at ~300 m/s while a town streams in and fills with people had no frame over 50 ms
+(one at the end screenshot); the earlier tests (smoke, landing, walk, pad, rover, bump,
+save-load, deorbit-land) still pass, descent with one 53 ms frame; CI passes. Known for later:
+- **density** (4.10): 24 + 8 settlements leave the land between them empty at any planet size;
+  the recommendation is to derive settlement counts from the region's area (decide first);
+- the Kenney and Quaternius stand-ins (bright cartoon palette, the colony's identical domes,
+  coveralls) until the design track's kits and characters;
+- towns have no walls or gates and no fields yet; trees are single models;
+- people don't sit (no benches), carry nothing and don't talk to the player (Batch 9).
 
 **Exit criteria:** flying over Meridian, both cultures' settlements are visible and sensibly
 placed; land at a medieval village and at a colony and walk among people going about their
