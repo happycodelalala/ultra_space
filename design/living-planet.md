@@ -373,6 +373,9 @@ Conditions come two ways, and both use the same representation:
   in the aggregate simulation, and their layouts decay accordingly when next generated
   (layout seed plus damage). Hazards fade over game years by their kind.
 
+Conditions are one kind of consequence among many: what the world's history leaves behind,
+told by its lore, which itself keeps changing (§8c).
+
 **Space-age populations live mostly on stations.** A station is a settlement in orbit
 (ships-stations-interiors §3.4) and uses the same aggregate simulation (food, goods, mood,
 people by role); its interior is generated and populated near the player like a town.
@@ -391,6 +394,61 @@ counties and provinces of 20–50 settlements.
 counts from area, the decoration layer and roads, lazy layouts, batched distant forms. The
 other tiers' patterns, conditions and stations come with the batches
 that first need them (development plan §7.1).
+
+## 8c. Living lore: history that keeps being written
+
+Decided 2026-11-14 (design ahead). Lore isn't written once: the world's background, its
+peoples' beliefs, its places' descriptions and its factions' histories change as the world and
+the player change it. A wasteland is one example; a conquered town renamed, a heresy that
+splits a church, a famine remembered in songs, a colony grown into a city, and the player's own
+legend are others.
+
+**One record of what happened: the chronicle.** An append-only, saved list of events: when,
+where (body, region, settlement), who (factions, people, the player), what kind (founding,
+war, conquest, famine, plague, disaster, catastrophe, migration, discovery, contact, a
+succession, a deed of the player's...), how big, and its consequences as state changes the
+simulation made (population, owner, condition, ruin, a new name). The simulation decides what
+happens and its consequences; the chronicle only records them (technical overview §13.6,
+§13.9).
+
+**The past and the present are the same record.** Generating a world writes its history as
+chronicle events too: the galaxy's and the planet's timeline from the content director (a
+catastrophe, a migration, a fallen ship like the Hollin's Keel) becomes events whose
+consequences generation applies (ruins of an older pattern, a wasteland, a people's home
+region). So play simply continues the history, and everything downstream treats an event
+from 900 years ago and one from yesterday alike.
+
+**Lore is versioned.** Every piece of lore (a culture profile's beliefs and history, a
+faction's history and motto, a settlement's description and landmark, codex entries, names)
+is a base version from generation plus revisions, each caused by chronicle events and dated.
+The current text is the latest revision; older versions stay, because the world remembers:
+an old book in a ruin, an elder's tale or an archive shows the place as it was.
+
+**Revising lore.** When events touch a piece of lore, it is marked stale; the content director
+rewrites it from the current version, the events and the present state (the same request,
+validation, cache and fallback as all generated text, §3 and technical overview §13.1). To
+keep the cost to what the player meets, revisions are lazy: a stale settlement is rewritten
+when the player comes near it or asks about it, a faction when its annals are read, a culture
+when enough has piled up; only major events are written up at once (and become rumours and
+news). Without an LLM, templates fill in from the events ("{settlement} was burned by {faction}
+in {year}"), and the tests replay recorded responses.
+
+**Who tells it.** The same events read differently by whom you ask: each culture and faction
+keeps its own version (a victory to one is a massacre to the other; propaganda, myths,
+songs). Knowledge travels: people know what happened near them and recently, and hear of the
+rest later and garbled, along trade routes and roads (rumours), so the player learns of a war
+from refugees before any herald. The player's deeds become a **legend** per culture
+(reputation, songs, place names, monuments, enemies who remember), told differently by
+friends and foes.
+
+**Cost and authority.** The chronicle is small (events, not text); revisions are generated
+rarely and cached in the save; the simulation stays authoritative and the director only
+words what happened and picks among existing things. Saves keep the chronicle and every lore
+version.
+
+**Scope.** Batch 4 writes lore once (recorded responses). The chronicle and versioned lore
+come with the first systems that make events: faction conflict and trade (Batches 7, 9), with
+the generated planetary history (wasteland and ruins) when a planet first needs one.
 
 ## 9. Open questions
 

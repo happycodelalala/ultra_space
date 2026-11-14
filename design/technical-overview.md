@@ -546,7 +546,10 @@ Rules:
   **dramatizes** them: quest text, characters involved, rumors.
 - **Quests are graphs of objectives** built only from supported verbs (go to, retrieve,
   escort, defend, persuade, sabotage). The LLM fills in details; the quest system runs them.
-- Major events get **chronicle entries**, so each save builds its own history.
+- Major events get **chronicle entries**, so each save builds its own history. Generated
+  history is written into the same chronicle, and lore is versioned: events mark it stale and
+  the director rewrites it lazily, each culture and faction keeping its own version
+  (living-planet.md §8c).
 
 ### 13.7 Generating the universe: top-down and lazy
 
