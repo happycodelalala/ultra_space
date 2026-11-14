@@ -8,7 +8,8 @@ publish.workspace = true
 
 # Engine-independent: must not depend on bevy or any rendering crate.
 [dependencies]
-sim_core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

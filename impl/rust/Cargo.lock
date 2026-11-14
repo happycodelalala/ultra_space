@@ -125,7 +125,8 @@ dependencies = [
 name = "ai_gateway"
 version = "0.1.0"
 dependencies = [
- "sim_core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5150,6 +5151,15 @@ version = "0.1.0"
 dependencies = [
  "glam 0.33.12",
  "sim_core",
+]
+
+[[package]]
+name = "sim_society"
+version = "0.1.0"
+dependencies = [
+ "ai_gateway",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

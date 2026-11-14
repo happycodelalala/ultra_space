@@ -23,6 +23,18 @@ other planets' populations, the real LLM gateway.
 | Simulation | Two tiers (overview §3): **aggregate** for every settlement all the time; **local** (buildings as objects, people with schedules) only near the player |
 | Persistence | Generation is deterministic from seeds, so untouched content isn't saved; the save keeps each settlement's changing state (population, stocks) and anything the player changed |
 
+**As built (task 4.1):** the content director is `ai_gateway::ContentDirector`: a request
+(kind, key, context) returns a typed answer the caller validates (`ai_gateway::Validate`), from
+its cache, from the provider, or from the caller's fallback (the answer says which). The replay
+provider reads `content/lore/*.json` (schema `lore.schema.json`, checked in CI); a recorded key
+is exact or a pattern ending in `*` whose responses form a pool, picked by the request key's
+hash, so lore for settlements generated later still has recorded answers. The types and their
+rules (roles of the tech tier, kits and clothing made for it, shares adding to 1, naming
+patterns) are in `sim_society::lore`. Recorded so far: both cultures' profiles (the Hollin, a
+medieval people descended from the survivors of a ship that fell nine centuries ago and revere
+its wreck, the Keel; the Compact, a chartered survey colony that arrived sixty-two years ago and
+keeps them under quarantine) and codex entries for both and the Keel.
+
 ## 2. Data
 
 All in `content/data/` with JSON schemas; generated records follow the same formats.
