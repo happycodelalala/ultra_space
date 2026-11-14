@@ -651,7 +651,9 @@ def bake_ao(objects, distance=0.6, samples=48):
 
 def write_glb(objects, path, colours, scale=1.0):
     """Writes the objects, scaled by `scale`, as one glTF mesh: a primitive per material with
-    positions, normals and the baked occlusion as COLOR_0."""
+    positions, normals, the baked occlusion as COLOR_0 and, as TEXCOORD_0, the surface
+    position in real metres along each piece (projected along the piece's own axis nearest
+    its face's normal, offset per piece), which the hull detail shader draws plate seams in."""
     prims = {}
     for o in objects:
         me = o.data
@@ -661,24 +663,33 @@ def write_glb(objects, path, colours, scale=1.0):
         ao = me.color_attributes.get("ao")
         normals = smooth_normals(me, min(35.0, o.get("angle", 35.0)))
         name = me.materials[0].name if me.materials else "armor"
-        verts, nrms, cols, idx, seen = prims.setdefault(name, ([], [], [], [], {}))
+        verts, nrms, cols, uvs, idx, seen = prims.setdefault(name, ([], [], [], [], [], {}))
+        seed = sum(ord(c) * (i + 1) for i, c in enumerate(o.name)) % 997
+        offset = Vector(((seed * 0.731) % 7.0, (seed * 0.377) % 5.0))
         for tri in me.loop_triangles:
+            fn = me.polygons[tri.polygon_index].normal
+            ax = max(range(3), key=lambda i: abs(fn[i]))
             for loop in tri.loops:
-                p = m @ me.vertices[me.loops[loop].vertex_index].co
+                co = me.vertices[me.loops[loop].vertex_index].co
+                p = m @ co
                 n = (nm @ normals[loop]).normalized()
                 a = ao.data[loop].color[0] if ao else 1.0
                 a = max(0.3, min(1.0, a))
+                q = co * scale
+                uv = (q.z, q.y) if ax == 0 else ((q.x, q.z) if ax == 1 else (q.x, q.y))
+                uv = (uv[0] + offset.x, uv[1] + offset.y)
                 key = (round(p.x, 5), round(p.y, 5), round(p.z, 5), round(n.x, 3), round(n.y, 3),
-                       round(n.z, 3), round(a, 2))
+                       round(n.z, 3), round(a, 2), round(uv[0], 3), round(uv[1], 3))
                 i = seen.get(key)
                 if i is None:
                     i = seen[key] = len(verts)
                     verts.append((p.x, p.y, p.z))
                     nrms.append((n.x, n.y, n.z))
                     cols.append((a, a, a, 1.0))
+                    uvs.append(uv)
                 idx.append(i)
     open(path, "wb").write(glb(prims, colours))
-    return sum(len(v[3]) // 3 for v in prims.values())
+    return sum(len(v[4]) // 3 for v in prims.values())
 
 
 def smooth_normals(me, degrees=35.0):
@@ -717,7 +728,7 @@ def glb(prims, colours):
         return len(views) - 1
 
     for name in sorted(prims):
-        verts, nrms, cols, idx, _ = prims[name]
+        verts, nrms, cols, uvs, idx, _ = prims[name]
         if not idx:
             continue
         acc = len(accessors)
@@ -729,6 +740,8 @@ def glb(prims, colours):
                           "componentType": 5126, "count": len(nrms), "type": "VEC3"})
         accessors.append({"bufferView": view(struct.pack(f"<{len(cols) * 4}f", *[c for v in cols for c in v]), 34962),
                           "componentType": 5126, "count": len(cols), "type": "VEC4"})
+        accessors.append({"bufferView": view(struct.pack(f"<{len(uvs) * 2}f", *[c for v in uvs for c in v]), 34962),
+                          "componentType": 5126, "count": len(uvs), "type": "VEC2"})
         accessors.append({"bufferView": view(struct.pack(f"<{len(idx)}I", *idx), 34963),
                           "componentType": 5125, "count": len(idx), "type": "SCALAR"})
         spec = colours.get(name, {"color": [0.6, 0.6, 0.6], "metallic": 0.5, "roughness": 0.5})
@@ -738,8 +751,9 @@ def glb(prims, colours):
         if "emissive" in spec:
             mat["emissiveFactor"] = [srgb_to_linear(c) for c in spec["emissive"]]
         materials.append(mat)
-        primitives.append({"attributes": {"POSITION": acc, "NORMAL": acc + 1, "COLOR_0": acc + 2},
-                           "indices": acc + 3, "material": len(materials) - 1})
+        primitives.append({"attributes": {"POSITION": acc, "NORMAL": acc + 1, "COLOR_0": acc + 2,
+                                          "TEXCOORD_0": acc + 3},
+                           "indices": acc + 4, "material": len(materials) - 1})
     while len(binary) % 4:
         binary.append(0)
     doc = {"asset": {"version": "2.0", "generator": "tools/blender"}, "scene": 0,

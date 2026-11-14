@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { applyHullDetail } from "./hull_detail.mjs";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -53,6 +54,8 @@ async function loadPalette() {
         emissiveIntensity: m.emissive_strength ?? 1,
       });
     }
+    // Models carry the surface position in metres (TEXCOORD_0): plate seams and wear.
+    applyHullDetail(MODEL_MATERIALS[name], m.detail);
   }
 }
 /// The game's material for a model primitive's material name (part_models.rs).

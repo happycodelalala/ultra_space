@@ -1,5 +1,5 @@
 {
-  "description": "Materials of part models, by the material name each model primitive carries (tools/blender). Colours are sRGB; metallic and roughness as in glTF PBR; emissive in sRGB times strength.",
+  "description": "Materials of part models, by the material name each model primitive carries (tools/blender). Colours are sRGB; metallic and roughness as in glTF PBR; emissive in sRGB times strength. `detail` (painted armour): plate seams, fasteners and wear the hull detail shader draws at real sizes: plate height and width/height, a structural seam every so many plates, seam width, fastener spacing, grime and overall strength.",
   "materials": {
     "armor": {
       "color": [
@@ -9,7 +9,16 @@
       ],
       "metallic": 0.1,
       "roughness": 0.55,
-      "about": "armour plates: dark military green, satin"
+      "about": "armour plates: dark military green, satin",
+      "detail": {
+        "plate_m": 3.0,
+        "aspect": 2.0,
+        "structural_every": 4,
+        "seam_m": 0.05,
+        "fastener_m": 0.5,
+        "grime": 1.0,
+        "strength": 1.0
+      }
     },
     "armor2": {
       "color": [
@@ -19,7 +28,16 @@
       ],
       "metallic": 0.12,
       "roughness": 0.5,
-      "about": "second (lapped) armour plates: a lighter dark military green, satin"
+      "about": "second (lapped) armour plates: a lighter dark military green, satin",
+      "detail": {
+        "plate_m": 2.5,
+        "aspect": 2.0,
+        "structural_every": 4,
+        "seam_m": 0.05,
+        "fastener_m": 0.5,
+        "grime": 1.0,
+        "strength": 1.0
+      }
     },
     "metal": {
       "color": [

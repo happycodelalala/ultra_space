@@ -1,10 +1,10 @@
 """The Bastion's body as a titan (about 100 m tall), built in its design units (1/BASTION_SCALE).
 
-A machine this size reads like a ship or a building, not a suit: its armour is plating in a
-grid of panels a few metres across (patched, some raised), its structure shows as trusses,
-banks of parallel rams and pipe runs, and the crew's scale is everywhere: catwalks with
-railings round the decks, ladders up the limbs, door-sized hatches, rows of lit windows,
-floodlight banks, masts with red warning beacons. Sizes written `R(x)` are real metres.
+A machine this size keeps big armour forms (large sculpted plates; the fine plate seams,
+fasteners and wear are drawn on them at real sizes by the hull detail shader), its structure
+shows as girders, banks of parallel rams and pipe runs, and the crew's scale is everywhere:
+catwalks with railings, caged ladders, door-sized hatches, rows of lit windows, floodlight
+banks, masts with red warning beacons. Sizes written `R(x)` are real metres.
 """
 
 import math
@@ -13,6 +13,7 @@ import bmesh
 from mathutils import Matrix
 
 from mech import V, X, Y, Z, along, frame
+import parts_body
 from parts import BASTION_SCALE, builder
 
 S = BASTION_SCALE
@@ -21,17 +22,6 @@ S = BASTION_SCALE
 def R(metres):
     """Real metres in design units."""
     return metres / S
-
-
-def _noise(*k):
-    """A repeatable value in [0, 1) for panel variation."""
-    h = 0
-    for v in k:
-        h = (h * 1000003 + int(round(v * 997))) & 0xFFFFFFFF
-    h ^= h >> 13
-    h = (h * 0x5BD1E995) & 0xFFFFFFFF
-    h ^= h >> 15
-    return (h & 0xFFFF) / 65536.0
 
 
 class Batch:
@@ -186,28 +176,6 @@ def mast(b, base, height, beacon_top=True):
 # --- Plating -----------------------------------------------------------------------------
 
 
-def plating(m, b, centre, u, v, a, c, panel=3.2, depth=0.5, mat="armor", seed=0, skip=None):
-    """A face plated in a grid of panels about `panel` m across, `depth` m thick, with 0.3 m
-    gaps: some raised, a few replaced in the second paint (patched in the field). `u`, `v`
-    the face's axes (its normal u × v), `a`, `c` its extents along them. `skip(x, y)` leaves a
-    panel out (x, y its centre in the face, from −a/2..a/2, −c/2..c/2)."""
-    centre, u, v = V(centre), V(u).normalized(), V(v).normalized()
-    n = u.cross(v).normalized()
-    nu, nv = max(1, round(a / R(panel))), max(1, round(c / R(panel)))
-    gap = R(0.3)
-    for i in range(nu):
-        for j in range(nv):
-            x = -a / 2 + (i + 0.5) * a / nu
-            y = -c / 2 + (j + 0.5) * c / nv
-            if skip and skip(x, y):
-                continue
-            r = _noise(seed, i, j)
-            lift = R(depth) * (1.5 if r > 0.8 else 1.0)
-            pm = "armor2" if 0.55 < r < 0.63 else mat
-            p = centre + u * x + v * y + n * lift / 2
-            b.box((a / nu - gap, c / nv - gap, lift), frame(p, u=u, v=v), pm)
-
-
 def ring_bearing(m, b, centre, axis, r, width=None, mat="dark"):
     """A slewing-ring joint seen from outside: a heavy ring, its drive motors round it, a
     cover in the middle."""
@@ -255,89 +223,47 @@ def pipes(b, pts, r, count, spread, across):
 
 @builder("bastion.torso")
 def torso(m, h, part):
-    """The torso, a superstructure: a plated hull wider at the shoulders, a sloped glacis;
-    the reactor intake in the chest (a louvred ring glowing amber); the command deck on top
-    with its gallery, hatches and a mast; a catwalk gallery round the waist; ladders up the
-    flanks; the heat exchanger and two exhaust stacks on the back."""
+    """The torso: the big sculpted armour of the industrial frame (chest plates either side of
+    the reactor, abdomen bands, shoulder slabs, back blades round the heat sink), with what a
+    100 m machine carries for its crew and its size: a deck with railings on each shoulder
+    slab, hatches, a lattice mast, floodlight banks under the slabs, a catwalk gallery round
+    the waist, caged ladders up the flanks, two exhaust stacks on the back, red beacons."""
     hx, hy, hz = h
+    parts_body.torso(m, h, part)
     b = Batch(m)
-    # Core and plated faces.
-    m.hull([V((sx * wx * hx, y * hy, sz * wz * hz)) for sx in (-1, 1) for sz in (-1, 1)
-            for y, wx, wz in ((0.92, 0.95, 0.8), (0.15, 0.9, 0.85), (-0.95, 0.6, 0.7))], "dark", bevel=R(0.3))
-    # Glacis: two sloped faces (upper chest, lower belly).
-    for (y0, z0, x0), (y1, z1, x1), seed in (((0.92, -0.8, 0.95), (0.15, -0.85, 0.9), 1),
-                                             ((0.15, -0.85, 0.9), (-0.95, -0.7, 0.6), 2)):
-        p0, p1 = V((0, y0 * hy, z0 * hz)), V((0, y1 * hy, z1 * hz))
-        up = (p0 - p1).normalized()
-        w = min(x0, x1) * hx * 2
-        plating(m, b, (p0 + p1) / 2, -X, up, w, (p0 - p1).length, panel=3.2, seed=seed,
-                skip=(lambda x, y: math.hypot(x, y - R(1)) < R(6.5)) if seed == 1 else None)
-    # Flanks and back.
-    for s in (-1, 1):
-        p0, p1 = V((s * 0.95 * hx, 0.92 * hy, 0)), V((s * 0.6 * hx, -0.95 * hy, 0))
-        plating(m, b, (p0 + p1) / 2, Z * s, (p0 - p1).normalized(), 1.6 * hz, (p0 - p1).length, panel=3.2,
-                seed=3 + s)
-    plating(m, b, V((0, 0.05 * hy, 0.83 * hz)), X, Y, 1.6 * hx, 1.7 * hy, panel=3.2, seed=6,
-            skip=lambda x, y: abs(x) < R(8) and y > -R(4))
-    # Reactor intake: a ring of armour round louvred vanes, the core glowing behind.
-    rc = V((0, 0.55 * hy + R(1), -0.85 * hz - R(0.5)))
-    n = (V((0, 0.3, -1))).normalized()
-    rr = R(5.5)
-    m.lathe([(rr * 0.7, -R(1.5)), (rr, -R(1.5)), (rr * 1.05, 0), (rr * 0.98, R(1.2)), (rr * 0.8, R(1.4)),
-             (rr * 0.75, 0), (rr * 0.7, 0)], along(rc, rc + n), "armor2", 48, closed=True, angle=40.0)
-    m.cyl(rc - n * R(2.5), rc - n * R(1.6), rr * 0.75, "light", 32)
-    for k in range(24):
-        t = 2 * math.pi * k / 24
-        d = V((math.cos(t), math.sin(t), 0))
-        d = (d - n * d.dot(n)).normalized()
-        b.box((R(0.5), rr * 0.6, R(1.6)), frame(rc + d * rr * 0.42 - n * R(0.4), u=n.cross(d), v=d), "dark")
-    m.cyl(rc - n * R(1.5), rc + n * R(0.6), rr * 0.18, "metal", 24, bevel=R(0.2))
-    # Command deck on top: a raised plated deck, its gallery railing, two hatches, a mast and
-    # floodlights.
-    top = 0.92 * hy
-    deck = V((0, top, 0.05 * hz))
-    plating(m, b, deck, X, -Z, 1.75 * hx, 1.55 * hz, panel=3.0, depth=0.35, mat="armor2", seed=9,
-            skip=lambda x, y: math.hypot(x, y) < R(5))
-    edge = [V((sx * 0.9 * hx, top + R(0.4), sz * 0.8 * hz)) for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-    for a, c in zip(edge, edge[1:] + edge[:1]):
-        railing(b, a, c, Y)
-    for x in (-0.55, 0.55):
-        hatch(b, V((x * hx, top + R(1.6), 0.6 * hz)), Z, Y)
-        b.box((R(3.0), R(3.2), R(2.6)), frame(V((x * hx, top + R(1.6), 0.6 * hz - R(1.4)))), "armor2")
-    mast(b, V((0.62 * hx, top + R(0.4), 0.55 * hz)), R(16))
-    for s in (-1, 1):
-        floods(b, V((s * 0.6 * hx, top - R(1.2), -0.82 * hz - R(0.8))), V((0, -0.3, -1)), Y, 3, 2)
-        beacon(b, V((s * 0.9 * hx, top + R(0.6), -0.8 * hz)))
-    # Waist gallery all round, ladders up the flanks to the deck.
-    yg = -0.2 * hy
-    ring = [V((sx * 0.86 * hx, yg, sz * 0.86 * hz)) for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    top = 1.0 * hy
+    for s_ in (-1, 1):
+        # Shoulder slab deck: railing round its outer edges, a hatch, floodlights below.
+        x0, x1 = s_ * 0.3 * hx, s_ * 0.86 * hx
+        z0, z1 = -0.5 * hz, 0.5 * hz
+        for a, c in ((V((x0, top, z0)), V((x1, top, z0))), (V((x1, top, z0)), V((x1, top, z1))),
+                     (V((x1, top, z1)), V((x0, top, z1)))):
+            railing(b, a, c, Y)
+        hatch(b, V((s_ * 0.55 * hx, top + R(0.2), 0.2 * hz)), Y, Z, lamp=False)
+        floods(b, V((s_ * 0.6 * hx, 0.88 * hy, -0.62 * hz)), V((0, -0.3, -1)), Y, 3, 2)
+        beacon(b, V((s_ * 0.85 * hx, top + R(0.4), -0.48 * hz)))
+    mast(b, V((0.62 * hx, top, 0.35 * hz)), R(16))
+    # Waist gallery round the abdomen.
+    yg = -0.28 * hy
+    ring = [V((sx * 0.78 * hx, yg, sz * 0.8 * hz)) for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
     outs = [V((0, 0, -1)), V((1, 0, 0)), V((0, 0, 1)), V((-1, 0, 0))]
     for (a, c), o in zip(zip(ring, ring[1:] + ring[:1]), outs):
-        catwalk(b, a + o * R(0.6), c + o * R(0.6), Y, o)
-    for s in (-1, 1):
-        x = s * 0.83 * hx
-        ladder(b, V((x, top, 0.45 * hz)), V((x, yg, 0.45 * hz)), V((s, 0, 0)))
-        hatch(b, V((s * 0.85 * hx, yg + R(1.3), -0.2 * hz)), V((s, 0, 0)), Y)
-    # Heat exchanger on the back, between the stacks: a bank of fins behind a frame.
-    hc = V((0, 0.25 * hy, 0.86 * hz))
-    b.box((R(15), R(17), R(1.2)), frame(hc), "dark")
-    for k in range(18):
-        x = R(-7 + 14 * k / 17)
-        b.box((R(0.35), R(15.5), R(2.2)), frame(hc + V((x, 0, R(1.0)))), "metal")
-    for y in (-1, 1):
-        b.box((R(16), R(0.8), R(2.6)), frame(hc + V((0, y * R(8.2), R(1.2)))), "armor2")
-    for s in (-1, 1):
-        e = V((s * 0.62 * hx, 0.1 * hy, 0.9 * hz))
+        catwalk(b, a + o * R(0.4), c + o * R(0.4), Y, o)
+    for s_ in (-1, 1):
+        x = s_ * 0.9 * hx
+        ladder(b, V((x, 0.25 * hy, 0.55 * hz)), V((x, yg, 0.55 * hz)), V((s_, 0, 0)))
+        hatch(b, V((s_ * 0.88 * hx, 0.0, -0.1 * hz)), V((s_, 0, 0)), Y)
+    # Exhaust stacks on the back, a ladder up one.
+    for s_ in (-1, 1):
+        e = V((s_ * 0.62 * hx, 0.1 * hy, 0.98 * hz))
         m.cyl(e, e + Y * R(16), R(1.6), "dark", 24, bevel=R(0.2))
         for y in (R(6), R(11)):
             m.cyl(e + Y * (y - R(0.3)), e + Y * (y + R(0.3)), R(1.8), "metal", 24)
         m.cyl(e + Y * R(16), e + Y * R(17), R(1.9), "metal", 24, bevel=R(0.2))
         m.cyl(e + Y * R(16.5), e + Y * R(17.1), R(1.45), "rubber", 24)
-        beacon(b, e + Y * R(17.6) + X * s * R(1.6))
-        ladder(b, e + Y * R(15.5) + Z * R(1.7), e + Y * R(2) + Z * R(1.7), Z, cage=True)
-    # Shoulder bearings.
-    for s in (-1, 1):
-        ring_bearing(m, b, V((s * 0.95 * hx, 0.57 * hy, 0)), V((s, 0, 0)), R(6))
+        beacon(b, e + Y * R(17.6) + X * s_ * R(1.6))
+    ladder(b, V((0.62 * hx, 0.1 * hy, 0.98 * hz)) + Y * R(15.5) + Z * R(1.7),
+           V((0.62 * hx, 0.1 * hy, 0.98 * hz)) + Y * R(2) + Z * R(1.7), Z)
     b.done()
 
 
@@ -411,17 +337,23 @@ def titan_limb(m, h, kind):
         m.cyl(V((-hx * 0.5, y, 0)), V((hx * 0.5, y, 0)), min(hy, hz) * 0.42, "metal", 32, bevel=R(0.3))
         for sx in (-1, 1):
             ring_bearing(m, b, V((sx * hx * 0.5, y, 0)), V((sx, 0, 0)), min(hy, hz) * 0.4, width=R(2.0))
-    # Plating front and back.
+    # Big armour plates front and back, curved across, the lower lapped over the upper.
     top_y = 0.3 if kind == "shin" else 0.62
-    for z, seed in ((-0.95, 1), (0.9, 2)):
-        ya, yc = (top_y, -0.6) if z < 0 else (0.55, -0.5)
-        pa, pc = F(0, ya, z), F(0, yc, z)
-        w = min(F(0.82, ya, 0).x, F(0.82, yc, 0).x) * 2
-        u = -X if z < 0 else X
-        b.box((w - R(0.4), (pa - pc).length, R(2.0)), frame((pa + pc) / 2 - V((0, 0, math.copysign(R(1.0), z)))),
-              "dark")
-        plating(m, b, (pa + pc) / 2, u, Y, w, (pa - pc).length, panel=2.8, depth=0.45, seed=seed + len(kind),
-                skip=(lambda x, y: z > 0 and abs(x) < R(1.8) and y < -(pa - pc).length * 0.1))
+
+    def curved(y0, y1, z_in, z_out, w0, w1, front=-1):
+        pts = []
+        for y, w in ((y0, w0), (y1, w1)):
+            for x, f in ((0.0, 1.0), (0.4, 0.96), (0.68, 0.82), (0.86, 0.55)):
+                for sx in ((1,) if x == 0 else (-1, 1)):
+                    pts.append(F(sx * x * w / 0.86, y, front * (z_in + (z_out - z_in) * f)))
+            for sx in (-1, 1):
+                pts.append(F(sx * w, y, front * z_in))
+        return pts
+
+    plate = dict(bevel=R(0.8), segments=3, angle=35.0)
+    m.hull(curved(top_y, -0.1, 0.42, 1.0, 0.82, 0.76), "armor", **plate)
+    m.hull(curved(0.0, -0.6, 0.45, 1.06, 0.78, 0.7), "armor2", **plate)
+    m.hull(curved(0.55, -0.5, 0.42, 0.93, 0.7, 0.64, front=1), "armor", **plate)
     # Rams down the sides, pipes beside them.
     for sx in (-1, 1):
         x = sx * hx * 0.72
@@ -429,7 +361,7 @@ def titan_limb(m, h, kind):
         pipes(b, [V((sx * hx * 0.62, hy * 0.7, hz * 0.55)), V((sx * hx * 0.62, -hy * 0.7, hz * 0.55))], R(0.25), 3,
               R(0.8), Z)
     # Ladder and hatch on the back.
-    zb = F(0, 0, 0.9).z + R(0.6)
+    zb = F(0, 0, 0.93).z + R(0.4)
     ladder(b, V((R(0), hy * 0.5, zb)), V((R(0), -hy * 0.5, zb)), Z)
     hatch(b, V((R(2.6), -hy * 0.55, zb - R(0.2))), Z, Y)
     if kind == "shin":

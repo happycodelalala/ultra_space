@@ -8,7 +8,10 @@
 
 use std::collections::HashMap;
 
+use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
+use bevy::render::render_resource::AsBindGroup;
+use bevy::shader::ShaderRef;
 use bevy::tasks::{Task, block_on, poll_once};
 use sim_core::objects::Object;
 use sim_core::{ObjectId, ObjectState};
@@ -24,7 +27,9 @@ pub struct VehicleVisualPlugin;
 
 impl Plugin for VehicleVisualPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<VehicleMeshes>()
+        bevy::asset::embedded_asset!(app, "shaders/hull_detail.wesl");
+        app.add_plugins(MaterialPlugin::<PartSurface>::default())
+            .init_resource::<VehicleMeshes>()
             .add_systems(Update, finish_vehicle_meshes)
             .add_systems(
                 Update,
@@ -33,6 +38,53 @@ impl Plugin for VehicleVisualPlugin {
                     .after(CameraSet)
                     .in_set(InGame),
             );
+    }
+}
+
+/// A part surface: the standard material with surface detail drawn at real sizes (plate
+/// seams, fasteners, wear; `shaders/hull_detail.wesl`) where the palette slot has `detail`.
+pub type PartSurface = ExtendedMaterial<StandardMaterial, HullDetail>;
+
+const HULL_DETAIL_SHADER: &str = "embedded://ultra_space/shaders/hull_detail.wesl";
+
+/// The surface detail of a palette slot (`detail` in `content/data/part_materials.json`).
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct HullDetail {
+    /// x plate height (m), y plate width / height, z structural seam every this many plates,
+    /// w strength (0: none).
+    #[uniform(100)]
+    pub plate: Vec4,
+    /// x seam width (m), y fastener spacing (m), z grime strength.
+    #[uniform(100)]
+    pub seam: Vec4,
+}
+
+impl HullDetail {
+    fn from_json(v: Option<&serde_json::Value>) -> Self {
+        let Some(v) = v else {
+            return Self::default();
+        };
+        let f = |k: &str, d: f64| v.get(k).and_then(|x| x.as_f64()).unwrap_or(d) as f32;
+        Self {
+            plate: Vec4::new(
+                f("plate_m", 3.0),
+                f("aspect", 2.0),
+                f("structural_every", 4.0),
+                f("strength", 1.0),
+            ),
+            seam: Vec4::new(
+                f("seam_m", 0.05),
+                f("fastener_m", 0.5),
+                f("grime", 1.0),
+                0.0,
+            ),
+        }
+    }
+}
+
+impl MaterialExtension for HullDetail {
+    fn fragment_shader() -> ShaderRef {
+        HULL_DETAIL_SHADER.into()
     }
 }
 
@@ -109,6 +161,7 @@ struct PaletteEntry {
     roughness: f32,
     emissive: Option<[f32; 3]>,
     emissive_strength: Option<f32>,
+    detail: HullDetail,
 }
 
 impl PaletteEntry {
@@ -130,12 +183,13 @@ impl PaletteEntry {
                 .get("emissive_strength")
                 .and_then(|s| s.as_f64())
                 .map(|s| s as f32),
+            detail: HullDetail::from_json(v.get("detail")),
         })
     }
 }
 
 /// The part materials from the palette file, with built-in fallbacks for missing ones.
-fn palette_materials() -> HashMap<PartMaterial, StandardMaterial> {
+fn palette_materials() -> HashMap<PartMaterial, PartSurface> {
     let mut entries: HashMap<String, PaletteEntry> = HashMap::new();
     if let Some(dir) = crate::universe::content_dir() {
         let path = dir.join("data/part_materials.json");
@@ -167,6 +221,7 @@ fn palette_materials() -> HashMap<PartMaterial, StandardMaterial> {
                 roughness: 0.5,
                 emissive: None,
                 emissive_strength: None,
+                detail: HullDetail::default(),
             });
             let [r, g, b] = e.color;
             let emissive = e.emissive.map_or(LinearRgba::BLACK, |[r, g, b]| {
@@ -174,12 +229,15 @@ fn palette_materials() -> HashMap<PartMaterial, StandardMaterial> {
             });
             (
                 m,
-                StandardMaterial {
-                    base_color: Color::srgb(r, g, b),
-                    metallic: e.metallic,
-                    perceptual_roughness: e.roughness,
-                    emissive,
-                    ..default()
+                PartSurface {
+                    base: StandardMaterial {
+                        base_color: Color::srgb(r, g, b),
+                        metallic: e.metallic,
+                        perceptual_roughness: e.roughness,
+                        emissive,
+                        ..default()
+                    },
+                    extension: e.detail,
                 },
             )
         })
@@ -297,7 +355,7 @@ type GroupMeshes = Vec<(usize, PartMaterial, Mesh)>;
 pub struct VehicleMeshes {
     ready: HashMap<u64, Vec<(usize, PartMaterial, Handle<Mesh>)>>,
     pending: HashMap<u64, Task<GroupMeshes>>,
-    materials: HashMap<PartMaterial, Handle<StandardMaterial>>,
+    materials: HashMap<PartMaterial, Handle<PartSurface>>,
 }
 
 impl VehicleMeshes {
@@ -318,8 +376,8 @@ impl VehicleMeshes {
     fn material(
         &mut self,
         which: PartMaterial,
-        materials: &mut Assets<StandardMaterial>,
-    ) -> Handle<StandardMaterial> {
+        materials: &mut Assets<PartSurface>,
+    ) -> Handle<PartSurface> {
         if self.materials.is_empty() {
             self.materials = palette_materials()
                 .into_iter()
@@ -363,7 +421,7 @@ fn finish_vehicle_meshes(
     mut commands: Commands,
     mut cache: ResMut<VehicleMeshes>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<PartSurface>>,
     mut visuals: Query<(Entity, &mut VehicleMesh, Option<&Children>)>,
     nodes: Query<(&GroupNode, Option<&Children>)>,
     merged_parts: Query<(), With<MergedPart>>,

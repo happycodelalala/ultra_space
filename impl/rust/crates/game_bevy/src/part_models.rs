@@ -1,7 +1,8 @@
 //! Part models (task 3.12): low-poly glTF binaries in `assets/export/models/<model>.glb` (the
 //! repo) or `assets/models/` (next to an exported executable), named by a part form's `model`.
 //! Each primitive's material name picks the game material (a slot of
-//! `content/data/part_materials.json`); its COLOR_0 is baked ambient occlusion.
+//! `content/data/part_materials.json`); its COLOR_0 is baked ambient occlusion and its
+//! TEXCOORD_0 the surface position in metres along each plate (for the hull detail shader).
 //! Loaded once, on first use, on whichever thread asks (the mesh workers); parts without a
 //! model keep their placeholder shape.
 
@@ -91,7 +92,11 @@ pub fn parse_glb(bytes: &[u8]) -> Result<PartModel, String> {
             .ok_or("no indices")?
             .into_u32()
             .collect();
-        let uvs = vec![[0.0f32, 0.0]; positions.len()];
+        // Surface position in metres along each plate (for the hull detail; zero without).
+        let uvs: Vec<[f32; 2]> = match reader.read_tex_coords(0) {
+            Some(t) => t.into_f32().collect(),
+            None => vec![[0.0f32, 0.0]; positions.len()],
+        };
         // Baked ambient occlusion (white without it).
         let colors: Vec<[f32; 4]> = match reader.read_colors(0) {
             Some(c) => c.into_rgba_f32().collect(),
