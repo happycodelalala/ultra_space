@@ -666,8 +666,20 @@ def write_glb(objects, path, colours, scale=1.0):
         verts, nrms, cols, uvs, idx, seen = prims.setdefault(name, ([], [], [], [], [], {}))
         seed = sum(ord(c) * (i + 1) for i, c in enumerate(o.name)) % 997
         offset = Vector(((seed * 0.731) % 7.0, (seed * 0.377) % 5.0))
+        # One projection for the faces turned the piece's main way (a curved plate keeps one
+        # continuous grid), the face's own nearest axis for the rest (its sides).
+        main = Vector((0.0, 0.0, 0.0))
+        for poly in me.polygons:
+            main += poly.normal * poly.area
+        area = sum(poly.area for poly in me.polygons) or 1.0
+        planar = main.length > 0.5 * area
+        if planar:
+            main.normalize()
+            pu = (Vector((0, 1, 0)).cross(main) if abs(main.y) < 0.9 else Vector((1, 0, 0)).cross(main)).normalized()
+            pv = main.cross(pu)
         for tri in me.loop_triangles:
             fn = me.polygons[tri.polygon_index].normal
+            along_main = planar and fn.dot(main) > 0.5
             ax = max(range(3), key=lambda i: abs(fn[i]))
             for loop in tri.loops:
                 co = me.vertices[me.loops[loop].vertex_index].co
@@ -676,7 +688,10 @@ def write_glb(objects, path, colours, scale=1.0):
                 a = ao.data[loop].color[0] if ao else 1.0
                 a = max(0.3, min(1.0, a))
                 q = co * scale
-                uv = (q.z, q.y) if ax == 0 else ((q.x, q.z) if ax == 1 else (q.x, q.y))
+                if along_main:
+                    uv = (q.dot(pu), q.dot(pv))
+                else:
+                    uv = (q.z, q.y) if ax == 0 else ((q.x, q.z) if ax == 1 else (q.x, q.y))
                 uv = (uv[0] + offset.x, uv[1] + offset.y)
                 key = (round(p.x, 5), round(p.y, 5), round(p.z, 5), round(n.x, 3), round(n.y, 3),
                        round(n.z, 3), round(a, 2), round(uv[0], 3), round(uv[1], 3))

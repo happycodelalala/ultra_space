@@ -13,7 +13,6 @@ import bmesh
 from mathutils import Matrix
 
 from mech import V, X, Y, Z, along, frame
-import parts_body
 from parts import BASTION_SCALE, builder
 
 S = BASTION_SCALE
@@ -202,76 +201,156 @@ def ram_bank(m, a, c, r, count, spread, hint):
         m.ram(a + o, c + o, r, extension=0.5, hint=h, booted=False)
 
 
-def pipes(b, pts, r, count, spread, across):
-    """A run of `count` parallel pipes along `pts`, `spread` apart across `across`, with
-    brackets."""
-    across = V(across).normalized()
-    pts = [V(p) for p in pts]
-    for k in range(count):
-        o = across * spread * (k - (count - 1) / 2)
-        for p0, p1 in zip(pts, pts[1:]):
-            b.bar(p0 + o, p1 + o, r * 2, "metal")
-    for p0, p1 in zip(pts, pts[1:]):
-        n = max(1, int((p1 - p0).length / R(4)))
-        for k in range(n + 1):
-            p = p0.lerp(p1, k / n)
-            b.bar(p - across * spread * count / 2, p + across * spread * count / 2, r * 2.6, "dark")
-
-
 # --- Body --------------------------------------------------------------------------------
+
+
+def deck_light(b, p, height=2.4):
+    """A deck light: a lamp on a short post, facing down onto the deck."""
+    p = V(p)
+    b.bar(p, p + Y * R(height), R(0.15), "dark")
+    b.box((R(0.9), R(0.25), R(0.6)), frame(p + Y * R(height)), "light")
+    b.box((R(1.1), R(0.2), R(0.8)), frame(p + Y * R(height + 0.2)), "dark")
+
+
+def davit(b, base, out, drop=6.0):
+    """The crew lift's davit: a post and jib over the railing, the cage hanging under it on
+    its cables (stowed, level with the walkway it was lowered from)."""
+    base, out = V(base), V(out).normalized()
+    top = base + Y * R(5.0)
+    tip = top + out * R(4.0)
+    b.bar(base, top, R(0.5), "dark")
+    b.bar(top - out * R(0.6), tip, R(0.4), "dark")
+    b.bar(base + Y * R(2.0), top - out * R(0.0) + out * R(2.2), R(0.25), "metal")
+    b.box((R(0.8), R(0.8), R(0.8)), frame(tip), "metal")
+    cage = tip - Y * R(drop)
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            c = cage + V((sx * R(0.8), 0, sz * R(0.8)))
+            b.bar(c - Y * R(1.2), c + Y * R(1.2), R(0.08), "metal")
+            b.bar(tip, c + Y * R(1.2), R(0.04), "metal")
+    b.box((R(1.8), R(0.15), R(1.8)), frame(cage - Y * R(1.2)), "dark")
+    b.box((R(1.8), R(0.12), R(1.8)), frame(cage + Y * R(1.2)), "dark")
 
 
 @builder("bastion.torso")
 def torso(m, h, part):
-    """The torso: the big sculpted armour of the industrial frame (chest plates either side of
-    the reactor, abdomen bands, shoulder slabs, back blades round the heat sink), with what a
-    100 m machine carries for its crew and its size: a deck with railings on each shoulder
-    slab, hatches, a lattice mast, floodlight banks under the slabs, a catwalk gallery round
-    the waist, caged ladders up the flanks, two exhaust stacks on the back, red beacons."""
+    """The torso (design/bastion.md): a dark frame under big sculpted armour. Chest plates
+    either side of the reactor's cooling-air intake (an armoured ring, louvres across it);
+    abdomen bands with two flex rams, hazard stripes at the pinch point between chest and
+    abdomen; shoulder slabs whose tops are the shoulder decks (railed outer edges, a hatch down
+    into the torso, deck lights on posts) with the driving lights under their front edges;
+    servo drums for the shoulders; flank plates. Round the waist the gallery: doors into the
+    torso on both flanks with a lamp over each, caged ladders up to the decks, the crew lift's
+    davit on the left. On the back, the radiator (a fin bank) between armoured blades, and the
+    two exhaust stacks rising from it."""
     hx, hy, hz = h
-    parts_body.torso(m, h, part)
+
+    def P(x, y, z):
+        return V((x * hx, y * hy, z * hz))
+
+    big = dict(bevel=R(0.9), segments=3, angle=35.0)
     b = Batch(m)
+    m.hull([P(sx * wx, y, sz * wz) for sx in (-1, 1) for sz in (-1, 1)
+            for y, wx, wz in ((0.9, 0.8, 0.55), (0.1, 0.74, 0.7), (-0.94, 0.45, 0.6))], "dark", bevel=R(0.3))
+    # Chest plates either side of the intake.
+    for s_ in (-1, 1):
+        m.hull([P(s_ * x, y, z) for x, y, z in (
+            (0.25, 0.94, -0.62), (0.92, 0.94, -0.5), (0.98, 0.5, -0.7), (0.85, 0.12, -0.72), (0.28, 0.08, -0.86),
+            (0.55, 0.55, -1.0), (0.28, 0.94, -0.2), (0.92, 0.94, -0.2), (0.95, 0.12, -0.3), (0.28, 0.08, -0.3))],
+            "armor", **big)
+    # Reactor intake: an armoured ring, horizontal louvres across the opening, dark behind.
+    rc = P(0, 0.5, -0.9)
+    fwd = V((0, 0.1, -1)).normalized()
+    rr = hx * 0.24
+    m.lathe([(rr * 0.6, -0.25), (rr, -0.25), (rr * 1.08, -0.1), (rr * 1.08, 0.08), (rr * 0.9, 0.12),
+             (rr * 0.75, 0.12), (rr * 0.75, -0.05), (rr * 0.6, -0.05)], along(rc, rc + fwd), "armor2", 32,
+            closed=True, angle=40.0)
+    m.cyl(rc - fwd * 0.3, rc - fwd * 0.12, rr * 0.76, "dark", 32)
+    side = fwd.cross(Y).normalized()
+    up = side.cross(fwd).normalized()
+    for k in range(9):
+        y = (-0.8 + 1.6 * k / 8) * rr * 0.72
+        half = math.sqrt(max(0.0, (rr * 0.76) ** 2 - y * y))
+        b.box((2 * half, R(0.35), R(1.6)), frame(rc + up * y - fwd * R(0.3), u=side, v=up) @
+              Matrix.Rotation(math.radians(-30), 4, "X"), "metal")
+    # Hazard stripes at the pinch point under the chest.
+    m.hazard(P(-0.5, 0.06, -0.84), P(0.5, 0.06, -0.84), V((0, -0.2, -1)).normalized(), R(1.0), R(2.0), R(0.1))
+    # Abdomen bands and the two flex rams.
+    for k in range(3):
+        y0 = -0.14 - k * 0.27
+        w = 0.42 - 0.05 * k
+        m.box((2 * hx * w, hy * 0.2, hz * 0.5), at=P(0, y0 - 0.06, -0.55 + 0.04 * k),
+              mat="armor" if k != 1 else "armor2", bevel=R(0.9), segments=3)
+    for s_ in (-1, 1):
+        m.ram(P(s_ * 0.56, 0.05, -0.62), P(s_ * 0.44, -0.86, -0.58), hx * 0.07, extension=0.35, hint=(0, 0, 1),
+              booted=False)
+    # Shoulder slabs: their tops are the decks.
+    for s_ in (-1, 1):
+        m.hull([P(s_ * x, y, z) for x, y, z in ((0.24, 0.9, -0.62), (0.9, 0.9, -0.55), (0.24, 0.9, 0.62),
+                                                 (0.9, 0.9, 0.6), (0.3, 1.04, -0.5), (0.7, 1.0, -0.45),
+                                                 (0.3, 1.04, 0.5), (0.7, 1.0, 0.48))], "armor2", **big)
+        m.servo(P(s_ * 0.8, 0.57, 0), P(s_ * 1.0, 0.57, 0), hy * 0.32, "dark", 12)
+    m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in ((0.3, 0.92, -0.72), (0.3, 0.74, -0.86),
+                                                               (0.22, 0.92, -0.5), (0.22, 0.74, -0.6))],
+           "armor2", bevel=R(0.5), segments=2)
+    for s_ in (-1, 1):
+        m.hull([P(s_ * x, y, z) for x, y, z in ((0.8, 0.3, -0.5), (0.8, 0.3, 0.5), (0.66, -0.6, -0.5),
+                                                 (0.66, -0.6, 0.5), (0.9, 0.25, -0.4), (0.9, 0.25, 0.4),
+                                                 (0.74, -0.55, -0.4), (0.74, -0.55, 0.4))], "armor", **big)
+    # Back: blades either side of the radiator, the stacks rising from its top.
+    for s_ in (-1, 1):
+        m.hull([P(s_ * x, y, z) for x, y, z in ((0.3, 0.9, 0.62), (0.92, 0.9, 0.52), (0.95, 0.15, 0.62),
+                                                 (0.3, 0.05, 0.7), (0.6, 0.5, 0.86), (0.3, 0.9, 0.3),
+                                                 (0.92, 0.9, 0.2), (0.95, 0.15, 0.3), (0.3, 0.05, 0.3))],
+               "armor", **big)
+    sink = P(0, 0.42, 0.74)
+    m.box((hx * 0.56, hy * 0.7, hz * 0.14), at=sink, mat="dark", bevel=R(0.3), segments=2)
+    for k in range(13):
+        x = (-0.5 + k / 12) * hx * 0.5
+        b.box((R(0.35), hy * 0.64, hz * 0.3), frame(sink + V((x, 0, hz * 0.12))), "metal")
+    m.box((hx * 1.05, hy * 0.75, hz * 0.3), at=P(0, -0.45, 0.66), mat="armor2", bevel=R(0.9), segments=3)
+    for s_ in (-1, 1):
+        e = P(s_ * 0.17, 0.77, 0.8)
+        m.cyl(e, e + Y * (0.25 * hy + R(9)), R(1.5), "dark", 24, bevel=R(0.2))
+        for y in (0.25 * hy + R(2), 0.25 * hy + R(6)):
+            m.cyl(e + Y * (y - R(0.3)), e + Y * (y + R(0.3)), R(1.7), "metal", 24)
+        t = e + Y * (0.25 * hy + R(9))
+        m.cyl(t, t + Y * R(1.0), R(1.8), "metal", 24, bevel=R(0.2))
+        m.cyl(t + Y * R(0.5), t + Y * R(1.05), R(1.35), "rubber", 24)
+    # Shoulder decks.
     top = 1.0 * hy
     for s_ in (-1, 1):
-        # Shoulder slab deck: railing round its outer edges, a hatch, floodlights below.
-        x0, x1 = s_ * 0.3 * hx, s_ * 0.86 * hx
-        z0, z1 = -0.5 * hz, 0.5 * hz
+        x0, x1 = s_ * 0.32 * hx, s_ * 0.86 * hx
+        z0, z1 = -0.45 * hz, 0.45 * hz
         for a, c in ((V((x0, top, z0)), V((x1, top, z0))), (V((x1, top, z0)), V((x1, top, z1))),
                      (V((x1, top, z1)), V((x0, top, z1)))):
             railing(b, a, c, Y)
-        hatch(b, V((s_ * 0.55 * hx, top + R(0.2), 0.2 * hz)), Y, Z, lamp=False)
-        floods(b, V((s_ * 0.6 * hx, 0.88 * hy, -0.62 * hz)), V((0, -0.3, -1)), Y, 3, 2)
-        beacon(b, V((s_ * 0.85 * hx, top + R(0.4), -0.48 * hz)))
-    mast(b, V((0.62 * hx, top, 0.35 * hz)), R(16))
-    # Waist gallery round the abdomen.
+        hatch(b, V((s_ * 0.55 * hx, top + R(0.1), 0.15 * hz)), Y, Z, lamp=False)
+        for z in (-0.3, 0.3):
+            deck_light(b, V((s_ * 0.8 * hx, top, z * hz)))
+        # Driving lights under the slab's front edge, aimed down and ahead.
+        floods(b, P(s_ * 0.58, 0.86, -0.64), V((0, -0.6, -1)), Y, 3, 2)
+    # Waist gallery, doors, ladders up to the decks, the crew lift.
     yg = -0.28 * hy
     ring = [V((sx * 0.78 * hx, yg, sz * 0.8 * hz)) for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
     outs = [V((0, 0, -1)), V((1, 0, 0)), V((0, 0, 1)), V((-1, 0, 0))]
     for (a, c), o in zip(zip(ring, ring[1:] + ring[:1]), outs):
         catwalk(b, a + o * R(0.4), c + o * R(0.4), Y, o)
     for s_ in (-1, 1):
-        x = s_ * 0.9 * hx
-        ladder(b, V((x, 0.25 * hy, 0.55 * hz)), V((x, yg, 0.55 * hz)), V((s_, 0, 0)))
-        hatch(b, V((s_ * 0.88 * hx, 0.0, -0.1 * hz)), V((s_, 0, 0)), Y)
-    # Exhaust stacks on the back, a ladder up one.
-    for s_ in (-1, 1):
-        e = V((s_ * 0.62 * hx, 0.1 * hy, 0.98 * hz))
-        m.cyl(e, e + Y * R(16), R(1.6), "dark", 24, bevel=R(0.2))
-        for y in (R(6), R(11)):
-            m.cyl(e + Y * (y - R(0.3)), e + Y * (y + R(0.3)), R(1.8), "metal", 24)
-        m.cyl(e + Y * R(16), e + Y * R(17), R(1.9), "metal", 24, bevel=R(0.2))
-        m.cyl(e + Y * R(16.5), e + Y * R(17.1), R(1.45), "rubber", 24)
-        beacon(b, e + Y * R(17.6) + X * s_ * R(1.6))
-    ladder(b, V((0.62 * hx, 0.1 * hy, 0.98 * hz)) + Y * R(15.5) + Z * R(1.7),
-           V((0.62 * hx, 0.1 * hy, 0.98 * hz)) + Y * R(2) + Z * R(1.7), Z)
+        hatch(b, V((s_ * 0.79 * hx, yg + R(1.3), -0.15 * hz)), V((s_, 0, 0)), Y)
+        ladder(b, V((s_ * 0.9 * hx, top, 0.5 * hz)), V((s_ * 0.86 * hx, yg, 0.5 * hz)), V((s_, 0, 0)))
+    davit(b, V((-0.78 * hx - R(1.6), yg, 0.3 * hz)), -X)
     b.done()
 
 
 @builder("bastion.head")
 def head(m, h, part):
-    """The head, a sensor citadel: an armoured house with the bridge's lit windows in a band
-    round its front, a radar dome and a sensor ball either side, a lattice mast with
-    beacons, a floodlight bank under the brow, a hatch onto the torso's deck behind."""
+    """The head (design/bastion.md): the bridge. An armoured house on the neck bearing (the
+    lift comes up through it), the bridge's windows in a band across the front and round the
+    sides under the brow; a sensor turret either side, a radar dome and the lattice mast on
+    top (its red beacon the machine's highest point standing); driving lights under the brow,
+    aimed down and ahead; the bridge's emergency exit at the back, rungs down to the
+    shoulder decks."""
     hx, hy, hz = h
     b = Batch(m)
     k = 1.15
@@ -283,32 +362,36 @@ def head(m, h, part):
     m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
         (0.8, -0.75, 0.75), (0.85, -0.75, -0.6), (0.6, -0.75, -0.9), (0.75, 0.5, 0.7), (0.7, 0.55, -0.5),
         (0.45, 0.4, -0.95), (0.4, 0.75, 0.3))], "dark", bevel=R(0.4), segments=2)
-    # Armoured brow and cheeks over the house, the window band between them.
     m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
         (0.85, 0.1, 0.8), (0.9, 0.1, -0.62), (0.62, 0.08, -1.0), (0.78, 0.55, 0.72), (0.72, 0.62, -0.52),
-        (0.46, 0.45, -0.98), (0.42, 0.8, 0.3))], "armor", bevel=R(0.5), segments=2)
+        (0.46, 0.45, -0.98), (0.42, 0.8, 0.3))], "armor", bevel=R(0.9), segments=3)
     m.hull([P(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
         (0.88, -0.25, 0.75), (0.9, -0.25, -0.6), (0.6, -0.25, -0.95), (0.8, -0.8, 0.7), (0.82, -0.8, -0.55),
-        (0.5, -0.78, -0.85))], "armor2", bevel=R(0.5), segments=2)
+        (0.5, -0.78, -0.85))], "armor2", bevel=R(0.9), segments=3)
     for sx in (-1, 1):
         windows(b, P(sx * 0.12, -0.08, -0.99), P(sx * 0.6, -0.08, -0.9), V((sx * 0.25, 0, -1)), Y, 4)
-        windows(b, P(sx * 0.85, -0.08, -0.5), P(sx * 0.88, -0.08, 0.5), V((sx, 0, 0)), Y, 5)
-        m.cyl(P(sx * 0.9, -0.1, 0.1), P(sx * 1.02, -0.1, 0.1), hy * 0.42, "armor2", 24, bevel=R(0.3))
+        windows(b, P(sx * 0.85, -0.08, -0.5), P(sx * 0.88, -0.08, 0.2), V((sx, 0, 0)), Y, 3)
+        m.cyl(P(sx * 0.9, -0.1, 0.4), P(sx * 1.02, -0.1, 0.4), hy * 0.42, "armor2", 24, bevel=R(0.3))
         m.lathe([(0, 0), (hy * 0.32, 0), (hy * 0.3, hy * 0.18), (0, hy * 0.3)],
-                along(P(sx * 1.02, -0.1, 0.1), P(sx * 1.2, -0.1, 0.1)), "glass", 24)
-    floods(b, P(0, 0.05, -1.02), V((0, -0.2, -1)), Y, 4, 1)
+                along(P(sx * 1.02, -0.1, 0.4), P(sx * 1.2, -0.1, 0.4)), "glass", 24)
+    floods(b, P(0, -0.2, -1.0), V((0, -0.6, -1)), Y, 4, 1)
     m.lathe([(0, 0), (hx * 0.32, 0), (hx * 0.3, hx * 0.16), (hx * 0.2, hx * 0.28), (0, hx * 0.32)],
             along(P(-0.3, 0.75, 0.25), P(-0.3, 1.0, 0.25)), "armor2", 32)
     mast(b, P(0.35, 0.72, 0.3), R(12))
-    hatch(b, P(0, -0.4, 0.82), Z, Y)
-    railing(b, P(-0.7, 0.78, 0.6), P(0.7, 0.78, 0.6), Y)
+    hatch(b, P(0, -0.35, 0.86), Z, Y, lamp=False)
+    rung_top, rung_bottom = P(0, -0.62, 0.9), P(0, -1.0, 0.9)
+    n = max(2, int((rung_top - rung_bottom).length / R(0.3)))
+    for i in range(n + 1):
+        p = rung_bottom.lerp(rung_top, i / n) + Z * R(0.2)
+        b.bar(p - X * R(0.3), p + X * R(0.3), R(0.06), "metal")
     b.done()
 
 
 def titan_limb(m, h, kind):
     """An arm or leg segment as a titan's: a box girder of dark structure between slewing-ring
-    joints, plated front and back in panels, a bank of three rams down each side (they work
-    the joint below), pipe runs in brackets, a ladder and a maintenance hatch on the back."""
+    joints, big curved armour plates front and back, a bank of three rams down each side (they
+    work the joint below) fed from a manifold under the joint above, bolted service panels on
+    the back (no ladders or doors: no one climbs a limb while it moves; design/bastion.md)."""
     hx, hy, hz = h
     b = Batch(m)
     yb = hy * 0.84
@@ -354,28 +437,34 @@ def titan_limb(m, h, kind):
     m.hull(curved(top_y, -0.1, 0.42, 1.0, 0.82, 0.76), "armor", **plate)
     m.hull(curved(0.0, -0.6, 0.45, 1.06, 0.78, 0.7), "armor2", **plate)
     m.hull(curved(0.55, -0.5, 0.42, 0.93, 0.7, 0.64, front=1), "armor", **plate)
-    # Rams down the sides, pipes beside them.
+    # Rams down the sides (they work the joint below), fed from a manifold under the joint
+    # above: one line in across the joint, a short line to each ram.
     for sx in (-1, 1):
         x = sx * hx * 0.72
-        ram_bank(m, V((x, hy * 0.62, -hz * 0.35)), V((x, -hy * 0.72, -hz * 0.3)), R(0.6), 3, R(1.9), Z)
-        pipes(b, [V((sx * hx * 0.62, hy * 0.7, hz * 0.55)), V((sx * hx * 0.62, -hy * 0.7, hz * 0.55))], R(0.25), 3,
-              R(0.8), Z)
-    # Ladder and hatch on the back.
-    zb = F(0, 0, 0.93).z + R(0.4)
-    ladder(b, V((R(0), hy * 0.5, zb)), V((R(0), -hy * 0.5, zb)), Z)
-    hatch(b, V((R(2.6), -hy * 0.55, zb - R(0.2))), Z, Y)
+        top_end, bottom_end = V((x, hy * 0.6, -hz * 0.35)), V((x, -hy * 0.72, -hz * 0.3))
+        ram_bank(m, top_end, bottom_end, R(0.6), 3, R(1.9), Z)
+        man = V((x, hy * 0.72, -hz * 0.35 + R(3.2)))
+        b.box((R(1.2), R(1.6), R(4.6)), frame(man), "dark")
+        b.bar(man + Z * R(1.8), V((sx * hx * 0.5, yb, R(0))), R(0.35), "metal")
+        for k in range(3):
+            port = top_end + Z * R(1.9) * (k - 1) + V((0, -R(1.4), 0))
+            b.bar(man + Z * (R(1.6) * (k - 1)) - Y * R(0.6), port + X * sx * R(0.5), R(0.22), "metal")
+    # Bolted service panels on the back plate (worked from gantries when parked).
+    zb = F(0, 0, 0.93).z
+    for y in (0.25, -0.2):
+        b.box((R(3.6), R(4.2), R(0.25)), frame(V((0, y * hy, zb + R(0.1)))), "armor2")
+        b.box((R(3.9), R(4.5), R(0.15)), frame(V((0, y * hy, zb))), "dark")
     if kind == "shin":
         # Knee cap: a big plated wedge over the joint above.
         m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
             (0.8, 0.35, -0.9), (0.6, 1.02, -0.85), (0.5, 0.85, -1.1), (0.5, 0.4, -1.08), (0.75, 0.4, -0.5),
             (0.6, 0.98, -0.5))], "armor", bevel=R(0.6), segments=2)
-        b.box((F(0.6, 0.3, 0).x * 2, R(0.8), R(0.3)), frame(F(0, 0.36, -1.06), u=X, v=Y), "trim")
-        beacon(b, F(0.62, 0.95, -0.9))
     if kind == "forearm":
         m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
             (1.0, -0.2, -0.75), (1.0, -0.2, 0.7), (1.0, -0.92, -0.75), (1.0, -0.92, 0.7))], "armor",
             bevel=R(0.6), segments=2)
-        floods(b, F(0, -0.6, -0.78), -Z, Y, 3, 1)
+        # Work lights at the wrist end, aimed down along the forearm at the hand.
+        floods(b, F(0, -0.88, -0.8), V((0, -1, -0.35)), -Z, 3, 1)
     if kind == "thigh":
         m.hull([F(sx * x, y, z) for sx in (-1, 1) for x, y, z in (
             (1.02, 0.2, -0.75), (1.02, 0.2, 0.6), (1.02, 0.78, -0.75), (1.02, 0.78, 0.6), (0.85, 0.98, -0.6),
@@ -385,13 +474,13 @@ def titan_limb(m, h, kind):
 
 @builder("bastion.limb")
 def upper_arm(m, h, part):
-    """An upper arm (titan): girder, plating, ram banks, pipes, ladder."""
+    """An upper arm (titan): girder, big plates, ram banks and their manifolds, service panels."""
     titan_limb(m, h, "upper_arm")
 
 
 @builder("bastion.forearm")
 def forearm(m, h, part):
-    """A forearm (titan): as an upper arm, with an armoured gauntlet and floodlights."""
+    """A forearm (titan): as an upper arm, an armoured gauntlet, work lights aimed at the hand."""
     titan_limb(m, h, "forearm")
 
 
@@ -403,5 +492,5 @@ def thigh(m, h, part):
 
 @builder("bastion.shin")
 def shin(m, h, part):
-    """A shin (titan): as an upper arm, a plated knee cap with a beacon."""
+    """A shin (titan): as an upper arm, a big knee cap over the joint above."""
     titan_limb(m, h, "shin")

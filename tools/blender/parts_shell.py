@@ -223,14 +223,14 @@ def inside_bay(hi, lo, d0, d1):
 
 @builder("bastion.shell_quarter")
 def shell_quarter(m, h, part):
-    """A quarter of the cocoon, a platform in flight: a thick faceted bulge, lens-shaped in
-    section (full depth across the middle, thinning to the side seams), its structure between
-    a dark inner skin and the armour. Ceramic armour plates in bands overlap like scales, a
-    graphite band at the shoulder line, a graphite keel down the middle rising to a point
-    above the top, the hem cut into points with a marker lamp on the outer ones. In the
-    middle of the bulge, the drone bay (floor and walls) under its cover (a separate part);
-    the four lift engines' gimbal mounts sit in sockets in the inner skin; a mounting pad
-    takes the carrier."""
+    """A quarter of the cocoon, a platform in flight (design/bastion.md): a thick faceted
+    bulge, lens-shaped in section, its structure between a dark inner skin and big banded
+    armour plates (a second plate lapped on the larger ones, a band in the second paint at
+    the shoulder line), a steel band along the hem. In the middle of the bulge the drone bay
+    (floor and walls; its door is a separate part) with lights under its top wall and amber
+    approach lights along its rim for drones homing on it; red obstruction beacons on the top
+    (the cocoon's highest point) and at the hem's outer corners. The four lift engines'
+    gimbal mounts sit in sockets in the inner skin; a mounting pad takes the carrier."""
     shape = part["shape"]
     P = shape["profile_m"]
     a0, a1 = shape["arc_deg"]
@@ -288,6 +288,11 @@ def shell_quarter(m, h, part):
             p = point(d, y, r + outer(d, y) + 0.14)
             n = point(d, 0, 1)
             bt.box((R(0.8), R(0.8), R(0.5)), frame(p, w=n, v=Y), "light")
+    # Bay lights under the bay's top wall, lighting it when the door is open.
+    for d in (-16.0, -5.0, 5.0, 16.0):
+        y = BAY_TOP - 0.12
+        r = resample(prof, y + 0.01, y - 0.01)[0][1]
+        bt.box((R(2.0), R(0.3), R(0.9)), frame(point(d, y, r + inner_face + 0.9), w=point(d, 0, 1), v=Y), "light")
     bt.done()
     # Carrier pad.
     for node in part.get("attach_nodes", []):
@@ -318,8 +323,7 @@ def bay_cover(m, h, part, quarter=None):
     skin(m, rows, -BAY_DEG + 0.2, BAY_DEG - 0.2, lambda d, y: face(d, y) - lid,
          lambda d, y: face(d, y) - 0.06, "dark", facets=(a0, fdeg), angle=4.0)
     armour(m, prof, t, a0, a1, fdeg, top, bottom, inside_bay, surface=face)
-    # The door's lower edge swings out: a hazard band along it, latches above it, and a grab
-    # handle to open it by hand.
+    # The door's lower edge swings out: a hazard band along it, latches above it.
     y = BAY_BOTTOM + 0.3
     r = resample(prof, y + 0.01, y - 0.01)[0][1]
     step = 8.0
@@ -336,9 +340,6 @@ def bay_cover(m, h, part, quarter=None):
         r = resample(prof, y + 0.01, y - 0.01)[0][1]
         n = point(d, 0, 1)
         m.latch(point(d, y, r + face(d, y) + 0.12), n, Y, 0.16)
-    y = BAY_BOTTOM + 1.9
-    r = resample(prof, y + 0.01, y - 0.01)[0][1]
-    m.rail(point(-3.0, y, r + face(0, y) + 0.12), point(3.0, y, r + face(0, y) + 0.12), point(0, 0, 1), 0.14)
 
 
 @builder("bastion.lift_engine", "thruster.main.medium")
