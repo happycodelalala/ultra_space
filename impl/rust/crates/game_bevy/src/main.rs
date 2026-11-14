@@ -9,6 +9,7 @@ mod capture;
 mod debug_overlay;
 mod hud;
 mod inspector;
+mod meeting;
 mod part_models;
 mod people;
 mod planet_maps;
@@ -84,6 +85,7 @@ fn main() {
             save::SavePlugin,
             settlements::SettlementsPlugin,
             people::PeoplePlugin,
+            meeting::MeetingPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

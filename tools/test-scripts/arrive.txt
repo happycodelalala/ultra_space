@@ -1,0 +1,10 @@
+# Arriving at a settlement (task 4.9). Run with ULTRA_SPACE_START_NEAR=<town|colony>,700,60,day
+# ULTRA_SPACE_INSPECTOR=1 ULTRA_SPACE_CHASE_ORBIT=0,-10: 60 m up, 700 m south, the inspector
+# open. Fly in: on entering, a banner names the settlement (kind, faction, culture, people) for
+# a few seconds (log 'entered ...'); the inspector shows its live state and lore.
+1    shot 01-approach.png    # inspector: the settlement, some hundred metres away
+2    hold W 0.4              # about 60 m/s
+9    shot 02-entering.png    # the banner
+12   press X
+13   shot 03-inside.png      # inspector: "here", live state, people by role, lore
+14   quit

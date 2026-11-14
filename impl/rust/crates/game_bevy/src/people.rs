@@ -78,6 +78,10 @@ struct Resident {
     offset: f32,
 }
 
+/// What looking at a person shows: name, role (the culture's word) and culture.
+#[derive(Component)]
+pub(crate) struct PersonLabel(pub String);
+
 /// A settlement's promoted people and their entities.
 struct Shown {
     crowd: Crowd,
@@ -283,6 +287,12 @@ fn stream_people(
                     let e = commands
                         .spawn((
                             Name::new(format!("{} ({})", person.name, person.role)),
+                            PersonLabel(format!(
+                                "{}, {} ({})",
+                                person.name,
+                                site.role_names.get(&person.role).unwrap_or(&person.role),
+                                site.culture.1
+                            )),
                             WorldAssetRoot(ready.scene.clone()),
                             Transform::default(),
                             Visibility::Hidden,

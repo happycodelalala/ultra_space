@@ -77,7 +77,7 @@ pub(crate) struct Site {
     pub(crate) origin: DVec3,
     pub(crate) basis: DQuat,
     /// Distance from the centre to the farthest building (m).
-    extent: f64,
+    pub(crate) extent: f64,
     pub(crate) root: Entity,
     /// Its buildings, while the camera is near.
     pub(crate) near: Option<Vec<Entity>>,
@@ -88,6 +88,10 @@ pub(crate) struct Site {
     pub(crate) terrain: std::sync::Arc<sim_planet::Terrain>,
     pub(crate) settlement: sim_society::Settlement,
     pub(crate) naming: sim_society::NamingRules,
+    /// Its culture (name and adjective), its faction, and its culture's word for each role.
+    pub(crate) culture: (String, String),
+    pub(crate) faction: String,
+    pub(crate) role_names: HashMap<String, String>,
 }
 
 #[derive(Resource)]
@@ -396,6 +400,17 @@ fn setup_settlements(
                     .profile
                     .naming
                     .clone(),
+                culture: {
+                    let p = &society.society.cultures[settlement.culture].profile;
+                    (p.name.clone(), p.adjective.clone())
+                },
+                faction: society.society.factions[settlement.faction].name.clone(),
+                role_names: society.society.cultures[settlement.culture]
+                    .profile
+                    .roles
+                    .iter()
+                    .map(|r| (r.id.clone(), r.name.clone()))
+                    .collect(),
             };
             // The distant form and the lights.
             let (far, lights) = distant_meshes(&site, kit, &models, radius);

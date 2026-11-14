@@ -247,6 +247,7 @@ fn update_inspector(
     mut sim: ResMut<Sim>,
     universe: Res<Universe>,
     ship: Option<Res<PlayerShip>>,
+    settlement: Res<crate::meeting::SettlementInfo>,
     mut text: Query<&mut Text, With<InspectorText>>,
 ) {
     inspector.since_refresh += real.delta();
@@ -300,6 +301,10 @@ fn update_inspector(
             describe_object(sim, system, id, &mut out);
         }
         None => out.push_str("No objects\n"),
+    }
+    if !settlement.0.is_empty() {
+        out.push('\n');
+        out.push_str(&settlement.0);
     }
 
     for mut t in &mut text {
