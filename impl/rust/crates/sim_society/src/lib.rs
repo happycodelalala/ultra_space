@@ -6,12 +6,15 @@
 //!   director's answers and the body's seed; [`names`] from each culture's naming rules.
 //! - [`settlements`]: where each people's settlements are (sites scored by the body's terrain
 //!   and climate), whose, what kind, and how many people in which roles.
+//! - [`layout`]: each settlement's buildings and streets from its culture's building kit, and
+//!   the foundations that level the ground under them.
 //! - [`aggregate`]: every settlement's food, goods, mood and people, and faction relations,
 //!   stepping in each body's region at any time warp.
 //!
 //! Engine-independent: no rendering or engine dependencies.
 
 pub mod aggregate;
+pub mod layout;
 pub mod lore;
 pub mod names;
 pub mod rng;
@@ -19,6 +22,7 @@ pub mod settlements;
 pub mod society;
 
 pub use aggregate::{RegionSociety, SettlementState};
+pub use layout::{Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout};
 pub use lore::{
     Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Role, SettlementLore, TechTier,
 };

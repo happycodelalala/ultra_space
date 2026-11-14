@@ -13,7 +13,7 @@ use sim_core::frames::FrameState;
 use sim_core::objects::{RegionBody, SimClock, SystemRef};
 
 use crate::flight::{BodyEnv, RegionTerrain, ground_altitude, region_env};
-use crate::physics::RegionPhysics;
+use crate::physics::{CHARACTER_HEIGHT, CHARACTER_RADIUS, RegionPhysics};
 
 /// Walking and running speeds (m/s).
 pub const WALK_SPEED: f64 = 5.0;
@@ -184,6 +184,47 @@ pub fn walk_step(
     state.angular_velocity = env.spin;
 }
 
+/// Walls (task 4.5): pushes the walker's body (a cylinder of the character's radius and
+/// height, feet at its position) out of any building it entered, along the nearer side, and
+/// takes away its speed into the wall, so it slides along. Buildings come with the terrain's
+/// foundations.
+pub fn keep_out_of_buildings(state: &mut FrameState, walker: &mut Walker, env: &BodyEnv) {
+    let Some(f) = env.terrain.as_ref().and_then(|t| t.foundations()) else {
+        return;
+    };
+    let p = env.surface_rotation.inverse() * state.position;
+    let dir = p.normalize();
+    let mut push = DVec3::ZERO;
+    for (_, b) in f.structures_near(dir, 2.0) {
+        let local = b.rotation.inverse() * (p + push - b.center);
+        // Feet above the roof, or the head below the floor: clear.
+        if local.y > b.half.y || local.y + CHARACTER_HEIGHT < -b.half.y {
+            continue;
+        }
+        let dx = b.half.x + CHARACTER_RADIUS - local.x.abs();
+        let dz = b.half.z + CHARACTER_RADIUS - local.z.abs();
+        if dx <= 0.0 || dz <= 0.0 {
+            continue;
+        }
+        let out = if dx < dz {
+            DVec3::X * dx * if local.x < 0.0 { -1.0 } else { 1.0 }
+        } else {
+            DVec3::Z * dz * if local.z < 0.0 { -1.0 } else { 1.0 }
+        };
+        push += b.rotation * out;
+    }
+    if push == DVec3::ZERO {
+        return;
+    }
+    let push = env.surface_rotation * push;
+    state.position += push;
+    let n = push.normalize();
+    let into = walker.velocity.dot(n);
+    if into < 0.0 {
+        walker.velocity -= n * into;
+    }
+}
+
 /// Moves every walker in a region for one tick.
 pub fn walker_system(
     region: Res<RegionBody>,
@@ -219,6 +260,7 @@ pub fn walker_system(
                 }
                 None => walk_step(&mut local.state, &mut walker, &mut control, &env, h, None),
             }
+            keep_out_of_buildings(&mut local.state, &mut walker, &env);
         }
         if scene.is_some() {
             // Turned with the planet once for the whole tick.

@@ -50,8 +50,8 @@ const REST_SPEED: f64 = 0.1;
 const REST_SPIN: f64 = 0.05;
 const REST_AFTER: f64 = 1.0;
 /// Walkers' capsule (m).
-const CHARACTER_HEIGHT: f64 = 1.8;
-const CHARACTER_RADIUS: f64 = 0.3;
+pub(crate) const CHARACTER_HEIGHT: f64 = 1.8;
+pub(crate) const CHARACTER_RADIUS: f64 = 0.3;
 const CHARACTER_GAP: f64 = 0.02;
 /// Most look-ahead along a body's motion when choosing patches (m).
 const PATCH_LOOKAHEAD: f64 = 60.0;
@@ -123,6 +123,8 @@ pub struct PhysicsStats {
     pub bodies: usize,
     pub patches: usize,
     pub patches_pending: usize,
+    /// Buildings' collision boxes in the world.
+    pub buildings: usize,
     /// Times the ground was rebuilt from a different terrain.
     pub ground_rebuilds: u64,
     pub substeps: u32,
@@ -614,6 +616,7 @@ impl PhysicsScene {
             bodies: self.bodies.len(),
             patches: self.patch_count(),
             patches_pending: self.ground.as_ref().map_or(0, Ground::pending),
+            buildings: self.ground.as_ref().map_or(0, Ground::buildings),
             ground_rebuilds: self.stats.ground_rebuilds,
             substeps,
             step_ms: started.elapsed().as_secs_f64() * 1e3,

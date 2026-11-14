@@ -9,9 +9,12 @@
 //! minus its finest detail. Land is always above sea level and ocean floor always below, so the
 //! coastline is set by the continent field alone and the ocean fraction matches the data.
 
+use std::sync::Arc;
+
 use glam::DVec3;
 use sim_core::{Body, TerrainData};
 
+use crate::foundations::Foundations;
 use crate::noise::{fbm, hash3, mix64, octaves_between, ridged, unit};
 
 /// Continents: about 1.3 cycles across the radius.
@@ -55,6 +58,8 @@ pub struct Terrain {
     /// Player-made changes (terrain deltas, planet-surface.md §6), applied in order on top of
     /// the generated heights, so regeneration always gives the same result.
     pads: Vec<Pad>,
+    /// Settlement foundations (generated from the layouts, not saved), under the pads.
+    foundations: Option<Arc<Foundations>>,
 }
 
 /// A flattened area (task 2.11): inside `radius` the ground is at `height`; over the next
@@ -115,6 +120,7 @@ impl Terrain {
             coast: 0.0,
             seeds,
             pads: Vec::new(),
+            foundations: None,
         };
         terrain.coast = terrain.coast_threshold();
         terrain
@@ -137,6 +143,17 @@ impl Terrain {
 
     pub fn pads(&self) -> &[Pad] {
         &self.pads
+    }
+
+    /// This terrain with the settlements' foundations (the pads stay).
+    pub fn with_foundations(&self, foundations: Arc<Foundations>) -> Terrain {
+        let mut t = self.clone();
+        t.foundations = Some(foundations);
+        t
+    }
+
+    pub fn foundations(&self) -> Option<&Arc<Foundations>> {
+        self.foundations.as_ref()
     }
 
     /// Whether `pad` reaches any point within `spread` radians of the unit direction `center`
@@ -218,6 +235,9 @@ impl Terrain {
         if p.craters > 0.0 {
             // Overlapping craters add up; keep the total within the body's relief.
             height += self.craters(dir, shortest).clamp(-p.relief, 0.5 * p.relief);
+        }
+        if let Some(f) = &self.foundations {
+            height = f.apply(dir, r, height);
         }
         for pad in &self.pads {
             let w = pad.weight(dir, r);

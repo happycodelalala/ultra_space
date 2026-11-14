@@ -84,6 +84,8 @@ pub(crate) struct Ground {
     patch_size: f64,
     pub(crate) body: RigidBodyHandle,
     patches: HashMap<TileKey, Patch>,
+    /// Buildings' collision boxes near bodies, by (site, building).
+    boxes: HashMap<(u32, u32), Patch>,
     pending: HashSet<TileKey>,
     /// Patches finished by the workers (with the terrain generation they were built from),
     /// waiting to be added.
@@ -108,6 +110,7 @@ impl Ground {
             patch_size,
             body,
             patches: HashMap::new(),
+            boxes: HashMap::new(),
             pending: HashSet::new(),
             done: Arc::default(),
             generation: 0,
@@ -219,6 +222,23 @@ impl Ground {
     /// time `now` and starts building the missing ones. Returns whether every patch within
     /// `cover` (m) of `dir` is ready.
     pub(crate) fn want(&mut self, dir: DVec3, radius: f64, cover: f64, now: f64) -> bool {
+        // Buildings: boxes are cheap, so they go in at once (no background build).
+        if let Some(f) = self.terrain.foundations() {
+            for (key, _) in f.structures_near(dir, radius) {
+                match self.boxes.get_mut(&key) {
+                    Some(b) => b.wanted_at = now,
+                    None => {
+                        self.boxes.insert(
+                            key,
+                            Patch {
+                                collider: ColliderHandle::invalid(),
+                                wanted_at: now,
+                            },
+                        );
+                    }
+                }
+            }
+        }
         for key in self.keys_around(dir, radius) {
             if let Some(p) = self.patches.get_mut(&key) {
                 p.wanted_at = now;
@@ -268,6 +288,44 @@ impl Ground {
                 },
             );
         }
+        // Buildings wanted for the first time get their colliders; unwanted ones go.
+        if let Some(f) = self.terrain.foundations().cloned() {
+            let sites = f.sites();
+            for (&(site, k), b) in self.boxes.iter_mut() {
+                if b.collider != ColliderHandle::invalid() {
+                    continue;
+                }
+                let Some(s) = sites
+                    .get(site as usize)
+                    .and_then(|s| s.structures().get(k as usize))
+                else {
+                    continue;
+                };
+                let builder = ColliderBuilder::cuboid(s.half.x, s.half.y, s.half.z)
+                    .position(Pose::from_parts(s.center, s.rotation))
+                    .density(0.0)
+                    .friction(GROUND_FRICTION)
+                    .collision_groups(InteractionGroups::new(
+                        GROUND_GROUP,
+                        Group::ALL,
+                        InteractionTestMode::And,
+                    ));
+                b.collider = world.insert_collider(builder, Some(self.body));
+            }
+        }
+        let gone: Vec<(u32, u32)> = self
+            .boxes
+            .iter()
+            .filter(|(_, b)| now - b.wanted_at > PATCH_LIFETIME)
+            .map(|(k, _)| *k)
+            .collect();
+        for key in gone {
+            if let Some(b) = self.boxes.remove(&key)
+                && b.collider != ColliderHandle::invalid()
+            {
+                world.remove_collider(b.collider);
+            }
+        }
         let mut by_age: Vec<(f64, TileKey)> = self
             .patches
             .iter()
@@ -291,6 +349,14 @@ impl Ground {
     /// Number of patches being built.
     pub(crate) fn pending(&self) -> usize {
         self.pending.len()
+    }
+
+    /// Number of buildings with colliders (stats and tests).
+    pub(crate) fn buildings(&self) -> usize {
+        self.boxes
+            .values()
+            .filter(|b| b.collider != ColliderHandle::invalid())
+            .count()
     }
 
     /// Number of built patches (stats and tests).

@@ -143,6 +143,52 @@ while loading, from the recorded responses exported with it (`content/lore`).
 - **From the air:** settlements show at a distance in a simplified form, so they don't pop
   into existence on approach, and windows and streets are lit at night.
 
+**As built (task 4.5):**
+
+- **Kits.** Each culture's kit is a recipe file (`content/data/building_kits/<id>.json`) that
+  `tools/build-kits.sh` assembles in headless Blender (`tools/kits/assemble.py`) from
+  third-party pieces in `assets/third_party/<pack>/` (CC0, licences alongside) into one model per
+  building in `assets/export/buildings/<kit>/` plus a generated `kit.json` with each building's
+  uses and measured bounds. Houses are recipes on cells (walls round each storey, door and
+  windows at the front, a hipped roof, chimney, banners, lanterns, a tower); the rest are
+  placed pieces. The medieval kit (Kenney Fantasy Town Kit, 3 m cells) has 18 buildings, from
+  a 6 m cottage to an 18 m two-storey hall, mills, stalls, a well, trees and a cart; the
+  stand-in colony kit (Kenney Space Kit, 6 m cells) has 12: habitat domes, greenhouse, hangar,
+  workshop, lab, modules, landing pad, comms dish, generator, a rocket and crates. Fronts face
+  +Z. CI checks the kits were rebuilt after their recipes changed (`kits.stamp`) and the recipes
+  against `building_kit.schema.json`. Placeholders until the design track's own kits.
+- **Layouts** (`sim_society::layout`): what a settlement needs comes from its people by role
+  (medieval households of five, a barn per eight farmers and herders, a smithy per three
+  smiths, an inn, a shrine and mills for villages and towns, a hall and six market stalls for
+  towns; colony habitats of forty, a greenhouse per ten growers, a hangar per ten pilots,
+  workshops, labs, pads, power and comms). The **medieval** style starts from a square (a ring
+  street with the well at the centre), sends four to six winding streets out from it (a random
+  walk that turns back toward its bearing and stops at water or steep ground) with side lanes
+  branching off (and, in towns, lanes off those), sized so every household finds frontage.
+  Plots along the streets, both sides, fill from the square outward: public buildings take the
+  square, homes the streets beyond, farms and mills the outer third; buildings face their
+  street. Stalls stand in the square, trees and carts round the edge. The **colony** style is
+  a grid of plots (the largest building plus a street) in blocks of 3 × 3 with avenues between,
+  turned to a random bearing, filled from the centre out: pads and hangars, the port, the
+  administration module, labs, workshops, habitats, greenhouses, then power and comms; each
+  building faces the street toward the centre. A plot is skipped when the ground rises more
+  than 3 m across it or lies within 1 m of sea level. Meridian's 32 settlements give about 4,000
+  buildings (towns about 670, the Compact's colony about 400) in about 50 ms on one core,
+  laid out on the loading worker on all cores.
+- **Foundations** (`sim_planet::foundations`): every building's footprint (plus 0.8 m) is
+  levelled at the ground height of its centre and eases back to the natural ground over 4 m.
+  Where neighbours' blends overlap, their heights are averaged weighted by nearness, so each
+  building's own rectangle stays level to the millimetre and the ground stays continuous. They
+  apply under the player's pads, are generated with the layouts and never saved. **Spatial
+  index:** a sample first tests each settlement's cap (one dot product), then the footprints
+  in its 16 m cell of that settlement's grid; sampling costs the same as before planet-wide and
+  a few percent more inside a town.
+- **Collision:** each building has a box from its model's bounds (trees have none). Physics
+  streams the boxes near vehicles in as cuboid colliders on the ground body, with the terrain
+  patches (they turn with the planet); the walker is pushed out of the boxes near it and slides
+  along their walls. Both come with the region's terrain (`Terrain::foundations`), so physics,
+  the walker and the drawn terrain agree. The `layout_map` example draws layouts from above.
+
 ## 6. People near the player
 
 - **Promotion:** within about 2 km a settlement's buildings appear and some of its people

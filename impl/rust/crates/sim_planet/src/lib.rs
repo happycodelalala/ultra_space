@@ -5,6 +5,7 @@
 //! gameplay.
 
 pub mod climate;
+pub mod foundations;
 pub mod map;
 pub mod mesh;
 pub mod noise;
@@ -12,6 +13,7 @@ pub mod quadtree;
 pub mod terrain;
 
 pub use climate::{Biome, Climate, latitude, subsolar_latitude};
+pub use foundations::{Footprint, Foundations, PlacedBox, Site, Structure, tangent_frame};
 pub use mesh::{CollisionPatch, TileMesh, build_tile, collision_patch, tile_indices};
 pub use quadtree::{Extent, TileKey, View, estimated_heights, locate, select};
 pub use terrain::{Pad, Sample, Terrain, fibonacci_directions};

@@ -1,0 +1,315 @@
+{
+  "id": "medieval_village",
+  "source": "kenney-fantasy-town",
+  "licence": "assets/third_party/kenney-fantasy-town/License.txt",
+  "buildings": [
+    {
+      "id": "cottage",
+      "uses": [
+        "home"
+      ],
+      "model": "cottage.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -3.212
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        3.212
+      ]
+    },
+    {
+      "id": "house",
+      "uses": [
+        "home"
+      ],
+      "model": "house.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -4.712
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        4.712
+      ]
+    },
+    {
+      "id": "stone_house",
+      "uses": [
+        "home"
+      ],
+      "model": "stone_house.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -4.712
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        4.712
+      ]
+    },
+    {
+      "id": "longhouse",
+      "uses": [
+        "home",
+        "farm"
+      ],
+      "model": "longhouse.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -7.712
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        7.712
+      ]
+    },
+    {
+      "id": "townhouse",
+      "uses": [
+        "home",
+        "shop"
+      ],
+      "model": "townhouse.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -4.712
+      ],
+      "max_m": [
+        3.212,
+        9.422,
+        4.712
+      ]
+    },
+    {
+      "id": "hall",
+      "uses": [
+        "hall"
+      ],
+      "model": "hall.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -9.212
+      ],
+      "max_m": [
+        3.212,
+        9.422,
+        9.212
+      ]
+    },
+    {
+      "id": "inn",
+      "uses": [
+        "inn"
+      ],
+      "model": "inn.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -6.212
+      ],
+      "max_m": [
+        3.212,
+        9.422,
+        6.636
+      ]
+    },
+    {
+      "id": "smithy",
+      "uses": [
+        "smithy"
+      ],
+      "model": "smithy.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -3.212
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        3.212
+      ]
+    },
+    {
+      "id": "barn",
+      "uses": [
+        "farm"
+      ],
+      "model": "barn.glb",
+      "min_m": [
+        -3.201,
+        0.0,
+        -6.201
+      ],
+      "max_m": [
+        3.201,
+        4.878,
+        6.201
+      ]
+    },
+    {
+      "id": "shrine",
+      "uses": [
+        "shrine"
+      ],
+      "model": "shrine.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -7.65
+      ],
+      "max_m": [
+        3.212,
+        12.0,
+        4.712
+      ]
+    },
+    {
+      "id": "watermill",
+      "uses": [
+        "mill"
+      ],
+      "model": "watermill.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -3.212
+      ],
+      "max_m": [
+        5.625,
+        6.422,
+        3.212
+      ]
+    },
+    {
+      "id": "windmill",
+      "uses": [
+        "mill"
+      ],
+      "model": "windmill.glb",
+      "min_m": [
+        -4.67,
+        0.0,
+        -1.65
+      ],
+      "max_m": [
+        4.67,
+        12.47,
+        2.957
+      ]
+    },
+    {
+      "id": "well",
+      "uses": [
+        "square"
+      ],
+      "model": "well.glb",
+      "min_m": [
+        -3.0,
+        -0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        0.84,
+        3.0
+      ]
+    },
+    {
+      "id": "stall_red",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_red.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "stall_green",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_green.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -1.535,
+        0.0,
+        -1.535
+      ],
+      "max_m": [
+        1.535,
+        8.918,
+        1.535
+      ]
+    },
+    {
+      "id": "tree_crooked",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree_crooked.glb",
+      "min_m": [
+        -1.535,
+        -0.0,
+        -1.535
+      ],
+      "max_m": [
+        1.535,
+        7.238,
+        1.535
+      ]
+    },
+    {
+      "id": "cart",
+      "uses": [
+        "prop"
+      ],
+      "model": "cart.glb",
+      "min_m": [
+        -1.34,
+        -0.0,
+        -1.935
+      ],
+      "max_m": [
+        1.34,
+        1.607,
+        2.085
+      ]
+    }
+  ]
+}

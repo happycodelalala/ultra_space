@@ -1,0 +1,212 @@
+{
+  "id": "colony_standin",
+  "source": "kenney-space-kit",
+  "licence": "assets/third_party/kenney-space-kit/License.txt",
+  "buildings": [
+    {
+      "id": "hab_dome",
+      "uses": [
+        "home"
+      ],
+      "model": "hab_dome.glb",
+      "min_m": [
+        2.186,
+        0.0,
+        0.501
+      ],
+      "max_m": [
+        21.814,
+        9.0,
+        17.499
+      ]
+    },
+    {
+      "id": "hab_dome_b",
+      "uses": [
+        "home"
+      ],
+      "model": "hab_dome_b.glb",
+      "min_m": [
+        2.186,
+        0.0,
+        0.501
+      ],
+      "max_m": [
+        21.814,
+        10.8,
+        17.499
+      ]
+    },
+    {
+      "id": "greenhouse",
+      "uses": [
+        "farm"
+      ],
+      "model": "greenhouse.glb",
+      "min_m": [
+        2.186,
+        0.0,
+        0.501
+      ],
+      "max_m": [
+        21.814,
+        8.4,
+        17.499
+      ]
+    },
+    {
+      "id": "hangar",
+      "uses": [
+        "hangar"
+      ],
+      "model": "hangar.glb",
+      "min_m": [
+        6.0,
+        0.0,
+        -0.0
+      ],
+      "max_m": [
+        18.0,
+        6.0,
+        18.0
+      ]
+    },
+    {
+      "id": "workshop",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop.glb",
+      "min_m": [
+        6.0,
+        0.0,
+        3.0
+      ],
+      "max_m": [
+        18.0,
+        6.0,
+        15.0
+      ]
+    },
+    {
+      "id": "lab",
+      "uses": [
+        "lab"
+      ],
+      "model": "lab.glb",
+      "min_m": [
+        6.0,
+        0.0,
+        3.0
+      ],
+      "max_m": [
+        18.0,
+        6.0,
+        15.0
+      ]
+    },
+    {
+      "id": "module",
+      "uses": [
+        "hall",
+        "clinic"
+      ],
+      "model": "module.glb",
+      "min_m": [
+        6.0,
+        -0.0,
+        6.0
+      ],
+      "max_m": [
+        18.0,
+        6.0,
+        12.0
+      ]
+    },
+    {
+      "id": "landing_pad",
+      "uses": [
+        "pad"
+      ],
+      "model": "landing_pad.glb",
+      "min_m": [
+        6.0,
+        0.0,
+        3.0
+      ],
+      "max_m": [
+        18.0,
+        0.6,
+        15.0
+      ]
+    },
+    {
+      "id": "comms",
+      "uses": [
+        "comms"
+      ],
+      "model": "comms.glb",
+      "min_m": [
+        9.454,
+        0.0,
+        6.194
+      ],
+      "max_m": [
+        14.546,
+        4.885,
+        10.615
+      ]
+    },
+    {
+      "id": "generator",
+      "uses": [
+        "power"
+      ],
+      "model": "generator.glb",
+      "min_m": [
+        9.0,
+        0.0,
+        5.1
+      ],
+      "max_m": [
+        15.0,
+        4.098,
+        12.9
+      ]
+    },
+    {
+      "id": "rocket",
+      "uses": [
+        "port"
+      ],
+      "model": "rocket.glb",
+      "min_m": [
+        6.6,
+        0.0,
+        3.6
+      ],
+      "max_m": [
+        17.4,
+        17.4,
+        14.4
+      ]
+    },
+    {
+      "id": "crates",
+      "uses": [
+        "prop"
+      ],
+      "model": "crates.glb",
+      "min_m": [
+        10.35,
+        0.0,
+        7.511
+      ],
+      "max_m": [
+        13.65,
+        2.1,
+        10.489
+      ]
+    }
+  ]
+}

@@ -136,6 +136,7 @@ fn linear(c: [f32; 3]) -> Vec4 {
 fn setup_terrains(
     mut commands: Commands,
     universe: Res<Universe>,
+    sim: Res<crate::sim::Sim>,
     mut ground_materials: ResMut<Assets<TerrainMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
 ) {
@@ -145,7 +146,14 @@ fn setup_terrains(
         .iter()
         .enumerate()
         .filter_map(|(i, body)| {
-            let terrain = Terrain::of(body)?;
+            // The region's terrain (with its settlements' foundations), else the body's own.
+            let terrain = sim
+                .0
+                .regions
+                .get(i)
+                .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>())
+                .and_then(|t| t.0.as_deref().cloned())
+                .or_else(|| Terrain::of(body))?;
             let p = &terrain.params;
             let extent = Extent {
                 radius: terrain.radius,
