@@ -417,7 +417,7 @@ Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
 legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
 builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 
-**Status (2026-11-14):** 3.1–3.13 done on branch `batch3/builder` (not merged).
+**Status (2026-11-14):** 3.1–3.14 done on branch `batch3/builder` (not merged).
 - 3.1–3.9: rapier physics per region, terrain collision patches, the new part and design format
   with landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
   the builder (keys and mouse picking, symmetry, sections, stats and balance warnings) and new
@@ -430,7 +430,8 @@ builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
 - Vehicle and building design now runs on its own track (AGENTS.md, design/design-track.md);
   the Bastion in the game is a placeholder until its redesign is imported.
 - 3.13: save and load (F5/F9 quick save, round-trip tests).
-- Next: 3.14 per-ship cruise, then 3.15 review.
+- 3.14: per-ship cruise characteristics from the drive's rating and the ship's mass (load).
+- Next: 3.15 review.
 - Known gaps: stats size measures part centres; the lander parts are overpowered (~10 g);
   wheels don't spin or move with their suspension; soles don't roll to side slopes; frame rate
   with the Bastion fell to ~22 fps (left until its redesign); no save list menu yet.

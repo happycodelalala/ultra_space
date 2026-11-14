@@ -5,7 +5,8 @@ use bevy_ecs::prelude::*;
 use glam::{DQuat, DVec3};
 
 use crate::allocation::{Allocator, Thruster, Wrench};
-use crate::catalog::{CruiseDriveDef, PartKind, Shape};
+use crate::catalog::{PartKind, Shape};
+use crate::cruise::CruiseCharacteristics;
 use crate::design::{VehicleDesign, VehiclePart};
 use crate::mass::MassProperties;
 
@@ -40,8 +41,8 @@ pub struct Performance {
     pub max_acceleration: [f64; 6],
     /// Maximum angular acceleration (rad/s²) about vehicle X, Y, Z (smaller of the two signs).
     pub max_angular_acceleration: DVec3,
-    /// Cruise drive, if fitted.
-    pub cruise: Option<CruiseDriveDef>,
+    /// What the cruise drives (if any) do for this ship.
+    pub cruise: Option<CruiseCharacteristics>,
 }
 
 impl Performance {
@@ -196,7 +197,12 @@ impl VehicleBody {
             .fold(1.0, f64::max)
             * 2.0;
         let allocator = Allocator::new(thrusters, wheel, size);
-        let cruise = vehicle.parts.iter().find_map(|p| p.def.cruise_drive);
+        let drives: Vec<_> = vehicle
+            .parts
+            .iter()
+            .filter_map(|p| p.def.cruise_drive)
+            .collect();
+        let cruise = CruiseCharacteristics::of(&drives, mass.mass);
         let performance = performance(&allocator, &mass, cruise);
         let wheels = vehicle
             .parts
@@ -276,7 +282,7 @@ impl VehicleBody {
 fn performance(
     allocator: &Allocator,
     mass: &MassProperties,
-    cruise: Option<CruiseDriveDef>,
+    cruise: Option<CruiseCharacteristics>,
 ) -> Performance {
     const HUGE: f64 = 1.0e15;
     let mut max_acceleration = [0.0; 6];

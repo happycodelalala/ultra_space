@@ -453,7 +453,25 @@ pub struct ReactionWheelDef {
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CruiseDriveDef {
+    /// Top speed with the ship at or under the rated mass (m/s).
     pub max_speed_ms: f64,
+    /// The ship mass the drive is sized for (kg): heavier ships load it, charge and turn
+    /// slower, and lose top speed (cruise.rs, [`crate::cruise::CruiseCharacteristics`]).
+    pub rated_mass_kg: f64,
+    /// Charge time at the rated mass (s).
+    #[serde(default = "default_charge_time")]
+    pub charge_time_s: f64,
+    /// Turn rate at full stick at the rated mass (degrees per second).
+    #[serde(default = "default_cruise_turn")]
+    pub turn_rate_deg_s: f64,
+}
+
+fn default_charge_time() -> f64 {
+    3.0
+}
+
+fn default_cruise_turn() -> f64 {
+    30.0
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]

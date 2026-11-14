@@ -304,7 +304,10 @@
         ]
       },
       "cruise_drive": {
-        "max_speed_ms": 200000000
+        "max_speed_ms": 200000000,
+        "rated_mass_kg": 24000,
+        "charge_time_s": 3,
+        "turn_rate_deg_s": 30
       },
       "attach_nodes": [
         {

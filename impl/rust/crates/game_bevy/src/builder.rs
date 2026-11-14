@@ -996,6 +996,15 @@ fn update_panel(
             };
         }
     }
+    if let Some(c) = st.cruise {
+        s += &format!(
+            "\ncruise: load {:.2} | charge {:.1} s | turn {:.0} deg/s | top {:.0} km/s",
+            c.load,
+            c.charge_time_s,
+            c.turn_rate.to_degrees(),
+            c.max_speed_ms / 1000.0
+        );
+    }
     for problem in &st.problems {
         s += &format!("\n! {problem}");
     }

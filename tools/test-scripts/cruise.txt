@@ -1,0 +1,12 @@
+# Per-ship cruise (task 3.14). Starts in the 150 km parking orbit. J charges the drive (HUD
+# CHARGING for about 2.8 s for the Kestrel), then cruises; the mouse turns it at the cruise
+# turn rate; J drops out. Look for: 01-charging.png HUD "CHARGING", 02-cruising.png HUD
+# "CRUISE" with a large speed, 03-turned.png the view swung right, then back in orbit.
+1    press J                 # engage
+1.5  shot 01-charging.png
+5    shot 02-cruising.png
+5.5  mouse 40 0 1.0          # turn right while cruising
+7    shot 03-turned.png
+7.5  press J                 # drop out
+9    shot 04-dropped.png
+9.5  quit

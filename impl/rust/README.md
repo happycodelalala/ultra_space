@@ -74,7 +74,7 @@ Windows export copies `content/data` next to the `.exe`.
   points, W/S raise or lower the held speed up to 4 km/s, X stops),
   **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the
   planet when in orbit (drop straight down),
-  **J** engages the cruise drive (3 s charge; steer with the mouse; J again or approaching a body
+  **J** engages the cruise drive (charge time and turn rate from the drive and the ship's mass, about 3 s for the Kestrel; steer with the mouse; J again or approaching a body
   drops out into orbit),
   V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
   camera. Thrust is disabled above ×4 time warp, where coasting ships go on rails.

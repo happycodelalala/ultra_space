@@ -472,6 +472,8 @@ pub struct BuildStats {
     pub wheels: usize,
     /// Centre of mass height over half the narrowest wheel track (above 1 tips easily).
     pub tipping: Option<f64>,
+    /// What the cruise drives do for this ship, if fitted.
+    pub cruise: Option<crate::cruise::CruiseCharacteristics>,
     /// Problems that stop the vehicle working.
     pub problems: Vec<String>,
 }
@@ -533,7 +535,15 @@ pub fn stats(vehicle: &Vehicle, g: f64) -> BuildStats {
             ));
         }
     }
+    if let Some(c) = perf.cruise.filter(|c| c.overloaded()) {
+        problems.push(format!(
+            "cruise drive overloaded: {:.1}x its rated mass (at most {:.0}x)",
+            c.load,
+            crate::cruise::MAX_LOAD
+        ));
+    }
     BuildStats {
+        cruise: perf.cruise,
         parts: vehicle.parts.len(),
         mass_kg: body.mass.mass,
         center_of_mass: com,

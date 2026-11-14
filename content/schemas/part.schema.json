@@ -201,12 +201,31 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "max_speed_ms"
+            "max_speed_ms",
+            "rated_mass_kg"
           ],
           "properties": {
             "max_speed_ms": {
               "type": "number",
-              "exclusiveMinimum": 0
+              "exclusiveMinimum": 0,
+              "description": "Top speed with the ship at or under the rated mass (m/s)."
+            },
+            "rated_mass_kg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Ship mass the drive is sized for: heavier ships charge and turn slower (square root of the load) and lose top speed; above 4x it won't engage."
+            },
+            "charge_time_s": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 3,
+              "description": "Charge time at the rated mass (s)."
+            },
+            "turn_rate_deg_s": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 30,
+              "description": "Turn rate at full stick at the rated mass (degrees per second)."
             }
           }
         },

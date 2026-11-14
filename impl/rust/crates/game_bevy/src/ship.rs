@@ -750,6 +750,9 @@ pub fn player_cruise_status(sim: &Simulation, ship: &PlayerShip, system: &StarSy
             format!("  CRUISE {:.0} km/s (J drop)", speed / 1_000.0)
         }
         (CruisePhase::Off, Some(CruiseBlocked::NoDrive)) => "  NO CRUISE DRIVE".into(),
+        (CruisePhase::Off, Some(CruiseBlocked::Overloaded(load))) => {
+            format!("  CRUISE DRIVE OVERLOADED ({load:.1}x its rated mass)")
+        }
         (CruisePhase::Off, Some(CruiseBlocked::TooClose(i))) => {
             format!("  CRUISE BLOCKED: too close to {}", system.bodies[*i].name)
         }
