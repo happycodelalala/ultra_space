@@ -272,6 +272,31 @@ against the buildings' boxes) shows "name, role (culture)" under the crosshair.
 | People simulated in detail | ≤ 64 per settlement near the player |
 | Settlement draw cost | A few draw calls per building kind (instancing) |
 
+## 8a. Planet size with settlements (task 4.10, for the developer's decision)
+
+`cargo run --release -p sim_society --example size_compare` regenerates Meridian's societies at
+each radius (surface gravity kept); the test views `size-<km>-low|high` show the biggest town
+from 1.5 km up and 3 km out, and from 25 km up (round q0058).
+
+| Radius | Circumference | Low orbit | Hollish home region | Nearest Hollish settlement | Nearest Compact | Seat to seat (at 300 m/s) |
+|---|---|---|---|---|---|---|
+| 300 km | 1,885 km | 1.5 km/s | 73 km radius | 17 km | 23 km | 344 km (19 min) |
+| 600 km | 3,770 km | 2.3 km/s | 147 km | 35 km | 41 km | 737 km (41 min) |
+| 1,000 km | 6,283 km | 3.0 km/s | 244 km | 60 km | 65 km | 1,225 km (68 min) |
+
+What it shows: each people has a fixed number of settlements (Hollin 24, Compact 8) spread
+over a home region sized in degrees, so the radius only stretches the gaps. At every size the
+land is far emptier than a lived-in one (medieval villages stood 2–5 km apart): from 3 km a
+town of 1,900 is a small patch, from 25 km up no settlement can be seen at all. The views
+differ mainly in curvature (300 km reads as a small world from 25 km up).
+
+**Recommendation:** keep 600 km (orbit at 2.3 km/s, room for 10–25 realms) and make density
+the lever instead: settlement counts from the home region's area (villages every 5–8 km, a
+few hundred settlements per people; layouts and people are already made only near the
+player, and the aggregate step of all 32 settlements costs 0.01 ms), plus hamlets, farms and
+fields between them so the land between towns isn't empty. That is a change of scope for a
+later task, to be agreed first.
+
 ## 9. Open questions
 
 - Planet size (300, 600 or 1000 km): decided at the end of the batch with settlements on the
