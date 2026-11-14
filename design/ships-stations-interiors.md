@@ -262,7 +262,7 @@ be 15,000 draw calls if drawn naively. Mitigations, independent of art source:
 
 Estimate: the development machine's GPU handles a few million triangles and a few thousand draw
 calls per frame comfortably, so X4-scale battles fit with merging and instancing. To be confirmed
-by a benchmark when fleets arrive (Batch 6).
+by a benchmark when fleets arrive (Batch 7).
 
 ## 8. Data format additions
 
@@ -300,4 +300,4 @@ everything above from the start, even before each feature is implemented:
 - Interior layout generator for districts: shape grammar details per culture.
 - Grid size and connector size classes for stations and sections.
 - Art sources: which CC0 kits for placeholders; which signature pieces to model first.
-- Whether virtual geometry is mature enough by Batch 6.
+- Whether virtual geometry is mature enough by Batch 7.
