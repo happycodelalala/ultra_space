@@ -129,7 +129,39 @@
         0.05
       ],
       "emissive_strength": 8.0,
-      "about": "red warning beacons on a giant frame's extremities (masts, shoulders, shell tops)"
+      "about": "red: warning beacons and port (left) navigation lights"
+    },
+    "nav_green": {
+      "color": [
+        0.1,
+        1.0,
+        0.3
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        0.1,
+        1.0,
+        0.3
+      ],
+      "emissive_strength": 8.0,
+      "about": "green: starboard (right) navigation lights"
+    },
+    "strobe": {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissive_strength": 10.0,
+      "about": "white: anti-collision strobes and stern lights"
     }
   }
 }

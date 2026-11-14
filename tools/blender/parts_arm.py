@@ -66,42 +66,51 @@ def rotor(m, h, part):
 @builder("bastion.leg_1", "bastion.leg_2", "bastion.leg_3", "bastion.leg_4", "bastion.leg_5",
          "bastion.leg_6")
 def spider(m, h, part):
-    """A folding-leg segment: a hexagonal spine of dark frame metal, tapering to the tip, with
-    stiffening rings; faceted clevis cheeks at each end round the pins, held by retainers; a
-    pointed ceramic fairing on the outer face (it is outermost when folded); the fold
-    actuator along one side and the armoured cable feeding the next joints along the other."""
+    """A folding-leg segment, a manipulator boom (design/bastion.md): a tapered tube in the
+    second paint between the joint housings, clevis cheeks round the pins at each end, held by
+    retainers; a flat armour strip on the outer face (outermost when folded against the
+    shell); the fold actuator (rod under a dust boot) along one side, the utility harness
+    feeding the next joints along the other in clamps. Every second segment carries an
+    inspection camera and its light at its far end, looking along the boom at the grapple."""
     hx, hy, hz = h
     r = hx * 0.55
     rb = hx * 0.62
     end = hy - rb * 1.1
-    m.lathe([(r * 0.95, -end), (r * 1.05, -end + 0.1), (r * 0.9, -end * 0.2), (r * 0.98, end - 0.1),
-             (r * 0.9, end)], frame(), "dark", 6, angle=20.0)
-    for y in (-end * 0.6, -end * 0.2, end * 0.2, end * 0.6):
-        m.lathe([(r * 0.9, y - 0.06), (r * 1.12, y - 0.03), (r * 1.12, y + 0.03), (r * 0.9, y + 0.06)],
-                frame(), "metal", 6, closed=True, angle=20.0)
-    for s in (-1, 1):
-        y = s * (hy - rb)
+    m.lathe([(r * 0.92, -end), (r * 1.0, -end + 0.12), (r * 0.9, end - 0.12), (r * 0.82, end)], frame(),
+            "armor2", 12, angle=35.0)
+    for s_ in (-1, 1):
+        y = s_ * (end - 0.05)
+        m.cyl((0, y - 0.1, 0), (0, y + 0.1, 0), r * 1.08, "dark", 12, bevel=0.01, segments=1)
+    for s_ in (-1, 1):
+        y = s_ * (hy - rb)
         for sx in (-1, 1):
-            inner = s * (end - rb * 0.8) - y
-            out = [(-rb * 0.7, inner), (rb * 0.7, inner), (rb * 0.95, 0), (rb * 0.4, s * rb),
-                   (-rb * 0.4, s * rb), (-rb * 0.95, 0)]
+            inner = s_ * (end - rb * 0.8) - y
+            out = [(-rb * 0.7, inner), (rb * 0.7, inner), (rb * 0.95, 0), (rb * 0.4, s_ * rb),
+                   (-rb * 0.4, s_ * rb), (-rb * 0.95, 0)]
             if sx > 0:
                 pl = frame((hx * 0.6, y, 0), u=(0, 0, -1), v=(0, 1, 0))
                 pts = [(-x, yy) for x, yy in out]
             else:
                 pl = frame((-hx * 0.6, y, 0), u=(0, 0, 1), v=(0, 1, 0))
                 pts = out
-            m.plate(pts, hx * 0.3, pl, "armor2", chamfer=0.02)
+            m.plate(pts, hx * 0.3, pl, "dark", chamfer=0.02)
         m.cyl((-hx * 0.98, y, 0), (hx * 0.98, y, 0), rb * 0.3, "chrome", 12)
         for sx in (-1, 1):
             m.cap((sx * hx * 0.9, y, 0), X * sx, rb * 0.45)
-    fl = end * 0.75
-    m.plate([(-r * 0.7, -fl), (0, -fl - r * 1.2), (r * 0.7, -fl), (r * 0.55, fl), (0, fl + r * 0.8),
-                    (-r * 0.55, fl)], 0.07, frame((0, 0, r * 0.95)), "armor", chamfer=0.03)
+    fl = end * 0.8
+    m.box((r * 1.1, 2 * fl, 0.06), at=(0, 0, r * 0.98), mat="armor", bevel=0.02, segments=2)
     rr = max(0.03, r * 0.24)
     xr = r * 1.05 + rr * 1.4
-    m.piston((xr, end * 0.15, 0), (xr, -end * 0.92, 0), rr, extension=0.4, hint=(0, 0, 1))
+    m.ram((xr, end * 0.15, 0), (xr, -end * 0.92, 0), rr, extension=0.4, hint=(0, 0, 1))
     m.cable([(-r * 1.15, end * 0.85, 0), (-r * 1.15, -end * 0.85, 0)], max(0.03, r * 0.16))
+    for y in (end * 0.5, 0.0, -end * 0.5):
+        m.clamp(V((-r * 1.15, y, 0)), Y, -X, max(0.03, r * 0.16))
+    if part["id"] in ("bastion.leg_2", "bastion.leg_4"):
+        # Inspection camera and its light near the far (-Y) end, looking down the boom.
+        c = V((0, -end * 0.8, -r * 1.05))
+        m.box((r * 0.7, r * 0.5, r * 0.5), at=c - Z * r * 0.2, mat="dark", bevel=0.01, segments=1)
+        m.cyl(c - Y * r * 0.25, c - Y * r * 0.55, r * 0.16, "glass", 12)
+        m.box((r * 0.35, r * 0.1, r * 0.28), at=c + X * r * 0.45 - Y * r * 0.3, mat="light", bevel=0.0)
 
 
 @builder("bastion.carrier_front_left", "bastion.carrier_front_right", "bastion.carrier_back_left",
@@ -267,8 +276,8 @@ def forearm_beam(m, h, part):
 
 @builder("bastion.grapple")
 def grapple(m, h, part):
-    """A three-claw grapple: the wrist flange, a faceted palm housing, and
-    three claws, each between two blade cheeks on the palm: a tapered proximal finger and a
+    """A three-claw grapple: the wrist flange, a faceted palm housing with the wrist camera and
+    its light looking down between the claws, and three claws, each between two blade cheeks on the palm: a tapered proximal finger and a
     hooked, hardened talon, closed by its own sealed actuator."""
     hx, hy, hz = h
     m.lathe([(0, hy), (hx * 0.8, hy), (hx * 0.8, hy * 0.86), (hx * 0.6, hy * 0.8), (hx * 0.66, hy * 0.5),
@@ -294,3 +303,10 @@ def grapple(m, h, part):
                (-0.07, -0.25)]
         m.extrude(out, 0.09, tip, "metal", bevel=0.006, segments=1)
         m.piston(Y * hy * 0.3 + rd * hx * 0.25, k0.lerp(k1, 0.5) - rd * 0.06, 0.03, extension=0.35, hint=tg)
+    # Wrist camera and its light between two claws, looking down between them.
+    for k, mat in ((0.5, "glass"), (1.5, "light")):
+        t = 2 * math.pi * k / 3
+        rd = V((math.sin(t), 0, math.cos(t)))
+        c = rd * hx * 0.7 + Y * hy * 0.45
+        m.box((0.12, 0.1, 0.12), place=frame(c, u=Y.cross(rd), v=Y), mat="dark", bevel=0.01, segments=1)
+        m.cyl(c - Y * 0.05, c - Y * 0.1, 0.04, mat, 10)

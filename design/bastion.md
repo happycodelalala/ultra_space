@@ -1,67 +1,79 @@
 # The Bastion: functional layout
 
-An original titan, about 100 m tall, carried in a cocoon of four quarter-shells that open into
-flying platforms (vehicle data: `content/data/vehicles/bastion.json`; built and checked by
-`impl/rust/crates/sim_vehicle/tests/bastion.rs`). This document says where its crew are, how
-they move around it and what each visible detail is for, so the models stay honest: **a
-window has a room behind it, a light lights something, a ladder or railing is on a route
-people use, a vent is where heat or air leaves, a hatch opens into a space.** Anything that
-fails that test is left off.
+An original titan, about 100 m tall, for **interplanetary exploration and combat**: it works in
+vacuum, on airless and atmospheric worlds, in low and full gravity, and under fire. Four
+quarter-shells close round it as a cocoon (armour in transit and in a fight) and open into
+platforms carrying its main engines and drone bays (vehicle data:
+`content/data/vehicles/bastion.json`; built and checked by
+`impl/rust/crates/sim_vehicle/tests/bastion.rs`).
+
+This document says where its crew are, how they move, how it stays alive in space and what
+each visible detail is for, so the models stay honest: **a light lights or marks something,
+a hatch opens into a space, a handrail is on a route suited crew use, a radiator is where
+heat leaves.** Nothing open-air: no walkways, railings, deck lights, cranes, air intakes or
+exhaust stacks, which would only work on a planet with air.
 
 ## Crew and spaces
 
-About fourteen crew.
+About fourteen crew, all inside one pressurised, armoured **crew module** in the upper torso,
+behind the thickest chest armour, shielded from the reactor below by its shadow shield:
+command deck, operations, quarters, galley, airlock. **No windows** anywhere: the crew see
+through the sensors (a window is a hole in the armour and useless at combat ranges).
 
-| Space | Where | Seen from outside as |
+| What | Where | Seen from outside as |
 |---|---|---|
-| Bridge: pilot, commander, sensor operator | Head, at the window band | The window band across the front and round the sides (the only windows on the machine) |
-| Operations, crew quarters, galley | Upper torso, behind the chest armour | Nothing: armoured, no windows |
-| Engineering: reactor control | Torso core, beside the reactor | Nothing |
-| Reactor | Chest centre | The armoured intake ring with its louvres (cooling air in) |
-| Lift shaft | Torso core to the neck | The neck bearing is hollow: the lift runs up into the head |
-| Drone crews | Shell bays (when the bays are open they are worked from the platform) | Bay lights inside the bays |
+| Crew module | Upper torso, behind the chest armour | Nothing but armour (and its two airlocks) |
+| Reactor (fusion) | Pelvis / waist, below the crew module | The armoured waist; its heat leaves through the radiators |
+| Sensors | The head (no crew): radar, optical and infrared turrets, lidar, star trackers, searchlights | A sensor head |
+| Radiators | Back of the torso, fin banks between armoured blades | The radiator fins, the only place heat leaves |
+| Communications | High-gain dish on the back (folded flat against it), whip antennas on the head | The dish |
+| Drones | Bays in the shells | Bay doors; lights inside the bays |
 
-## Routes
+## Getting in and out
 
-- **Boarding on the ground:** the crew lift is a cage on cables lowered by a davit on the
-  waist gallery (left side), from the gallery to the ground. Standing, the gallery is about
-  55 m up.
-- **Waist gallery:** a catwalk with railings right round the torso at the waist. Doors into
-  the torso on both flanks, each lit by a lamp over it. From the gallery, a caged ladder up
-  each flank to the shoulder deck.
-- **Shoulder decks:** the flat tops of the two shoulder slabs, railed round their outer edges,
-  each with a deck hatch down into the torso. Crews work there on the shell-arm roots and the
-  saddles. Deck lights on short posts light the deck.
-- **Head:** reached by the lift. A rear hatch onto the shoulder decks is the bridge's
-  emergency exit, with rungs down to the deck.
-- **No one climbs the limbs, the shells or the arms while the machine moves.** They are
-  serviced kneeling or parked, from outside gantries, through bolted service panels (not
-  doors), so the limbs carry service panels and no ladders, railings or door lamps.
+- **Docking port** on the back, above the radiators: a docking collar for shuttles and
+  stations, ringed by docking lights.
+- **Surface airlock** on the left flank of the torso: a door in an armoured frame with a
+  stowed hoist under it (a platform on cables lowered to the ground on a planet).
+- **EVA** (suited crew outside, any gravity): handrails from each airlock to the work sites
+  that are serviced outside (the shoulder bearings and the sensor head), tether rings along
+  them, work floodlights at each airlock and work site. **Nothing else outside is a route**:
+  limbs and shells are serviced docked or parked, through bolted service panels.
+
+## Moving
+
+- **Main engines:** the four lift engines on each shell (in flight the shells are platforms).
+- **Attitude:** RCS thruster quads (four nozzles each) at the extremities: the outer corners
+  of the shoulder slabs and of each shell; at 100 m a small push far from the centre turns it.
+- **Walking:** sealed hydraulic rams with dust boots over their rods (regolith gets into
+  everything); the feet have retractable anchor spikes for low gravity.
 
 ## Lights
 
-- **Driving lights:** floodlight banks under the shoulder slabs and under the head's brow,
-  aimed down and ahead: they light the ground where the machine walks.
-- **Work lights:** on each forearm, aimed along it at the hand.
-- **Door lamps:** one over each gallery door. **Deck lights:** on posts on the shoulder decks.
-- **Bay lights:** inside each drone bay (lighting it when open); amber approach lights along
-  the bay rim (drones homing on it).
-- **Red obstruction beacons** only at the highest and outermost points: the top of the head
-  mast, the tops of the shells and their outer hem corners.
-- **No glows** anywhere else: the reactor is not visible through its intake.
+- **Navigation lights:** red on the left, green on the right (on the shoulder slabs), white
+  strobes on the shells' outer corners and the head mast: so other craft see which way it
+  faces and how big it is.
+- **Terrain lights:** under the chest and on the shins, aimed down and ahead, for walking on
+  the dark side of a world.
+- **Searchlights:** in the sensor head, aimed where the sensors look.
+- **Work lights:** at the airlocks, the docking port and the EVA work sites.
+- **Bay lights:** inside each drone bay; amber approach lights along the bay rims (drones
+  homing on it).
+- **Red beacon** on the top of the head mast (the highest point when standing on a planet).
+- No other glow: the reactor and engines show nothing until they fire.
 
-## Heat and air
+## Heat
 
-The reactor draws cooling air in through the chest intake; the loop's heat leaves through the
-radiator fin bank on the back, the hot air out of the two exhaust stacks above it.
+In vacuum heat leaves only by radiation: the reactor's coolant runs from the waist up the back
+to the radiator fin banks between the back armour; nothing vents.
 
 ## Markings
 
-Hazard stripes only on pinch points and moving edges: the gap between chest and abdomen (it
-closes when the torso bends) and the drone bay doors' swinging edges.
+Hazard stripes only at pinch points and moving edges (chest–abdomen gap, bay door edges) and
+round the airlocks and the docking collar (keep clear).
 
 ## Surface
 
 Big sculpted armour plates; the plate seams, fasteners and wear on them are drawn by the hull
 detail shader at real sizes (plates about 3 m by 6 m), so the machine reads as 100 m from the
-plating alone, without modelled tiles.
+plating alone.

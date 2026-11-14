@@ -143,7 +143,7 @@ def head(m, h, part):
            + [P(0, 0.82, 0.3), P(0, 0.78, -0.1)], "armor2", bevel=0.01)
 
 
-@builder("bastion.waist", "frame.waist")
+@builder("frame.waist")
 def waist(m, h, part):
     """The pelvis: the sealed slewing drive the torso turns on; a faceted pelvis frame; both
     hip actuators with their pin retainers; thick pointed skirt armour front and back over
@@ -308,7 +308,7 @@ def shin(m, h, part):
     limb_body(m, h, "shin")
 
 
-@builder("bastion.foot", "frame.foot")
+@builder("frame.foot")
 def foot(m, h, part):
     """A talon foot: two pointed ceramic toes and a graphite heel spur round a dark sole
     with grip pads under it; the faceted ankle shroud; sealed shock struts from the shroud
@@ -341,7 +341,8 @@ def foot(m, h, part):
 def hand(m, h, part):
     """A heavy hand: the wrist drive, a faceted palm under a pointed ceramic back plate,
     three fingers in a row (three tapered phalanges
-    each, the last a talon) curling toward the palm side (+X) and an opposed thumb.
+    each, the last a talon) curling toward the palm side (+X) and an opposed thumb; grip pads
+    on the palm, each finger's curl actuator along the back of the hand.
     Symmetric front to back, so one part serves both arms."""
     hx, hy, hz = h
     m.drum((0, hy, 0), (0, hy * 0.62, 0), hx * 0.6, "dark", 8, hint=X)
@@ -380,6 +381,12 @@ def hand(m, h, part):
                "armor", bevel=0.008)
         if i == 0:
             m.drum(q - Z * hz * 0.2, q + Z * hz * 0.2, seg * 0.7, "dark", 8, hint=X)
+    # Grip pads on the palm side; each finger's curl actuator along its back, from the palm to
+    # its first joint.
+    m.box((0.06, hy * 0.5, hz * 1.5), at=(hx * 0.47, hy * 0.3, 0), mat="rubber", bevel=0.01, segments=1)
+    for z in (-hz * 0.58, 0.0, hz * 0.58):
+        m.ram(V((-hx * 0.62, hy * 0.45, z)), V((-hx * 0.42, -hy * 0.3, z)), seg * 0.28, extension=0.4,
+              hint=Z)
 
 
 @builder("frame.backpack")

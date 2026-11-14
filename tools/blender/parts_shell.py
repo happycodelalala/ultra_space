@@ -7,7 +7,7 @@ from pathlib import Path
 import bmesh
 from mech import V, X, Y, Z, along, frame
 from parts import builder, design_units
-from parts_titan import Batch, R, beacon
+from parts_titan import Batch, R, nav_light, rcs_quad
 
 
 def catmull(points, steps):
@@ -228,8 +228,8 @@ def shell_quarter(m, h, part):
     armour plates (a second plate lapped on the larger ones, a band in the second paint at
     the shoulder line), a steel band along the hem. In the middle of the bulge the drone bay
     (floor and walls; its door is a separate part) with lights under its top wall and amber
-    approach lights along its rim for drones homing on it; red obstruction beacons on the top
-    (the cocoon's highest point) and at the hem's outer corners. The four lift engines'
+    approach lights along its rim for drones homing on it; white strobes on the top (the
+    cocoon's highest point) and the hem's outer corners; RCS quads at the top outer corners. The four lift engines'
     gimbal mounts sit in sockets in the inner skin; a mounting pad takes the carrier."""
     shape = part["shape"]
     P = shape["profile_m"]
@@ -277,10 +277,15 @@ def shell_quarter(m, h, part):
     # Red beacons along the top and at the hem's outer corners; amber approach lights round
     # the drone bay's rim, for drones coming home.
     bt = Batch(m)
-    for d, y in ((0.0, top - 0.25), (a0 + 3.0, top - 1.2), (a1 - 3.0, top - 1.2), (a0 + 3.0, bottom + 0.6),
-                 (a1 - 3.0, bottom + 0.6)):
+    # White anti-collision strobes on the top and the hem's outer corners (the cocoon's
+    # extremities), RCS quads at the top outer corners (far from the centre: attitude control).
+    for d, y in ((0.0, top - 0.25), (a0 + 3.0, bottom + 0.6), (a1 - 3.0, bottom + 0.6)):
         r = resample(prof, y + 0.01, y - 0.01)[0][1]
-        beacon(bt, point(d, y, r + outer(d, y) + 0.2), 0.9)
+        nav_light(bt, point(d, y, r + outer(d, y) + 0.1), point(d, 0, 1), "strobe")
+    for d in (a0 + 4.0, a1 - 4.0):
+        y = top - 1.4
+        r = resample(prof, y + 0.01, y - 0.01)[0][1]
+        rcs_quad(m, bt, point(d, y, r + outer(d, y) + 0.3), point(d, 0, 1), Y)
     for d in (-BAY_DEG - 1.2, BAY_DEG + 1.2):
         for k in range(8):
             y = BAY_TOP - 0.5 - k * (BAY_TOP - BAY_BOTTOM - 1.0) / 7
