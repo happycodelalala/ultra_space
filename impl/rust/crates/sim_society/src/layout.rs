@@ -567,6 +567,12 @@ fn village(
             if h < MIN_HEIGHT + 1.0 || (h - plots.ground(p)).abs() > 0.3 * step {
                 break;
             }
+            // Reaching another street: a junction with it ends the lane (no crossings).
+            if let Some(k) = junction(plots, streets, nodes, at, p, q) {
+                streets.push((at, k));
+                plots.add_street(p, nodes[k as usize]);
+                break;
+            }
             nodes.push(q);
             let i = (nodes.len() - 1) as u32;
             streets.push((at, i));
@@ -639,6 +645,7 @@ fn village(
     order.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut used = vec![false; slots.len()];
     let mut unplaced = 0;
+    let mut grove: Vec<DVec2> = Vec::new();
 
     for &(use_, count) in wanted {
         for _ in 0..count {
@@ -659,21 +666,39 @@ fn village(
                     })
                 }
                 // Trees and props scattered round the edge.
+                // Trees in groves just outside the houses (most start next to an earlier tree),
+                // props among the streets.
                 "tree" | "prop" => {
                     let b = pick(kit, use_, Some(rng));
-                    let reach = length + 40.0;
+                    let reach = plots
+                        .placed
+                        .iter()
+                        .filter(|p| !kit.buildings[p.building].uses.iter().any(|u| u == "tree"))
+                        .map(|p| DVec2::new(p.x, p.z).length())
+                        .fold(square, f64::max)
+                        + 25.0;
                     b.is_some_and(|b| {
                         (0..40).any(|_| {
                             let a = rng.unit() * std::f64::consts::TAU;
-                            let d = if use_ == "tree" {
-                                reach * (0.5 + 0.6 * rng.unit())
+                            let p = if use_ == "tree" && !grove.is_empty() && rng.unit() < 0.75 {
+                                *rng.pick(&grove)
+                                    + DVec2::new(a.cos(), a.sin()) * (5.0 + 8.0 * rng.unit())
+                            } else if use_ == "tree" {
+                                DVec2::new(a.cos(), a.sin()) * reach * (0.85 + 0.3 * rng.unit())
                             } else {
-                                square + length * 0.5 * rng.unit()
+                                DVec2::new(a.cos(), a.sin()) * (square + length * 0.5 * rng.unit())
                             };
-                            let p = DVec2::new(a.cos(), a.sin()) * d;
-                            plots
+                            // Groves stay round the settlement.
+                            if p.length() > reach * 1.3 {
+                                return false;
+                            }
+                            let placed = plots
                                 .try_place(b, p, rng.unit() * std::f64::consts::TAU)
-                                .is_some()
+                                .is_some();
+                            if placed && use_ == "tree" {
+                                grove.push(p);
+                            }
+                            placed
                         })
                     })
                 }
@@ -711,7 +736,137 @@ fn village(
             }
         }
     }
+    let streets = prune(&nodes, streets, plots, ring);
     (nodes, streets, unplaced)
+}
+
+/// Where a lane stepping from node `at` (at `p`) to `q` meets another street: within 8 m of
+/// `q` or crossing the step. Returns the other street's node nearer `q` (not `at`).
+fn junction(
+    plots: &Plots,
+    streets: &[(u32, u32)],
+    nodes: &[DVec2],
+    at: u32,
+    p: DVec2,
+    q: DVec2,
+) -> Option<u32> {
+    let cell = |v: f64| (v / GRID).floor() as i32;
+    let mut best: Option<(f64, u32)> = None;
+    for z in cell(q.y.min(p.y) - 8.0)..=cell(q.y.max(p.y) + 8.0) {
+        for x in cell(q.x.min(p.x) - 8.0)..=cell(q.x.max(p.x) + 8.0) {
+            for &j in plots.street_grid.get(&(x, z)).into_iter().flatten() {
+                let (a, b) = streets[j];
+                if a == at || b == at {
+                    continue;
+                }
+                let (pa, pb) = (nodes[a as usize], nodes[b as usize]);
+                let near = segment_distance(q, pa, pb) < 8.0 || crosses(p, q, pa, pb);
+                if !near {
+                    continue;
+                }
+                let k = if pa.distance(q) <= pb.distance(q) {
+                    a
+                } else {
+                    b
+                };
+                let d = nodes[k as usize].distance(q);
+                if best.is_none_or(|(bd, _)| d < bd) {
+                    best = Some((d, k));
+                }
+            }
+        }
+    }
+    best.map(|(_, k)| k)
+}
+
+fn segment_distance(p: DVec2, a: DVec2, b: DVec2) -> f64 {
+    let ab = b - a;
+    let t = ((p - a).dot(ab) / ab.length_squared().max(1e-9)).clamp(0.0, 1.0);
+    (a + ab * t).distance(p)
+}
+
+/// Whether segments `p`–`q` and `a`–`b` cross.
+fn crosses(p: DVec2, q: DVec2, a: DVec2, b: DVec2) -> bool {
+    let side = |o: DVec2, u: DVec2, v: DVec2| (u - o).perp_dot(v - o);
+    let (d1, d2) = (side(a, b, p), side(a, b, q));
+    let (d3, d4) = (side(p, q, a), side(p, q, b));
+    d1 * d2 < 0.0 && d3 * d4 < 0.0
+}
+
+/// Keeps only the streets buildings use: the square's ring (the first `ring` nodes), streets
+/// between two nodes with a building within 12 m (trees and props don't count), and each such
+/// node's shortest way back to the square.
+fn prune(nodes: &[DVec2], streets: Vec<(u32, u32)>, plots: &Plots, ring: usize) -> Vec<(u32, u32)> {
+    let served = |n: usize| {
+        let p = nodes[n];
+        let cell = ((p.x / GRID).floor() as i32, (p.y / GRID).floor() as i32);
+        (-1..=1).any(|dz| {
+            (-1..=1).any(|dx| {
+                plots
+                    .grid
+                    .get(&(cell.0 + dx, cell.1 + dz))
+                    .into_iter()
+                    .flatten()
+                    .any(|&i| {
+                        let uses = &plots.kit.buildings[plots.placed[i].building].uses;
+                        if uses.iter().any(|u| u == "tree" || u == "prop") {
+                            return false;
+                        }
+                        let r = &plots.rects[i];
+                        let reach = DVec2::new(r.half[0], r.half[1]).length();
+                        DVec2::new(r.x, r.z).distance(p) < reach + 12.0
+                    })
+            })
+        })
+    };
+    let served: Vec<bool> = (0..nodes.len()).map(|n| n < ring || served(n)).collect();
+    // Shortest ways (in steps) from the square, breadth first.
+    let mut links: Vec<Vec<(usize, usize)>> = vec![Vec::new(); nodes.len()];
+    for (e, &(a, b)) in streets.iter().enumerate() {
+        links[a as usize].push((b as usize, e));
+        links[b as usize].push((a as usize, e));
+    }
+    let mut parent: Vec<Option<usize>> = vec![None; nodes.len()];
+    let mut seen = vec![false; nodes.len()];
+    let mut queue: std::collections::VecDeque<usize> = (0..ring.min(nodes.len())).collect();
+    for &n in &queue {
+        seen[n] = true;
+    }
+    while let Some(n) = queue.pop_front() {
+        for &(m, e) in &links[n] {
+            if !seen[m] {
+                seen[m] = true;
+                parent[m] = Some(e);
+                queue.push_back(m);
+            }
+        }
+    }
+    let mut keep = vec![false; streets.len()];
+    for (e, &(a, b)) in streets.iter().enumerate() {
+        if served[a as usize] && served[b as usize] {
+            keep[e] = true;
+        }
+    }
+    for n in (ring..nodes.len()).filter(|&n| served[n]) {
+        let mut at = n;
+        while let Some(e) = parent[at] {
+            if keep[e] && at != n {
+                break;
+            }
+            keep[e] = true;
+            let (a, b) = streets[e];
+            at = if a as usize == at {
+                b as usize
+            } else {
+                a as usize
+            };
+        }
+    }
+    streets
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(s, k)| k.then_some(s))
+        .collect()
 }
 
 /// Extra width of the colony's avenues between blocks of plots (m).

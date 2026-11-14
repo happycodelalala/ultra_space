@@ -1,0 +1,9 @@
+# Settlements stream in (task 4.6). Performance test: run alone with
+# ULTRA_SPACE_START_NEAR=town,30000,700,day ULTRA_SPACE_CHASE_ORBIT=0,-6: the ship starts 30 km
+# south of the biggest Hollish town, 700 m up, in arcade flight, and flies at it at a few hundred
+# m/s past villages on the way; their distant forms must be there all along and the buildings
+# take over near each one without a hitch. Check the script summary: no frame over 50 ms.
+1    hold W 2                # about 300 m/s toward the town
+90   hold S 1.5              # slow down for the last few kilometres
+110  shot flyin-end.png
+112  quit

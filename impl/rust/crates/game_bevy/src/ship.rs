@@ -261,6 +261,13 @@ fn spawn_player_ship(
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
 
+    let mut airborne = false;
+    if let Some((near, t, up_high)) = crate::settlements::start_near(&sim.0, system, index) {
+        state = near;
+        airborne = up_high;
+        sim.0
+            .set_universe_time(sim_core::time::UniverseTime::from_nanos((t * 1e9) as u64));
+    }
     let sim = &mut sim.0;
     let id = sim
         .objects
@@ -277,6 +284,18 @@ fn spawn_player_ship(
             ),
         )
         .expect("start region exists");
+    if airborne {
+        // Started in the air near a settlement: in arcade flight, so it holds still (no
+        // gravity) until the controls move it.
+        if let Some(loc) = sim.objects.location(id)
+            && let Some(region) = sim.regions.get_mut(loc.region)
+        {
+            region
+                .world
+                .entity_mut(loc.entity)
+                .insert(ArcadeFlight::default());
+        }
+    }
     commands.insert_resource(PlayerShip { id });
 }
 

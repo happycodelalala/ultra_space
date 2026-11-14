@@ -13,6 +13,7 @@ mod part_models;
 mod planet_maps;
 mod save;
 mod script;
+mod settlements;
 mod ship;
 mod sim;
 mod sky;
@@ -74,6 +75,7 @@ fn main() {
             vehicle_visual::VehicleVisualPlugin,
             builder::BuilderPlugin,
             save::SavePlugin,
+            settlements::SettlementsPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

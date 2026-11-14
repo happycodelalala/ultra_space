@@ -1,0 +1,17 @@
+# Settlements on screen (task 4.6). Run with ULTRA_SPACE_START_NEAR=<town|colony>,1400,300,<day|night>
+# ULTRA_SPACE_CHASE_ORBIT=0,-15: the ship starts 300 m up, 1.4 km south of Meridian's biggest
+# Hollish town (or the Compact's colony), in arcade flight holding still, nose toward it.
+# Look for: buildings on level ground (not floating or sunk), streets between them, the town
+# organic around its square, the colony a grid; at night lanterns or street lamps lit.
+1    shot 01-ahead.png
+2    hold W 0.3              # ease forward over the edge
+14   orbit 0 -35
+16   shot 02-over-the-edge.png
+17   press X                 # stop
+19   orbit 0 -75             # straight down
+21   shot 03-from-above.png
+22   orbit 120 -25
+24   shot 04-side.png
+25   orbit 200 -12
+27   shot 05-low-back.png
+28   quit

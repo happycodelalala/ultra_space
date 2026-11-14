@@ -1,0 +1,890 @@
+//! Settlements on screen (task 4.6; design: living-planet.md §5).
+//!
+//! Every settlement of the body the camera is at has a root entity in its own tangent frame
+//! (x east, y up, z south at its centre), placed camera-relative every frame, with:
+//!
+//! - **near** (the camera within about a kilometre of its edge): one entity per building with
+//!   its kit model; models share one vertex-coloured material, so the same building drawn many
+//!   times batches into instanced draws;
+//! - **far** (out to 250 km): one merged mesh of boxes, each building's footprint and height in
+//!   its roof and wall colours, so a settlement never pops into existence on approach; the boxes
+//!   reach a few metres into the ground so the coarser distant terrain doesn't show gaps;
+//! - **lights**: small glowing lanterns at every door and lamps along the colony's streets, lit
+//!   by night (the sun's height at the settlement) and drawn at every distance.
+//!
+//! Models are the kits' glTF binaries; their colours (a palette texture or plain material
+//! colours) are baked into vertex colours when loaded.
+
+use std::collections::HashMap;
+use std::path::Path;
+
+use bevy::asset::RenderAssetUsages;
+use bevy::camera::Exposure;
+use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+use bevy::light::NotShadowCaster;
+use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::prelude::*;
+use glam::{DMat3, DQuat, DVec3};
+use sim_core::{ObjectState, Simulation, StarSystem};
+use sim_planet::tangent_frame;
+use sim_society::{Kit, Kits, Layout, RegionLayouts};
+
+use crate::camera::{CameraSet, SpaceCamera};
+use crate::sim::{RenderTime, Sim};
+use crate::universe::{GameState, InGame, Universe, buildings_dir};
+
+/// The camera this close to a settlement's edge (m) shows its buildings; they go again beyond
+/// [`NEAR_OFF`] (a margin so they don't flicker at the boundary).
+const NEAR_ON: f64 = 1_200.0;
+const NEAR_OFF: f64 = 1_500.0;
+/// Farthest a settlement is drawn (m).
+const FAR: f64 = 250_000.0;
+/// How far the distant boxes reach into the ground (m).
+const SKIRT: f32 = 3.0;
+/// Night-light brightness on screen (relative to a white surface in full starlight).
+const NIGHT_GLOW: f32 = 6.0;
+
+pub struct SettlementsPlugin;
+
+impl Plugin for SettlementsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(GameState::Running), setup_settlements)
+            .add_systems(
+                Update,
+                (stream_settlements, place_settlements)
+                    .chain()
+                    .after(CameraSet)
+                    .in_set(InGame),
+            );
+    }
+}
+
+/// A building model as loaded: its mesh and colours seen from above (roof) and the side.
+struct Model {
+    mesh: Handle<Mesh>,
+    roof: [f32; 3],
+    wall: [f32; 3],
+}
+
+struct Site {
+    body: usize,
+    /// Centre on the ground (surface frame, m) and the tangent frame's rotation there.
+    origin: DVec3,
+    basis: DQuat,
+    /// Distance from the centre to the farthest building (m).
+    extent: f64,
+    root: Entity,
+    near: Option<Vec<Entity>>,
+    layout: Layout,
+}
+
+#[derive(Resource)]
+struct SettlementDraw {
+    kits: std::sync::Arc<Kits>,
+    models: HashMap<(String, usize), Model>,
+    material: Handle<StandardMaterial>,
+    /// Lights: warm lanterns (medieval) and white lamps (colony).
+    lanterns: Handle<StandardMaterial>,
+    lamps: Handle<StandardMaterial>,
+    sites: Vec<Site>,
+}
+
+/// The bytes of glTF buffer view `view` in the binary chunk `blob`.
+fn view_bytes<'a>(view: &gltf::buffer::View, blob: &'a [u8]) -> Option<&'a [u8]> {
+    blob.get(view.offset()..view.offset() + view.length())
+}
+
+fn linear(c: Color) -> [f32; 3] {
+    let l = c.to_linear();
+    [l.red, l.green, l.blue]
+}
+
+/// Loads a building model: one mesh, colours baked into vertex colours (each primitive's
+/// material colour times its texture at the vertex's texture coordinate).
+fn load_model(path: &Path) -> Result<(Mesh, [f32; 3], [f32; 3]), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let gltf = gltf::Gltf::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let blob = gltf.blob.as_deref().ok_or("no binary chunk")?;
+    // Images, decoded once.
+    let mut images: Vec<Option<Image>> = Vec::new();
+    for image in gltf.images() {
+        let decoded = match image.source() {
+            gltf::image::Source::View { view, mime_type } => {
+                view_bytes(&view, blob).and_then(|b| {
+                    Image::from_buffer(
+                        b,
+                        ImageType::MimeType(mime_type),
+                        CompressedImageFormats::NONE,
+                        true,
+                        ImageSampler::Default,
+                        RenderAssetUsages::MAIN_WORLD,
+                    )
+                    .ok()
+                })
+            }
+            gltf::image::Source::Uri { .. } => None,
+        };
+        images.push(decoded);
+    }
+    let mesh = gltf.meshes().next().ok_or("no mesh")?;
+    let (mut positions, mut normals, mut colors, mut indices) = (
+        Vec::<[f32; 3]>::new(),
+        Vec::<[f32; 3]>::new(),
+        Vec::<[f32; 4]>::new(),
+        Vec::<u32>::new(),
+    );
+    let (mut roof, mut roofs, mut wall, mut walls) = ([0.0f32; 3], 0.0f32, [0.0f32; 3], 0.0f32);
+    for primitive in mesh.primitives() {
+        let reader = primitive.reader(|_| Some(blob));
+        let p: Vec<[f32; 3]> = reader.read_positions().ok_or("no positions")?.collect();
+        let n: Vec<[f32; 3]> = reader.read_normals().ok_or("no normals")?.collect();
+        let uv: Vec<[f32; 2]> = reader
+            .read_tex_coords(0)
+            .map_or_else(|| vec![[0.0; 2]; p.len()], |t| t.into_f32().collect());
+        let pbr = primitive.material().pbr_metallic_roughness();
+        let factor = pbr.base_color_factor();
+        let texture = pbr
+            .base_color_texture()
+            .and_then(|t| images.get(t.texture().source().index())?.as_ref());
+        let base = positions.len() as u32;
+        for k in 0..p.len() {
+            let mut c = [factor[0], factor[1], factor[2]];
+            if let Some(img) = texture {
+                let (w, h) = (img.width(), img.height());
+                let x = ((uv[k][0].rem_euclid(1.0) * w as f32) as u32).min(w - 1);
+                let y = ((uv[k][1].rem_euclid(1.0) * h as f32) as u32).min(h - 1);
+                if let Ok(t) = img.get_color_at(x, y) {
+                    let t = linear(t);
+                    c = [c[0] * t[0], c[1] * t[1], c[2] * t[2]];
+                }
+            }
+            // Roof and wall colours for the distant boxes (by facing).
+            if n[k][1] > 0.5 {
+                roof = [roof[0] + c[0], roof[1] + c[1], roof[2] + c[2]];
+                roofs += 1.0;
+            } else if n[k][1].abs() < 0.3 {
+                wall = [wall[0] + c[0], wall[1] + c[1], wall[2] + c[2]];
+                walls += 1.0;
+            }
+            colors.push([c[0], c[1], c[2], 1.0]);
+        }
+        positions.extend(p);
+        normals.extend(n);
+        indices.extend(
+            reader
+                .read_indices()
+                .ok_or("no indices")?
+                .into_u32()
+                .map(|i| i + base),
+        );
+    }
+    let mean = |c: [f32; 3], n: f32| {
+        if n > 0.0 { c.map(|v| v / n) } else { [0.5; 3] }
+    };
+    let mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+    .with_inserted_indices(Indices::U32(indices));
+    Ok((mesh, mean(roof, roofs), mean(wall, walls)))
+}
+
+/// Adds a box (`centre`, `half` extents, turned `yaw` about Y) to a vertex-coloured mesh being
+/// built: top in `top`, sides in `side`, no bottom.
+#[allow(clippy::too_many_arguments)]
+fn add_box(
+    positions: &mut Vec<[f32; 3]>,
+    normals: &mut Vec<[f32; 3]>,
+    colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    centre: Vec3,
+    half: Vec3,
+    yaw: f32,
+    top: [f32; 3],
+    side: [f32; 3],
+) {
+    let q = Quat::from_rotation_y(yaw);
+    let faces: [(Vec3, Vec3, Vec3, [f32; 3]); 5] = [
+        (Vec3::Y, Vec3::X, Vec3::Z, top),
+        (Vec3::X, Vec3::Z, Vec3::Y, side),
+        (Vec3::NEG_X, Vec3::NEG_Z, Vec3::Y, side),
+        (Vec3::Z, Vec3::NEG_X, Vec3::Y, side),
+        (Vec3::NEG_Z, Vec3::X, Vec3::Y, side),
+    ];
+    for (n, u, v, c) in faces {
+        let base = positions.len() as u32;
+        let o = n * half;
+        let (hu, hv) = (u * half, v * half);
+        for (su, sv) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+            positions.push((centre + q * (o + hu * su + hv * sv)).to_array());
+            normals.push((q * n).to_array());
+            colors.push([c[0], c[1], c[2], 1.0]);
+        }
+        // Counter-clockwise seen from outside (u × v = n for the top; sides use v = up).
+        if u.cross(v).dot(n) > 0.0 {
+            indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        } else {
+            indices.extend([base, base + 2, base + 1, base, base + 3, base + 2]);
+        }
+    }
+}
+
+fn vertex_mesh(
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    colors: Vec<[f32; 4]>,
+    indices: Vec<u32>,
+) -> Mesh {
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+    .with_inserted_indices(Indices::U32(indices))
+}
+
+impl Site {
+    /// Building `i`'s model origin in the settlement's frame (curvature included) and its
+    /// turn.
+    fn building_pose(&self, i: usize, radius: f64) -> (Vec3, Quat) {
+        let p = &self.layout.buildings[i];
+        let up = self.layout.direction(p.x, p.z, radius);
+        let world = up * (radius + p.height);
+        let local = self.basis.inverse() * (world - self.origin);
+        // The ground's tilt at the building against the centre's (a fraction of a degree).
+        let tilt =
+            self.basis.inverse() * DQuat::from_rotation_arc(self.layout.center, up) * self.basis;
+        (
+            local.as_vec3(),
+            (tilt * DQuat::from_rotation_y(p.yaw)).as_quat().normalize(),
+        )
+    }
+}
+
+fn setup_settlements(
+    mut commands: Commands,
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let system = &universe.0;
+    let Some(dir) = buildings_dir() else {
+        return;
+    };
+    let material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        ..default()
+    });
+    // Lights: lantern glass by day, glowing by night (the emissive is set every frame).
+    let glow = |c: Color| StandardMaterial {
+        base_color: c,
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
+        ..default()
+    };
+    let lanterns = materials.add(glow(Color::srgb(0.35, 0.25, 0.12)));
+    let lamps = materials.add(glow(Color::srgb(0.3, 0.32, 0.35)));
+    let mut kits: Option<std::sync::Arc<Kits>> = None;
+    let mut models = HashMap::new();
+    let mut sites = Vec::new();
+    let mut buildings = 0;
+    for (body, region) in sim.0.regions.iter().enumerate() {
+        let Some(layouts) = region.world.get_resource::<RegionLayouts>() else {
+            continue;
+        };
+        let kits = kits.get_or_insert_with(|| layouts.kits.clone());
+        let radius = system.bodies[body].radius;
+        let Some(terrain) = region
+            .world
+            .get_resource::<sim_vehicle::flight::RegionTerrain>()
+            .and_then(|t| t.0.clone())
+        else {
+            continue;
+        };
+        for layout in &layouts.layouts {
+            let Some(kit) = kits.0.get(&layout.kit) else {
+                continue;
+            };
+            // Models of this kit, loaded once.
+            for (i, b) in kit.buildings.iter().enumerate() {
+                let key = (kit.id.clone(), i);
+                if models.contains_key(&key) {
+                    continue;
+                }
+                match load_model(&dir.join(&kit.id).join(&b.model)) {
+                    Ok((mesh, roof, wall)) => {
+                        models.insert(
+                            key,
+                            Model {
+                                mesh: meshes.add(mesh),
+                                roof,
+                                wall,
+                            },
+                        );
+                    }
+                    Err(e) => warn!("building model {}/{}: {e}", kit.id, b.model),
+                }
+            }
+            let centre_height = layout
+                .buildings
+                .iter()
+                .map(|p| p.height)
+                .fold(f64::NAN, f64::min);
+            let centre_height = if centre_height.is_finite() {
+                centre_height
+            } else {
+                0.0
+            };
+            let origin = layout.center * (radius + centre_height);
+            let (east, south) = tangent_frame(layout.center);
+            let basis = DQuat::from_mat3(&DMat3::from_cols(east, layout.center, south));
+            let extent = layout
+                .buildings
+                .iter()
+                .map(|p| (p.x * p.x + p.z * p.z).sqrt() + 20.0)
+                .fold(50.0, f64::max);
+            let root = commands
+                .spawn((
+                    Name::new("settlement"),
+                    Transform::IDENTITY,
+                    Visibility::Hidden,
+                ))
+                .id();
+            let site = Site {
+                body,
+                origin,
+                basis,
+                extent,
+                root,
+                near: None,
+                layout: layout.clone(),
+            };
+            // The distant form and the lights.
+            let (far, lights) = distant_meshes(&site, kit, &models, radius);
+            let streets = street_mesh(&site, kit, &terrain);
+            commands.entity(root).with_children(|p| {
+                p.spawn((
+                    FarForm,
+                    Mesh3d(meshes.add(far)),
+                    MeshMaterial3d(material.clone()),
+                    NotShadowCaster,
+                    Transform::IDENTITY,
+                ));
+                let colony = kit
+                    .buildings
+                    .iter()
+                    .any(|b| b.uses.iter().any(|u| u == "pad"));
+                p.spawn((
+                    Mesh3d(meshes.add(streets)),
+                    MeshMaterial3d(material.clone()),
+                    NotShadowCaster,
+                    Transform::IDENTITY,
+                ));
+                p.spawn((
+                    Mesh3d(meshes.add(lights)),
+                    MeshMaterial3d(if colony {
+                        lamps.clone()
+                    } else {
+                        lanterns.clone()
+                    }),
+                    NotShadowCaster,
+                    Transform::IDENTITY,
+                ));
+            });
+            buildings += layout.buildings.len();
+            sites.push(site);
+        }
+    }
+    let Some(kits) = kits else {
+        return;
+    };
+    info!(
+        "settlements drawn: {} settlements, {buildings} buildings, {} models",
+        sites.len(),
+        models.len()
+    );
+    commands.insert_resource(SettlementDraw {
+        kits,
+        models,
+        material,
+        lanterns,
+        lamps,
+        sites,
+    });
+}
+
+/// Marks a settlement's distant form (hidden while its buildings are shown).
+#[derive(Component)]
+struct FarForm;
+
+/// A settlement's distant boxes and its lights, in its own frame.
+fn distant_meshes(
+    site: &Site,
+    kit: &Kit,
+    models: &HashMap<(String, usize), Model>,
+    radius: f64,
+) -> (Mesh, Mesh) {
+    let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut lp, mut ln, mut lc, mut li) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let colony = kit
+        .buildings
+        .iter()
+        .any(|b| b.uses.iter().any(|u| u == "pad"));
+    for (i, placed) in site.layout.buildings.iter().enumerate() {
+        let b = &kit.buildings[placed.building];
+        let (origin, rotation) = site.building_pose(i, radius);
+        let yaw = placed.yaw as f32;
+        let (lo, hi) = (
+            Vec3::new(b.min_m[0] as f32, 0.0, b.min_m[2] as f32),
+            Vec3::new(b.max_m[0] as f32, b.max_m[1] as f32, b.max_m[2] as f32),
+        );
+        let model = models.get(&(kit.id.clone(), placed.building));
+        let (roof, wall) = model.map_or(([0.5; 3], [0.5; 3]), |m| (m.roof, m.wall));
+        // Trees as narrow cones would be fussy: a slim box in their colour.
+        let tree = b.uses.iter().any(|u| u == "tree");
+        let shrink = if tree { 0.45 } else { 1.0 };
+        let half = Vec3::new(
+            0.5 * (hi.x - lo.x) * shrink,
+            0.5 * (hi.y + SKIRT),
+            0.5 * (hi.z - lo.z) * shrink,
+        );
+        let centre_local = Vec3::new(
+            0.5 * (lo.x + hi.x),
+            0.5 * (hi.y - SKIRT),
+            0.5 * (lo.z + hi.z),
+        );
+        let centre = origin + rotation * centre_local;
+        add_box(
+            &mut p, &mut n, &mut c, &mut idx, centre, half, yaw, roof, wall,
+        );
+        // A lantern by the door of every building people use (not trees, wells or carts).
+        let lit = b.uses.iter().any(|u| {
+            !matches!(
+                u.as_str(),
+                "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms"
+            )
+        });
+        if lit {
+            let door = origin + rotation * Vec3::new(0.5 * (lo.x + hi.x), 2.4, hi.z + 0.3);
+            add_box(
+                &mut lp,
+                &mut ln,
+                &mut lc,
+                &mut li,
+                door,
+                Vec3::splat(0.35),
+                yaw,
+                [1.0; 3],
+                [1.0; 3],
+            );
+        }
+    }
+    // Colony street lamps: at every street corner, on 6 m posts.
+    if colony {
+        for node in &site.layout.nodes {
+            let up = site.layout.direction(node.x, node.y, radius);
+            let ground = site.layout.buildings.first().map_or(0.0, |b| b.height);
+            let world = up * (radius + ground + 6.0);
+            let local = (site.basis.inverse() * (world - site.origin)).as_vec3();
+            add_box(
+                &mut lp,
+                &mut ln,
+                &mut lc,
+                &mut li,
+                local,
+                Vec3::splat(0.4),
+                0.0,
+                [1.0; 3],
+                [1.0; 3],
+            );
+        }
+    }
+    (vertex_mesh(p, n, c, idx), vertex_mesh(lp, ln, lc, li))
+}
+
+/// Street surfaces: a ribbon along every street following the ground (dirt lanes and a paved
+/// square for the medieval style, concrete for the colony), a little above it.
+fn street_mesh(site: &Site, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
+    let colony = kit
+        .buildings
+        .iter()
+        .any(|b| b.uses.iter().any(|u| u == "pad"));
+    let (width, colour) = if colony {
+        (6.0, [0.32, 0.32, 0.31])
+    } else {
+        (4.0, [0.28, 0.21, 0.13])
+    };
+    let r = terrain.radius;
+    let l = &site.layout;
+    let to_local = |x: f64, z: f64| {
+        let up = l.direction(x, z, r);
+        let world = up * (r + terrain.surface_height(up, 2.0) + 0.2);
+        (site.basis.inverse() * (world - site.origin)).as_vec3()
+    };
+    let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut quad = |corners: [Vec3; 4], colour: [f32; 3]| {
+        let base = p.len() as u32;
+        for v in corners {
+            p.push(v.to_array());
+            n.push([0.0, 1.0, 0.0]);
+            c.push([colour[0], colour[1], colour[2], 1.0]);
+        }
+        // Counter-clockwise seen from above.
+        idx.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    };
+    for &(a, b) in &l.streets {
+        let (a, b) = (l.nodes[a as usize], l.nodes[b as usize]);
+        let length = a.distance(b);
+        if length < 0.1 {
+            continue;
+        }
+        let t = (b - a) / length;
+        let side = glam::DVec2::new(-t.y, t.x) * (0.5 * width);
+        // Overlapping a little at both ends, so turns don't leave gaps.
+        let (a, b) = (a - t * 0.5 * width, b + t * 0.5 * width);
+        let pieces = (a.distance(b) / 6.0).ceil().max(1.0) as usize;
+        for k in 0..pieces {
+            let (f0, f1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
+            let (p0, p1) = (a.lerp(b, f0), a.lerp(b, f1));
+            let v = |q: glam::DVec2| to_local(q.x, q.y);
+            quad(
+                [v(p0 + side), v(p1 + side), v(p1 - side), v(p0 - side)],
+                colour,
+            );
+        }
+    }
+    // The medieval square: paved out to its ring street.
+    if !colony && l.nodes.len() >= 8 {
+        let radius = l.nodes[0].length() + 0.5 * width;
+        let centre = to_local(0.0, 0.0);
+        let steps = 16;
+        for k in 0..steps {
+            let a0 = std::f64::consts::TAU * k as f64 / steps as f64;
+            let a1 = std::f64::consts::TAU * (k + 1) as f64 / steps as f64;
+            let e0 = to_local(radius * a0.cos(), radius * a0.sin());
+            let e1 = to_local(radius * a1.cos(), radius * a1.sin());
+            quad([centre, e1, e0, centre], [0.36, 0.33, 0.29]);
+        }
+    }
+    vertex_mesh(p, n, c, idx)
+}
+
+/// The camera's position in the surface frame of `body` at the render time.
+fn camera_on(universe: &Universe, camera: &SpaceCamera, body: usize, t: f64) -> DVec3 {
+    let system = &universe.0;
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let s = system
+        .frames
+        .state_in(anchor, system.bodies[body].surface_frame, t);
+    s.rotation.inverse() * (camera.offset - s.position)
+}
+
+/// Shows each settlement's buildings near the camera and its distant form elsewhere.
+fn stream_settlements(
+    mut commands: Commands,
+    draw: Option<ResMut<SettlementDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut far_forms: Query<(&ChildOf, &mut Visibility), With<FarForm>>,
+    mut roots: Query<&mut Visibility, Without<FarForm>>,
+) {
+    let Some(mut draw) = draw else {
+        return;
+    };
+    let draw = &mut *draw;
+    let mut cameras: HashMap<usize, DVec3> = HashMap::new();
+    for site in &mut draw.sites {
+        let radius = universe.0.bodies[site.body].radius;
+        let cam = *cameras
+            .entry(site.body)
+            .or_insert_with(|| camera_on(&universe, &camera, site.body, render.0));
+        let distance = (cam.distance(site.origin) - site.extent).max(0.0);
+        let shown = distance < FAR;
+        if let Ok(mut v) = roots.get_mut(site.root) {
+            let want = if shown {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+            if *v != want {
+                *v = want;
+            }
+        }
+        let near = match site.near {
+            Some(_) => distance < NEAR_OFF,
+            None => distance < NEAR_ON,
+        };
+        match (&site.near, near) {
+            (None, true) => {
+                let kit = &draw.kits.0[&site.layout.kit];
+                let mut entities = Vec::with_capacity(site.layout.buildings.len());
+                for (i, placed) in site.layout.buildings.iter().enumerate() {
+                    let Some(model) = draw.models.get(&(kit.id.clone(), placed.building)) else {
+                        continue;
+                    };
+                    let (translation, rotation) = site.building_pose(i, radius);
+                    let e = commands
+                        .spawn((
+                            Mesh3d(model.mesh.clone()),
+                            MeshMaterial3d(draw.material.clone()),
+                            Transform {
+                                translation,
+                                rotation,
+                                ..default()
+                            },
+                            ChildOf(site.root),
+                        ))
+                        .id();
+                    entities.push(e);
+                }
+                site.near = Some(entities);
+            }
+            (Some(_), false) => {
+                for e in site.near.take().unwrap_or_default() {
+                    commands.entity(e).despawn();
+                }
+            }
+            _ => {}
+        }
+        let far_visible = if site.near.is_some() {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        for (parent, mut v) in &mut far_forms {
+            if parent.0 == site.root && *v != far_visible {
+                *v = far_visible;
+            }
+        }
+    }
+}
+
+/// Places every shown settlement camera-relative and sets the lights by the sun at the one
+/// nearest the camera.
+fn place_settlements(
+    draw: Option<Res<SettlementDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut roots: Query<(&Visibility, &mut Transform)>,
+) {
+    let Some(draw) = draw else {
+        return;
+    };
+    let system = &universe.0;
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let star =
+        system
+            .frames
+            .transform_point(anchor, system.star().inertial_frame, render.0, DVec3::ZERO);
+    let mut poses: HashMap<usize, (DVec3, DQuat)> = HashMap::new();
+    let mut nearest = (f64::MAX, 0.0);
+    for site in &draw.sites {
+        let Ok((visibility, mut transform)) = roots.get_mut(site.root) else {
+            continue;
+        };
+        if *visibility == Visibility::Hidden {
+            continue;
+        }
+        let (position, rotation) = *poses.entry(site.body).or_insert_with(|| {
+            let s =
+                system
+                    .frames
+                    .state_in(anchor, system.bodies[site.body].surface_frame, render.0);
+            (s.position, s.rotation)
+        });
+        let at = position + rotation * site.origin;
+        transform.translation = (at - camera.offset).as_vec3();
+        transform.rotation = (rotation * site.basis).as_quat().normalize();
+        let d = at.distance(camera.offset);
+        if d < nearest.0 {
+            // The sun's height there: above the horizon, no lights; dusk brings them up.
+            let up = (rotation * site.origin).normalize();
+            let sun = (star - at).normalize_or_zero().dot(up);
+            nearest = (d, 1.0 - smoothstep(-0.12, 0.05, sun));
+        }
+    }
+    let night = nearest.1 as f32;
+    let exposure = Exposure::default().exposure();
+    for (handle, color) in [
+        (&draw.lanterns, LinearRgba::rgb(1.0, 0.55, 0.2)),
+        (&draw.lamps, LinearRgba::rgb(0.8, 0.9, 1.0)),
+    ] {
+        let want = color * (night * NIGHT_GLOW / exposure);
+        if let Some(m) = materials.get(handle)
+            && m.emissive == want
+        {
+            continue;
+        }
+        if let Some(mut m) = materials.get_mut(handle) {
+            m.emissive = want;
+        }
+    }
+}
+
+fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Debug start (tasks 4.6–4.9): `ULTRA_SPACE_START_NEAR=<settlement name or kind>[,<distance
+/// m>[,<height m>[,day|dusk|night]]]` starts the ship `distance` m (default 300) south of that
+/// settlement (by name, or the biggest of a kind such as `town` or `colony`), `height` m
+/// (default 0: on the ground) above the ground there, level, nose toward it, keeping still over
+/// the ground. With a time of day, the universe time is first moved to when the sun stands so
+/// there (morning sun 35° up, sunset, or midnight). Returns the state (in body `body`'s
+/// inertial frame), the universe time (s) to start at, and whether it starts in the air (the
+/// ship then starts in arcade flight, holding still).
+pub fn start_near(
+    sim: &Simulation,
+    system: &StarSystem,
+    body: usize,
+) -> Option<(ObjectState, f64, bool)> {
+    let spec = std::env::var("ULTRA_SPACE_START_NEAR").ok()?;
+    let mut parts = spec.split(',').map(str::trim);
+    let what = parts.next()?.to_lowercase();
+    let distance: f64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(300.0);
+    let height: f64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+    let when = parts.next().map(str::to_lowercase);
+    let region = sim.regions.get(body)?;
+    let society = region.world.get_resource::<sim_society::RegionSociety>()?;
+    let terrain = region
+        .world
+        .get_resource::<sim_vehicle::flight::RegionTerrain>()?
+        .0
+        .clone()?;
+    let s = society
+        .settlements
+        .iter()
+        .filter(|s| s.name.to_lowercase() == what || s.kind.name() == what)
+        .max_by_key(|s| s.population)?;
+    let (east, south) = tangent_frame(s.direction);
+    let r = terrain.radius;
+    let up = (s.direction * r + south * distance).normalize();
+    let ground = terrain.surface_height(up, 1.0);
+    // On the ground: the ship's lowest point a little above it (it settles on its legs).
+    let lift = if height > 0.0 { height } else { 4.0 };
+    let surface = up * (r + ground + lift);
+    let north = up.cross(east).normalize();
+    let t = match when.as_deref() {
+        Some(w) => time_of_day(system, body, up, w),
+        None => sim.universe_time().as_secs_f64(),
+    };
+    let frame = system.frames.state_in(
+        system.bodies[body].inertial_frame,
+        system.bodies[body].surface_frame,
+        t,
+    );
+    let position = frame.rotation * surface;
+    let rotation = crate::camera::look_rotation(frame.rotation * north, frame.rotation * up);
+    let mut state = ObjectState::at_rest(system.bodies[body].inertial_frame, position, rotation);
+    state.state.velocity = frame.angular_velocity.cross(position);
+    state.state.angular_velocity = frame.angular_velocity;
+    info!(
+        "debug: starting {distance:.0} m south of {} ({}), {lift:.0} m up, at {t:.0} s",
+        s.name,
+        s.kind.name()
+    );
+    Some((state, t, height > 0.0))
+}
+
+/// The first universe time (s) in the body's first day when the sun at surface direction `up`
+/// stands as `when` says: "day" (35° up, rising), "dusk" (3° up, setting), "night" (lowest).
+fn time_of_day(system: &StarSystem, body: usize, up: DVec3, when: &str) -> f64 {
+    let b = &system.bodies[body];
+    let spin = system
+        .frames
+        .state_in(b.inertial_frame, b.surface_frame, 0.0)
+        .angular_velocity
+        .length()
+        .max(1e-9);
+    let day = std::f64::consts::TAU / spin;
+    let elevation = |t: f64| {
+        let f = system.frames.state_in(b.inertial_frame, b.surface_frame, t);
+        let star = system.frames.transform_point(
+            b.inertial_frame,
+            system.star().inertial_frame,
+            t,
+            DVec3::ZERO,
+        );
+        let u = f.rotation * up;
+        (star - u * b.radius).normalize().dot(u)
+    };
+    let steps = 1440;
+    let samples: Vec<(f64, f64)> = (0..=steps)
+        .map(|k| {
+            let t = day * k as f64 / steps as f64;
+            (t, elevation(t))
+        })
+        .collect();
+    let crossing = |target: f64, rising: bool| {
+        samples
+            .windows(2)
+            .find(|w| {
+                let (a, b) = (w[0].1 - target, w[1].1 - target);
+                if rising {
+                    a < 0.0 && b >= 0.0
+                } else {
+                    a > 0.0 && b <= 0.0
+                }
+            })
+            .map(|w| w[1].0)
+    };
+    match when {
+        "day" => crossing(35f64.to_radians().sin(), true),
+        "dusk" => crossing(3f64.to_radians().sin(), false),
+        _ => samples
+            .iter()
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|s| s.0),
+    }
+    .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use bevy::mesh::VertexAttributeValues;
+
+    use super::*;
+
+    #[test]
+    fn every_kit_model_loads_with_its_colours() {
+        let dir =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../assets/export/buildings");
+        let kits = Kits::load_dir(&dir).unwrap();
+        assert!(kits.0.len() >= 2);
+        for kit in kits.0.values() {
+            for b in &kit.buildings {
+                let (mesh, roof, wall) = load_model(&dir.join(&kit.id).join(&b.model))
+                    .unwrap_or_else(|e| panic!("{}/{}: {e}", kit.id, b.model));
+                let Some(VertexAttributeValues::Float32x4(colors)) =
+                    mesh.attribute(Mesh::ATTRIBUTE_COLOR)
+                else {
+                    panic!("{}/{}: no colours", kit.id, b.model);
+                };
+                // Several colours (roof, walls, trim), none black from a missed texture.
+                let mut distinct: Vec<[u32; 3]> = colors
+                    .iter()
+                    .map(|c| [c[0], c[1], c[2]].map(|v| (v * 50.0) as u32))
+                    .collect();
+                distinct.sort();
+                distinct.dedup();
+                assert!(distinct.len() >= 2, "{}/{}: one colour", kit.id, b.model);
+                for c in [roof, wall] {
+                    assert!(c.iter().any(|&v| v > 0.02), "{}/{}: black", kit.id, b.model);
+                }
+            }
+        }
+    }
+}
