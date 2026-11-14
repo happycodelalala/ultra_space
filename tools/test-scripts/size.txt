@@ -3,8 +3,8 @@
 # around the biggest Hollish town at each size (curvature, horizon, how far the next
 # settlements are, how full the land feels).
 2    shot 01-ahead.png
-3    orbit 90 -10
-5    shot 02-side.png
+3    orbit 0 -8
+5    shot 02-horizon.png
 6    orbit 180 -10
 8    shot 03-behind.png
 9    quit
