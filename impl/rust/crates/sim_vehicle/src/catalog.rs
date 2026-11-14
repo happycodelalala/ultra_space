@@ -581,6 +581,8 @@ impl std::error::Error for CatalogError {}
 #[derive(Clone, Debug, Default)]
 pub struct PartCatalog {
     parts: BTreeMap<String, Arc<PartDef>>,
+    /// The file each part came from, by id (its family: `core`, or a design's own parts).
+    families: BTreeMap<String, String>,
 }
 
 impl PartCatalog {
@@ -599,6 +601,12 @@ impl PartCatalog {
 
     pub fn is_empty(&self) -> bool {
         self.parts.is_empty()
+    }
+
+    /// The family a part belongs to: the name of the file it was defined in, without folders
+    /// or extension (`core` for the general parts, else a design family such as `bastion`).
+    pub fn family(&self, id: &str) -> &str {
+        self.families.get(id).map_or("", String::as_str)
     }
 
     /// Loads every `*.json` file in `dir` (sorted by name), checking all files before failing.
@@ -634,6 +642,10 @@ impl PartCatalog {
             for part in parsed.parts {
                 problems.extend(validate(&part).into_iter().map(|p| format!("{file}: {p}")));
                 let id = part.id.clone();
+                let family = std::path::Path::new(file)
+                    .file_stem()
+                    .map_or_else(|| file.to_owned(), |f| f.to_string_lossy().into_owned());
+                catalog.families.insert(id.clone(), family);
                 if catalog.parts.insert(id.clone(), Arc::new(part)).is_some() {
                     problems.push(format!("{file}: duplicate part id {id:?}"));
                 }

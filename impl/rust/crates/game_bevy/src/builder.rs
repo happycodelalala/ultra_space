@@ -383,10 +383,16 @@ fn enter_or_leave(
         r.world.entity_mut(loc.entity).insert(Frozen);
     }
     let mut parts: Vec<Arc<PartDef>> = catalog.0.iter().cloned().collect();
+    // The general parts first, then each design family's own (so their order stays put as
+    // design families grow), each by kind and id.
+    let family = |p: &PartDef| {
+        let f = catalog.0.family(&p.id);
+        (f != "core", f.to_string())
+    };
     parts.sort_by(|a, b| {
-        a.kind
-            .cmp_key()
-            .cmp(&b.kind.cmp_key())
+        family(a)
+            .cmp(&family(b))
+            .then(a.kind.cmp_key().cmp(&b.kind.cmp_key()))
             .then(a.id.cmp(&b.id))
     });
     let palette = parts.into_iter().map(Entry::Part).collect();
