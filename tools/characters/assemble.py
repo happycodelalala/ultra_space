@@ -264,6 +264,14 @@ def build(c):
 
 
 def export(arm, meshes, path):
+    # Only what the game reads: one set of texture coordinates, no vertex colours.
+    for m in meshes:
+        uvs = m.data.uv_layers
+        while len(uvs) > 1:
+            uvs.remove(uvs[-1])
+        colours = m.data.color_attributes
+        while len(colours):
+            colours.remove(colours[0])
     bpy.ops.object.select_all(action="DESELECT")
     arm.select_set(True)
     for m in meshes:
