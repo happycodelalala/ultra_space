@@ -30,6 +30,10 @@ step() {
 step "secrets"       "$ROOT/tools/check-secrets.sh" --all
 step "boundaries"    "$ROOT/tools/check-boundaries.py"
 step "content"       "$ROOT/tools/check-content.py"
+step "models"        "$ROOT/tools/build-models.sh" --check
+if command -v node >/dev/null; then
+    step "viewer"        bash -c "node --test '$ROOT'/impl/viewer/*.test.mjs"
+fi
 step "format"        bash -c "cd '$WS' && cargo fmt --all --check"
 step "clippy"        bash -c "cd '$WS' && cargo clippy --workspace --all-targets --locked -- -D warnings"
 step "tests"         bash -c "cd '$WS' && cargo test --workspace --locked"

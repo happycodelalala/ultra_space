@@ -11,6 +11,7 @@
 //! 3.0  mouse 0 8 2        # move the mouse by (0, 8) px every frame for 2 s
 //! 9.0  shot descent.png   # screenshot, relative to the script's folder
 //! 9.5  log reached cloud deck
+//! 9.7  orbit 135 -20       # chase camera at yaw 135°, pitch -20° (degrees)
 //! 10   wait landed 20     # pause the script clock until the ship is landed and still (max 20 s)
 //! 12   quit               # exit (after pending screenshots), logging a frame summary
 //! ```
@@ -51,6 +52,9 @@ pub enum Action {
     Mouse(Vec2, f64),
     Shot(String),
     Log(String),
+    /// Set the chase camera's orbit around the ship: yaw and pitch (degrees, as
+    /// `ULTRA_SPACE_CHASE_ORBIT`).
+    Orbit(f64, f64),
     /// Pause the script clock until a condition holds (at most this many seconds).
     Wait(Condition, f64),
     Quit,
@@ -66,6 +70,9 @@ pub enum Condition {
 const WAIT_TIMEOUT: f64 = 20.0;
 /// "Still" for `wait landed` (m/s relative to the ground).
 const LANDED_SPEED: f64 = 0.5;
+/// A `wait` condition must hold this long without a break (s): a ship bouncing on landing
+/// touches the ground slowly for a moment, then moves again.
+const WAIT_STEADY: f64 = 1.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Step {
@@ -90,6 +97,8 @@ struct Script {
     quit_at: Option<Duration>,
     /// An active `wait`: condition, real time it started, limit (s).
     waiting: Option<(Condition, Duration, f64)>,
+    /// Since when the waited-for condition has held without a break.
+    met_since: Option<Duration>,
     frames: u64,
     worst: Duration,
     over_budget: u64,
@@ -97,8 +106,8 @@ struct Script {
 }
 
 /// Parses a key or mouse button name: letters, digits, `Space`, `Ctrl`, `Shift`, `Tab`, `Esc`,
-/// `F1`–`F12`, `Comma`, `Period`, `BracketLeft`, `BracketRight`, `Enter`, `MouseLeft`,
-/// `MouseRight`.
+/// `F1`–`F12`, `Comma`, `Period`, `BracketLeft`, `BracketRight`, `Enter`, `Up`, `Down`,
+/// `Left`, `Right`, `PageUp`, `PageDown`, `Delete`, `Home`, `MouseLeft`, `MouseRight`.
 pub fn parse_input(name: &str) -> Option<Input> {
     let key = |k| Some(Input::Key(k));
     let upper = name.to_ascii_uppercase();
@@ -181,6 +190,14 @@ pub fn parse_input(name: &str) -> Option<Input> {
         "PERIOD" => key(KeyCode::Period),
         "BRACKETLEFT" => key(KeyCode::BracketLeft),
         "BRACKETRIGHT" => key(KeyCode::BracketRight),
+        "UP" => key(KeyCode::ArrowUp),
+        "DOWN" => key(KeyCode::ArrowDown),
+        "LEFT" => key(KeyCode::ArrowLeft),
+        "RIGHT" => key(KeyCode::ArrowRight),
+        "PAGEUP" => key(KeyCode::PageUp),
+        "PAGEDOWN" => key(KeyCode::PageDown),
+        "DELETE" => key(KeyCode::Delete),
+        "HOME" => key(KeyCode::Home),
         "MOUSELEFT" => Some(Input::Mouse(MouseButton::Left)),
         "MOUSERIGHT" => Some(Input::Mouse(MouseButton::Right)),
         _ => None,
@@ -223,6 +240,7 @@ pub fn parse(text: &str) -> Result<Vec<Step>, String> {
                     .to_string(),
             ),
             "log" => Action::Log(rest.join(" ")),
+            "orbit" => Action::Orbit(number(0)?, number(1)?),
             "wait" => {
                 let condition = match rest.first().map(|w| w.to_ascii_lowercase()).as_deref() {
                     Some("landed") => Condition::Landed,
@@ -267,6 +285,7 @@ impl Plugin for ScriptPlugin {
                 shots: Vec::new(),
                 quit_at: None,
                 waiting: None,
+                met_since: None,
                 frames: 0,
                 worst: Duration::ZERO,
                 over_budget: 0,
@@ -317,6 +336,7 @@ fn holds(condition: Condition, sim: &Sim, ship: Option<&PlayerShip>) -> bool {
 #[allow(clippy::too_many_arguments)]
 fn run_script(
     mut commands: Commands,
+    mut pilot: ResMut<crate::ship::PilotState>,
     sim: Res<Sim>,
     ship: Option<Res<PlayerShip>>,
     mut script: ResMut<Script>,
@@ -332,7 +352,15 @@ fn run_script(
     // While waiting, the script clock stands still (holds and moves keep their timing).
     if let Some((condition, since, limit)) = script.waiting {
         let waited = (now - since).as_secs_f64();
-        let met = holds(condition, &sim, ship.as_deref());
+        let met_now = holds(condition, &sim, ship.as_deref());
+        if !met_now {
+            script.met_since = None;
+        } else if script.met_since.is_none() {
+            script.met_since = Some(now);
+        }
+        let met = script
+            .met_since
+            .is_some_and(|since| (now - since).as_secs_f64() >= WAIT_STEADY);
         if met || waited > limit {
             if met {
                 info!("script: waited {waited:.1} s for {condition:?}");
@@ -340,6 +368,7 @@ fn run_script(
                 error!("script: gave up waiting for {condition:?} after {limit:.0} s");
             }
             script.waiting = None;
+            script.met_since = None;
         }
         script.started = Some(started + real.delta());
     }
@@ -381,6 +410,9 @@ fn run_script(
                 script.shots.push(path);
             }
             Action::Log(text) => info!("script: {text}"),
+            Action::Orbit(yaw, pitch) => {
+                pilot.orbit = (yaw.to_radians(), pitch.to_radians().clamp(-1.4, 1.4));
+            }
             Action::Wait(condition, limit) => script.waiting = Some((condition, now, limit)),
             Action::Quit => script.quit_at = Some(now),
         }

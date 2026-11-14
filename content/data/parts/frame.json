@@ -1,0 +1,683 @@
+{
+  "description": "Parts for heavy humanoid frames (an original design for validating the builder): torso, head, waist, limbs, feet, a backpack with four binder mounts, binders, drone pods and a gyro.",
+  "parts": [
+    {
+      "id": "frame.torso",
+      "name": "Frame Torso",
+      "kind": "cockpit",
+      "mass_kg": 12000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          5.0,
+          5.0,
+          3.5
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "neck",
+          "position_m": [
+            0,
+            2.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "medium"
+        },
+        {
+          "id": "waist",
+          "position_m": [
+            0,
+            -2.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shoulder_left",
+          "position_m": [
+            -2.5,
+            1.5,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "shoulder_right",
+          "position_m": [
+            2.5,
+            1.5,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "back",
+          "position_m": [
+            0,
+            0,
+            1.75
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "size": "large"
+        }
+      ],
+      "interior": {
+        "spaces": [
+          {
+            "id": "cockpit",
+            "kind": "cockpit",
+            "size_m": [
+              2.0,
+              2.0,
+              2.0
+            ]
+          }
+        ]
+      },
+      "description": "Armoured torso of a heavy frame; the pilot sits inside. Limbs hang from the shoulders and waist, the backpack on the back.",
+      "form": {
+        "model": "frame.torso",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.head",
+      "name": "Frame Head",
+      "kind": "structure",
+      "mass_kg": 800,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.6,
+          1.8,
+          1.8
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "neck",
+          "position_m": [
+            0,
+            -0.9,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "Sensor head.",
+      "form": {
+        "model": "frame.head",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.waist",
+      "name": "Frame Waist",
+      "kind": "structure",
+      "mass_kg": 5000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          4.0,
+          1.5,
+          2.5
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.75,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "hip_left",
+          "position_m": [
+            -1.4,
+            -0.75,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "hip_right",
+          "position_m": [
+            1.4,
+            -0.75,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "Waist block carrying the legs.",
+      "form": {
+        "model": "frame.waist",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.shoulder",
+      "name": "Frame Shoulder",
+      "kind": "structure",
+      "mass_kg": 1500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.6,
+          1.6,
+          1.6
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "left",
+          "position_m": [
+            -0.8,
+            0,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "right",
+          "position_m": [
+            0.8,
+            0,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "down",
+          "position_m": [
+            0,
+            -0.8,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "Shoulder joint block; the arm hangs from it.",
+      "form": {
+        "model": "frame.shoulder",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.limb",
+      "name": "Frame Limb Segment",
+      "kind": "structure",
+      "mass_kg": 2500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.4,
+          3.6,
+          1.4
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            1.8,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -1.8,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "Upper arm or forearm.",
+      "form": {
+        "model": "frame.limb",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.leg",
+      "name": "Frame Leg Segment",
+      "kind": "structure",
+      "mass_kg": 5000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.0,
+          5.0,
+          2.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            2.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "bottom",
+          "position_m": [
+            0,
+            -2.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "Thigh or shin.",
+      "form": {
+        "model": "frame.leg",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.foot",
+      "name": "Frame Foot",
+      "kind": "landing_leg",
+      "mass_kg": 1500,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          2.2,
+          1.0,
+          3.6
+        ]
+      },
+      "landing_leg": {
+        "length_m": 1.0,
+        "foot_radius_m": 1.1
+      },
+      "attach_nodes": [
+        {
+          "id": "top",
+          "position_m": [
+            0,
+            0.5,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A foot the frame stands on.",
+      "form": {
+        "model": "frame.foot",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.backpack",
+      "name": "Frame Backpack",
+      "kind": "structure",
+      "mass_kg": 4000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          3.0,
+          3.0,
+          2.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "front",
+          "position_m": [
+            0,
+            0,
+            -1
+          ],
+          "direction": [
+            0,
+            0,
+            -1
+          ],
+          "size": "large"
+        },
+        {
+          "id": "mount_upper_right",
+          "position_m": [
+            1.06,
+            1.06,
+            0
+          ],
+          "direction": [
+            0.70710678,
+            0.70710678,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "mount_upper_left",
+          "position_m": [
+            -1.06,
+            1.06,
+            0
+          ],
+          "direction": [
+            -0.70710678,
+            0.70710678,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "mount_lower_left",
+          "position_m": [
+            -1.06,
+            -1.06,
+            0
+          ],
+          "direction": [
+            -0.70710678,
+            -0.70710678,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "mount_lower_right",
+          "position_m": [
+            1.06,
+            -1.06,
+            0
+          ],
+          "direction": [
+            0.70710678,
+            -0.70710678,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "Backpack with four diagonal binder mounts, centred on the frame's long axis.",
+      "form": {
+        "model": "frame.backpack",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.binder",
+      "name": "Frame Binder",
+      "kind": "structure",
+      "mass_kg": 6000,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          7.0,
+          4.0
+        ]
+      },
+      "attach_nodes": [
+        {
+          "id": "root",
+          "position_m": [
+            0,
+            -3.5,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "rear",
+          "position_m": [
+            0,
+            0.5,
+            2.0
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ],
+          "size": "medium"
+        }
+      ],
+      "description": "A large armoured wing plate on an arm from the backpack; an engine fits its rear.",
+      "form": {
+        "model": "frame.binder",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.drone_pod",
+      "name": "Drone Pod",
+      "kind": "structure",
+      "mass_kg": 300,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          0.8,
+          0.8,
+          1.6
+        ]
+      },
+      "description": "Holds a small remote drone (drones that launch and fly come with combat).",
+      "form": {
+        "model": "frame.drone_pod",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.gyro",
+      "name": "Frame Gyro",
+      "kind": "reaction_wheel",
+      "mass_kg": 1500,
+      "shape": {
+        "type": "sphere",
+        "radius_m": 0.8
+      },
+      "reaction_wheel": {
+        "max_torque_nm": 2000000
+      },
+      "description": "A big reaction wheel to turn a heavy frame.",
+      "form": {
+        "model": "frame.gyro",
+        "material_slots": [
+          "armor"
+        ],
+        "style": "heavy_frame"
+      }
+    },
+    {
+      "id": "frame.hinge",
+      "name": "Frame Hinge",
+      "kind": "joint",
+      "mass_kg": 800,
+      "shape": {
+        "type": "box",
+        "size_m": [
+          1.2,
+          0.6,
+          1.2
+        ]
+      },
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "limits_deg": [
+          -170,
+          170
+        ],
+        "speed_deg_s": 60,
+        "max_torque_nm": 5000000
+      },
+      "attach_nodes": [
+        {
+          "id": "base",
+          "position_m": [
+            0,
+            0.3,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ],
+          "size": "large"
+        },
+        {
+          "id": "end",
+          "position_m": [
+            0,
+            -0.3,
+            0
+          ],
+          "direction": [
+            0,
+            -1,
+            0
+          ],
+          "size": "large"
+        }
+      ],
+      "description": "A heavy hinge: what hangs below its end node turns about its X axis.",
+      "form": {
+        "model": "frame.hinge",
+        "material_slots": [
+          "joint"
+        ],
+        "style": "heavy_frame"
+      }
+    }
+  ]
+}

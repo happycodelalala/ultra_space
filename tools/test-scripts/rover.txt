@@ -1,0 +1,20 @@
+# Rover (task 3.5). Run with ULTRA_SPACE_START_ALTITUDE=1500 (below the start spot's ground, so the
+# ship is placed on the surface; Z cancels its orbital speed). Step out, spawn a rover (G), board
+# it, drive, steer and brake. Look for: the rover stands on its wheels (not sunk or floating),
+# drives forward over the ground, turns right with D, stops with X; the log says "boarded the
+# Rover".
+0.5  press Z
+1    wait landed 20
+2    press F                 # step out
+3    press G                 # a rover appears 8 m ahead
+5    shot 01-rover.png
+6    press F                 # board it
+8    shot 02-in-rover.png
+8.5  hold W 6                # drive forward
+12   shot 03-driving.png
+14.5 hold D 2                # turn right while still rolling
+14.5 hold W 2
+16   shot 04-turning.png
+17   hold X 3                # brake
+20   shot 05-stopped.png
+21   quit

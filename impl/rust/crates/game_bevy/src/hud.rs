@@ -19,7 +19,7 @@ use sim_vehicle::Reference;
 use crate::camera::{CameraSet, SpaceCamera};
 use crate::ship::{
     PilotState, PlayerShip, ShipRenderState, player_arcade_speed, player_cruise_status,
-    player_ship_state,
+    player_ship_state, player_walking_speed,
 };
 use crate::sim::{RenderTime, Sim};
 use crate::space_render::body_poses;
@@ -47,6 +47,7 @@ impl Plugin for HudPlugin {
             orbits: OrbitLines::Ship,
         })
         .insert_resource(HudRefresh(REFRESH_INTERVAL))
+        .init_resource::<Notice>()
         .add_systems(Startup, spawn_hud)
         .add_systems(
             Update,
@@ -72,6 +73,34 @@ pub enum OrbitLines {
 
 #[derive(Resource)]
 struct HudRefresh(Duration);
+
+/// How long a notice stays on screen (s).
+const NOTICE_TIME: f64 = 4.0;
+
+/// A short message shown at the top of the flight panel for a few seconds (e.g. why F did
+/// nothing).
+#[derive(Resource, Default, Debug)]
+pub struct Notice {
+    text: String,
+    /// Real time it was shown (s since launch).
+    at: f64,
+}
+
+impl Notice {
+    pub fn show(&mut self, text: impl Into<String>, now: f64) {
+        self.text = text.into();
+        self.at = now;
+    }
+
+    /// The notice as a first line, while it is fresh.
+    fn line(&self, now: f64) -> String {
+        if self.text.is_empty() || now - self.at > NOTICE_TIME {
+            String::new()
+        } else {
+            format!("{}\n", self.text.to_uppercase())
+        }
+    }
+}
 
 #[derive(Component)]
 struct HudRoot;
@@ -256,6 +285,7 @@ type FlightPanelQuery = (&'static mut Text, &'static mut Visibility);
 #[allow(clippy::too_many_arguments)]
 fn update_hud(
     on_foot: Option<Res<OnFoot>>,
+    notice: Res<Notice>,
     real: Res<Time<Real>>,
     mut refresh: ResMut<HudRefresh>,
     settings: Res<HudSettings>,
@@ -266,6 +296,7 @@ fn update_hud(
     mut flight: Query<FlightPanelQuery, (With<FlightPanel>, Without<TimePanel>)>,
     mut time_panel: Query<&mut Text, (With<TimePanel>, Without<FlightPanel>)>,
 ) {
+    let now = real.elapsed_secs_f64();
     refresh.0 += real.delta();
     if refresh.0 < REFRESH_INTERVAL || !settings.visible {
         return;
@@ -308,19 +339,20 @@ fn update_hud(
         {
             let body = &system.bodies[region];
             let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
-            text.0 = format!(
-                "{} | ON FOOT\n\
+            text.0 = notice.line(now)
+                + &format!(
+                    "{} | ON FOOT\n\
                  SPEED {}   ALT {}{}\n\
-                 WASD walk | Shift run | Space jump | F board ship (within 12 m) | H HUD",
-                body.name.to_uppercase(),
-                speed(walker.velocity.length()),
-                distance(local.position.length() - body.radius),
-                if walker.grounded {
-                    String::new()
-                } else {
-                    format!("   AIRBORNE {}", distance(walker.ground_altitude))
-                },
-            );
+                 WASD walk | Shift run | Space jump | F board (vehicle ahead, 12 m) | G spawn (Shift+G: which) | H HUD",
+                    body.name.to_uppercase(),
+                    speed(walker.velocity.length()),
+                    distance(local.position.length() - body.radius),
+                    if walker.grounded {
+                        String::new()
+                    } else {
+                        format!("   AIRBORNE {}", distance(walker.ground_altitude))
+                    },
+                );
             continue;
         }
         let body = &system.bodies[*region];
@@ -333,7 +365,14 @@ fn update_hud(
         };
         let cruise = player_cruise_status(sim, ship, system);
         let arcade = player_arcade_speed(sim, ship)
-            .map_or(String::new(), |s| format!("  ARCADE {}", speed(s)));
+            .map_or(String::new(), |s| format!("  ARCADE {}", speed(s)))
+            + &player_walking_speed(sim, ship).map_or(String::new(), |s| {
+                if s.abs() < 0.05 {
+                    "  STANDING".to_string()
+                } else {
+                    format!("  WALKING {}", speed(s))
+                }
+            });
         let state_flags = format!(
             "{}{}{}{}",
             if telemetry.on_rails { "  ON RAILS" } else { "" },
@@ -341,39 +380,40 @@ fn update_hud(
             arcade,
             cruise
         );
-        text.0 = format!(
-            "{} | {frame}\n\
+        text.0 = notice.line(now)
+            + &format!(
+                "{} | {frame}\n\
              SPEED {}   V/S {}   ALT {}{}\n\
              {}\n\
              ASSIST {:?}{state_flags}\n\
-             T assist | X brake | Z stop | N arcade | J cruise{} | V view | O orbits | H HUD | F3 debug",
-            body.name.to_uppercase(),
-            speed(relative.length()),
-            speed(relative.dot(up)),
-            distance(local.position.length() - body.radius),
-            if telemetry.ground_altitude < 20_000.0 {
-                format!("   AGL {}", distance(telemetry.ground_altitude))
-            } else {
-                String::new()
-            },
-            if telemetry.in_contact {
-                "(on the ground)".to_string()
-            } else {
-                orbit_summary(
-                    body.mu,
-                    body.radius,
-                    body.soi_radius,
-                    local.position,
-                    local.velocity,
-                )
-            },
-            assist,
-            if telemetry.ground_altitude < 30.0 && relative.length() < 2.0 {
-                " | F exit"
-            } else {
-                ""
-            },
-        );
+             T assist | X brake | Z stop | N arcade | M legs | J cruise{} | V view | O orbits | H HUD | F3 debug",
+                body.name.to_uppercase(),
+                speed(relative.length()),
+                speed(relative.dot(up)),
+                distance(local.position.length() - body.radius),
+                if telemetry.ground_altitude < 20_000.0 {
+                    format!("   AGL {}", distance(telemetry.ground_altitude))
+                } else {
+                    String::new()
+                },
+                if telemetry.in_contact {
+                    "(on the ground)".to_string()
+                } else {
+                    orbit_summary(
+                        body.mu,
+                        body.radius,
+                        body.soi_radius,
+                        local.position,
+                        local.velocity,
+                    )
+                },
+                assist,
+                if telemetry.ground_altitude < 30.0 && relative.length() < 2.0 {
+                    " | F exit"
+                } else {
+                    ""
+                },
+            );
     }
 }
 

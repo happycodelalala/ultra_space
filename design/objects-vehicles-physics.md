@@ -156,13 +156,23 @@ throttle for every actual thruster, plus reaction-wheel torque.
 
 | Parameter | Value |
 |---|---|
-| Speed | 0.25/s × distance to the nearest body surface, capped by the drive part (the small drive: 200,000 km/s, two-thirds of light speed) |
-| Engage | J; 3 s charge; refused within 1.2× any body's drop altitude or without a drive |
+| Speed | 0.25/s × distance to the nearest body surface, capped by the drive's top speed (the small drive: 200,000 km/s, two-thirds of light speed) |
+| Engage | J; the ship's charge time (below); refused within 1.2× any body's drop altitude, without a drive, or with the drive overloaded |
 | Drop altitude | Above the atmosphere (or 5% of the radius if airless) + 10 km; e.g. Meridian 80 km |
 | Drop out | J, or automatically below a drop altitude; velocity set to a circular orbit around the nearest body, along the nose's horizontal direction |
-| Steering | Rotation stick turns the ship directly (0.5 rad/s) |
+| Steering | Rotation stick turns the ship directly, at the ship's cruise turn rate |
 | Time warp | Substeps, and no step covers more than 5% of the distance to a surface, so even ×10,000 can't overshoot |
 | Measured | Meridian → Hoarfell 137 s; Cinder → Leviathan (across the system) 275 s |
+
+**Per-ship characteristics (task 3.14):** a drive part states its top speed, the ship mass it
+is rated for, and its charge time and turn rate at that mass. A ship's **load** is its mass
+over its drives' combined rated mass (several drives add up; the biggest sets the other
+figures). Charge time and the speed ramp grow, and the turn rate falls, with the square root
+of the load (loads under 0.25 count as 0.25); the top speed falls in proportion to any load
+above 1; above 4 the drive won't engage. The small drive is rated for 24 t (3 s, 30°/s): the
+20 t Kestrel charges in 2.8 s and turns 33°/s, three times heavier 4.8 s and 19°/s. The
+builder shows the load, charge, turn and top speed, and flags an overloaded drive. Ship class
+and final tuning come in Batch 6.
 
 Because speed is proportional to distance, a ship heading straight at a body slows
 exponentially and can never reach it; the drop altitude ends the approach about 15 s after
@@ -208,7 +218,7 @@ compilation: [ships-stations-interiors.md](ships-stations-interiors.md).
 | Streaming regions in and out | 2 |
 | Damage, parts breaking off | 5 |
 | Atmospheric lift and drag | 2–3 |
-| Per-ship cruise characteristics: charge time, speed curve, top speed and turn rate from the drive part and the ship (mass, class) instead of global constants | 3 (with the builder), tuned in 6 |
+| Per-ship cruise characteristics: from mass done in Batch 3 (task 3.14, §5); ship class and tuning | 6 |
 
 ## 9. Many ships and stations
 

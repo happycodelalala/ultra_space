@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "vehicle.schema.json",
   "title": "Vehicle design",
-  "description": "A vehicle built from catalog parts. Vehicle frame: forward -Z, up +Y, right +X. Loaded by sim_vehicle::design, which checks that every part exists in the catalog.",
+  "description": "A vehicle built from catalog parts, as a tree: the first part is the root, every other part names its parent and how it is attached. Vehicle frame: forward -Z, up +Y, right +X. Loaded by sim_vehicle::design, which checks that parts, parents and nodes exist and that joined nodes meet.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -29,10 +29,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "id",
           "part",
           "position_m"
         ],
         "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "The part's name within this vehicle (unique)."
+          },
           "part": {
             "type": "string",
             "description": "Catalog part id."
@@ -53,8 +59,102 @@
             "minItems": 3,
             "maxItems": 3,
             "description": "Rotation in degrees about the vehicle's X, then Y, then Z axes (fixed axes). Defaults to [0, 0, 0]."
+          },
+          "parent": {
+            "type": "string",
+            "description": "The part this one is attached to; omitted only for the root part (the first)."
+          },
+          "attach": {
+            "description": "How it joins its parent: node to node, or anywhere on (or inside) the parent's surface.",
+            "oneOf": [
+              {
+                "const": "surface"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "node",
+                  "to"
+                ],
+                "properties": {
+                  "node": {
+                    "type": "string",
+                    "description": "This part's attach node."
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "The parent's attach node."
+                  }
+                }
+              }
+            ]
+          },
+          "symmetry": {
+            "type": "string",
+            "description": "Parts with the same symmetry group were placed together by a symmetry tool and are edited together."
+          }
+        },
+        "dependentRequired": {
+          "parent": [
+            "attach"
+          ],
+          "attach": [
+            "parent"
+          ]
+        }
+      }
+    },
+    "poses": {
+      "type": "object",
+      "description": "Named joint poses: pose name -> joint part id -> angle in degrees, or metres for a slider (task 3.10). Joints not named go back to rest.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      }
+    },
+    "pose_stages": {
+      "type": "object",
+      "description": "Stages a pose passes through: pose name -> in-between joint sets (same form as a pose), passed in order on the way to the pose and in reverse when leaving it (a folded arm swings clear, then unfolds).",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
           }
         }
+      }
+    },
+    "gait": {
+      "type": "object",
+      "description": "How the vehicle walks (task 3.11): its legs by part id and the walking parameters.",
+      "additionalProperties": false,
+      "required": ["legs", "step_length_m", "step_height_m", "speed_m_s", "turn_rate_deg_s", "stance"],
+      "properties": {
+        "legs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hip", "knee", "foot"],
+            "properties": {
+              "hip": {"type": "string", "description": "Hip joint part id."},
+              "knee": {"type": "string", "description": "Knee joint part id."},
+              "ankle": {"type": "string", "description": "Ankle joint part id (keeps the sole level)."},
+              "foot": {"type": "string", "description": "Foot part id."}
+            }
+          }
+        },
+        "step_length_m": {"type": "number", "exclusiveMinimum": 0},
+        "step_height_m": {"type": "number", "minimum": 0},
+        "speed_m_s": {"type": "number", "exclusiveMinimum": 0},
+        "turn_rate_deg_s": {"type": "number", "minimum": 0},
+        "stance": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Standing hip-to-ankle distance as a fraction of the leg's length."},
+        "step_time_s": {"type": "number", "exclusiveMinimum": 0, "default": 0.55, "description": "How long a step takes (s); longer for longer legs (about the square root of the leg's length)."}
       }
     }
   }

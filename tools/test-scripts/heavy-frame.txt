@@ -1,0 +1,27 @@
+# The heavy frame (builder validation). Run with ULTRA_SPACE_START_ALTITUDE=1500. Step out,
+# choose the heavy frame (Shift+G twice: rover -> Bastion -> heavy frame), spawn it ahead (G), look up at it, walk
+# up and board it, then open the builder around it for an overall view. Look for: a ~20 m
+# humanoid frame standing on its feet (not sunk or floating) with four binders in an X on its
+# back; the log lines "G now spawns: Heavy Frame", "a Heavy Frame appeared", "boarded the Heavy
+# Frame", "building on the Heavy Frame (35 parts)"; no balance problems in the panel.
+0.5  press Z
+1    wait landed 20
+2    press F                 # step out
+3    hold Shift 0.3
+3.1  press G                 # rover -> Bastion
+3.3  hold Shift 0.3
+3.4  press G                 # -> the heavy frame
+4    press G                 # spawn it ahead
+6    mouse 0 -12 0.5         # look up at it
+7    shot 01-standing.png
+7.5  mouse 0 12 0.5          # level again
+8.5  hold W 2.5              # walk up to its feet
+11.5 press F                 # board it
+13.5 shot 02-chase.png
+14   press B                 # builder: orbit view of the whole frame
+16   shot 03-builder.png
+16.5 hold MouseRight 1.5     # around to its back (the binders)
+16.5 mouse 12 0 1.5
+18.5 shot 04-binders.png
+19   press B
+20   quit

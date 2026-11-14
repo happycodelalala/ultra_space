@@ -14,9 +14,10 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, Window};
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
+use sim_vehicle::gait::{LegsOff, Walking};
 use sim_vehicle::{
     ArcadeFlight, AssistMode, Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry,
-    OnRails, PartKind, Shape, Vehicle, VehicleBody,
+    OnRails, Vehicle, VehicleBody,
 };
 
 use crate::camera::{BODY_KEYS, CameraSet, CameraStage, SpaceCamera, look_rotation};
@@ -29,8 +30,11 @@ const START_BODY: &str = "meridian";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
-/// Chase camera offset behind and above the ship (vehicle axes).
+/// Chase camera offset behind and above the ship (vehicle axes), for a vehicle up to
+/// CHASE_SIZE across; larger ones push it out in proportion.
 const CHASE_OFFSET: DVec3 = DVec3::new(0.0, 5.0, 24.0);
+/// The vehicle reach (m, from its origin) CHASE_OFFSET suits.
+const CHASE_SIZE: f64 = 20.0;
 const COCKPIT_EYE: DVec3 = DVec3::new(0.0, 0.5, -5.2);
 
 pub struct ShipPlugin;
@@ -52,6 +56,8 @@ impl Plugin for ShipPlugin {
                         cruise_keys,
                         full_stop_key,
                         arcade_key,
+                        pose_key,
+                        walk_key,
                         pilot_input,
                     )
                         .chain()
@@ -59,7 +65,8 @@ impl Plugin for ShipPlugin {
                         .before(SimSet),
                     track_ship.after(SimSet).before(CameraSet),
                     follow_ship.in_set(CameraStage::Follow),
-                    (place_ship_visual, update_plumes, aim_starlight).after(CameraSet),
+                    aim_starlight.after(CameraSet),
+                    aim_sky.after(CameraSet),
                     cursor_lock,
                 )
                     .in_set(InGame),
@@ -162,6 +169,15 @@ pub struct PilotState {
     pub mouse_free: bool,
     /// Walking on foot (see `walk`): ship controls and the ship camera stand down.
     pub on_foot: bool,
+    /// In build mode (see `builder`): flying and walking controls and their cameras stand down.
+    pub building: bool,
+}
+
+impl PilotState {
+    /// Whether the ship's controls and chase camera are in use.
+    pub fn controls_ship(&self) -> bool {
+        self.flying && !self.on_foot && !self.building
+    }
 }
 
 /// Initial chase-camera orbit from `ULTRA_SPACE_CHASE_ORBIT=<yaw>,<pitch>` (degrees; negative
@@ -191,6 +207,7 @@ impl Default for PilotState {
             view: ShipView::Chase,
             orbit: start_orbit(),
             mouse_free: false,
+            building: false,
             on_foot: false,
         }
     }
@@ -201,8 +218,6 @@ fn spawn_player_ship(
     universe: Res<Universe>,
     start: Res<StartingVehicle>,
     mut sim: ResMut<Sim>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
@@ -246,7 +261,6 @@ fn spawn_player_ship(
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
 
-    spawn_ship_visual(&mut commands, &vehicle, &mut meshes, &mut materials);
     let sim = &mut sim.0;
     let id = sim
         .objects
@@ -359,7 +373,7 @@ fn teleport_keys(
     mut sim: ResMut<Sim>,
 ) {
     let Some(ship) = ship else { return };
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         return; // the free camera uses 1–8 to jump the camera instead
     }
     let system = &universe.0;
@@ -418,7 +432,7 @@ fn full_stop_key(
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyZ) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyZ) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -458,16 +472,109 @@ fn full_stop_key(
     info!("full stop ({reference:?} reference)");
 }
 
+/// P: the controlled vehicle steps through its design's poses (task 3.10): each named joint
+/// turns toward its angle, every other joint back to rest.
+fn pose_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
+    mut sim: ResMut<Sim>,
+    mut next: Local<usize>,
+) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyP) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let mut e = region.world.entity_mut(loc.entity);
+    let (Some(vehicle), Some(body)) = (e.get::<Vehicle>(), e.get::<VehicleBody>()) else {
+        return;
+    };
+    if vehicle.poses.is_empty() || !body.articulation.is_jointed() {
+        info!("this vehicle has no poses");
+        return;
+    }
+    let count = vehicle.poses.len();
+    let pose = vehicle.poses[*next % count].name.clone();
+    // Leaving the pose P went to last (its stages, in reverse), into this one (its stages).
+    let from = (*next > 0).then(|| vehicle.poses[(*next - 1) % count].name.clone());
+    *next += 1;
+    let Some(mut route) =
+        sim_vehicle::joints::pose_route(vehicle, &body.articulation, from.as_deref(), &pose)
+    else {
+        return;
+    };
+    if let Some(mut joints) = e.get_mut::<sim_vehicle::joints::JointState>() {
+        joints.targets = route.remove(0);
+        joints.queue = route.into();
+        info!("pose: {pose}");
+    }
+}
+
 /// N (debug): toggles arcade flight (No Man's Sky style: no gravity, the ship goes where the
 /// nose points; W/S change the held speed). Turning it on keeps the current forward speed;
 /// turning it off hands the current velocity back to Newtonian flight.
+/// M: switches a legged vehicle's legs (a design `gait`, task 3.11) off and on. With legs on
+/// (the default), it stands on them whenever it is on the ground and slow, and W/S walk, A/D
+/// turn, Space takes off. With legs off it stops on both feet and is a plain rigid body.
+fn walk_key(
+    keys: Res<ButtonInput<KeyCode>>,
+    pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
+    mut notice: ResMut<crate::hud::Notice>,
+    real: Res<Time<Real>>,
+    mut sim: ResMut<Sim>,
+) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyM) {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
+        return;
+    };
+    let now = real.elapsed_secs_f64();
+    if e.get::<Vehicle>().is_none_or(|v| v.gait.is_none()) {
+        notice.show("This vehicle has no legs", now);
+        return;
+    }
+    let text = if e.contains::<LegsOff>() {
+        e.remove::<LegsOff>();
+        "Legs on: stands and walks on the ground (W/S walk, A/D turn, Space takes off)"
+    } else {
+        e.insert(LegsOff);
+        if let Some(mut walking) = e.get_mut::<Walking>() {
+            // Stops on both feet, then hands over to plain physics.
+            walking.stopping = true;
+        }
+        "Legs off: a rigid body on its feet (M: legs on)"
+    };
+    if let Some(mut control) = e.get_mut::<FlightControl>() {
+        control.desired_velocity = None;
+    }
+    info!("{text}");
+    notice.show(text, now);
+}
+
 fn arcade_key(
     keys: Res<ButtonInput<KeyCode>>,
     ship: Option<Res<PlayerShip>>,
     pilot: Res<PilotState>,
     mut sim: ResMut<Sim>,
 ) {
-    if !pilot.flying || pilot.on_foot || !keys.just_pressed(KeyCode::KeyN) {
+    if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyN) {
         return;
     }
     let Some(ship) = ship else { return };
@@ -524,7 +631,7 @@ fn cruise_keys(
     else {
         return;
     };
-    if pilot.flying && !pilot.on_foot && keys.just_pressed(KeyCode::KeyJ) {
+    if pilot.controls_ship() && keys.just_pressed(KeyCode::KeyJ) {
         cruise.toggle = true;
         *notice = 0.0;
     } else if cruise.blocked.is_some() {
@@ -555,7 +662,7 @@ fn pilot_input(
         return;
     };
 
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         // Let go of the controls; assist keeps the ship steady.
         control.translate = DVec3::ZERO;
         control.rotate = DVec3::ZERO;
@@ -600,7 +707,7 @@ fn cursor_lock(
         return;
     }
     for mut cursor in &mut windows {
-        if pilot.flying && !pilot.mouse_free {
+        if pilot.flying && !pilot.mouse_free && !pilot.building {
             cursor.grab_mode = CursorGrabMode::Locked;
             cursor.visible = false;
         } else {
@@ -614,7 +721,13 @@ fn cursor_lock(
 // Camera
 // ---------------------------------------------------------------------------------------------
 
-/// Current state and flight data of the player ship, if it exists.
+/// Whether the player ship is walking, and its walking speed.
+pub fn player_walking_speed(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
+    let loc = sim.objects.location(ship.id)?;
+    let world = &sim.regions.get(loc.region)?.world;
+    world.get::<Walking>(loc.entity).map(|w| w.speed)
+}
+
 /// Whether the player ship is in arcade flight, and its held speed.
 pub fn player_arcade_speed(sim: &Simulation, ship: &PlayerShip) -> Option<f64> {
     let loc = sim.objects.location(ship.id)?;
@@ -637,6 +750,9 @@ pub fn player_cruise_status(sim: &Simulation, ship: &PlayerShip, system: &StarSy
             format!("  CRUISE {:.0} km/s (J drop)", speed / 1_000.0)
         }
         (CruisePhase::Off, Some(CruiseBlocked::NoDrive)) => "  NO CRUISE DRIVE".into(),
+        (CruisePhase::Off, Some(CruiseBlocked::Overloaded(load))) => {
+            format!("  CRUISE DRIVE OVERLOADED ({load:.1}x its rated mass)")
+        }
         (CruisePhase::Off, Some(CruiseBlocked::TooClose(i))) => {
             format!("  CRUISE BLOCKED: too close to {}", system.bodies[*i].name)
         }
@@ -658,13 +774,14 @@ pub fn player_ship_state(
 
 fn follow_ship(
     pilot: Res<PilotState>,
+    ship: Option<Res<PlayerShip>>,
     tracked: Res<ShipRenderState>,
     universe: Res<Universe>,
     sim: Res<Sim>,
     render: Res<RenderTime>,
     mut camera: ResMut<SpaceCamera>,
 ) {
-    if !pilot.flying || pilot.on_foot {
+    if !pilot.controls_ship() {
         return;
     }
     let Some(object) = tracked.state else { return };
@@ -678,13 +795,21 @@ fn follow_ship(
         return;
     };
     let state = object.state;
+    let size = ship
+        .and_then(|ship| {
+            let loc = sim.0.objects.location(ship.id)?;
+            let world = &sim.0.regions.get(loc.region)?.world;
+            world.get::<Vehicle>(loc.entity).map(crate::walk::reach)
+        })
+        .unwrap_or(0.0);
+    let chase = (size / CHASE_SIZE).max(1.0);
     let (offset, rotation) = match pilot.view {
         ShipView::Chase => {
             let orbit =
                 DQuat::from_rotation_y(pilot.orbit.0) * DQuat::from_rotation_x(pilot.orbit.1);
             let look = DQuat::from_rotation_x(-0.12);
             (
-                state.rotation * orbit * CHASE_OFFSET,
+                state.rotation * orbit * CHASE_OFFSET * chase,
                 state.rotation * orbit * look,
             )
         }
@@ -747,159 +872,6 @@ pub fn keep_above_ground(
 // Visuals
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Component)]
-struct ShipVisual;
-
-/// Exhaust plume for thruster `index` (in allocator order), scaled by its throttle.
-#[derive(Component)]
-struct Plume {
-    index: usize,
-    /// Full-throttle length (m).
-    length: f32,
-    /// Where the nozzle is along the part's Y axis.
-    nozzle_y: f32,
-}
-
-fn shape_mesh(shape: Shape) -> Mesh {
-    match shape {
-        Shape::Box { size_m: [x, y, z] } => Cuboid::new(x as f32, y as f32, z as f32).into(),
-        Shape::Cylinder { radius_m, length_m } => {
-            Cylinder::new(radius_m as f32, length_m as f32).into()
-        }
-        Shape::Sphere { radius_m } => Sphere::new(radius_m as f32).mesh().ico(3).expect("valid"),
-    }
-}
-
-fn spawn_ship_visual(
-    commands: &mut Commands,
-    vehicle: &Vehicle,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
-    let hull = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.62, 0.64, 0.68),
-        metallic: 0.6,
-        perceptual_roughness: 0.45,
-        ..default()
-    });
-    let glass = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.12, 0.2, 0.3),
-        metallic: 0.2,
-        perceptual_roughness: 0.15,
-        ..default()
-    });
-    let dark = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.18, 0.18, 0.2),
-        metallic: 0.8,
-        perceptual_roughness: 0.5,
-        ..default()
-    });
-    let flame = materials.add(StandardMaterial {
-        base_color: Color::BLACK,
-        emissive: LinearRgba::rgb(9.0, 5.0, 2.0),
-        unlit: true,
-        ..default()
-    });
-    let plume_mesh = meshes.add(Cone::new(1.0, 1.0));
-
-    let mut thruster_index = 0;
-    commands
-        .spawn((
-            Name::new(vehicle.name.clone()),
-            ShipVisual,
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .with_children(|ship| {
-            for part in &vehicle.parts {
-                let material = match part.def.kind {
-                    PartKind::Cockpit => glass.clone(),
-                    PartKind::Thruster | PartKind::ReactionWheel | PartKind::CruiseDrive => {
-                        dark.clone()
-                    }
-                    PartKind::Hull | PartKind::Tank => hull.clone(),
-                };
-                let transform = Transform::from_translation(part.position.as_vec3())
-                    .with_rotation(part.rotation.as_quat());
-                let mut part_entity = ship.spawn((
-                    Mesh3d(meshes.add(shape_mesh(part.def.shape))),
-                    MeshMaterial3d(material),
-                    transform,
-                ));
-                if part.def.thruster.is_some() {
-                    // Exhaust leaves along the part's -Y (it pushes the vehicle along +Y).
-                    let (radius, length) = match part.def.shape {
-                        Shape::Cylinder { radius_m, length_m } => {
-                            (radius_m as f32 * 0.8, length_m as f32)
-                        }
-                        Shape::Box { size_m: [x, _, z] } => (x.min(z) as f32 * 0.35, 0.4),
-                        Shape::Sphere { radius_m } => (radius_m as f32 * 0.6, radius_m as f32),
-                    };
-                    let plume_length = radius * 8.0;
-                    let nozzle_y = -length / 2.0;
-                    part_entity.with_children(|p| {
-                        p.spawn((
-                            Plume {
-                                index: thruster_index,
-                                length: plume_length,
-                                nozzle_y,
-                            },
-                            Mesh3d(plume_mesh.clone()),
-                            MeshMaterial3d(flame.clone()),
-                            Transform::from_xyz(0.0, nozzle_y, 0.0)
-                                .with_rotation(Quat::from_rotation_x(std::f32::consts::PI))
-                                .with_scale(Vec3::new(radius, 0.0, radius)),
-                            Visibility::Hidden,
-                        ));
-                    });
-                    thruster_index += 1;
-                }
-            }
-        });
-}
-
-fn place_ship_visual(
-    tracked: Res<ShipRenderState>,
-    render: Res<RenderTime>,
-    universe: Res<Universe>,
-    camera: Res<SpaceCamera>,
-    mut visuals: Query<&mut Transform, With<ShipVisual>>,
-) {
-    let Some(state) = tracked.state else { return };
-    let system = &universe.0;
-    let t = render.0;
-    let anchor = system.bodies[camera.anchor].inertial_frame;
-    let s = state.in_frame(&system.frames, anchor, t).state;
-    for mut transform in &mut visuals {
-        transform.translation = (s.position - camera.offset).as_vec3();
-        transform.rotation = s.rotation.as_quat().normalize();
-    }
-}
-
-fn update_plumes(
-    ship: Option<Res<PlayerShip>>,
-    sim: Res<Sim>,
-    mut plumes: Query<(&Plume, &mut Transform, &mut Visibility)>,
-) {
-    let Some(ship) = ship else { return };
-    let Some((_, _, telemetry, _)) = player_ship_state(&sim.0, &ship) else {
-        return;
-    };
-    for (plume, mut transform, mut visibility) in &mut plumes {
-        let throttle = telemetry.throttles.get(plume.index).copied().unwrap_or(0.0) as f32;
-        if throttle < 0.02 {
-            *visibility = Visibility::Hidden;
-            continue;
-        }
-        *visibility = Visibility::Inherited;
-        let length = plume.length * throttle.sqrt();
-        // The cone is centered on its origin with its apex flipped to point away from the
-        // nozzle: put its base at the nozzle and let it extend outward along -Y.
-        transform.scale.y = length;
-        transform.translation.y = plume.nozzle_y - length / 2.0;
-    }
-}
-
 /// Light from the star for ordinary (PBR) meshes such as ships, matching the planets' brightness.
 #[derive(Component)]
 struct Starlight;
@@ -910,9 +882,18 @@ fn spawn_starlight(mut commands: Commands) {
         Starlight,
         DirectionalLight {
             illuminance,
-            shadow_maps_enabled: false,
+            shadow_maps_enabled: true,
             ..default()
         },
+        // Shadows near the camera only (vehicles, the ground under them).
+        bevy::light::CascadeShadowConfigBuilder {
+            num_cascades: 3,
+            minimum_distance: 0.5,
+            first_cascade_far_bound: 40.0,
+            maximum_distance: 600.0,
+            ..default()
+        }
+        .build(),
         Transform::default(),
     ));
 }
@@ -937,6 +918,42 @@ fn aim_starlight(
         for mut transform in &mut lights {
             *transform = Transform::default().looking_to(direction, Vec3::Y);
         }
+    }
+}
+
+/// Sky light at full strength (cd/m²): about a sixth of the starlight, as a clear sky.
+const SKY_LIGHT: f32 = 180.0;
+/// Sky light left in space and at night (bounce from the planet, stars).
+const SKY_FLOOR: f32 = 0.08;
+
+/// Turns the sky light (the camera's environment map) to the local up over the anchor body and
+/// sets its strength: full by day low down, fading at night and with height to a floor.
+fn aim_sky(
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut lights: Query<&mut EnvironmentMapLight, With<MainCamera>>,
+) {
+    let system = &universe.0;
+    let body = &system.bodies[camera.anchor];
+    let up = camera.offset.normalize_or_zero();
+    if up == DVec3::ZERO {
+        return;
+    }
+    let star = system.frames.transform_point(
+        body.inertial_frame,
+        system.star().inertial_frame,
+        render.0,
+        DVec3::ZERO,
+    ) - camera.offset;
+    let day = up.dot(star.normalize_or_zero()).clamp(0.0, 1.0).sqrt();
+    let height = (camera.offset.length() - body.radius).max(0.0);
+    let air = body.atmosphere.as_ref().map_or(0.0, |a| a.height).max(1.0);
+    let in_air = (1.0 - height / (air * 2.0)).clamp(0.0, 1.0);
+    let strength = SKY_FLOOR + (1.0 - SKY_FLOOR) * day as f32 * in_air as f32;
+    for mut light in &mut lights {
+        light.rotation = Quat::from_rotation_arc(Vec3::Y, up.as_vec3());
+        light.intensity = SKY_LIGHT * strength;
     }
 }
 

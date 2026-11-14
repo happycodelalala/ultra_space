@@ -41,6 +41,13 @@ pub fn build_simulation(system: Arc<StarSystem>) -> Simulation {
     sim.objects
         .register_transferable::<sim_vehicle::ArcadeFlight>();
     sim.objects.register_transferable::<sim_vehicle::Walker>();
+    sim.objects.register_transferable::<sim_vehicle::Frozen>();
+    sim.objects
+        .register_transferable::<sim_vehicle::gait::Walking>();
+    sim.objects
+        .register_transferable::<sim_vehicle::gait::LegsOff>();
+    sim.objects
+        .register_transferable::<sim_vehicle::joints::JointState>();
     sim.objects
         .register_transferable::<sim_vehicle::WalkerControl>();
     // Vehicles land on the real terrain (built once per region, on the loading worker).
@@ -93,6 +100,26 @@ fn advance_simulation(
                 last.as_secs_f64() * 1e3,
                 budget.as_secs_f64() * 1e3
             );
+            // Which region's physics, and where in it.
+            for region in sim.0.regions.iter() {
+                if let Some(p) = region.world.get_resource::<sim_vehicle::RegionPhysics>() {
+                    let st = p.0.stats();
+                    if st.step_ms > 5.0 {
+                        warn!(
+                            "  physics in {}: step {:.1} ms (ground {:.1}, world {:.1}, {} substeps), {} bodies, {} patches, {} building, {} ground rebuilds",
+                            region.name,
+                            st.step_ms,
+                            st.ground_ms,
+                            st.world_ms,
+                            st.substeps,
+                            st.bodies,
+                            st.patches,
+                            st.patches_pending,
+                            st.ground_rebuilds
+                        );
+                    }
+                }
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-//! Task 1.13: the placeholder cruise drive.
+//! Task 1.13: the placeholder cruise drive; task 3.14: per-ship cruise characteristics.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use glam::{DQuat, DVec3};
 use sim_core::{ObjectId, ObjectState, Simulation, StarSystem};
-use sim_vehicle::cruise::{CHARGE_TIME, drop_altitude};
+use sim_vehicle::cruise::{CruiseCharacteristics, MAX_LOAD, drop_altitude};
 use sim_vehicle::flight::add_flight_systems;
 use sim_vehicle::{
     Cruise, CruiseBlocked, CruisePhase, FlightControl, FlightTelemetry, PartCatalog, PartKind,
@@ -14,6 +14,8 @@ use sim_vehicle::{
 };
 
 const TICK: f64 = 1.0 / 30.0;
+/// The small drive's charge time at its rated mass: the Kestrel (half of it) charges sooner.
+const CHARGE_TIME: f64 = 3.0;
 
 fn content() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data")
@@ -275,4 +277,106 @@ fn heading_straight_at_a_planet_never_overshoots_even_under_warp() {
         }
         assert!(!trip.cruise().is_cruising(), "warp {warp}: dropped out");
     }
+}
+
+/// The Kestrel with every part `factor` times as heavy.
+fn heavier(factor: f64) -> Vehicle {
+    let mut v = kestrel();
+    for p in &mut v.parts {
+        let mut def = (*p.def).clone();
+        def.mass_kg *= factor;
+        p.def = Arc::new(def);
+    }
+    v
+}
+
+/// Seconds from engaging until cruise starts, then the turn (radians) in one second of full
+/// yaw stick while cruising.
+fn charge_and_turn(vehicle: Vehicle) -> (f64, f64) {
+    let mut trip = Trip::new("meridian", 150_000.0, vehicle);
+    trip.cruise().toggle = true;
+    let start = trip.time();
+    while !trip.cruise().is_cruising() {
+        assert!(trip.time() - start < 30.0, "never started cruising");
+        trip.step();
+    }
+    let charge = trip.time() - start;
+    let nose = |trip: &Trip| {
+        let loc = trip.sim.objects.location(trip.id).unwrap();
+        let world = &trip.sim.regions.get(loc.region).unwrap().world;
+        world.get::<ObjectState>(loc.entity).unwrap().state.rotation * DVec3::NEG_Z
+    };
+    let before = nose(&trip);
+    {
+        let loc = trip.sim.objects.location(trip.id).unwrap();
+        let world = &mut trip.sim.regions.get_mut(loc.region).unwrap().world;
+        world.get_mut::<FlightControl>(loc.entity).unwrap().rotate = DVec3::Y;
+    }
+    for _ in 0..30 {
+        trip.step();
+    }
+    (charge, nose(&trip).angle_between(before))
+}
+
+#[test]
+fn heavier_ships_charge_and_turn_slower_in_cruise() {
+    let light = VehicleBody::of(&kestrel())
+        .unwrap()
+        .performance
+        .cruise
+        .unwrap();
+    assert!(
+        light.load < 1.0,
+        "the Kestrel is within its drive's rating: {}",
+        light.load
+    );
+    let (charge, turn) = charge_and_turn(kestrel());
+    let (heavy_charge, heavy_turn) = charge_and_turn(heavier(3.0));
+    println!(
+        "Kestrel: charge {charge:.2} s, turn {:.1} deg/s; three times heavier: {heavy_charge:.2} s, \
+         {:.1} deg/s",
+        turn.to_degrees(),
+        heavy_turn.to_degrees()
+    );
+    // Load 3x: charge and turn change by sqrt(3).
+    assert!(
+        (heavy_charge / charge - 3f64.sqrt()).abs() < 0.1,
+        "{charge} {heavy_charge}"
+    );
+    assert!(
+        (turn / heavy_turn - 3f64.sqrt()).abs() < 0.1,
+        "{turn} {heavy_turn}"
+    );
+    assert!((charge - light.charge_time_s).abs() < 2.0 * TICK);
+}
+
+#[test]
+fn an_overloaded_drive_refuses_and_loses_top_speed() {
+    let drive = PartCatalog::load_dir(content().join("parts"))
+        .unwrap()
+        .get("cruise_drive.small")
+        .unwrap()
+        .cruise_drive
+        .unwrap();
+    let rated = drive.rated_mass_kg;
+    let at = |load: f64| CruiseCharacteristics::of(&[drive], rated * load).unwrap();
+    assert_eq!(at(0.5).max_speed_ms, drive.max_speed_ms);
+    assert!((at(2.0).max_speed_ms - drive.max_speed_ms / 2.0).abs() < 1.0);
+    assert!(!at(MAX_LOAD).overloaded() && at(MAX_LOAD * 1.01).overloaded());
+    // Two drives share the load.
+    let two = CruiseCharacteristics::of(&[drive, drive], rated * 2.0).unwrap();
+    assert!((two.load - 1.0).abs() < 1e-9);
+
+    let heavy = heavier(MAX_LOAD * 3.0);
+    let load = VehicleBody::of(&heavy)
+        .unwrap()
+        .performance
+        .cruise
+        .unwrap()
+        .load;
+    let mut trip = Trip::new("meridian", 150_000.0, heavy);
+    trip.cruise().toggle = true;
+    trip.step();
+    assert_eq!(trip.cruise().phase, CruisePhase::Off);
+    assert_eq!(trip.cruise().blocked, Some(CruiseBlocked::Overloaded(load)));
 }

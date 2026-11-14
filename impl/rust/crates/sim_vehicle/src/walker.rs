@@ -13,6 +13,7 @@ use sim_core::frames::FrameState;
 use sim_core::objects::{RegionBody, SimClock, SystemRef};
 
 use crate::flight::{BodyEnv, RegionTerrain, ground_altitude, region_env};
+use crate::physics::RegionPhysics;
 
 /// Walking and running speeds (m/s).
 pub const WALK_SPEED: f64 = 5.0;
@@ -25,6 +26,8 @@ const GROUND_ACCELERATION: f64 = 40.0;
 const AIR_CONTROL: f64 = 0.15;
 /// Grounded feet follow the ground down steps up to this high (m) instead of falling off.
 const STEP_DOWN: f64 = 0.6;
+/// Most a walker is pushed out of an overlap with a vehicle per step (m).
+const MAX_PUSH: f64 = 0.2;
 /// Eye height above the feet (m).
 pub const EYE_HEIGHT: f64 = 1.7;
 
@@ -56,18 +59,42 @@ fn upright(forward: DVec3, up: DVec3) -> DQuat {
     DQuat::from_mat3(&glam::DMat3::from_cols(right, up, -f)).normalize()
 }
 
+/// Moves a walker's feet from a position along `up` by a desired displacement against the
+/// world's colliders: returns the push out of any overlap, the displacement made, and whether
+/// it stands on something ([`crate::PhysicsScene::sweep_character`]).
+pub type Mover<'a> = &'a mut dyn FnMut(DVec3, DVec3, DVec3) -> (DVec3, DVec3, bool);
+
 /// Advances a walker by `dt` (state in the body's inertial frame; `position` is the feet).
+///
+/// It walks on the terrain height. With a `mover` it also moves against the region's vehicles
+/// (as they were at the start of the tick: blocked by hulls, standing on decks) and does *not*
+/// turn with the planet here: all of a tick's steps happen in the frame of the tick's start, and
+/// the caller turns it once for the whole tick ([`ride`]), so it never moves relative to the
+/// vehicles it is swept against.
+/// Turns a walker with the planet for `dt` (after its steps against the vehicles).
+pub fn ride(state: &mut FrameState, walker: &mut Walker, env: &BodyEnv, dt: f64) {
+    let spin = DQuat::from_scaled_axis(env.spin * dt);
+    state.position = spin * state.position;
+    state.rotation = (spin * state.rotation).normalize();
+    walker.velocity = spin * walker.velocity;
+    state.velocity = env.spin.cross(state.position) + walker.velocity;
+    state.angular_velocity = env.spin;
+}
+
 pub fn walk_step(
     state: &mut FrameState,
     walker: &mut Walker,
     control: &mut WalkerControl,
     env: &BodyEnv,
     dt: f64,
+    mover: Option<Mover<'_>>,
 ) {
-    // Ride with the turning ground.
     let spin = DQuat::from_scaled_axis(env.spin * dt);
-    state.position = spin * state.position;
-    state.rotation = (spin * state.rotation).normalize();
+    if mover.is_none() {
+        // Ride with the turning ground.
+        state.position = spin * state.position;
+        state.rotation = (spin * state.rotation).normalize();
+    }
 
     // Stand upright along local gravity, then turn.
     let up = state.position.normalize();
@@ -101,6 +128,40 @@ pub fn walk_step(
     // Gravity, then move.
     let r = state.position.length();
     walker.velocity -= up * (env.mu / (r * r)) * dt;
+    if let Some(mover) = mover {
+        // Vehicles: blocked by hulls, standing on decks.
+        let desired = walker.velocity * dt;
+        let (out, moved, on_vehicle) = mover(state.position, up, desired);
+        // Rapier's controller can return more movement than asked (snapping and sliding over
+        // the edges of a hull): never more than asked plus a little, and a push out of an
+        // overlap of at most MAX_PUSH per step, or a bump can throw the walker.
+        let moved = moved.clamp_length_max(desired.length() + 0.02);
+        let out = out.clamp_length_max(MAX_PUSH);
+        // The push out of an overlap moves the walker but isn't its own speed.
+        state.position += out + moved;
+        let vertical = walker.velocity.dot(up);
+        // Sliding along a hull redirects the walker's speed but never adds to it.
+        let asked = (desired - up * desired.dot(up)).length() / dt;
+        let tangential = ((moved - up * moved.dot(up)) / dt).clamp_length_max(asked);
+        walker.velocity = tangential + up * vertical;
+        // The ground: the terrain height, as without vehicles.
+        let ground = env.radius + env.ground_height(state.position);
+        let feet = state.position.length() - ground;
+        let rising = walker.velocity.dot(up) > 0.0;
+        let on_ground = feet <= 0.0 || (walker.grounded && !rising && feet < STEP_DOWN);
+        if on_ground && !on_vehicle {
+            state.position = state.position.normalize() * ground;
+        }
+        if on_ground || on_vehicle {
+            let vertical = walker.velocity.dot(up);
+            if vertical < 0.0 || walker.grounded {
+                walker.velocity -= up * vertical;
+            }
+        }
+        walker.grounded = on_ground || on_vehicle;
+        walker.ground_altitude = (state.position.length() - ground).max(0.0);
+        return;
+    }
     state.position += walker.velocity * dt;
 
     // Ground: land, stay on it, or follow it down small steps.
@@ -129,6 +190,7 @@ pub fn walker_system(
     system: Res<SystemRef>,
     clock: Res<SimClock>,
     terrain: Option<Res<RegionTerrain>>,
+    physics: Option<Res<RegionPhysics>>,
     mut walkers: Query<(&mut ObjectState, &mut Walker, &mut WalkerControl)>,
 ) {
     let system = &system.0;
@@ -140,8 +202,27 @@ pub fn walker_system(
         // Steps of at most 1/60 s so jumps and slopes stay smooth under light time warp.
         let steps = (clock.dt / (1.0 / 60.0)).ceil().clamp(1.0, 64.0) as u32;
         let h = clock.dt / f64::from(steps);
+        // Against the region's vehicles when there is a physics scene.
+        let scene = physics.as_deref().map(|p| &p.0);
         for _ in 0..steps {
-            walk_step(&mut local.state, &mut walker, &mut control, &env, h);
+            match &scene {
+                Some(scene) => {
+                    let mut sweep = |feet, up, desired| scene.sweep_character(feet, up, desired, h);
+                    walk_step(
+                        &mut local.state,
+                        &mut walker,
+                        &mut control,
+                        &env,
+                        h,
+                        Some(&mut sweep),
+                    );
+                }
+                None => walk_step(&mut local.state, &mut walker, &mut control, &env, h, None),
+            }
+        }
+        if scene.is_some() {
+            // Turned with the planet once for the whole tick.
+            ride(&mut local.state, &mut walker, &env, clock.dt);
         }
         walker.ground_altitude = ground_altitude(&env, local.state.position).max(0.0);
         *state = local;
@@ -198,7 +279,7 @@ mod tests {
         let (mut s, mut w) = standing(&env);
         let mut c = WalkerControl::default();
         for _ in 0..600 {
-            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
         }
         assert!(w.grounded);
         assert!(feet_above_ground(&env, &s).abs() < 0.01);
@@ -214,7 +295,7 @@ mod tests {
         for _ in 0..(60 * 20) {
             c.movement = DVec2::new(0.0, 1.0);
             c.run = true;
-            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+            walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
             assert!(
                 feet_above_ground(&env, &s) > -0.01,
                 "never below the ground"
@@ -240,7 +321,7 @@ mod tests {
             };
             let mut highest: f64 = 0.0;
             for _ in 0..(60 * 30) {
-                walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0);
+                walk_step(&mut s, &mut w, &mut c, &env, 1.0 / 60.0, None);
                 highest = highest.max(feet_above_ground(&env, &s));
                 if w.grounded && highest > 0.1 {
                     break;

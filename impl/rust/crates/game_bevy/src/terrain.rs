@@ -678,6 +678,39 @@ fn place_tiles(
     }
 }
 
+/// Tiles built from an older terrain: drawn ones are rebuilt in place (the old one stays until
+/// its replacement is ready), the rest dropped.
+fn invalidate(bt: &mut BodyTiles, commands: &mut Commands, keys: Vec<TileKey>) {
+    for key in keys {
+        bt.estimates.lock().expect("estimates").remove(&key);
+        if bt.shown.contains(&key) {
+            bt.stale.insert(key);
+        } else if let Some(Tile::Ready { entities, .. }) = bt.tiles.remove(&key) {
+            for e in entities {
+                commands.entity(e).despawn();
+            }
+        } else {
+            // Still being generated from the old terrain: rebuild once it arrives.
+            bt.stale.insert(key);
+        }
+    }
+}
+
+/// Replaces a body's terrain (a loaded save's terrain deltas): every tile is rebuilt from it.
+pub fn replace_terrain(
+    terrains: &mut Terrains,
+    commands: &mut Commands,
+    body: usize,
+    terrain: Arc<Terrain>,
+) {
+    let Some(bt) = terrains.bodies.iter_mut().find(|bt| bt.body == body) else {
+        return;
+    };
+    bt.terrain = terrain;
+    let keys: Vec<TileKey> = bt.tiles.keys().copied().collect();
+    invalidate(bt, commands, keys);
+}
+
 /// Landing pad size (m): flat radius and the blend back to natural terrain.
 const PAD_RADIUS: f64 = 30.0;
 const PAD_BLEND: f64 = 20.0;
@@ -756,19 +789,7 @@ fn pad_key(
         })
         .copied()
         .collect();
-    for key in touched {
-        bt.estimates.lock().expect("estimates").remove(&key);
-        if bt.shown.contains(&key) {
-            bt.stale.insert(key);
-        } else if let Some(Tile::Ready { entities, .. }) = bt.tiles.remove(&key) {
-            for e in entities {
-                commands.entity(e).despawn();
-            }
-        } else {
-            // Still being generated from the old terrain: rebuild once it arrives.
-            bt.stale.insert(key);
-        }
-    }
+    invalidate(bt, &mut commands, touched);
 
     // Physics uses the same terrain at once.
     if let Some(r) = sim.regions.get_mut(region) {

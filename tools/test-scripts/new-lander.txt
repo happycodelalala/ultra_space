@@ -1,0 +1,39 @@
+# A lander from scratch (task 3.9). Run with ULTRA_SPACE_START_ALTITUDE=1500. Step out, start a
+# new vehicle (Shift+B), make its root a hull section (Home), put the cockpit on its top, the main
+# engine underneath (pointing down) and a mirrored pair of legs on its sides: the engine pushes
+# through the centre of mass. Leave, board it, lift off with Space. Look for: the panel saying
+# "can hover" with no problems; the vehicle lifted clear of the ground while building (the
+# engine never sinks in); "boarded the New vehicle 1"; the lander rising (AGL climbing in 04/05).
+0.5  press Z
+1    wait landed 20
+2    press F
+3    hold Shift 0.3
+3.1  press B                 # new vehicle (a cockpit)
+4    press Down              # hull section (3rd entry)
+4.1  press Down
+4.3  press Home              # the root is now the hull section
+5    press Up                # back to the cockpit
+5.1  press Up
+5.3  press Right             # hull nodes: front, rear, top, bottom, left, right
+5.4  press Right
+5.6  press Enter             # cockpit on top
+6    press Down              # main engine (6th entry)
+6.1  press Down
+6.2  press Down
+6.3  press Down
+6.4  press Down
+6.8  press Enter             # on the bottom (now the 3rd free node), pointing down
+7.2  press Down              # landing leg (10th entry)
+7.3  press Down
+7.4  press Down
+7.5  press Down
+7.8  press M                 # mirror
+8.2  press Enter             # on the left (now the 3rd free node) and the right
+8.8  shot 01-lander.png
+9.5  press B                 # leave
+12   shot 02-standing.png
+12.5 press F                 # board it
+14   hold Space 6            # lift off
+16   shot 03-lifting.png
+19.5 shot 04-up.png
+20.5 quit

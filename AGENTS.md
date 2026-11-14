@@ -28,6 +28,30 @@ decision, architecture, development batches) before starting non-trivial work.
   (development plan §7 and §7.1). Don't build infrastructure ahead of its first real use, and
   ask before expanding a task's scope.
 
+## Two tracks: game and design
+
+Work runs on two tracks, each on its own branch and worktree (and its own sessions):
+
+- **Game track** (main checkout, `~/code/ultra_space`): engine and gameplay, `impl/rust/`,
+  system design docs, performance, Windows test rounds.
+- **Design track** (`~/code/ultra_space-design`, branch `design/*`): vehicles, mechs, ships,
+  capital ships, buildings and objects: `tools/blender/`, `assets/export/models/`, the design
+  data in `content/data/parts/` and `content/data/vehicles/` (and their builder tests, e.g.
+  `sim_vehicle/tests/bastion.rs`), vehicle design docs (`design/bastion.md`), the palette and
+  the viewer (`impl/viewer/`). Review in the design viewer with screenshots
+  (`tools/viewer-shots.sh`); **no game test rounds** while iterating. Plan and backlog:
+  `design/design-track.md`.
+- **The handoff** between them is fixed: the part and vehicle schemas, the model format
+  (glb, metres, part axes, material slot names, COLOR_0 occlusion, TEXCOORD_0 metres), the
+  palette slots and the joint/pose data. Changing any of it touches both tracks: agree it
+  first and change both sides together.
+- **Importing designs into the game:** the design branch merges at milestones, after
+  `tools/ci.sh` passes (it checks models, schemas and the design tests: interference in every
+  pose and move, balance, lift); the game branch takes it in by merging, and an occasional
+  test round shows it in the game.
+- The game keeps the last imported designs as placeholders meanwhile; don't edit design files
+  on the game track (or engine code on the design track) except for the handoff.
+
 ## Units and coordinates
 
 - **Meters, seconds, radians.** World and frame positions are `f64` (`DVec3`, `DQuat`).
@@ -47,6 +71,9 @@ decision, architecture, development batches) before starting non-trivial work.
 - **Don't write Bevy code from memory.** Check the pinned version's source and examples in
   `~/.cargo/registry/src/*/bevy-0.20.1/` (and the matching `bevy_*` crates) first.
 - Upgrade Bevy only between development batches, never mid-batch.
+- **rapier3d-f64 is pinned to `=0.36.1`** (simulation physics, Batch 3; it uses our glam 0.33).
+  It's also newer than most training data: check `~/.cargo/registry/src/*/rapier3d-f64-0.36.1/`
+  and `parry3d-f64-0.31.*` before writing rapier code.
 
 ## Commands (in `impl/rust/`)
 
@@ -99,18 +126,37 @@ honestly with their output.
   `game_bevy/src/script.rs`, examples in `tools/test-scripts/`). A window opens on the
   developer's desktop (tell them before launching); it doesn't grab the mouse. The script logs a
   frame-time summary; screenshots land in `C:\Users\yangc\Apps\ultra_space\runs\<script>\`.
-      **Test rounds:** `tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]` runs the test list
-  `tools/test-scripts/tests.txt` (name, script, settings, kind, what to check): one build and
-  export, visual tests several at a time (own window, folder and `game.log` each, via
-  `ULTRA_SPACE_LOG`), performance tests alone afterwards, a `runs/<name>/done` marker per finished test (review can start per test), and a
-  `runs/summary.txt`. Visual rounds can run while building at low priority (`nice`); `--perf`
-  rounds need a quiet machine. Reviewing
-  the screenshots can then be split across several test agents, a few tests each.
-  Background test agents build in their own worktree with a shared build cache
-  (`CARGO_TARGET_DIR=$HOME/.cache/ultra_space/test-target`) and export to
-  `ULTRA_SPACE_EXPORT_DIR=/mnt/c/Users/yangc/Apps/ultra_space-test`, never the developer's build.
+      **Test rounds:** `tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]`
+  runs the test list `tools/test-scripts/tests.txt` (name, script, settings, kind, what to check):
+  one build and export, visual tests several at a time (own window, folder and `game.log` each,
+  via `ULTRA_SPACE_LOG`), performance tests alone afterwards, a `done` marker per finished test
+  and a `summary.txt`. Visual rounds can run while building at low priority (`nice`); `--perf`
+  rounds need a quiet machine.
+  **Test queue (use this for rounds):** `tools/test-queue.sh add [options] [names]` queues the
+  commit at HEAD (full id) and prints a request id; `tools/test-queue.sh run` (as a background
+  command) works through requests first in, first out: it checks out exactly that commit in
+  `.claude/worktrees/round` (refusing on a mismatch), builds it with the shared cache
+  (`CARGO_TARGET_DIR=$HOME/.cache/ultra_space/test-target`), exports to
+  `ULTRA_SPACE_EXPORT_DIR=/mnt/c/Users/yangc/Apps/ultra_space-test` (never the developer's
+  build) and writes results to `runs/q<id>/` with a `manifest.txt` (id, commit, tests, times,
+  status). `tools/test-queue.sh status` lists requests. Commit before queueing: uncommitted
+  changes aren't tested.
   WSL itself can only render in software (OpenGL on Mesa's D3D12 driver can't present to a
   window or run the atmosphere shader), so in-WSL captures are a fallback.
+- **Design viewer** (`impl/viewer`, three.js): `tools/viewer.sh` serves http://localhost:8765/
+  (open it in a Windows browser) showing designs and part models from `content/` and
+  `assets/export/models/` with joints, poses, collision boxes, centre of mass and live reload.
+  `tools/viewer-shots.sh <design> [pose] [views]` (or `--part <id>`) saves review shots to
+  `.viewer-shots/` with headless Chromium, no window: use it to check geometry before a game
+  round. `FOCUS=<part name prefixes>` frames the shots on those parts (close-ups of details).
+  The viewer writes only design JSON and `.glb` models in the game's folders and
+  formats.
+- **Part models:** `tools/build-models.sh [names...] [--preview DIR]` builds them in headless
+  Blender (`~/.local/opt/blender-4.2.3-linux-x64`, or `$BLENDER`) from `tools/blender/*.py`
+  into `assets/export/models/` (~8 min for all; `--preview` adds a studio render per model,
+  `--view x,y,z` its direction).
+  A full build writes `models.stamp`; CI fails when the scripts, parts or palette changed
+  since. Materials are the slots in `content/data/part_materials.json`.
 - **Screenshot capture:** `ULTRA_SPACE_CAPTURE=/path/shot.png cargo run -p game_bevy` renders
   ~120 frames, saves a screenshot and exits. Use it to check visual work from WSL; frame rates
   there are software-rendered and meaningless.

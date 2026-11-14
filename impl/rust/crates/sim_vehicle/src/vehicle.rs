@@ -2,19 +2,24 @@
 //! (design §2–3, §9.1).
 
 use bevy_ecs::prelude::*;
-use glam::DVec3;
+use glam::{DQuat, DVec3};
 
 use crate::allocation::{Allocator, Thruster, Wrench};
-use crate::catalog::CruiseDriveDef;
+use crate::catalog::{PartKind, Shape};
+use crate::cruise::CruiseCharacteristics;
 use crate::design::{VehicleDesign, VehiclePart};
 use crate::mass::MassProperties;
 
 /// A vehicle's own parts. Spawned from a design; later edited by the builder (Batch 3).
-#[derive(Component, Clone, Debug, PartialEq)]
+#[derive(Component, Clone, Debug, Default, PartialEq)]
 pub struct Vehicle {
     pub design_id: String,
     pub name: String,
     pub parts: Vec<VehiclePart>,
+    /// Named joint poses from the design (task 3.10).
+    pub poses: Vec<crate::design::NamedPose>,
+    /// How it walks, if it has legs (task 3.11).
+    pub gait: Option<crate::gait::GaitDef>,
 }
 
 impl Vehicle {
@@ -23,6 +28,8 @@ impl Vehicle {
             design_id: design.id.clone(),
             name: design.name.clone(),
             parts: design.parts.clone(),
+            poses: design.poses.clone(),
+            gait: design.gait.clone(),
         }
     }
 }
@@ -34,8 +41,8 @@ pub struct Performance {
     pub max_acceleration: [f64; 6],
     /// Maximum angular acceleration (rad/s²) about vehicle X, Y, Z (smaller of the two signs).
     pub max_angular_acceleration: DVec3,
-    /// Cruise drive, if fitted.
-    pub cruise: Option<CruiseDriveDef>,
+    /// What the cruise drives (if any) do for this ship.
+    pub cruise: Option<CruiseCharacteristics>,
 }
 
 impl Performance {
@@ -52,6 +59,34 @@ pub struct VehicleBody {
     pub mass: MassProperties,
     pub allocator: Allocator,
     pub performance: Performance,
+    /// One collision shape per part, in vehicle axes (the compound collider).
+    pub colliders: Vec<PartCollider>,
+    /// How the parts split into rigid groups at joints (one group without joints).
+    pub articulation: crate::joints::Articulation,
+    /// Thrusters at rest (vehicle axes, positions from the vehicle origin) and their groups, to
+    /// rebuild the allocator when joints move.
+    pub rest_thrusters: Vec<(Thruster, usize)>,
+    /// Reaction-wheel torque and characteristic size, for rebuilding the allocator.
+    pub wheel_torque: f64,
+    pub size: f64,
+    /// Wheels, driven by the raycast vehicle controller (not part of the collider).
+    pub wheels: Vec<crate::wheels::WheelMount>,
+    /// [`Vehicle::design_hash`] of the parts this was compiled from: identical designs share
+    /// compiled data (colliders, meshes), and a changed hash means the vehicle was rebuilt.
+    pub hash: u64,
+}
+
+/// A part's collision shape, placed in the vehicle frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PartCollider {
+    pub shape: Shape,
+    pub position: DVec3,
+    pub rotation: DQuat,
+    /// Keep this exact shape in the compiled collider (feet); other parts are merged into a few
+    /// boxes.
+    pub exact: bool,
+    /// The rigid group it moves with (0 without joints).
+    pub group: usize,
 }
 
 /// Directions matching [`Performance::max_acceleration`].
@@ -64,11 +99,80 @@ pub const AXIS_DIRECTIONS: [DVec3; 6] = [
     DVec3::NEG_Z,
 ];
 
+impl Vehicle {
+    /// Hash of the vehicle's function data (parts, placement, attachment; not looks): equal
+    /// for identical designs, so their compiled forms can be shared (vehicle-builder.md §4).
+    /// Stable across runs and machines (FNV-1a over a canonical byte stream).
+    pub fn design_hash(&self) -> u64 {
+        let mut h = Fnv(0xcbf2_9ce4_8422_2325);
+        h.write_u64(self.parts.len() as u64);
+        for p in &self.parts {
+            h.write_str(&p.def.id);
+            for v in p
+                .position
+                .to_array()
+                .into_iter()
+                .chain(p.rotation.to_array())
+            {
+                // +0.0 and -0.0 hash alike.
+                h.write_u64((v + 0.0).to_bits());
+            }
+            h.write_u64(p.parent.map_or(u64::MAX, |i| i as u64));
+            match &p.attach {
+                crate::design::Attach::Root => h.write_u64(0),
+                crate::design::Attach::Surface => h.write_u64(1),
+                crate::design::Attach::Node { node, to } => {
+                    h.write_u64(2);
+                    h.write_str(node);
+                    h.write_str(to);
+                }
+            }
+        }
+        h.0
+    }
+}
+
+struct Fnv(u64);
+
+impl Fnv {
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 ^= u64::from(b);
+            self.0 = self.0.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+
+    fn write_u64(&mut self, v: u64) {
+        self.write(&v.to_le_bytes());
+    }
+
+    fn write_str(&mut self, s: &str) {
+        self.write_u64(s.len() as u64);
+        self.write(s.as_bytes());
+    }
+}
+
 impl VehicleBody {
     /// `None` if the vehicle has no parts.
     pub fn of(vehicle: &Vehicle) -> Option<Self> {
         let mass = MassProperties::of_parts(&vehicle.parts)?;
         let com = mass.center_of_mass;
+        let articulation = crate::joints::Articulation::of(&vehicle.parts);
+        let rest_thrusters: Vec<(Thruster, usize)> = vehicle
+            .parts
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                p.def.thruster.map(|t| {
+                    let thruster = Thruster {
+                        direction: (p.rotation * DVec3::Y).normalize(),
+                        position: p.position,
+                        max_thrust: t.max_thrust_n,
+                    };
+                    (thruster, articulation.part_group[i])
+                })
+            })
+            .collect();
         let thrusters = vehicle
             .parts
             .iter()
@@ -93,20 +197,92 @@ impl VehicleBody {
             .fold(1.0, f64::max)
             * 2.0;
         let allocator = Allocator::new(thrusters, wheel, size);
-        let cruise = vehicle.parts.iter().find_map(|p| p.def.cruise_drive);
+        let drives: Vec<_> = vehicle
+            .parts
+            .iter()
+            .filter_map(|p| p.def.cruise_drive)
+            .collect();
+        let cruise = CruiseCharacteristics::of(&drives, mass.mass);
         let performance = performance(&allocator, &mass, cruise);
+        let wheels = vehicle
+            .parts
+            .iter()
+            .filter_map(crate::wheels::WheelMount::of)
+            .collect();
+        let colliders = vehicle
+            .parts
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.def.wheel.is_none())
+            .flat_map(|(i, p)| {
+                let shape = p.def.collision_shape();
+                let group = articulation.part_group[i];
+                let tiles = shape.tiles();
+                if tiles.is_empty() {
+                    return vec![PartCollider {
+                        shape,
+                        position: p.position,
+                        rotation: p.rotation,
+                        exact: p.def.kind == PartKind::LandingLeg,
+                        group,
+                    }];
+                }
+                // A procedural shape collides as its tiles (boxes following its surface).
+                tiles
+                    .into_iter()
+                    .map(|t| PartCollider {
+                        shape: Shape::Box {
+                            size_m: (t.half * 2.0).to_array(),
+                        },
+                        position: p.position + p.rotation * t.centre,
+                        rotation: (p.rotation * t.rotation).normalize(),
+                        exact: false,
+                        group,
+                    })
+                    .collect()
+            })
+            .collect();
         Some(Self {
             mass,
             allocator,
             performance,
+            colliders,
+            articulation,
+            rest_thrusters,
+            wheel_torque: wheel,
+            size,
+            wheels,
+            hash: vehicle.design_hash(),
         })
+    }
+
+    /// The thrust allocator with the rigid groups at `poses` (thrusters on moving limbs push
+    /// along their current direction).
+    pub fn posed_allocator(&self, poses: &[crate::joints::Pose]) -> Allocator {
+        let com = self.mass.center_of_mass;
+        let thrusters = self
+            .rest_thrusters
+            .iter()
+            .map(|(t, g)| {
+                let pose = poses
+                    .get(*g)
+                    .copied()
+                    .unwrap_or(crate::joints::Pose::IDENTITY);
+                Thruster {
+                    direction: (pose.rotation * t.direction).normalize(),
+                    position: pose.apply(t.position) - com,
+                    max_thrust: t.max_thrust,
+                }
+            })
+            .collect();
+        Allocator::new(thrusters, self.wheel_torque, self.size)
     }
 }
 
 fn performance(
     allocator: &Allocator,
     mass: &MassProperties,
-    cruise: Option<CruiseDriveDef>,
+    cruise: Option<CruiseCharacteristics>,
 ) -> Performance {
     const HUGE: f64 = 1.0e15;
     let mut max_acceleration = [0.0; 6];
@@ -154,6 +330,9 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content/data")
     }
 
+    /// Parts' total mass (kg), landing legs included.
+    const KESTREL_MASS: f64 = 20_120.0;
+
     fn kestrel() -> Vehicle {
         let catalog =
             PartCatalog::load_dir(content().join("parts")).unwrap_or_else(|e| panic!("{e}"));
@@ -166,15 +345,19 @@ mod tests {
     fn kestrel_matches_the_design_doc() {
         // objects-vehicles-physics.md §10: about 20 tonnes, lifts off Meridian at ~3× its weight.
         let v = kestrel();
-        assert_eq!(v.parts.len(), 7 + 16);
+        assert_eq!(v.parts.len(), 7 + 16 + 4);
         let body = VehicleBody::of(&v).unwrap();
         assert!(
-            (body.mass.mass - 19_640.0).abs() < 1e-6,
+            (body.mass.mass - KESTREL_MASS).abs() < 1e-6,
             "{}",
             body.mass.mass
         );
-        // Symmetric left/right and up/down: center of mass on the Z axis.
-        assert!(body.mass.center_of_mass.x.abs() < 1e-9 && body.mass.center_of_mass.y.abs() < 1e-9);
+        // Symmetric left/right: center of mass on the YZ plane, a little low (the legs).
+        let com = body.mass.center_of_mass;
+        assert!(
+            com.x.abs() < 1e-9 && (-0.1..0.0).contains(&com.y),
+            "{com:?}"
+        );
         let twr = body.performance.forward_acceleration() / 9.81;
         assert!((3.0..3.3).contains(&twr), "thrust-to-weight {twr}");
         assert!(body.performance.cruise.is_some());
@@ -187,15 +370,15 @@ mod tests {
         // Two 4 kN thrusters push each lateral direction: ~0.41 m/s².
         for i in 0..2 {
             assert!(
-                (p.max_acceleration[i] - 8_000.0 / 19_640.0).abs() < 1e-3,
+                (p.max_acceleration[i] - 8_000.0 / KESTREL_MASS).abs() < 1e-3,
                 "{:?}",
                 p.max_acceleration
             );
         }
         // Four up thrusters: ~0.81 m/s² (hovering needs the main engine).
-        assert!((p.max_acceleration[2] - 16_000.0 / 19_640.0).abs() < 1e-3);
+        assert!((p.max_acceleration[2] - 16_000.0 / KESTREL_MASS).abs() < 1e-3);
         // Forward = main engine plus two rear maneuvering thrusters.
-        assert!((p.forward_acceleration() - 608_000.0 / 19_640.0).abs() < 1e-3);
+        assert!((p.forward_acceleration() - 608_000.0 / KESTREL_MASS).abs() < 1e-3);
         assert!(
             p.max_angular_acceleration.min_element() > 0.0,
             "can turn about every axis"
@@ -227,8 +410,8 @@ mod tests {
             VehicleDesign::from_path(content().join("vehicles/kestrel.json"), &catalog).unwrap();
         let mut v = Vehicle::from_design(&design);
         v.parts.pop();
-        assert_eq!(design.parts.len(), 23);
-        assert_eq!(v.parts.len(), 22);
+        assert_eq!(design.parts.len(), 27);
+        assert_eq!(v.parts.len(), 26);
     }
 
     #[test]
@@ -239,5 +422,22 @@ mod tests {
         let thruster_without_block = r#"{"parts": [{"id": "t.x", "name": "T", "kind": "thruster", "mass_kg": 1,
             "shape": {"type": "sphere", "radius_m": 1}}]}"#;
         assert!(PartCatalog::from_sources([("x.json", thruster_without_block)]).is_err());
+    }
+
+    #[test]
+    fn design_hash_follows_function_not_identity() {
+        let a = kestrel();
+        let b = kestrel();
+        assert_eq!(a.design_hash(), b.design_hash());
+        let mut moved = kestrel();
+        moved.parts[3].position.x += 0.01;
+        assert_ne!(a.design_hash(), moved.design_hash());
+        let mut fewer = kestrel();
+        fewer.parts.pop();
+        assert_ne!(a.design_hash(), fewer.design_hash());
+        // Renaming a part doesn't change what the vehicle is.
+        let mut renamed = kestrel();
+        renamed.parts[0].name = "bridge".into();
+        assert_eq!(a.design_hash(), renamed.design_hash());
     }
 }

@@ -3,12 +3,15 @@
 //! Game logic lives in the engine-independent `sim_*` crates; this crate only renders, handles
 //! input and wires plugins together.
 
+mod builder;
 mod camera;
 mod capture;
 mod debug_overlay;
 mod hud;
 mod inspector;
+mod part_models;
 mod planet_maps;
+mod save;
 mod script;
 mod ship;
 mod sim;
@@ -17,6 +20,7 @@ mod space_render;
 mod terrain;
 mod terrain_material;
 mod universe;
+mod vehicle_visual;
 mod walk;
 mod warmup;
 mod workers;
@@ -65,6 +69,11 @@ fn main() {
             script::ScriptPlugin,
             walk::WalkPlugin,
             warmup::WarmupPlugin,
+        ))
+        .add_plugins((
+            vehicle_visual::VehicleVisualPlugin,
+            builder::BuilderPlugin,
+            save::SavePlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

@@ -155,6 +155,73 @@ pub fn face_direction(face: u8, uv: DVec2) -> DVec3 {
     spherify(cube)
 }
 
+/// The face whose region of the sphere contains `dir` (the cube-to-sphere mapping keeps
+/// points within their face's cone: the largest coordinate picks the face).
+pub fn face_of(dir: DVec3) -> u8 {
+    let a = dir.abs();
+    if a.x >= a.y && a.x >= a.z {
+        if dir.x >= 0.0 { 0 } else { 1 }
+    } else if a.y >= a.z {
+        if dir.y >= 0.0 { 2 } else { 3 }
+    } else if dir.z >= 0.0 {
+        4
+    } else {
+        5
+    }
+}
+
+/// Face coordinates `uv ∈ [0, 1]²` of unit direction `dir` on `face` (inverse of
+/// [`face_direction`], by Newton's method from the gnomonic projection).
+pub fn face_uv(face: u8, dir: DVec3) -> DVec2 {
+    let f = FACES[face as usize];
+    let n = dir.dot(f.normal).max(1e-9);
+    let mut uv = (DVec2::new(dir.dot(f.u), dir.dot(f.v)) / n + DVec2::ONE) * 0.5;
+    let error = |uv: DVec2| {
+        let d = dir - face_direction(face, uv);
+        DVec2::new(d.dot(f.u), d.dot(f.v))
+    };
+    const H: f64 = 1e-7;
+    for _ in 0..8 {
+        let e = error(uv);
+        if e.length() < 1e-15 {
+            break;
+        }
+        // Jacobian of the error with respect to uv (numerical).
+        let du = (error(uv + DVec2::new(H, 0.0)) - e) / H;
+        let dv = (error(uv + DVec2::new(0.0, H)) - e) / H;
+        let det = du.x * dv.y - dv.x * du.y;
+        if det.abs() < 1e-30 {
+            break;
+        }
+        let step = DVec2::new(e.x * dv.y - dv.x * e.y, du.x * e.y - e.x * du.y) / det;
+        uv = (uv - step).clamp(DVec2::ZERO, DVec2::ONE);
+    }
+    uv
+}
+
+/// The tile at `level` that contains unit direction `dir`.
+pub fn locate(dir: DVec3, level: u8) -> TileKey {
+    let face = face_of(dir);
+    let uv = face_uv(face, dir);
+    let n = 1u32 << level;
+    let cell = |c: f64| ((c * f64::from(n)) as u32).min(n - 1);
+    TileKey {
+        face,
+        level,
+        x: cell(uv.x),
+        y: cell(uv.y),
+    }
+}
+
+/// The level whose vertex spacing on a sphere of `radius` is closest to (not above) `spacing`.
+pub fn level_for_spacing(radius: f64, spacing: f64) -> u8 {
+    let mut level = 0;
+    while level < 30 && level_spacing(level, radius) > spacing {
+        level += 1;
+    }
+    level
+}
+
 /// Area-preserving cube-to-sphere mapping (for points on the unit cube's surface).
 pub fn spherify(p: DVec3) -> DVec3 {
     let (x2, y2, z2) = (p.x * p.x, p.y * p.y, p.z * p.z);
@@ -460,5 +527,30 @@ mod tests {
         };
         let spacing = key.vertex_spacing(R);
         assert!((0.5..1.5).contains(&spacing), "{spacing} m");
+    }
+
+    #[test]
+    fn locate_finds_the_tile_containing_a_direction() {
+        for (n, dir) in crate::fibonacci_directions(2000).enumerate() {
+            let level = (n % 16) as u8;
+            let key = locate(dir, level);
+            let uv = face_uv(key.face, dir);
+            assert!(
+                face_direction(key.face, uv).distance(dir) < 1e-12,
+                "{dir:?}"
+            );
+            let local = (uv - key.origin()) / key.size();
+            assert!(
+                (-1e-9..=1.0 + 1e-9).contains(&local.x) && (-1e-9..=1.0 + 1e-9).contains(&local.y),
+                "{key:?} {local:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn level_for_spacing_reaches_the_spacing() {
+        let level = level_for_spacing(600_000.0, 2.0);
+        assert!(level_spacing(level, 600_000.0) <= 2.0);
+        assert!(level_spacing(level - 1, 600_000.0) > 2.0);
     }
 }

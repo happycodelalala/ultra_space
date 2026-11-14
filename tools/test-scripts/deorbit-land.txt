@@ -1,0 +1,16 @@
+# Coming down from the default start (150 km orbit) in normal flight and stepping out. Run with
+# the default start. Z holds still over the ground, so the ship drops and assist brakes it;
+# shots every 20 s show the HUD (altitude, AGL, speed). Look for: it lands on the terrain (not
+# through it), "LANDED", then F steps out ("stepped out of the ship" in the log).
+0.5  press Z
+20   shot 01.png
+40   shot 02.png
+60   shot 03.png
+80   shot 04.png
+100  shot 05.png
+120  shot 06.png
+121  wait landed 240         # the full descent takes about 4-5 minutes in all
+122  shot 07-landed.png
+123  press F
+125  shot 08-out.png
+126  quit

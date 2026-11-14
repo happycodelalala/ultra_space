@@ -391,6 +391,71 @@ Debug aids added along the way: full stop (Z), arcade flight (N), flattened pad 
 position, time of day and camera angle by environment variables, scripted test rounds on Windows
 (`AGENTS.md`).
 
+### 7.4 Batch 3 tasks
+
+Decisions behind these tasks: [vehicle-builder.md](vehicle-builder.md).
+
+| # | Task | Done when |
+|---|---|---|
+| 3.1 | **Rapier core:** rapier3d-f64 in the simulation crates, one world per region, per-body gravity, the Kestrel as one rigid body with a compound collider flown by the existing assist and allocator | Orbit-stability and region-transfer tests pass; flight feels unchanged |
+| 3.2 | **Terrain collision:** collision patches from the terrain function on a body turning with the planet; rapier contacts replace the Batch 2 ground contact (kept as a fallback while patches build) | Landing test (stays put on a slope) passes; landing, pad and descent tests pass on Windows |
+| 3.3 | **Data format additions:** attach nodes, attachment graph, connectors, sections, slots, form, interior placeholder, collider, new part kinds (landing legs, wheels, batteries); design hash; schemas; Kestrel converted, with landing legs | Schema checks; graph and hash tests |
+| 3.4 | **Design compilation:** compiled form (mass, allocation, compound collider, wheel set, merged meshes per material) on workers, cached by hash | No hitch when a design changes; 300-part benchmark ≈ the Kestrel per tick |
+| 3.5 | **Wheels and a rover:** wheel parts, raycast vehicle controller, a rover design, drive controls, boarding any vehicle | Drive over hills and back without tipping or sinking |
+| 3.6 | **Walker on the character controller:** collides with and stands on vehicles; slope limit and steps | Walk around and onto the rover; tests |
+| 3.7 | **Builder mode:** enter and leave (B), orbit camera, parts palette, snap to attach nodes, place, rotate, select, remove, undo | Build a small lander from parts and fly it |
+| 3.8 | **Builder tools:** symmetry, sections, stats (mass, centre of mass, thrust-to-weight, hover/strafe/turn, rover stability, Δv estimate), validation | Stats match flight; invalid designs explained |
+| 3.9 | **New vehicles:** start from a root part on open ground | Build a rover and a ship from scratch, drive and fly them |
+| 3.10 | **Jointed parts** (brought forward 2026-11-13): hinge and rotor parts, rigid groups turning about joints (kinematic articulation), moving colliders and meshes, joint angles and poses | The heavy frame raises its arms and swings its binders on Windows; tests |
+| 3.11 | **Animated walking:** legs declared in the design, a locomotion controller and gait, two-joint leg solving onto the terrain, walk controls | The heavy frame walks over hills and turns |
+| 3.12 | **Part models:** glTF models in `assets/models/` merged into vehicle meshes; generated original low-poly models for the frame and core parts | The frame looks like armour, not boxes; draw calls stay a few per vehicle |
+| 3.13 | **Save and load:** versioned JSON, object records, `ObjectId` allocator, terrain deltas, quick save and load | Round-trip tests; reload puts everything back as it was |
+| 3.14 | **Per-ship cruise characteristics** from the drive part and the ship (objects-vehicles-physics §8) | Heavier ships charge and turn slower in cruise |
+| 3.15 | **Batch review** | Exit criteria met |
+
+**Exit criteria:** build a rover and a ship from parts in the world, drive and fly them, land on
+legs and wheels, walk the heavy frame with jointed limbs, save and load everything; no frame over 50 ms when entering or leaving the
+builder; a 300-part ship costs about as much per tick as the Kestrel; CI passes.
+
+**Status:** done on branch `batch3/builder`. The 3.15 review (2026-11-14, a full scripted
+round on Windows, q0046–q0047) passed:
+- **Build and fly or drive from parts in the world:** a rover and a lander built from scratch,
+  boarded, driven and flown; the builder's place, remove, undo, redo, symmetry and sections.
+- **Land on legs and wheels:** the Kestrel lands and stays put, from 3 km and from orbit (orbit to
+  the ground in about 5 minutes, then stepping out); the rover drives on its wheels.
+- **Walk the heavy frame with jointed limbs:** poses, walking, turning and stopping standing;
+  mechs stand by themselves on slopes.
+- **Save and load everything:** F5 / F9 put the world back (objects, states, poses, pads,
+  time); round-trip tests.
+- **No frame over 50 ms entering or leaving the builder:** three enter / change / leave cycles,
+  run alone: 0 frames over 50 ms, worst 33 ms.
+- **300 parts per tick:** flying 18 µs against the Kestrel's 10 µs; landed 96 µs against 20 µs
+  (the gap noted at 3.4; both far inside the 33 ms tick).
+- CI passes.
+
+What Batch 3 built:
+- 3.1–3.9: rapier physics per region, terrain collision patches, the part and design format with
+  landing legs, design compilation, wheels and a rover, the walker colliding with vehicles,
+  the builder (keys and mouse picking, symmetry, sections, stats and balance warnings) and new
+  vehicles from scratch.
+- 3.10–3.12 (brought forward): jointed parts and poses (staged moves, sliders), animated
+  walking, part models built in Blender with a shared palette, baked occlusion and a hull
+  detail shader, and support for 100 m vehicles.
+- 3.13 save and load; 3.14 per-ship cruise characteristics from the drive's rating and the
+  ship's mass.
+- Vehicle and building design now runs on its own track (AGENTS.md, design/design-track.md);
+  the Bastion in the game is a placeholder until its redesign is imported. The builder lists
+  the general parts first, then each design family's.
+
+Known gaps for later:
+- builder stats measure part centres, not extents; the lander parts are overpowered (~10 g)
+- wheels don't spin or move with their suspension; soles don't roll to side slopes
+- a landed 300-part ship costs ~5× the Kestrel per tick (fine at this size)
+- the descent test now has one or two frames just over 50 ms (Batch 2 had none)
+- the Bastion's frame rate fell to ~22 fps after its stance change and is back to 66–89 fps in
+  this round, for reasons not pinned down
+- no save list menu yet (with the first menus, Batch 4); fuel and power come in Batch 4
+
 ### 7.1 When the object system is built
 
 The object model, persistence and streaming design (technical overview §14) is settled up

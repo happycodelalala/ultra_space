@@ -50,6 +50,16 @@ impl Default for ObjectIdAllocator {
 }
 
 impl ObjectIdAllocator {
+    /// The ID the next allocation returns (saved, so IDs are never reused across sessions).
+    pub fn next(&self) -> u64 {
+        self.next
+    }
+
+    /// Continues from a saved [`Self::next`] (never below 1).
+    pub fn resume(next: u64) -> Self {
+        Self { next: next.max(1) }
+    }
+
     pub fn allocate(&mut self) -> ObjectId {
         let id = ObjectId(self.next);
         self.next = self.next.checked_add(1).expect("ObjectId space exhausted");
@@ -233,6 +243,7 @@ pub struct ObjectLocation {
 pub enum ObjectError {
     UnknownObject(ObjectId),
     UnknownRegion(usize),
+    IdInUse(ObjectId),
 }
 
 impl fmt::Display for ObjectError {
@@ -240,6 +251,7 @@ impl fmt::Display for ObjectError {
         match self {
             Self::UnknownObject(id) => write!(f, "unknown object {id}"),
             Self::UnknownRegion(r) => write!(f, "unknown region {r}"),
+            Self::IdInUse(id) => write!(f, "object id {id} is invalid or in use"),
         }
     }
 }
@@ -282,6 +294,48 @@ impl Objects {
 
     pub fn ids(&self) -> impl Iterator<Item = ObjectId> + '_ {
         self.locations.keys().copied()
+    }
+
+    /// The object ID allocator (part of a save).
+    pub fn allocator(&self) -> &ObjectIdAllocator {
+        &self.allocator
+    }
+
+    /// Removes every object (before loading a save).
+    pub fn clear(&mut self, regions: &mut RegionSet) {
+        for (_, loc) in self.locations.drain() {
+            if let Some(region) = regions.get_mut(loc.region) {
+                region.world.despawn(loc.entity);
+            }
+        }
+    }
+
+    /// Continues allocating from `next` (a loaded save's allocator), never below an ID in use.
+    pub fn resume_ids(&mut self, next: u64) {
+        let used = self.locations.keys().map(|id| id.0 + 1).max().unwrap_or(1);
+        self.allocator = ObjectIdAllocator::resume(next.max(used));
+    }
+
+    /// Spawns an object with a given identity (a loaded save's): fails if the ID is in use.
+    /// Call [`Self::resume_ids`] after the last one.
+    pub fn spawn_with_id(
+        &mut self,
+        regions: &mut RegionSet,
+        id: ObjectId,
+        region: usize,
+        state: ObjectState,
+        extra: impl Bundle,
+    ) -> Result<(), ObjectError> {
+        if id.0 == 0 || self.locations.contains_key(&id) {
+            return Err(ObjectError::IdInUse(id));
+        }
+        let world = &mut regions
+            .get_mut(region)
+            .ok_or(ObjectError::UnknownRegion(region))?
+            .world;
+        let entity = world.spawn((Object { id }, state, extra)).id();
+        self.locations.insert(id, ObjectLocation { region, entity });
+        Ok(())
     }
 
     /// Spawns a new object in `region` with `state` and any extra components.

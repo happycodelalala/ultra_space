@@ -16,3 +16,6 @@ target/
 *.swp
 .DS_Store
 Thumbs.db
+/.test-queue/
+/.viewer-shots/
+__pycache__/

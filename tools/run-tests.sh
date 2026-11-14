@@ -6,7 +6,7 @@
 #   tools/run-tests.sh [--no-export] [--parallel N] [--visual | --perf] [name ...]
 #
 # --no-export   use the build already in the export folder
-# --parallel N  visual tests at once (default 3)
+# --parallel N  visual tests at once (default 2; 3 overloads the machine)
 # --visual      only visual tests (fine while other work goes on)
 # --perf        only performance tests (needs a quiet machine)
 # name ...      only these tests (default: all)
@@ -15,13 +15,16 @@
 # reviewed before the whole round is over.
 #
 # Respects ULTRA_SPACE_EXPORT_DIR and CARGO_TARGET_DIR like tools/export-windows.sh.
-# Results: <export>/runs/<name>/ (screenshots, game.log, output.txt) and <export>/runs/summary.txt.
+# Results: <export>/runs/<name>/ (screenshots, game.log, output.txt) and <export>/runs/summary.txt;
+# RUNS=<folder> replaces "runs" (tools/test-queue.sh gives each request its own).
 set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
+# The runner scripts next to this one (the queue runs the current tools on an older checkout).
+TOOLS="$(cd "$(dirname "$0")" && pwd)"
 DEST="${ULTRA_SPACE_EXPORT_DIR:-/mnt/c/Users/yangc/Apps/ultra_space}"
 LIST="$ROOT/tools/test-scripts/tests.txt"
-PARALLEL=3
+PARALLEL=2
 EXPORT=1
 KINDS="visual perf"
 ONLY=()
@@ -57,12 +60,12 @@ done < "$LIST"
 run_one() {
     local name script settings
     IFS='|' read -r name script settings <<< "$1"
-    mkdir -p "$DEST/runs/$name"
-    rm -f "$DEST/runs/$name/done"
+    mkdir -p "$DEST/${RUNS:-runs}/$name"
+    rm -f "$DEST/${RUNS:-runs}/$name/done"
     # shellcheck disable=SC2086
-    RUN_NAME="$name" "$ROOT/tools/run-windows.sh" "$ROOT/tools/test-scripts/$script" $settings \
-        > "$DEST/runs/$name/output.txt" 2>&1
-    touch "$DEST/runs/$name/done"
+    RUN_NAME="$name" "$TOOLS/run-windows.sh" "$ROOT/tools/test-scripts/$script" $settings \
+        > "$DEST/${RUNS:-runs}/$name/output.txt" 2>&1
+    touch "$DEST/${RUNS:-runs}/$name/done"
     echo "finished $name"
 }
 
@@ -81,12 +84,12 @@ if [[ ${#PERF[@]} -gt 0 ]]; then
     for entry in "${PERF[@]}"; do run_one "$entry"; done
 fi
 
-SUMMARY="$DEST/runs/summary.txt"
+SUMMARY="$DEST/${RUNS:-runs}/summary.txt"
 {
     echo "Test run $(date -Is), commit $(git -C "$ROOT" rev-parse --short HEAD)"
     for entry in "${VISUAL[@]+"${VISUAL[@]}"}" "${PERF[@]+"${PERF[@]}"}"; do
         name="${entry%%|*}"
-        dir="$DEST/runs/$name"
+        dir="$DEST/${RUNS:-runs}/$name"
         echo
         echo "== $name"
         grep -hE "script: done|panicked|ERROR" "$dir/game.log" 2>/dev/null | cut -c 1-220 || true

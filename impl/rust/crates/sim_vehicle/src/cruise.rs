@@ -23,12 +23,51 @@ use crate::vehicle::{Vehicle, VehicleBody};
 /// Cruise speed per metre of distance to the nearest surface (1/s). The inverse is the
 /// time constant of the approach: the distance falls by e every 1/CRUISE_RATE seconds.
 pub const CRUISE_RATE: f64 = 0.25;
-/// Charge time before cruising starts (s).
-pub const CHARGE_TIME: f64 = 3.0;
-/// Time to blend from the entry speed to the cruise speed (s).
+/// Time to blend from the entry speed to the cruise speed at the rated mass (s).
 pub const RAMP_TIME: f64 = 2.0;
-/// Turn rate at full stick while cruising (rad/s).
-pub const CRUISE_TURN_RATE: f64 = 0.5;
+/// A drive refuses to engage beyond this load (ship mass over rated mass).
+pub const MAX_LOAD: f64 = 4.0;
+/// Loads below this count as this (a big drive on a small ship isn't faster without end).
+const MIN_LOAD: f64 = 0.25;
+
+/// What a ship's cruise drives do for it (task 3.14): its drives' figures scaled by the load,
+/// the ship's mass over the drives' combined rated mass. Charge and ramp time grow and the turn
+/// rate falls with the square root of the load; the top speed falls in proportion to any load
+/// above 1; above [`MAX_LOAD`] the drive won't engage.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CruiseCharacteristics {
+    /// Ship mass over the drives' combined rated mass.
+    pub load: f64,
+    pub max_speed_ms: f64,
+    pub charge_time_s: f64,
+    pub ramp_time_s: f64,
+    /// Turn rate at full stick (rad/s).
+    pub turn_rate: f64,
+}
+
+impl CruiseCharacteristics {
+    /// For a ship of `mass` (kg) with `drives`; `None` without one. Several drives add their
+    /// rated masses; the biggest sets the speed, charge and turn figures.
+    pub fn of(drives: &[crate::catalog::CruiseDriveDef], mass: f64) -> Option<Self> {
+        let main = drives
+            .iter()
+            .max_by(|a, b| a.rated_mass_kg.total_cmp(&b.rated_mass_kg))?;
+        let rated: f64 = drives.iter().map(|d| d.rated_mass_kg).sum();
+        let load = mass / rated.max(1.0);
+        let k = load.max(MIN_LOAD).sqrt();
+        Some(Self {
+            load,
+            max_speed_ms: main.max_speed_ms / load.max(1.0),
+            charge_time_s: main.charge_time_s * k,
+            ramp_time_s: RAMP_TIME * k,
+            turn_rate: main.turn_rate_deg_s.to_radians() / k,
+        })
+    }
+
+    pub fn overloaded(&self) -> bool {
+        self.load > MAX_LOAD
+    }
+}
 /// Engaging needs this multiple of every body's drop altitude.
 pub const ENGAGE_MARGIN: f64 = 1.2;
 /// Longest kinematic substep (s): `CRUISE_RATE × step` stays small.
@@ -66,6 +105,8 @@ pub enum CruisePhase {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CruiseBlocked {
     NoDrive,
+    /// The ship is too heavy for its drives (the load).
+    Overloaded(f64),
     /// Too close to this body (index).
     TooClose(usize),
 }
@@ -185,15 +226,16 @@ pub fn cruise_system(
 
         match cruise.phase {
             CruisePhase::Off => {
-                cruise.blocked = if body.performance.cruise.is_none() {
-                    Some(CruiseBlocked::NoDrive)
-                } else {
-                    here.too_close(system, p, ENGAGE_MARGIN)
-                        .map(CruiseBlocked::TooClose)
+                cruise.blocked = match body.performance.cruise {
+                    None => Some(CruiseBlocked::NoDrive),
+                    Some(c) if c.overloaded() => Some(CruiseBlocked::Overloaded(c.load)),
+                    Some(_) => here
+                        .too_close(system, p, ENGAGE_MARGIN)
+                        .map(CruiseBlocked::TooClose),
                 };
-                if cruise.blocked.is_none() {
+                if let (None, Some(c)) = (&cruise.blocked, body.performance.cruise) {
                     cruise.phase = CruisePhase::Charging {
-                        remaining: CHARGE_TIME,
+                        remaining: c.charge_time_s,
                     };
                 }
             }
@@ -223,11 +265,13 @@ pub fn cruise_system(
                 entry_speed,
                 ..
             } => {
-                let max_speed = body.performance.cruise.map_or(0.0, |c| c.max_speed_ms);
+                let drive = body.performance.cruise;
+                let max_speed = drive.map_or(0.0, |c| c.max_speed_ms);
+                let ramp_time = drive.map_or(RAMP_TIME, |c| c.ramp_time_s);
+                let turn_rate = drive.map_or(0.0, |c| c.turn_rate);
                 let steps = ((clock.dt / MAX_STEP).ceil() as u32).clamp(1, MAX_STEPS);
                 let h = clock.dt / f64::from(steps);
-                let spin =
-                    control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0)) * CRUISE_TURN_RATE;
+                let spin = control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0)) * turn_rate;
                 let mut s = local.state;
                 let mut elapsed = elapsed;
                 let mut speed = 0.0;
@@ -245,7 +289,7 @@ pub fn cruise_system(
                     let around = around.as_ref().unwrap_or(here);
                     let (_, distance) = around.nearest(system, s.position);
                     let target = (CRUISE_RATE * distance).min(max_speed);
-                    let ramp = smoothstep(elapsed / RAMP_TIME);
+                    let ramp = smoothstep(elapsed / ramp_time);
                     speed = entry_speed + (target - entry_speed) * ramp;
                     speed = speed.min(MAX_STEP_FRACTION * distance / h).max(0.0);
                     s.rotation = (s.rotation * DQuat::from_scaled_axis(spin * h)).normalize();

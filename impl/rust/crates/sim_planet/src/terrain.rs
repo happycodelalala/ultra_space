@@ -128,6 +128,13 @@ impl Terrain {
         t
     }
 
+    /// This terrain with its pads replaced by `pads` (a loaded save's deltas).
+    pub fn with_pads(&self, pads: Vec<Pad>) -> Terrain {
+        let mut t = self.clone();
+        t.pads = pads;
+        t
+    }
+
     pub fn pads(&self) -> &[Pad] {
         &self.pads
     }
@@ -141,6 +148,13 @@ impl Terrain {
     /// Whether the body has an ocean (sea level at height 0).
     pub fn has_ocean(&self) -> bool {
         self.params.ocean_coverage > 0.0
+    }
+
+    /// Height of what vehicles and walkers stand on at `dir` (m): the ground, or the sea surface
+    /// where there is water (a floor until swimming and floating exist).
+    pub fn surface_height(&self, dir: DVec3, min_wavelength: f64) -> f64 {
+        let h = self.height(dir, min_wavelength);
+        if self.has_ocean() { h.max(0.0) } else { h }
     }
 
     fn continent(&self, dir: DVec3) -> f64 {

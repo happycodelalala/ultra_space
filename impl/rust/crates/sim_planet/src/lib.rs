@@ -11,6 +11,6 @@ pub mod quadtree;
 pub mod terrain;
 
 pub use climate::{Biome, Climate, latitude, subsolar_latitude};
-pub use mesh::{TileMesh, build_tile, tile_indices};
-pub use quadtree::{Extent, TileKey, View, estimated_heights, select};
+pub use mesh::{CollisionPatch, TileMesh, build_tile, collision_patch, tile_indices};
+pub use quadtree::{Extent, TileKey, View, estimated_heights, locate, select};
 pub use terrain::{Pad, Sample, Terrain, fibonacci_directions};

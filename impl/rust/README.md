@@ -74,7 +74,7 @@ Windows export copies `content/data` next to the `.exe`.
   points, W/S raise or lower the held speed up to 4 km/s, X stops),
   **Z** full stop (debug): instantly zero speed relative to the ground when low (hover) or to the
   planet when in orbit (drop straight down),
-  **J** engages the cruise drive (3 s charge; steer with the mouse; J again or approaching a body
+  **J** engages the cruise drive (charge time and turn rate from the drive and the ship's mass, about 3 s for the Kestrel; steer with the mouse; J again or approaching a body
   drops out into orbit),
   V toggles chase/cockpit view, right mouse orbits the chase camera, Tab switches to the free
   camera. Thrust is disabled above ×4 time warp, where coasting ships go on rails.
@@ -89,6 +89,9 @@ Windows export copies `content/data` next to the `.exe`.
   periapsis and period, assist and cruise status (bottom); Galactic Standard Time, local solar
   time under the ship and time warp (top right). **O** cycles orbit lines: the ship's predicted
   path, plus the other bodies' orbits, or none.
+- **F5** quick saves, **F9** quick loads (`saves/quick.json` next to the executable, or in
+  `ULTRA_SPACE_SAVES`): every vehicle and walker with its state, joint poses and flight
+  settings, terrain pads, universe time, and who the player controls. Not in the builder.
 - **F4** toggles the inspector (hidden at start; `ULTRA_SPACE_INSPECTOR=1` shows it): regions
   in use, the frame tree, and the selected object's `ObjectId`, region, frame, position and
   velocity (also in the star's frame), rails, cruise and assist state. `[` / `]` select objects.

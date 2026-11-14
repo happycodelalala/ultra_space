@@ -26,6 +26,14 @@ pub struct Universe(pub Arc<StarSystem>);
 #[derive(Resource)]
 pub struct StartingVehicle(pub Vehicle);
 
+/// Every vehicle design in `content/data/vehicles`, by id.
+#[derive(Resource, Default)]
+pub struct Designs(pub std::collections::BTreeMap<String, VehicleDesign>);
+
+/// The part catalog (the builder's palette).
+#[derive(Resource)]
+pub struct Catalog(pub PartCatalog);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -56,6 +64,8 @@ struct Loaded {
     system: Arc<StarSystem>,
     sim: Simulation,
     vehicle: Vehicle,
+    designs: Designs,
+    catalog: PartCatalog,
     seconds: f64,
 }
 
@@ -77,16 +87,28 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     };
     let system = Arc::new(StarSystem::from_json_str(&text).map_err(|e| e.to_string())?);
     let catalog = PartCatalog::load_dir(dir.join("data/parts")).map_err(|e| e.to_string())?;
-    let design = VehicleDesign::from_path(
-        dir.join(format!("data/vehicles/{START_DESIGN}.json")),
-        &catalog,
-    )
-    .map_err(|e| e.to_string())?;
+    let mut designs = Designs::default();
+    let vehicles_dir = dir.join("data/vehicles");
+    let entries =
+        std::fs::read_dir(&vehicles_dir).map_err(|e| format!("{}: {e}", vehicles_dir.display()))?;
+    for path in entries.filter_map(|e| e.ok().map(|e| e.path())) {
+        if path.extension().is_some_and(|x| x == "json") {
+            let design = VehicleDesign::from_path(&path, &catalog)
+                .map_err(|e| format!("{}: {e}", path.display()))?;
+            designs.0.insert(design.id.clone(), design);
+        }
+    }
+    let design = designs
+        .0
+        .get(START_DESIGN)
+        .ok_or(format!("no {START_DESIGN} design"))?;
     let sim = build_sim(system.clone());
     Ok(Loaded {
         system,
         sim,
-        vehicle: Vehicle::from_design(&design),
+        vehicle: Vehicle::from_design(design),
+        designs,
+        catalog,
         seconds: start.elapsed().as_secs_f64(),
     })
 }
@@ -137,6 +159,8 @@ fn finish_loading(
             commands.insert_resource(Universe(loaded.system));
             commands.insert_resource(crate::sim::Sim(loaded.sim));
             commands.insert_resource(StartingVehicle(loaded.vehicle));
+            commands.insert_resource(loaded.designs);
+            commands.insert_resource(Catalog(loaded.catalog));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }

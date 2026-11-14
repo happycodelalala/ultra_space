@@ -1,0 +1,167 @@
+{
+  "description": "Materials of part models, by the material name each model primitive carries (tools/blender). Colours are sRGB; metallic and roughness as in glTF PBR; emissive in sRGB times strength. `detail` (painted armour): plate seams, fasteners and wear the hull detail shader draws at real sizes: plate height and width/height, a structural seam every so many plates, seam width, fastener spacing, grime and overall strength.",
+  "materials": {
+    "armor": {
+      "color": [
+        0.17,
+        0.21,
+        0.13
+      ],
+      "metallic": 0.1,
+      "roughness": 0.55,
+      "about": "armour plates: dark military green, satin",
+      "detail": {
+        "plate_m": 3.0,
+        "aspect": 2.0,
+        "structural_every": 4,
+        "seam_m": 0.05,
+        "fastener_m": 0.5,
+        "grime": 1.0,
+        "strength": 1.0
+      }
+    },
+    "armor2": {
+      "color": [
+        0.22,
+        0.25,
+        0.18
+      ],
+      "metallic": 0.12,
+      "roughness": 0.5,
+      "about": "second (lapped) armour plates: a lighter dark military green, satin",
+      "detail": {
+        "plate_m": 2.5,
+        "aspect": 2.0,
+        "structural_every": 4,
+        "seam_m": 0.05,
+        "fastener_m": 0.5,
+        "grime": 1.0,
+        "strength": 1.0
+      }
+    },
+    "metal": {
+      "color": [
+        0.34,
+        0.35,
+        0.36
+      ],
+      "metallic": 1.0,
+      "roughness": 0.38,
+      "about": "machined steel: flanges, bearings, clamps; dark grey steel"
+    },
+    "chrome": {
+      "color": [
+        0.78,
+        0.8,
+        0.8
+      ],
+      "metallic": 1.0,
+      "roughness": 0.15,
+      "about": "actuator rods and pins"
+    },
+    "dark": {
+      "color": [
+        0.17,
+        0.18,
+        0.19
+      ],
+      "metallic": 0.85,
+      "roughness": 0.42,
+      "about": "machinery: frame, housings, servos, rams, heat sinks; dark metallic grey"
+    },
+    "rubber": {
+      "color": [
+        0.06,
+        0.06,
+        0.06
+      ],
+      "metallic": 0.0,
+      "roughness": 0.9,
+      "about": "dust boots, hoses, grip pads, seals"
+    },
+    "trim": {
+      "color": [
+        0.92,
+        0.7,
+        0.1
+      ],
+      "metallic": 0.05,
+      "roughness": 0.55,
+      "about": "hazard yellow (warning stripes at pinch points)"
+    },
+    "glass": {
+      "color": [
+        0.05,
+        0.08,
+        0.07
+      ],
+      "metallic": 0.0,
+      "roughness": 0.05,
+      "about": "vision blocks and optics"
+    },
+    "light": {
+      "color": [
+        1.0,
+        0.58,
+        0.18
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        1.0,
+        0.58,
+        0.18
+      ],
+      "emissive_strength": 5.0,
+      "about": "reactor core, visor and floodlights"
+    },
+    "beacon": {
+      "color": [
+        1.0,
+        0.08,
+        0.05
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        1.0,
+        0.08,
+        0.05
+      ],
+      "emissive_strength": 8.0,
+      "about": "red: warning beacons and port (left) navigation lights"
+    },
+    "nav_green": {
+      "color": [
+        0.1,
+        1.0,
+        0.3
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        0.1,
+        1.0,
+        0.3
+      ],
+      "emissive_strength": 8.0,
+      "about": "green: starboard (right) navigation lights"
+    },
+    "strobe": {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.5,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissive_strength": 10.0,
+      "about": "white: anti-collision strobes and stern lights"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# Builder frame times (Batch 3 exit criterion: no frame over 50 ms when entering or leaving the
+# builder). Run alone (perf). Run with ULTRA_SPACE_START_ALTITUDE=1500. Three times: enter the
+# builder on the landed Kestrel (B), put a hull section on top of the front hull (the design
+# changes, so leaving rebuilds its meshes and colliders), leave (B) and let it settle. Look
+# for: the script summary (frames over 50 ms, worst frame) and no hitch lines near "building
+# on" / "left the builder".
+0.5  press Z
+1    wait landed 20
+3    press B                 # enter
+5    press Down              # palette: cockpit, rover cab, hull section
+5.2  press Down
+5.5  press Enter             # a hull section on the front hull's top node
+7    press B                 # leave: new meshes and colliders, the ship settles
+11   press B                 # enter again
+13   press Down
+13.2 press Down
+13.5 press Enter             # another section, on the new section's top node
+15   press B                 # leave
+19   press B                 # enter
+21   press Down
+21.2 press Down
+21.5 press Enter
+23   press B                 # leave
+28   shot 01-after.png
+28.5 quit
