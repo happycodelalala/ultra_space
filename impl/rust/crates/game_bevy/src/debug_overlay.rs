@@ -4,6 +4,7 @@
 //! each one is logged (rate-limited), and a startup summary is logged after the first seconds
 //! of play.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -39,7 +40,7 @@ impl Plugin for DebugOverlayPlugin {
         .add_systems(Update, mark("Update"))
         .add_systems(SpawnScene, mark("SpawnScene"))
         .add_systems(PostUpdate, mark("PostUpdate"))
-        .add_systems(Last, report_frame_marks);
+        .add_systems(Last, (report_frame_marks, count_new_meshes));
         if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
             use bevy::render::{ExtractSchedule, Render, RenderSystems as R};
             render_app
@@ -375,5 +376,26 @@ fn report_render_marks(mut m: ResMut<FrameMarks>) {
             ms(now - first.1),
             parts.join(", ")
         );
+    }
+}
+
+/// Logs a frame that added many mesh entities (each is specialised by the renderer when new;
+/// task 4b.6), with how many are skinned.
+fn count_new_meshes(
+    added: Query<Has<bevy::mesh::skinning::SkinnedMesh>, Added<Mesh3d>>,
+    names: Query<&Name, Added<Name>>,
+) {
+    let (n, skinned) = added
+        .iter()
+        .fold((0, 0), |(n, s), skin| (n + 1, s + usize::from(skin)));
+    if n >= 50 {
+        let mut kinds: HashMap<&str, usize> = HashMap::new();
+        for name in &names {
+            *kinds.entry(name.as_str()).or_default() += 1;
+        }
+        let mut kinds: Vec<_> = kinds.into_iter().collect();
+        kinds.sort_by_key(|a| std::cmp::Reverse(a.1));
+        kinds.truncate(4);
+        warn!("{n} new mesh entities ({skinned} skinned); most named: {kinds:?}");
     }
 }
