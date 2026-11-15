@@ -31,10 +31,12 @@ pub(crate) const HIDE_TILES: f64 = 80.0;
 const DROP_REACH: f64 = 115.0;
 /// The disc of block ground round the village (m).
 const GROUND_REACH: f64 = 1_500.0;
+/// No collision boxes this close to the ship's landing spot (m).
+const SHIP_CLEAR: f64 = 8.0;
 /// Chunk meshes being made at once.
 const CHUNKS_IN_FLIGHT: usize = 12;
 /// Most finished chunks shown per frame.
-const CHUNKS_PER_FRAME: usize = 6;
+const CHUNKS_PER_FRAME: usize = 4;
 
 pub struct BlocksPlugin;
 
@@ -238,7 +240,9 @@ pub fn load(
         models: Arc::new(models),
         palette: Arc::new(palette),
     };
-    // Collision boxes: buildings and props whole, trees by their trunks.
+    // Collision boxes: buildings and props whole, trees by their trunks; none where the
+    // player's ship lands (it is bigger than the block ship the layout was made for).
+    let ship_at = DVec3::from_array(world.village.ship.pos);
     for p in &world.village.placements {
         let Some(trunk) = collision_of(&p.model) else {
             continue;
@@ -247,6 +251,9 @@ pub fn load(
             continue;
         };
         let at = DVec3::from_array(p.pos);
+        if (at - ship_at).truncate().length() < SHIP_CLEAR {
+            continue;
+        }
         if trunk {
             ground.add_box(
                 at + DVec3::new(0.0, 0.0, 1.5),
@@ -392,7 +399,7 @@ pub struct BlockCoverage(pub f64);
 struct BlockDraw {
     root: Entity,
     chunks: HashMap<(i32, i32), Option<Entity>>,
-    pending: HashMap<(i32, i32), Task<Option<MeshData>>>,
+    pending: HashMap<(i32, i32), Task<Option<Mesh>>>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
     glow: Handle<StandardMaterial>,
@@ -512,6 +519,9 @@ fn setup_blocks(
         made.insert(key.clone(), list);
     }
     for p in &world.village.placements {
+        if std::env::var_os("ULTRA_SPACE_DEBUG_NO_MODELS").is_some() {
+            break;
+        }
         let Some(list) = made.get(&p.model) else {
             continue;
         };
@@ -594,11 +604,12 @@ fn stream_chunks(
     };
     let height = cam.length() - ground.radius - ground.base;
     // High above, nothing is drawn (the tiles show the land).
-    let wanted: HashSet<(i32, i32)> = if height < DRAW_REACH {
-        ground.chunks_near(here, DRAW_REACH).into_iter().collect()
-    } else {
-        HashSet::new()
-    };
+    let wanted: HashSet<(i32, i32)> =
+        if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
+            ground.chunks_near(here, DRAW_REACH).into_iter().collect()
+        } else {
+            HashSet::new()
+        };
     // Start the nearest missing ones.
     let mut missing: Vec<(i32, i32)> = wanted
         .iter()
@@ -616,8 +627,19 @@ fn stream_chunks(
         .take(CHUNKS_IN_FLIGHT.saturating_sub(draw.pending.len()))
     {
         let g = world.ground.clone();
-        draw.pending
-            .insert(key, pool.spawn(async move { g.chunk(key.0, key.1) }));
+        let palette = world.palette.clone();
+        draw.pending.insert(
+            key,
+            pool.spawn(async move {
+                // The Bevy mesh is made here too, off the main thread.
+                g.chunk(key.0, key.1).map(|m| {
+                    bevy_mesh(&m, |c| {
+                        let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[c as usize - 1]);
+                        [r, g, b, 1.0]
+                    })
+                })
+            }),
+        );
     }
     let done: Vec<(i32, i32)> = draw
         .pending
@@ -626,7 +648,6 @@ fn stream_chunks(
         // A few a frame: each is a mesh upload.
         .take(CHUNKS_PER_FRAME)
         .collect();
-    let palette = world.palette.clone();
     for key in done {
         let Some(task) = draw.pending.remove(&key) else {
             continue;
@@ -635,11 +656,7 @@ fn stream_chunks(
         if m.is_none() {
             debug!("block chunk {key:?}: nothing to draw");
         }
-        let entity = m.map(|m| {
-            let mesh = bevy_mesh(&m, |c| {
-                let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[c as usize - 1]);
-                [r, g, b, 1.0]
-            });
+        let entity = m.map(|mesh| {
             commands
                 .spawn((
                     ChunkMesh,

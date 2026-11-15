@@ -895,7 +895,8 @@ fn vehicle_groups(with_ground: bool) -> InteractionGroups {
     let filter = if with_ground {
         Group::ALL
     } else {
-        Group::ALL.difference(GROUND_GROUP)
+        // Resting: neither the ground nor the structures on it.
+        Group::ALL.difference(GROUND_GROUP | STRUCTURE_GROUP)
     };
     InteractionGroups::new(VEHICLE_GROUP, filter, InteractionTestMode::And)
 }
