@@ -39,7 +39,7 @@ impl Plugin for MeetingPlugin {
             .add_systems(Startup, spawn_labels)
             .add_systems(
                 Update,
-                (entering, inspect, look_at)
+                (entering, inspect, look_at, hazard_warning)
                     .after(SettlementSet)
                     .in_set(InGame),
             );
@@ -64,7 +64,29 @@ struct Banner;
 #[derive(Component)]
 struct LookLabel;
 
+/// The hazard warning (task 4b.4).
+#[derive(Component)]
+struct HazardLabel;
+
 fn spawn_labels(mut commands: Commands) {
+    commands.spawn((
+        HazardLabel,
+        Text::new(""),
+        TextFont {
+            font_size: FontSize::Px(20.0),
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.35, 0.2)),
+        TextLayout::justify(Justify::Center),
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(170),
+            width: percent(100),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        Visibility::Hidden,
+    ));
     commands.spawn((
         Banner,
         Text::new(""),
@@ -270,6 +292,10 @@ fn inspect(
             .collect();
         let _ = writeln!(out, "  {}", roles.join(", "));
     }
+    let (level, kind) = hazard_here(&sim, &universe, &camera, render.0);
+    if let Some(k) = kind {
+        let _ = writeln!(out, "  Hazard here: {} {level:.2}", k.name());
+    }
     let _ = writeln!(out, "  {}", s.lore.description);
     let _ = writeln!(out, "  Landmark: {}", s.lore.landmark);
     if info.0 != out {
@@ -378,6 +404,82 @@ fn look_at(
                 }
             }
         }
+    }
+}
+
+/// How strong the hazard is where the camera is, on the body it is at (0–1), and of what kind.
+fn hazard_here(
+    sim: &Sim,
+    universe: &Universe,
+    camera: &SpaceCamera,
+    t: f64,
+) -> (f64, Option<sim_society::HazardKind>) {
+    let body = camera.anchor;
+    let Some(rs) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<RegionSociety>())
+    else {
+        return (0.0, None);
+    };
+    if rs.conditions.is_empty() {
+        return (0.0, None);
+    }
+    let at = camera_on(universe, camera, body, t);
+    let b = &universe.0.bodies[body];
+    // Only near the ground (the air is clean a few km up).
+    if at.length() - b.radius > 3_000.0 {
+        return (0.0, None);
+    }
+    sim_society::hazard_at(&rs.conditions, at.normalize(), b.radius)
+}
+
+/// Warns the player in a hazard: its kind and how strong ("RADIATION: HIGH").
+fn hazard_warning(
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut label: Query<(&mut Text, &mut Visibility), With<HazardLabel>>,
+    mut was: Local<&'static str>,
+) {
+    let (level, kind) = hazard_here(&sim, &universe, &camera, render.0);
+    let Ok((mut text, mut v)) = label.single_mut() else {
+        return;
+    };
+    let band = match level {
+        l if l < 0.03 => "",
+        l if l < 0.15 => "LOW",
+        l if l < 0.35 => "MODERATE",
+        l if l < 0.6 => "HIGH",
+        _ => "LETHAL",
+    };
+    if band != *was {
+        if band.is_empty() {
+            info!("left the hazard");
+        } else {
+            info!(
+                "hazard: {} {band} ({level:.2})",
+                kind.map_or("", |k| k.name())
+            );
+        }
+        *was = band;
+    }
+    let want = if band.is_empty() {
+        Visibility::Hidden
+    } else {
+        let line = format!(
+            "{}: {band}",
+            kind.map_or("HAZARD", |k| k.name()).to_uppercase()
+        );
+        if text.0 != line {
+            text.0 = line;
+        }
+        Visibility::Visible
+    };
+    if *v != want {
+        *v = want;
     }
 }
 

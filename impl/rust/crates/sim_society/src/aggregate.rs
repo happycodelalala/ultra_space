@@ -23,6 +23,11 @@ use sim_core::time::GAME_TIME_SCALE;
 use sim_core::{Simulation, StarSystem};
 
 use crate::lore::TechTier;
+use ai_gateway::{ContentRequest, Source};
+use glam::DVec3;
+use sim_planet::{Climate, Terrain};
+
+use crate::history::{Condition, History, Ruin, hazard_at};
 use crate::patterns::SettlementPatterns;
 use crate::rng::Rng;
 use crate::settlements::{Settlement, generate_settlements};
@@ -99,6 +104,10 @@ impl SettlementState {
 #[derive(Resource, Clone, Debug)]
 pub struct RegionSociety {
     pub society: Society,
+    /// The body's history (the director's), and the conditions and ruins it left.
+    pub history: History,
+    pub conditions: Vec<Condition>,
+    pub ruins: Vec<Ruin>,
     pub settlements: Vec<Settlement>,
     pub states: Vec<SettlementState>,
     /// Relations between factions (−100 … 100), simulated; `society.relations` holds them
@@ -133,7 +142,23 @@ impl RegionSociety {
         patterns: &SettlementPatterns,
     ) -> Self {
         let mut society = generate(system, body, director);
-        let settlements = generate_settlements(system, &mut society, director, patterns);
+        let b = &system.bodies[body];
+        let request = ContentRequest::new(
+            "history",
+            format!("history/{}", b.id),
+            serde_json::json!({"body": b.id}),
+        );
+        let answer = director.request(&request, History::default);
+        if let Source::Fallback(why) = &answer.source {
+            society.fallbacks.push(why.clone());
+        }
+        let history = answer.value;
+        let (conditions, ruins) = match (Terrain::of(b), Climate::of(b)) {
+            (Some(t), Some(c)) => crate::history::apply(&history, &society, &t, &c, patterns),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let hazard = |d: DVec3| hazard_at(&conditions, d, b.radius).0;
+        let settlements = generate_settlements(system, &mut society, director, patterns, &hazard);
         let radius = system.bodies[body].radius;
         let seat = |f: usize| settlements.iter().find(|s| s.faction == f && s.seat);
         let n = society.factions.len();
@@ -158,10 +183,14 @@ impl RegionSociety {
         }
         let soil = settlements
             .iter()
-            .map(|s| match society.cultures[s.culture].profile.tech_tier {
-                // Domes and hydroponics, and foragers living off the wild land.
-                TechTier::Spacefaring | TechTier::StoneAge => 1.0,
-                _ => 0.5 + 0.8 * s.site_score,
+            .map(|s| {
+                // Poisoned land yields less.
+                (1.0 - 0.8 * hazard(s.direction))
+                    * match society.cultures[s.culture].profile.tech_tier {
+                        // Domes and hydroponics, and foragers living off the wild land.
+                        TechTier::Spacefaring | TechTier::StoneAge => 1.0,
+                        _ => 0.5 + 0.8 * s.site_score,
+                    }
             })
             .collect();
         let states = settlements.iter().map(SettlementState::start).collect();
@@ -172,6 +201,9 @@ impl RegionSociety {
             .collect();
         Self {
             society,
+            history,
+            conditions,
+            ruins,
             settlements,
             states,
             relations,

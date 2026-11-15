@@ -645,6 +645,20 @@ what is simulated, level of detail) and never show on screen:
   kits and clothing (`stone_age_camp`, `ancient_city`, `early_modern_town`, `industrial_town`,
   `wasteland_enclave`; their clothing sets) come with task 4b.7; until then they are generated
   and simulated but not drawn.
+- **As built (task 4b.4): a wasteland from history.** `sim_society::history`: the content
+  director writes a body's history (`history/<body>`, `content/lore/meridian-history.json`:
+  the Tayu's migration 12,000 years ago, the first Velan cities, the Fall, the Corvantine
+  crowning, the Aldmark war of the provinces, the Kesh's Week 80 years ago, the Landing), as
+  dated events validated like all lore. A catastrophe's condition (hazard kind, severity as it
+  is now, the people's old pattern) is applied by generation: the old pattern (`modern`) laid
+  out over the people's home region gives the ruins (towns and bigger: 197 for the Kesh) and
+  the hazard zones (fallout over the whole region at a quarter of the severity; hot zones of
+  30 km on old metropolises, 12 km on old cities and 4 km on some towns); the survivors'
+  pattern (`wasteland_enclaves`) then avoids land of hazard 0.35 or more, and hazard cuts what
+  land yields (×(1 − 0.8 × hazard)). Not saved: the same seeds give the same history. The game
+  warns the player in a hazard near the ground ("RADIATION: HIGH", logged), the inspector shows
+  the level, and the debug start can target ruins (`ULTRA_SPACE_START_NEAR=ruin,...`). Ruins
+  and the blighted look of the land are drawn with task 4b.6.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

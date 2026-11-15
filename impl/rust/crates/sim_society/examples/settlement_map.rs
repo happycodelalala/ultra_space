@@ -10,7 +10,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use sim_core::StarSystem;
 use sim_planet::map::{biome_map, direction, pixel};
 use sim_planet::{Climate, Terrain};
-use sim_society::{SizeClass, generate, generate_settlements};
+use sim_society::SizeClass;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -27,19 +27,35 @@ fn main() {
     let director = ContentDirector::new(Box::new(
         ReplayProvider::load_dir(content.join("lore")).unwrap(),
     ));
-    let mut society = generate(&system, body, &director);
-    let settlements = generate_settlements(
+    let rs = sim_society::RegionSociety::generate(
         &system,
-        &mut society,
+        body,
         &director,
-        &sim_society::SettlementPatterns::load_dir(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../../content/data/settlement_patterns"),
-        )
-        .unwrap(),
+        &sim_society::SettlementPatterns::load_dir(&content.join("data/settlement_patterns"))
+            .unwrap(),
     );
+    let society = rs.society.clone();
+    let settlements = rs.settlements.clone();
     let b = &system.bodies[body];
     let mut img = biome_map(&Terrain::of(b).unwrap(), &Climate::of(b).unwrap(), width);
+    // Hazard zones, shaded red by strength.
+    let b = &system.bodies[body];
+    for y in 0..height {
+        for x in 0..width {
+            let lon =
+                (x as f64 + 0.5) / width as f64 * std::f64::consts::TAU - std::f64::consts::PI;
+            let lat = std::f64::consts::FRAC_PI_2
+                - (y as f64 + 0.5) / height as f64 * std::f64::consts::PI;
+            let (level, _) = sim_society::hazard_at(&rs.conditions, direction(lat, lon), b.radius);
+            if level > 0.02 {
+                let i = (y * width + x) * 3;
+                let a = (level * 1.5).min(0.8);
+                img[i] = (f64::from(img[i]) * (1.0 - a) + 230.0 * a) as u8;
+                img[i + 1] = (f64::from(img[i + 1]) * (1.0 - a) + 60.0 * a) as u8;
+                img[i + 2] = (f64::from(img[i + 2]) * (1.0 - a) + 30.0 * a) as u8;
+            }
+        }
+    }
     let mut put = |x: i64, y: i64, c: [f64; 3]| {
         let (x, y) = (
             x.rem_euclid(width as i64) as usize,
@@ -61,6 +77,20 @@ fn main() {
             put(x as i64, y as i64, [1.0, 1.0, 1.0]);
         }
     }
+    // Ruins (grey).
+    for ruin in &rs.ruins {
+        let (x, y) = pixel(ruin.direction, width);
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                put(x as i64 + dx, y as i64 + dy, [0.45, 0.45, 0.45]);
+            }
+        }
+    }
+    println!(
+        "{} ruins, {} conditions",
+        rs.ruins.len(),
+        rs.conditions.len()
+    );
     for s in &settlements {
         let (x, y) = pixel(s.direction, width);
         let r: i64 = match s.size {

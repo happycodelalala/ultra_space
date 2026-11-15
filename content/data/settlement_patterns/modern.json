@@ -1,0 +1,13 @@
+{
+  "id": "modern",
+  "description": "Modern peoples (living-planet.md §8b): most people in cities and their suburbs, towns every 8–10 km, few big farms. On Meridian only the Kesh had it, before their war: the ruins and the hot zones of their land come from it.",
+  "tiers": ["modern"],
+  "settled_share": 0.6,
+  "seat": {"size": "metropolis", "people": [800000, 3000000], "roles": ["seat", "market"], "capital_roles": ["capital"]},
+  "classes": [
+    {"size": "city", "spacing_km": 30, "people": [20000, 99000], "roles": ["market"]},
+    {"size": "town", "spacing_km": 9, "people": [2000, 5000], "roles": ["market"]},
+    {"size": "village", "spacing_km": 5, "people": [200, 500], "roles": []}
+  ],
+  "dwelling_spacing_km": 1.0
+}

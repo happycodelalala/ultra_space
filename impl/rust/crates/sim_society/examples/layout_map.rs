@@ -59,6 +59,7 @@ fn main() {
                 .join("../../../../content/data/settlement_patterns"),
         )
         .unwrap(),
+        &|_| 0.0,
     );
     let terrain = Terrain::of(&system.bodies[body]).unwrap();
 

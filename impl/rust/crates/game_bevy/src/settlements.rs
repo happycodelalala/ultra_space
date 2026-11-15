@@ -808,7 +808,8 @@ pub fn start_near(
         .get_resource::<sim_vehicle::flight::RegionTerrain>()?
         .0
         .clone()?;
-    let s = society
+    // A settlement by name or kind, or a ruin ("ruin": the biggest; or by name).
+    let settlement = society
         .settlements
         .iter()
         .filter(|s| {
@@ -817,13 +818,23 @@ pub fn start_near(
                 || s.size.name() == what
                 || s.word.to_lowercase() == what
         })
-        .max_by_key(|s| s.population)?;
-    let (east, south) = tangent_frame(s.direction);
+        .max_by_key(|s| s.population)
+        .map(|s| (s.name.clone(), s.word.clone(), s.direction));
+    let ruin = || {
+        society
+            .ruins
+            .iter()
+            .filter(|r| what == "ruin" || r.name.to_lowercase() == what)
+            .max_by_key(|r| r.size)
+            .map(|r| (r.name.clone(), "ruin".to_string(), r.direction))
+    };
+    let (name, word, direction) = settlement.or_else(ruin)?;
+    let (east, south) = tangent_frame(direction);
     let r = terrain.radius;
     // Landing: the first spot from `distance` outward with no building within 12 m (not on a
     // roof).
     let clear = |d: f64| {
-        let up = (s.direction * r + south * d).normalize();
+        let up = (direction * r + south * d).normalize();
         terrain
             .foundations()
             .is_none_or(|f| f.structures_near(up, 12.0).next().is_none())
@@ -836,7 +847,7 @@ pub fn start_near(
             .find(|&d| clear(d))
             .unwrap_or(distance)
     };
-    let up = (s.direction * r + south * distance).normalize();
+    let up = (direction * r + south * distance).normalize();
     let ground = terrain.surface_height(up, 1.0);
     // On the ground: the ship's lowest point a little above it (it settles on its legs).
     let lift = if height > 0.0 { height } else { 4.0 };
@@ -859,10 +870,7 @@ pub fn start_near(
     let mut state = ObjectState::at_rest(system.bodies[body].inertial_frame, position, rotation);
     state.state.velocity = frame.angular_velocity.cross(position);
     state.state.angular_velocity = frame.angular_velocity;
-    info!(
-        "debug: starting {distance:.0} m south of {} ({}), {lift:.0} m up, at {t:.0} s",
-        s.name, s.word
-    );
+    info!("debug: starting {distance:.0} m south of {name} ({word}), {lift:.0} m up, at {t:.0} s");
     Some((state, t, height > 0.0))
 }
 

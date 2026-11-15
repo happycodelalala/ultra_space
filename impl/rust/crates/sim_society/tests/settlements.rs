@@ -33,6 +33,7 @@ fn meridian() -> (StarSystem, Society, Vec<Settlement>) {
                 .join("../../../../content/data/settlement_patterns"),
         )
         .unwrap(),
+        &|_| 0.0,
     );
     (system, society, settlements)
 }

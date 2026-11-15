@@ -20,7 +20,7 @@
             "additionalProperties": false,
             "required": ["kind", "key"],
             "properties": {
-              "kind": {"enum": ["culture_profile", "faction_lore", "settlement_lore", "codex"]},
+              "kind": {"enum": ["culture_profile", "faction_lore", "settlement_lore", "codex", "history"]},
               "key": {"type": "string", "minLength": 1}
             }
           },
@@ -34,7 +34,9 @@
           {"if": {"properties": {"request": {"properties": {"kind": {"const": "settlement_lore"}}}}},
            "then": {"properties": {"response": {"$ref": "#/$defs/settlement_lore"}}}},
           {"if": {"properties": {"request": {"properties": {"kind": {"const": "codex"}}}}},
-           "then": {"properties": {"response": {"$ref": "#/$defs/codex"}}}}
+           "then": {"properties": {"response": {"$ref": "#/$defs/codex"}}}},
+          {"if": {"properties": {"request": {"properties": {"kind": {"const": "history"}}}}},
+           "then": {"properties": {"response": {"$ref": "#/$defs/history"}}}}
         ]
       }
     }
@@ -108,6 +110,39 @@
       "additionalProperties": false,
       "required": ["description", "landmark"],
       "properties": {"description": {"$ref": "#/$defs/text"}, "landmark": {"$ref": "#/$defs/text"}}
+    },
+    "history": {
+      "type": "object",
+      "description": "A body's history, oldest first (living-planet.md §8c); a catastrophe's condition is applied by generation (§8b).",
+      "additionalProperties": false,
+      "required": ["events"],
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["years_ago", "kind", "title", "text"],
+            "properties": {
+              "years_ago": {"type": "integer", "minimum": 0},
+              "kind": {"enum": ["fall", "landing", "founding", "war", "migration", "discovery", "catastrophe"]},
+              "people": {"type": "string"},
+              "title": {"$ref": "#/$defs/text"},
+              "text": {"$ref": "#/$defs/text"},
+              "condition": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["hazard", "severity", "old_pattern"],
+                "properties": {
+                  "hazard": {"enum": ["radiation", "chemical", "biological"]},
+                  "severity": {"type": "number", "minimum": 0, "maximum": 1},
+                  "old_pattern": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "codex": {
       "type": "object",
