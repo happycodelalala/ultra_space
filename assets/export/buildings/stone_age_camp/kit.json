@@ -240,6 +240,40 @@
         13.545,
         2.526
       ]
+    },
+    {
+      "id": "palisade",
+      "uses": [
+        "wall"
+      ],
+      "model": "palisade.glb",
+      "min_m": [
+        -4.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        4.5,
+        3.105,
+        -1.182
+      ]
+    },
+    {
+      "id": "palisade_gate",
+      "uses": [
+        "gate"
+      ],
+      "model": "palisade_gate.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.516
+      ],
+      "max_m": [
+        1.5,
+        3.105,
+        -1.227
+      ]
     }
   ]
 }

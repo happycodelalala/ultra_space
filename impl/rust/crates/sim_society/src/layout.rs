@@ -129,6 +129,30 @@ pub struct Layout {
     pub streets: Vec<(u32, u32)>,
     /// Buildings asked for that found no plot.
     pub unplaced: usize,
+    /// The worked land round it (living-planet.md §8d).
+    pub fields: Vec<Field>,
+}
+
+/// A worked field round a settlement: a rectangle on the tangent plane (centre, half extents
+/// across and along, turned `yaw` like a building), its crop (an index the renderer colours)
+/// and what bounds it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Field {
+    pub x: f64,
+    pub z: f64,
+    pub half: [f64; 2],
+    pub yaw: f64,
+    pub crop: u8,
+    pub edge: Edge,
+}
+
+/// What bounds a field: nothing, a hedge, a fence or a low stone wall.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Edge {
+    Open,
+    Hedge,
+    Fence,
+    Wall,
 }
 
 /// Space kept round a footprint (m): half the gap between neighbours, and the plinth.
@@ -179,7 +203,10 @@ impl Layout {
         let boxes = (0..self.buildings.len())
             .filter(|&i| {
                 let b = &kit.buildings[self.buildings[i].building];
-                !b.uses.iter().any(|u| u == "tree" || u == "harbour")
+                // Gates are passable (their towers are thin enough to leave out).
+                !b.uses
+                    .iter()
+                    .any(|u| u == "tree" || u == "harbour" || u == "gate")
             })
             .map(|i| {
                 let (c, yaw, half) = self.collision_box(kit, i);
@@ -294,6 +321,17 @@ impl<'a> Plots<'a> {
     /// Places `building` with its origin at `at`, turned `yaw`, if it fits: clear of other
     /// buildings and streets, on ground that is dry and not too steep. Returns its index.
     fn try_place(&mut self, building: usize, at: DVec2, yaw: f64) -> Option<usize> {
+        self.place_checked(building, at, yaw, true)
+    }
+
+    /// As [`Self::try_place`], over the streets when `streets` is false (a gate on a road).
+    fn place_checked(
+        &mut self,
+        building: usize,
+        at: DVec2,
+        yaw: f64,
+        streets: bool,
+    ) -> Option<usize> {
         let mut p = Placed {
             building,
             x: at.x,
@@ -317,10 +355,12 @@ impl<'a> Plots<'a> {
             .collect();
         near.sort_unstable();
         near.dedup();
-        if near.iter().any(|&i| {
-            let (a, b) = self.streets[i];
-            segment_hits(&rect, a, b, STREET_HALF - MARGIN)
-        }) {
+        if streets
+            && near.iter().any(|&i| {
+                let (a, b) = self.streets[i];
+                segment_hits(&rect, a, b, STREET_HALF - MARGIN)
+            })
+        {
             return None;
         }
         // Ground: the centre and corners (the footprint without its margin).
@@ -396,6 +436,22 @@ impl Plots<'_> {
         self.rects.push(rect);
         Some(i)
     }
+}
+
+/// How far the placed buildings (not trees or props) reach from the centre (m).
+fn outer_reach(plots: &Plots) -> f64 {
+    plots
+        .placed
+        .iter()
+        .zip(&plots.rects)
+        .filter(|(p, _)| {
+            !plots.kit.buildings[p.building]
+                .uses
+                .iter()
+                .any(|u| u == "tree" || u == "prop")
+        })
+        .map(|(_, r)| DVec2::new(r.x, r.z).length() + DVec2::new(r.half[0], r.half[1]).length())
+        .fold(20.0, f64::max)
 }
 
 /// Whether two footprints overlap (separating axes).
@@ -578,18 +634,101 @@ fn demand(s: &Settlement, tier: TechTier) -> Vec<(&'static str, usize)> {
         .collect()
 }
 
+/// Whether a settlement is walled (living-planet.md §8d): the towns, cities and forts of the
+/// walled stages, the Stone Age hill forts (a palisade), the wasteland's enclaves (barricades).
+fn walled(s: &Settlement, tier: TechTier) -> bool {
+    match tier {
+        TechTier::StoneAge => s.size >= SizeClass::Town,
+        TechTier::Ancient | TechTier::Medieval | TechTier::EarlyModern => {
+            s.size >= SizeClass::Town || s.has(SettlementRole::Fort)
+        }
+        TechTier::Industrial | TechTier::Modern => s.has(SettlementRole::Enclave),
+        _ => false,
+    }
+}
+
+/// A ring of wall at `radius` round the centre: the kit's wall sections end to end, a tower
+/// every sixth (if the kit has one), a gate where a street crosses (or a gap, without one);
+/// sections that don't fit (a building, steep or wet ground) leave a gap. `gap`: leave an
+/// opening anyway (a ring with no street through it).
+fn ring_wall(kit: &Kit, plots: &mut Plots, radius: f64, rng: &mut Rng, gap: bool) {
+    let Some(wall) = pick(kit, "wall", None) else {
+        return;
+    };
+    let (tower, gate) = (pick(kit, "tower", None), pick(kit, "gate", None));
+    let tau = std::f64::consts::TAU;
+    let length = (kit.buildings[wall].max_m[0] - kit.buildings[wall].min_m[0]).max(2.0);
+    let n = ((tau * radius / length).ceil() as usize).max(8);
+    let start = rng.unit() * tau;
+    for k in 0..n {
+        if gap && k < 2 {
+            continue;
+        }
+        let a = start + tau * k as f64 / n as f64;
+        let out = DVec2::new(a.cos(), a.sin());
+        let at = out * radius;
+        let yaw = facing(out);
+        // A street through here: a gate over it.
+        let crossing = plots
+            .streets
+            .iter()
+            .any(|&(p, q)| segment_distance(at, p, q) < 0.5 * length);
+        if crossing {
+            if let Some(g) = gate {
+                plots.place_checked(g, at, yaw, false);
+            }
+            continue;
+        }
+        if k % 6 == 0
+            && let Some(t) = tower
+            && plots.try_place(t, at, yaw).is_some()
+        {
+            continue;
+        }
+        plots.try_place(wall, at, yaw);
+    }
+}
+
+/// The radius of a walled town's core: room for its buildings (their footprints, with streets
+/// and gaps) round the square; the rest grows outside the walls.
+fn core_radius(kit: &Kit, wanted: &[(&'static str, usize)], square: f64) -> f64 {
+    let area: f64 = wanted
+        .iter()
+        .filter(|w| !matches!(w.0, "tree" | "prop"))
+        .map(|&(u, n)| {
+            let of = kit.with_use(u);
+            if of.is_empty() {
+                return 0.0;
+            }
+            let mean = of
+                .iter()
+                .map(|&b| {
+                    let h = kit.buildings[b].half();
+                    4.0 * h.x * h.y
+                })
+                .sum::<f64>()
+                / of.len() as f64;
+            mean * n as f64
+        })
+        .sum::<f64>()
+        * 2.5;
+    (area / std::f64::consts::PI).sqrt().max(square + 30.0)
+}
+
 /// The layout of `s` (a culture of `tier`) with `kit` on `terrain`.
 pub fn generate_layout(s: &Settlement, tier: TechTier, kit: &Kit, terrain: &Terrain) -> Layout {
     let mut rng = Rng::new(s.layout_seed);
     let mut plots = Plots::new(kit, terrain, s.direction);
     let wanted = demand(s, tier);
+    let walls = walled(s, tier);
     let (nodes, streets, unplaced) = match tier {
         TechTier::Spacefaring | TechTier::Industrial | TechTier::Modern => {
-            grid(s, &wanted, kit, &mut plots, &mut rng)
+            grid(s, &wanted, kit, &mut plots, &mut rng, walls)
         }
-        TechTier::StoneAge => camp(&wanted, kit, &mut plots, &mut rng),
-        _ => village(s, &wanted, kit, &mut plots, &mut rng),
+        TechTier::StoneAge => camp(&wanted, kit, &mut plots, &mut rng, walls),
+        _ => village(s, &wanted, kit, &mut plots, &mut rng, walls),
     };
+    let fields = fields(s, tier, &plots, &mut rng);
     Layout {
         kit: kit.id.clone(),
         center: s.direction,
@@ -597,7 +736,105 @@ pub fn generate_layout(s: &Settlement, tier: TechTier, kit: &Kit, terrain: &Terr
         nodes,
         streets,
         unplaced,
+        fields,
     }
+}
+
+/// Most fields round one settlement.
+const MOST_FIELDS: usize = 2_500;
+
+/// The worked land round a settlement (living-planet.md §8d): rings of fields outside its
+/// buildings, out to a depth growing with its people, clear of buildings, streets and water;
+/// their shape and bounds by its stage (Stone Age garden plots, Ancient squares behind stone
+/// walls, medieval strips between hedges, big fenced industrial fields). Some lie fallow.
+fn fields(s: &Settlement, tier: TechTier, plots: &Plots, rng: &mut Rng) -> Vec<Field> {
+    let (w, l, edge, crops) = match tier {
+        TechTier::StoneAge => (12.0, 14.0, Edge::Open, 3),
+        TechTier::Ancient => (40.0, 45.0, Edge::Wall, 5),
+        TechTier::Medieval => (24.0, 90.0, Edge::Hedge, 5),
+        TechTier::EarlyModern => (32.0, 80.0, Edge::Hedge, 5),
+        TechTier::Industrial => (70.0, 120.0, Edge::Fence, 5),
+        _ => return Vec::new(),
+    };
+    let pop = f64::from(s.population);
+    let depth = if tier == TechTier::StoneAge {
+        if pop < 60.0 {
+            return Vec::new();
+        }
+        25.0
+    } else {
+        60.0 + 4.0 * pop.sqrt()
+    };
+    let r0 = outer_reach(plots) + 8.0;
+    let mut out = Vec::new();
+    let tau = std::f64::consts::TAU;
+    let mut r = r0 + 0.5 * l;
+    while r < r0 + depth + 0.5 * l && out.len() < MOST_FIELDS {
+        let n = ((tau * r / (w + 3.0)).floor() as usize).max(4);
+        let start = rng.unit() * tau;
+        for k in 0..n {
+            let a = start + tau * k as f64 / n as f64;
+            let out_dir = DVec2::new(a.cos(), a.sin());
+            let c = out_dir * r;
+            let yaw = facing(out_dir);
+            let rect = Footprint {
+                x: c.x,
+                z: c.y,
+                half: [0.5 * w, 0.5 * l],
+                yaw,
+                height: 0.0,
+            };
+            let built = Plots::cells(&rect)
+                .filter_map(|cell| plots.grid.get(&cell))
+                .flatten()
+                .any(|&i| overlaps(&rect, &plots.rects[i]));
+            let street = Plots::cells(&rect)
+                .filter_map(|cell| plots.street_grid.get(&cell))
+                .flatten()
+                .any(|&i| {
+                    let (p, q) = plots.streets[i];
+                    segment_hits(&rect, p, q, STREET_HALF)
+                });
+            if built || street {
+                continue;
+            }
+            // Dry and not too steep (a field may follow a gentle slope).
+            let (hx, hz) = (0.5 * w, 0.5 * l);
+            let mut lo = f64::MAX;
+            let mut hi = f64::MIN;
+            for (sx, sz) in [
+                (0.0, 0.0),
+                (-1.0, -1.0),
+                (1.0, -1.0),
+                (-1.0, 1.0),
+                (1.0, 1.0),
+            ] {
+                let h = plots.ground(c + rotate(DVec2::new(sx * hx, sz * hz), yaw));
+                lo = lo.min(h);
+                hi = hi.max(h);
+            }
+            if lo < MIN_HEIGHT || hi - lo > 0.25 * l {
+                continue;
+            }
+            // Some fallow, some given to grazing (no crop drawn).
+            if rng.unit() < 0.12 {
+                continue;
+            }
+            out.push(Field {
+                x: c.x,
+                z: c.y,
+                half: [0.5 * w, 0.5 * l],
+                yaw,
+                crop: (rng.next_u64() % crops) as u8,
+                edge,
+            });
+            if out.len() >= MOST_FIELDS {
+                break;
+            }
+        }
+        r += l + 3.0;
+    }
+    out
 }
 
 type Graph = (Vec<DVec2>, Vec<(u32, u32)>, usize);
@@ -622,6 +859,7 @@ fn village(
     kit: &Kit,
     plots: &mut Plots,
     rng: &mut Rng,
+    walls: bool,
 ) -> Graph {
     // Everything that stands along the streets.
     let households = wanted
@@ -779,8 +1017,15 @@ fn village(
     let mut used = vec![false; slots.len()];
     let mut unplaced = 0;
     let mut grove: Vec<DVec2> = Vec::new();
+    let mut walls = walls;
 
     for &(use_, count) in wanted {
+        // The walls after the square and the harbour (and its street), before the rest: round
+        // the core, which houses fill from the square out; the rest grows outside them.
+        if walls && !matches!(use_, "square" | "port") {
+            walls = false;
+            ring_wall(kit, plots, core_radius(kit, wanted, square), rng, false);
+        }
         for _ in 0..count {
             let ok = match use_ {
                 "square" => pick(kit, "square", None)
@@ -904,7 +1149,13 @@ fn village(
 /// The camp style (Stone Age): huts in rings round fires, the first fire at the centre and the
 /// others round it, the chief's tent by the central fire, the stone circle a little apart, trails
 /// from each fire to the centre and one leading away.
-fn camp(wanted: &[(&'static str, usize)], kit: &Kit, plots: &mut Plots, rng: &mut Rng) -> Graph {
+fn camp(
+    wanted: &[(&'static str, usize)],
+    kit: &Kit,
+    plots: &mut Plots,
+    rng: &mut Rng,
+    walls: bool,
+) -> Graph {
     let tau = std::f64::consts::TAU;
     let fires = wanted
         .iter()
@@ -997,6 +1248,11 @@ fn camp(wanted: &[(&'static str, usize)], kit: &Kit, plots: &mut Plots, rng: &mu
     for &(use_, count) in wanted {
         if use_ == "square" {
             continue; // the fires, above
+        }
+        // A hill fort's palisade round the huts, before the trees.
+        if walls && use_ == "tree" {
+            let r = outer_reach(plots) + 8.0;
+            ring_wall(kit, plots, r, rng, false);
         }
         for n in 0..count {
             let Some(b) = pick(kit, use_, Some(rng)) else {
@@ -1218,6 +1474,7 @@ fn grid(
     kit: &Kit,
     plots: &mut Plots,
     rng: &mut Rng,
+    walls: bool,
 ) -> Graph {
     let size = |b: usize| kit.buildings[b].half().max_element() * 2.0;
     // Plot pitch: three in four of the kit's buildings (not trees or props) fit one plot.
@@ -1298,6 +1555,21 @@ fn grid(
         // A use the kit has no building for is passed over (as in the village style).
         if pick(kit, use_, None).is_none() {
             continue;
+        }
+        // An enclave's barricade round the built, before the trees and props (an opening
+        // left: no street crosses it).
+        if walls && use_ == "prop" {
+            // Outside the streets round the built blocks (their farthest corner, and a street).
+            let r = used
+                .keys()
+                .flat_map(|&(i, j)| {
+                    let (bi, bj) = (block(i), block(j));
+                    [(bi, bj), (bi + 1, bj), (bi, bj + 1), (bi + 1, bj + 1)]
+                })
+                .map(|(bi, bj)| DVec2::new(line(bi), line(bj)).length())
+                .fold(outer_reach(plots), f64::max)
+                + AVENUE;
+            ring_wall(kit, plots, r, rng, true);
         }
         // Trees and props: in spare plots near the built, without taking them.
         if matches!(use_, "tree" | "prop") {
@@ -1466,6 +1738,7 @@ impl RegionLayouts {
                 nodes: Vec::new(),
                 streets: Vec::new(),
                 unplaced: 0,
+                fields: Vec::new(),
             },
         }
     }

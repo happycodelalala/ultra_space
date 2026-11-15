@@ -27,7 +27,9 @@ pub mod society;
 
 pub use aggregate::{RegionSociety, SettlementState};
 pub use history::{Condition, HazardKind, History, HistoryEvent, Ruin, hazard_at};
-pub use layout::{Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout};
+pub use layout::{
+    Edge, Field, Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout,
+};
 pub use lore::{
     Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Polity, Role, SettlementLore,
     TechTier,

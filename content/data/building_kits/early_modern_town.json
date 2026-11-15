@@ -399,6 +399,135 @@
      }
     ]
    }
+  },
+  {
+   "id": "town_wall",
+   "uses": [
+    "wall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "wall",
+      "at": [
+       -1.0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 2.0
+     },
+     {
+      "piece": "wall",
+      "at": [
+       1.0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "wall_tower",
+   "uses": [
+    "tower"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tower-square-base",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 2.0
+     },
+     {
+      "piece": "tower-square-mid",
+      "at": [
+       0,
+       2.02,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 2.0
+     },
+     {
+      "piece": "tower-square-top-roof",
+      "at": [
+       0,
+       4.04,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "town_gate",
+   "uses": [
+    "gate"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tower-square-base",
+      "at": [
+       -1.6,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 1.6
+     },
+     {
+      "piece": "tower-square-base",
+      "at": [
+       1.6,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 1.6
+     },
+     {
+      "piece": "tower-square-top",
+      "at": [
+       -1.6,
+       1.62,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 1.6
+     },
+     {
+      "piece": "tower-square-top",
+      "at": [
+       1.6,
+       1.62,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-castle-kit",
+      "scale": 1.6
+     }
+    ]
+   }
   }
  ]
 }

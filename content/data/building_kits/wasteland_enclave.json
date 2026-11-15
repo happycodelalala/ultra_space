@@ -569,6 +569,38 @@
      }
     ]
    }
+  },
+  {
+   "id": "barrier",
+   "uses": [
+    "wall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "shipping-container-a",
+      "at": [
+       -4.6,
+       0,
+       0
+      ],
+      "rot": 90,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     },
+     {
+      "piece": "shipping-container-c",
+      "at": [
+       4.6,
+       0,
+       0
+      ],
+      "rot": 90,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     }
+    ]
+   }
   }
  ]
 }

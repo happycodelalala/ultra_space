@@ -66,7 +66,7 @@ fn kits_load_with_their_buildings() {
         for b in &kit.buildings {
             let size = [0, 1, 2].map(|k| b.max_m[k] - b.min_m[k]);
             assert!(
-                size.iter().all(|&s| s > 0.3 && s < 50.0),
+                size.iter().all(|&s| s > 0.2 && s < 50.0),
                 "{id}.{}: {size:?}",
                 b.id
             );
@@ -233,8 +233,13 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
                         continue;
                     }
                     let kind = &kit.buildings[l.buildings[i].building];
-                    // The colony's streets run between plots; small props may stand by them.
-                    if kind.uses.iter().any(|u| u == "prop" || u == "tree") {
+                    // The colony's streets run between plots; small props may stand by them; a
+                    // town's gates stand over its streets.
+                    if kind
+                        .uses
+                        .iter()
+                        .any(|u| u == "prop" || u == "tree" || u == "gate")
+                    {
                         continue;
                     }
                     assert!(

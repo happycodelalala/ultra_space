@@ -432,6 +432,62 @@
      }
     ]
    }
+  },
+  {
+   "id": "palisade",
+   "uses": [
+    "wall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "fence-fortified",
+      "at": [
+       -0.5,
+       0,
+       0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "fence-fortified",
+      "at": [
+       0.0,
+       0,
+       0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "fence-fortified",
+      "at": [
+       0.5,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "palisade_gate",
+   "uses": [
+    "gate"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "fence-doorway",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
   }
  ]
 }

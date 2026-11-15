@@ -275,6 +275,57 @@
         1.607,
         2.085
       ]
+    },
+    {
+      "id": "town_wall",
+      "uses": [
+        "wall"
+      ],
+      "model": "town_wall.glb",
+      "min_m": [
+        -6.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        6.0,
+        7.86,
+        3.0
+      ]
+    },
+    {
+      "id": "wall_tower",
+      "uses": [
+        "tower"
+      ],
+      "model": "wall_tower.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        18.12,
+        3.0
+      ]
+    },
+    {
+      "id": "town_gate",
+      "uses": [
+        "gate"
+      ],
+      "model": "town_gate.glb",
+      "min_m": [
+        -7.2,
+        0.0,
+        -2.4
+      ],
+      "max_m": [
+        7.2,
+        6.3,
+        2.4
+      ]
     }
   ]
 }

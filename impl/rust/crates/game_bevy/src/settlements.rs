@@ -703,6 +703,7 @@ fn stream_layouts(
                         nodes: Vec::new(),
                         streets: Vec::new(),
                         unplaced: 0,
+                        fields: Vec::new(),
                     };
                     return (empty, None);
                 };
@@ -935,7 +936,17 @@ fn distant_meshes(
             && b.uses.iter().any(|u| {
                 !matches!(
                     u.as_str(),
-                    "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms" | "harbour"
+                    "tree"
+                        | "prop"
+                        | "square"
+                        | "market"
+                        | "pad"
+                        | "power"
+                        | "comms"
+                        | "harbour"
+                        | "wall"
+                        | "tower"
+                        | "gate"
                 )
             });
         if lit {
@@ -1028,6 +1039,73 @@ fn street_mesh(site: Frame, layout: &Layout, kit: &Kit, terrain: &sim_planet::Te
             );
         }
     }
+    // Fields round it: a height grid of about 20 m over each, stripes of its crop across it,
+    // and its hedges, fences or walls along the long sides (their own buffers, joined after).
+    let (mut ep, mut en, mut ec, mut eidx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for f in &l.fields {
+        let (w, len) = (2.0 * f.half[0], 2.0 * f.half[1]);
+        let (nu, nv) = (
+            ((w / 6.0).ceil() as usize).max(2),
+            ((len / 20.0).ceil() as usize).max(2),
+        );
+        let (sn, cs) = f.yaw.sin_cos();
+        let at = |u: f64, v: f64| {
+            // (u, v) across and along, -1..1, turned like a building.
+            let (x, z) = (u * f.half[0], v * f.half[1]);
+            (f.x + cs * x + sn * z, f.z - sn * x + cs * z)
+        };
+        let grid: Vec<Vec3> = (0..=nv)
+            .flat_map(|j| (0..=nu).map(move |i| (i, j)))
+            .map(|(i, j)| {
+                let (x, z) = at(
+                    -1.0 + 2.0 * i as f64 / nu as f64,
+                    -1.0 + 2.0 * j as f64 / nv as f64,
+                );
+                to_local(x, z) - Vec3::Y * 0.1
+            })
+            .collect();
+        let crop = FIELD_COLOURS[f.crop as usize % FIELD_COLOURS.len()];
+        for j in 0..nv {
+            for i in 0..nu {
+                let k = |i: usize, j: usize| grid[j * (nu + 1) + i];
+                // Stripes across the field (rows of the crop), two shades.
+                let shade = if i % 2 == 0 { 1.0 } else { 0.86 };
+                quad(
+                    [k(i, j), k(i, j + 1), k(i + 1, j + 1), k(i + 1, j)],
+                    crop.map(|c| c * shade),
+                );
+            }
+        }
+        let (half_w, height, colour) = match f.edge {
+            sim_society::Edge::Open => continue,
+            sim_society::Edge::Hedge => (0.6, 1.4, [0.16, 0.26, 0.1]),
+            sim_society::Edge::Fence => (0.06, 1.1, [0.32, 0.25, 0.17]),
+            sim_society::Edge::Wall => (0.35, 1.0, [0.5, 0.47, 0.42]),
+        };
+        for side in [-1.0, 1.0] {
+            for j in 0..nv {
+                let (v0, v1) = (
+                    -1.0 + 2.0 * j as f64 / nv as f64,
+                    -1.0 + 2.0 * (j + 1) as f64 / nv as f64,
+                );
+                let (x0, z0) = at(side, v0);
+                let (x1, z1) = at(side, v1);
+                let (a, b) = (to_local(x0, z0), to_local(x1, z1));
+                let mid = 0.5 * (a + b) + Vec3::Y * (0.5 * height - 0.3);
+                add_box(
+                    &mut ep,
+                    &mut en,
+                    &mut ec,
+                    &mut eidx,
+                    mid,
+                    Vec3::new(half_w, 0.5 * height + 0.3, 0.5 * a.distance(b)),
+                    f.yaw as f32,
+                    colour,
+                    colour,
+                );
+            }
+        }
+    }
     // The medieval square: paved out to its ring street.
     if !colony && l.nodes.len() >= 8 {
         let radius = l.nodes[0].length() + 0.5 * width;
@@ -1041,8 +1119,23 @@ fn street_mesh(site: Frame, layout: &Layout, kit: &Kit, terrain: &sim_planet::Te
             quad([centre, e1, e0, centre], [0.36, 0.33, 0.29]);
         }
     }
+    let base = p.len() as u32;
+    p.extend(ep);
+    n.extend(en);
+    c.extend(ec);
+    idx.extend(eidx.into_iter().map(|i| i + base));
     vertex_mesh(p, n, c, idx)
 }
+
+/// Crops as seen from above (linear RGB): ripe wheat, green barley, ploughed earth, pale oats,
+/// beans.
+const FIELD_COLOURS: [[f32; 3]; 5] = [
+    [0.55, 0.45, 0.18],
+    [0.26, 0.38, 0.12],
+    [0.3, 0.21, 0.13],
+    [0.5, 0.48, 0.28],
+    [0.2, 0.3, 0.12],
+];
 
 /// The camera's position in the surface frame of `body` at the render time.
 pub(crate) fn camera_on(universe: &Universe, camera: &SpaceCamera, body: usize, t: f64) -> DVec3 {
