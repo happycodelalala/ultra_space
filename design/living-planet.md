@@ -254,7 +254,7 @@ end screenshot.
 ### 6.1 The people model (design ahead, decided 2026-11-14)
 
 How people behave, scale to a metropolis, react when things go wrong, and remember the player.
-Sections 6.2–6.6 build on two rules (6.2) that keep it cheap at any population.
+Sections 6.3–6.8 build on two rules (6.2) that keep it cheap at any population.
 
 ### 6.2 Two rules: what costs tokens, and who is remembered
 
