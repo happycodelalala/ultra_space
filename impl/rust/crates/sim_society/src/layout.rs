@@ -523,6 +523,20 @@ fn demand(s: &Settlement, tier: TechTier) -> Vec<(&'static str, usize)> {
     let pop = s.population as usize;
     let ceil = |n: usize, per: usize| n.div_ceil(per);
     let port = s.has(SettlementRole::Port);
+    // A dwelling (task 4b.8): a home of its stage, a barn where it farms, a few trees.
+    if s.size == SizeClass::Dwelling {
+        let farms = role("farmer") + role("herder") + role("grower") > 0;
+        return match tier {
+            TechTier::StoneAge => vec![("square", 1), ("home", 2), ("prop", 1), ("tree", 3)],
+            TechTier::Spacefaring => vec![("home", 1), ("power", 1), ("prop", 1)],
+            _ => vec![
+                ("home", 1),
+                ("farm", usize::from(farms)),
+                ("prop", 1),
+                ("tree", 4),
+            ],
+        };
+    }
     let wanted = match tier {
         TechTier::Spacefaring => {
             let colony = s.has(SettlementRole::Capital);
@@ -736,6 +750,11 @@ pub fn generate_layout(s: &Settlement, tier: TechTier, kit: &Kit, terrain: &Terr
     let wanted = demand(s, tier);
     let walls = walled(s, tier);
     let (nodes, streets, unplaced) = match tier {
+        _ if s.size == SizeClass::Dwelling
+            && !matches!(tier, TechTier::StoneAge | TechTier::Spacefaring) =>
+        {
+            farmstead(&wanted, kit, &mut plots, &mut rng)
+        }
         TechTier::Spacefaring | TechTier::Industrial | TechTier::Modern => {
             grid(s, &wanted, kit, &mut plots, &mut rng, walls)
         }
@@ -1322,6 +1341,78 @@ fn camp(
         }
     }
     (nodes, streets, unplaced)
+}
+
+/// A dwelling's farmstead: the home near the centre (moved a little where the ground is rough),
+/// its barn beside it, a prop by the door, trees round about, and a track leading off.
+fn farmstead(
+    wanted: &[(&'static str, usize)],
+    kit: &Kit,
+    plots: &mut Plots,
+    rng: &mut Rng,
+) -> Graph {
+    let tau = std::f64::consts::TAU;
+    let count = |u: &str| wanted.iter().find(|w| w.0 == u).map_or(0, |w| w.1);
+    let mut unplaced = 0;
+    let yaw = rng.unit() * tau;
+    let front = rotate(DVec2::Y, yaw);
+    // The track: out from the front, so nothing stands on it.
+    let (a, b) = (front * 8.0, front * 45.0);
+    plots.add_street(a, b);
+    let mut home_at = None;
+    if let Some(home) = pick(kit, "home", Some(rng)) {
+        let back = kit.buildings[home].max_m[2] + STREET_HALF + 1.0;
+        home_at = (0..16).find_map(|t| {
+            let a = rng.unit() * tau;
+            let p = DVec2::new(a.cos(), a.sin()) * (2.5 * t as f64) - front * (back - 8.0);
+            plots.try_place(home, p, yaw).map(|_| p)
+        });
+    }
+    let Some(home) = home_at else {
+        let total: usize = wanted.iter().map(|w| w.1).sum();
+        return (vec![a, b], vec![(0, 1)], total);
+    };
+    let side = rotate(DVec2::X, yaw);
+    for (use_, n) in [("farm", count("farm")), ("prop", count("prop"))] {
+        for _ in 0..n {
+            let Some(bld) = pick(kit, use_, Some(rng)) else {
+                continue;
+            };
+            let s = if rng.unit() < 0.5 { 1.0 } else { -1.0 };
+            let placed = (0..12).any(|t| {
+                let d = 12.0 + 3.0 * t as f64;
+                let p = home + side * s * d - front * (4.0 * rng.unit());
+                plots.try_place(bld, p, yaw + s * 0.2).is_some()
+            });
+            if !placed {
+                unplaced += 1;
+            }
+        }
+    }
+    let mut grove: Vec<DVec2> = Vec::new();
+    for _ in 0..count("tree") {
+        let Some(tree) = pick(kit, "tree", Some(rng)) else {
+            break;
+        };
+        let placed = (0..20).any(|_| {
+            let a = rng.unit() * tau;
+            let p = match grove.last() {
+                Some(&g) if rng.unit() < 0.6 => {
+                    g + DVec2::new(a.cos(), a.sin()) * (5.0 + 5.0 * rng.unit())
+                }
+                _ => home + DVec2::new(a.cos(), a.sin()) * (18.0 + 20.0 * rng.unit()),
+            };
+            let ok = plots.try_place(tree, p, rng.unit() * tau).is_some();
+            if ok {
+                grove.push(p);
+            }
+            ok
+        });
+        if !placed {
+            unplaced += 1;
+        }
+    }
+    (vec![a, b], vec![(0, 1)], unplaced)
 }
 
 /// Where the land meets the sea nearest the centre: the last dry point (tangent plane, m) and

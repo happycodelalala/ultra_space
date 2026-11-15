@@ -68,7 +68,13 @@ impl Plugin for SettlementsPlugin {
         app.add_systems(OnEnter(GameState::Running), setup_settlements)
             .add_systems(
                 Update,
-                (stream_layouts, stream_settlements, place_settlements)
+                (
+                    stream_dwellings,
+                    stream_roads,
+                    stream_layouts,
+                    stream_settlements,
+                    place_settlements,
+                )
                     .chain()
                     .after(CameraSet)
                     .in_set(SettlementSet)
@@ -168,6 +174,17 @@ pub(crate) struct SettlementDraw {
     pending: HashMap<usize, bevy::tasks::Task<Made>>,
     ready: HashMap<usize, (Mesh, Mesh, Mesh, bool)>,
     colours: std::sync::Arc<Colours>,
+    /// Dwellings near the camera (task 4b.8): their sites by id, sites free for reuse, and
+    /// where they were last asked for.
+    dwellings: HashMap<u32, usize>,
+    free: Vec<usize>,
+    dwellings_at: Option<(usize, DVec3)>,
+    /// Roads (task 4b.8): each body's (settlement pairs, made once), the mesh of those near the
+    /// camera with its frame and body, the one being made, and where it was asked for.
+    roads: HashMap<usize, std::sync::Arc<Vec<(usize, usize)>>>,
+    road: Option<(Entity, Frame, usize)>,
+    road_task: Option<bevy::tasks::Task<(Frame, usize, Mesh)>>,
+    roads_at: Option<(usize, DVec3)>,
 }
 
 impl SettlementDraw {
@@ -530,43 +547,14 @@ fn setup_settlements(
         }
         let radius = system.bodies[body].radius;
         for (index, settlement) in society.settlements.iter().enumerate() {
-            let profile = &society.society.cultures[settlement.culture].profile;
-            let origin = settlement.direction * (radius + settlement.height);
-            let (east, south) = tangent_frame(settlement.direction);
-            let basis = DQuat::from_mat3(&DMat3::from_cols(east, settlement.direction, south));
-            let root = commands
-                .spawn((
-                    Name::new("settlement"),
-                    Transform::IDENTITY,
-                    Visibility::Hidden,
-                ))
-                .id();
-            sites.push(Site {
+            sites.push(new_site(
+                &mut commands,
                 body,
                 index,
-                origin,
-                basis,
-                extent: estimated_extent(settlement.size),
-                root,
-                near: None,
-                near_task: None,
-                layout: None,
-                drawn: Vec::new(),
-                clothing: profile.clothing.clone(),
-                seed: settlement.layout_seed,
-                settlement: settlement.clone(),
-                tier: profile.tech_tier,
-                kit: profile.building_kit.clone(),
-                naming: profile.naming.clone(),
-                culture: (profile.name.clone(), profile.adjective.clone()),
-                faction: society.society.factions[settlement.faction].name.clone(),
-                role_names: profile
-                    .roles
-                    .iter()
-                    .map(|r| (r.id.clone(), r.name.clone()))
-                    .collect(),
-                palette: profile.palette.clone(),
-            });
+                settlement,
+                society,
+                radius,
+            ));
         }
     }
     let Some(kits) = kits else {
@@ -591,8 +579,321 @@ fn setup_settlements(
         terrains,
         pending: HashMap::new(),
         ready: HashMap::new(),
+        dwellings: HashMap::new(),
+        free: Vec::new(),
+        dwellings_at: None,
+        roads: HashMap::new(),
+        road: None,
+        road_task: None,
+        roads_at: None,
         colours: std::sync::Arc::new(colours),
     });
+}
+
+/// A site for settlement `settlement` (index `index` among its body's settlements, or a
+/// dwelling's id) on body `body` of `radius`, with its root entity.
+fn new_site(
+    commands: &mut Commands,
+    body: usize,
+    index: usize,
+    settlement: &sim_society::Settlement,
+    society: &sim_society::RegionSociety,
+    radius: f64,
+) -> Site {
+    let profile = &society.society.cultures[settlement.culture].profile;
+    let origin = settlement.direction * (radius + settlement.height);
+    let (east, south) = tangent_frame(settlement.direction);
+    let basis = DQuat::from_mat3(&DMat3::from_cols(east, settlement.direction, south));
+    let root = commands
+        .spawn((
+            Name::new("settlement"),
+            Transform::IDENTITY,
+            Visibility::Hidden,
+        ))
+        .id();
+    Site {
+        body,
+        index,
+        origin,
+        basis,
+        extent: estimated_extent(settlement.size),
+        root,
+        near: None,
+        near_task: None,
+        layout: None,
+        drawn: Vec::new(),
+        clothing: profile.clothing.clone(),
+        seed: settlement.layout_seed,
+        settlement: settlement.clone(),
+        tier: profile.tech_tier,
+        kit: profile.building_kit.clone(),
+        naming: profile.naming.clone(),
+        culture: (profile.name.clone(), profile.adjective.clone()),
+        faction: society.society.factions[settlement.faction].name.clone(),
+        role_names: profile
+            .roles
+            .iter()
+            .map(|r| (r.id.clone(), r.name.clone()))
+            .collect(),
+        palette: profile.palette.clone(),
+    }
+}
+
+/// Where a site free for reuse waits: far beyond everything (nothing near, nothing drawn).
+const PARKED: DVec3 = DVec3::splat(1.0e12);
+
+/// Dwellings are asked for again once the camera has moved this far (m), within
+/// [`LAYOUT_ON`] of it; a dwelling's site is freed beyond [`LAYOUT_OFF`].
+const DWELLINGS_EVERY: f64 = 500.0;
+
+/// Keeps the dwellings near the camera as sites (task 4b.8): the decoration layer between
+/// settlements, placed from the seed (`sim_society::dwellings_near`), laid out, drawn and
+/// peopled like settlements while near, their sites reused after.
+fn stream_dwellings(
+    mut commands: Commands,
+    draw: Option<ResMut<SettlementDraw>>,
+    sim: Res<Sim>,
+    patterns: Option<Res<crate::universe::Patterns>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_dwellings");
+    let (Some(mut draw), Some(patterns)) = (draw, patterns) else {
+        return;
+    };
+    let draw = &mut *draw;
+    let body = camera.anchor;
+    let cam = camera_on(&universe, &camera, body, render.0);
+    let radius = universe.0.bodies[body].radius;
+    // Free the far ones (once their layouts are gone).
+    let mut gone = Vec::new();
+    for (&id, &k) in &draw.dwellings {
+        let site = &mut draw.sites[k];
+        if site.body != body || cam.distance(site.origin) > LAYOUT_OFF + 500.0 {
+            site.origin = PARKED;
+        }
+        if site.origin == PARKED
+            && site.layout.is_none()
+            && site.near.is_none()
+            && !draw.pending.contains_key(&k)
+        {
+            gone.push(id);
+        }
+    }
+    for id in gone {
+        if let Some(k) = draw.dwellings.remove(&id) {
+            draw.free.push(k);
+        }
+    }
+    // Ask again after moving.
+    let up = cam.normalize();
+    if draw
+        .dwellings_at
+        .is_some_and(|(b, at)| b == body && at.distance(cam) < DWELLINGS_EVERY)
+        || cam.length() > radius + 20_000.0
+    {
+        return;
+    }
+    draw.dwellings_at = Some((body, cam));
+    let Some(rs) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<sim_society::RegionSociety>())
+    else {
+        return;
+    };
+    let Some(terrain) = draw.terrains.get(&body).cloned() else {
+        return;
+    };
+    for (id, d) in sim_society::dwellings_near(rs, &patterns.0, &terrain, up, LAYOUT_ON) {
+        if draw.dwellings.contains_key(&id) {
+            continue;
+        }
+        let site = new_site(&mut commands, body, id as usize, &d, rs, radius);
+        let k = match draw.free.pop() {
+            Some(k) => {
+                commands.entity(draw.sites[k].root).despawn();
+                draw.sites[k] = site;
+                k
+            }
+            None => {
+                draw.sites.push(site);
+                draw.sites.len() - 1
+            }
+        };
+        draw.dwellings.insert(id, k);
+    }
+}
+
+/// Roads are drawn this far round the camera (m), made again once it has moved
+/// [`ROADS_EVERY`], and not at all above [`ROADS_UP_TO`].
+const ROAD_REACH: f64 = 8_000.0;
+const ROADS_EVERY: f64 = 1_500.0;
+const ROADS_UP_TO: f64 = 12_000.0;
+
+/// A road to draw: its ends (unit directions), how far each end's settlement reaches (m, the
+/// road stops at its edge) and its people's stage (its width and surface).
+type RoadEnds = (DVec3, DVec3, f64, f64, sim_society::TechTier);
+
+/// Keeps the roads near the camera drawn (task 4b.8): every so often, the roads passing within
+/// [`ROAD_REACH`] are made into one ribbon mesh on a worker, following the ground.
+#[allow(clippy::too_many_arguments)]
+fn stream_roads(
+    mut commands: Commands,
+    draw: Option<ResMut<SettlementDraw>>,
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_roads");
+    let Some(mut draw) = draw else { return };
+    let draw = &mut *draw;
+    // A made mesh: in place of the last.
+    if let Some(task) = &mut draw.road_task
+        && task.is_finished()
+        && let Some(task) = draw.road_task.take()
+    {
+        let (frame, body, mesh) = bevy::tasks::block_on(task);
+        if let Some((old, _, _)) = draw.road.take() {
+            commands.entity(old).despawn();
+        }
+        let e = commands
+            .spawn((
+                Name::new("roads"),
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(draw.material.clone()),
+                NotShadowCaster,
+                Transform::IDENTITY,
+                Visibility::Inherited,
+            ))
+            .id();
+        draw.road = Some((e, frame, body));
+    }
+    if draw.road_task.is_some() {
+        return;
+    }
+    let body = camera.anchor;
+    let cam = camera_on(&universe, &camera, body, render.0);
+    let radius = universe.0.bodies[body].radius;
+    if cam.length() > radius + ROADS_UP_TO
+        || draw
+            .roads_at
+            .is_some_and(|(b, at)| b == body && at.distance(cam) < ROADS_EVERY)
+    {
+        return;
+    }
+    let Some(rs) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<sim_society::RegionSociety>())
+    else {
+        return;
+    };
+    let Some(terrain) = draw.terrains.get(&body).cloned() else {
+        return;
+    };
+    draw.roads_at = Some((body, cam));
+    let all = draw
+        .roads
+        .entry(body)
+        .or_insert_with(|| std::sync::Arc::new(sim_society::roads(rs, radius)))
+        .clone();
+    // Each settlement's reach: its layout's when made, else its size's.
+    let mut extent: Vec<f64> = rs
+        .settlements
+        .iter()
+        .map(|s| estimated_extent(s.size))
+        .collect();
+    for site in draw.sites.iter().filter(|s| s.body == body) {
+        if let Some(e) = extent.get_mut(site.index) {
+            *e = site.extent;
+        }
+    }
+    let up = cam.normalize();
+    let near: Vec<RoadEnds> = all
+        .iter()
+        .filter_map(|&(a, b)| {
+            let (da, db) = (rs.settlements[a].direction, rs.settlements[b].direction);
+            // Within reach of the camera somewhere along it (chord distance, near enough).
+            let (pa, pb) = (da * radius, db * radius);
+            let ab = pb - pa;
+            let t = ((up * radius - pa).dot(ab) / ab.length_squared().max(1.0)).clamp(0.0, 1.0);
+            ((pa + ab * t).distance(up * radius) < ROAD_REACH).then(|| {
+                let tier = rs.society.cultures[rs.settlements[a].culture]
+                    .profile
+                    .tech_tier;
+                (da, db, extent[a], extent[b], tier)
+            })
+        })
+        .collect();
+    let (east, south) = tangent_frame(up);
+    let frame = Frame {
+        origin: up * (radius + terrain.surface_height(up, 10.0)),
+        basis: DQuat::from_mat3(&DMat3::from_cols(east, up, south)),
+    };
+    draw.road_task = Some(
+        crate::workers::workers()
+            .spawn(async move { (frame, body, road_mesh(frame, &near, &terrain, up)) }),
+    );
+}
+
+/// The roads `roads` as ribbons over the ground near `centre` (within [`ROAD_REACH`]), in
+/// `frame`: sampled every 25 m, stopping at each end's settlement and at the water.
+fn road_mesh(
+    frame: Frame,
+    roads: &[RoadEnds],
+    terrain: &sim_planet::Terrain,
+    centre: DVec3,
+) -> Mesh {
+    let r = terrain.radius;
+    let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let local = |w: DVec3| (frame.basis.inverse() * (w - frame.origin)).as_vec3();
+    for &(da, db, ea, eb, tier) in roads {
+        use sim_society::TechTier::*;
+        let (width, colour) = match tier {
+            StoneAge => (2.0, [0.33, 0.27, 0.18]),
+            Industrial | Modern => (7.0, [0.2, 0.2, 0.21]),
+            Spacefaring | Interstellar => (6.0, [0.32, 0.32, 0.31]),
+            _ => (4.0, [0.3, 0.23, 0.15]),
+        };
+        let length = da.angle_between(db) * r;
+        let steps = (length / 25.0).ceil().max(1.0) as usize;
+        let mut last: Option<(DVec3, f64)> = None;
+        for k in 0..=steps {
+            let d = da.lerp(db, k as f64 / steps as f64).normalize();
+            let off = d.angle_between(da) * r < ea
+                || d.angle_between(db) * r < eb
+                || d.angle_between(centre) * r > ROAD_REACH;
+            let h = if off {
+                -1.0
+            } else {
+                terrain.surface_height(d, 5.0)
+            };
+            if h < 0.5 {
+                last = None;
+                continue;
+            }
+            if let Some((q, hq)) = last {
+                let (wq, wd) = (q * (r + hq + 0.3), d * (r + h + 0.3));
+                let along = (wd - wq).normalize_or_zero();
+                let side = along.cross(d).normalize_or_zero() * (0.5 * width);
+                let base = p.len() as u32;
+                for v in [wq + side, wd + side, wd - side, wq - side] {
+                    p.push(local(v).to_array());
+                    n.push([0.0, 1.0, 0.0]);
+                    c.push([colour[0], colour[1], colour[2], 1.0]);
+                }
+                idx.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            }
+            last = Some((d, h));
+        }
+    }
+    vertex_mesh(p, n, c, idx)
 }
 
 /// Sites in one foundations and not the other (by id): their centres and angular reach.
@@ -1363,6 +1664,17 @@ fn place_settlements(
             let sun = (star - at).normalize_or_zero().dot(up);
             nearest = (d, 1.0 - smoothstep(-0.12, 0.05, sun));
         }
+    }
+    // The roads near the camera, placed like a settlement.
+    if let Some((e, frame, body)) = draw.road
+        && let Ok((_, mut transform)) = roots.get_mut(e)
+    {
+        let s = system
+            .frames
+            .state_in(anchor, system.bodies[body].surface_frame, render.0);
+        let at = s.position + s.rotation * frame.origin;
+        transform.translation = (at - camera.offset).as_vec3();
+        transform.rotation = (s.rotation * frame.basis).as_quat().normalize();
     }
     let night = nearest.1 as f32;
     let exposure = Exposure::default().exposure();

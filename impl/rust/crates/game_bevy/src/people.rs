@@ -286,7 +286,12 @@ fn stream_people(
                     &layout,
                     kit,
                     &site.naming,
-                    promoted(site.settlement.population),
+                    // A dwelling's people, all of them.
+                    if site.settlement.size == sim_society::SizeClass::Dwelling {
+                        site.settlement.population as usize
+                    } else {
+                        promoted(site.settlement.population)
+                    },
                 );
                 crowd.settle(local_day(&universe, site, render.0));
                 characters.shown.insert(

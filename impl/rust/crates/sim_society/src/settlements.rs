@@ -702,7 +702,7 @@ fn kind_word(size: SizeClass, roles: &[SettlementRole]) -> &'static str {
 }
 
 /// People by role: the culture's shares of `population`, rounded so they add up.
-fn role_counts(roles: &[crate::lore::Role], population: u32) -> Vec<(String, u32)> {
+pub(crate) fn role_counts(roles: &[crate::lore::Role], population: u32) -> Vec<(String, u32)> {
     let mut counts: Vec<(String, u32, f64)> = roles
         .iter()
         .map(|r| {

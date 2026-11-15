@@ -297,7 +297,10 @@ fn stream_chunks(
             .sites
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.body == body)
+            // Not dwellings (made near the camera; their sites are reused).
+            .filter(|(_, s)| {
+                s.body == body && s.settlement.size != sim_society::SizeClass::Dwelling
+            })
         {
             let key = locate(site.settlement.direction, LEVEL);
             chunk_of(&mut distant.chunks, body, key, r)

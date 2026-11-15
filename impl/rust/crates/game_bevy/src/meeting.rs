@@ -161,9 +161,12 @@ fn entering(
 ) {
     let Some(draw) = draw else { return };
     let near = distances(&draw, &universe, &camera, render.0);
+    // Settlements only: a dwelling has no banner.
     let inside = near
         .iter()
-        .filter(|(_, d)| *d < 0.0)
+        .filter(|(i, d)| {
+            *d < 0.0 && draw.sites[*i].settlement.size != sim_society::SizeClass::Dwelling
+        })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|n| n.0);
     // Leaving needs a margin, so the edge doesn't flicker the banner.
