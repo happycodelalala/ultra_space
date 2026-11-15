@@ -95,6 +95,14 @@ honestly with their output.
 
 - **Inspector** (F4 toggles; `ULTRA_SPACE_INSPECTOR=1` shows it at start): regions, frame tree,
   and a selected object's id, region, frame, position and velocity. `[` / `]` change selection.
+- **Hitches:** a frame over 50 ms logs `hitch frame … ms: outside …, First …, PreUpdate …`
+  (time per main schedule; *outside* is render extraction, waiting on the render thread and
+  presenting), a render frame over 30 ms logs its stages (`slow render frame`), a frame adding
+  50+ mesh entities says so, and `SlowSystem::new("name")` at the top of a system warns when
+  it takes over 8 ms. For system-level detail build with a Chrome trace:
+  `ULTRA_SPACE_FEATURES=trace tools/test-queue.sh run` (feature `trace` of game_bevy) writes
+  `trace-<time>.json` next to the executable: about 20 GB for a two-minute run, so stream it
+  for long spans rather than opening it, and delete it afterwards.
 - **Log file:** every run writes `ultra_space.log` next to the executable (replaced each run);
   testers send that file. Hitches during startup are all logged with their time since launch.
 - **Generation threads:** heavy background work (tiles, planet maps, sky) runs on the

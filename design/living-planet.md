@@ -682,6 +682,18 @@ what is simulated, level of detail) and never show on screen:
   at its chunk: the Aldmark republic is thousands of lights to the horizon. Hazard zones blight
   the land: the climate's moisture falls by their strength (`Climate::with_blight`), so drawn
   tiles and the maps seen from orbit show the Kesh land dry and dead around its old cities.
+  *Streaming without hitches* (found with per-schedule frame marks and a Chrome trace, see
+  AGENTS.md): chunks are level 4 tiles (smaller rebuilds); layouts and all their meshes are
+  made on workers; near, a settlement is drawn by 200 m cells, each its buildings' boxes merged
+  into one mesh, and only cells within ~500 m of the camera get model entities (200 a frame):
+  a city's thousands of building entities, all moved every frame by the camera-relative
+  placement, cost the renderer 10–25 ms a frame, and merging the models themselves made
+  meshes of millions of vertices (a 600 ms upload). People spawn 4 a frame (a crowd of
+  skinned scenes at once took 70 ms to spawn and 90 ms of transform propagation). Materials
+  that first appear in flight (settlements, glow, lanterns, characters) are compiled behind
+  the loading overlay by primers. The fly-in at 300 m/s from 30 km went from 17 frames over
+  50 ms (worst 340 ms) to 2–3 (worst 60–95 ms), the average frame from ~17 ms to 6–11 ms when
+  the machine is quiet.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,
