@@ -295,6 +295,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
+| **4b** | **Density** *(2026-11-14)* | Settlements from each culture's settlement pattern and the land's area (hundreds per people), the settlement hierarchy (size class, roles, culture's words), layouts and foundations made on approach, distant forms batched, roads and dwellings between settlements ([living-planet.md](living-planet.md) §8b) | 3–5 wk |
 | **5** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
 | **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
@@ -500,6 +501,26 @@ placed; land at a medieval village and at a colony and walk among people going a
 day, changing with day and night; entering shows names, factions and cultures; populations
 change over game days and survive save and load; no frame over 50 ms when settlements stream
 in or fill with people; CI passes.
+
+### 7.6 Batch 4b tasks
+
+Make Meridian's settled lands feel lived in (living-planet.md §8b): its two patterns (the
+Hollin's medieval realm and the Compact's young colony) at real density, without loading or
+drawing everything at once.
+
+| # | Task | Done when |
+|---|---|---|
+| 4b.1 | **Settlement hierarchy and patterns:** size class (dwelling … megalopolis) and roles replace the settlement kind; each culture's words for them; settlement patterns as data per tier and polity (spacing and sizes per class, settled share, roles), with a schema | Generation and layouts read size and roles; the Hollin and the Compact read the same as before in their own words; tests |
+| 4b.2 | **Counts from area:** settlements placed by the pattern over the home region's good land (spacing per size class, seats as the largest), territories, populations by class; the aggregate simulation at that scale; saves made before keep their settlements or start fresh, never mixed | ~1,500–2,000 Hollish settlements, ~20 Compact; generation within the load budget; aggregate step < 1 ms on average; a map of them; tests |
+| 4b.3 | **Layouts and foundations on approach:** a settlement's layout, foundations and collision made on workers when the player comes within a few km and dropped after; terrain tiles and physics follow the changes | Loading no slower than before; no frame over 50 ms when a village appears; walls still stop the walker and vehicles |
+| 4b.4 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records (no layout needed), night lights from orbit, the real layout replacing them near | Flying over the Hollin from orbit to the ground, the land is full of settlements and lit at night; draw calls bounded; no popping beyond a few kilometres |
+| 4b.5 | **Roads and dwellings:** roads joining settlements following the terrain, farmsteads and other dwellings of the era every 1–1.5 km in settled land (decoration, not simulated), made on approach with foundations and collision | On foot, something built within about a kilometre anywhere in Hollish farmland; roads lead from village to village |
+| 4b.6 | **Batch review** | Exit criteria met |
+
+**Exit criteria:** flying low over the Hollish lands, a settlement every few minutes and
+several in view at once from a height; from orbit at night, the realm lit; on foot, farmsteads
+and roads between villages; loading no slower than Batch 4; no frame over 50 ms flying low at
+300 m/s or landing by a village; CI passes.
 
 ### 7.1 When the object system is built
 
