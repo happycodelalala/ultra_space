@@ -154,12 +154,12 @@ rules compute the results.**
 | Names, descriptions, myths | Survivability (heat, cold, pressure, air) for gameplay |
 
 Planet types include gas giants, planets with atmospheres, and bare airless worlds. Until LLM
-generation (Batch 8), parameters are written by hand in the same data format.
+generation (Batch 10), parameters are written by hand in the same data format.
 
 ## 6. First star system: Halcyon (hand-made)
 
 A fixed test bed with one body per feature to exercise, in the same data format the procedural
-generator and LLM will produce later. Procedural systems come in Batch 7. These are the names
+generator and LLM will produce later. Procedural systems come in Batch 9. These are the names
 outsiders use; each culture may name its own world differently.
 
 | Body | Type | Radius | Tests |
@@ -179,7 +179,7 @@ outsiders use; each culture may name its own world differently.
 |---|---|
 | Final planet size ranges | Batch 2, comparing sizes on foot |
 | Cruise drive as unlockable technology or standard | Technology tree design |
-| Interstellar jump duration and escape rules | Batch 7 (living galaxy) and combat design |
-| Combat flight behavior and balance | Batch 6 (combat core) |
+| Interstellar jump duration and escape rules | Batch 9 (living galaxy) and combat design |
+| Combat flight behavior and balance | Batch 8 (combat core) |
 | Shared time warp in multiplayer | If multiplayer is pursued |
-| Time skips: sleeping, idling, hibernation | Survival and NPC design (Batches 5 and 9) |
+| Time skips: sleeping, idling, hibernation | Survival and NPC design (Batches 7 and 11) |

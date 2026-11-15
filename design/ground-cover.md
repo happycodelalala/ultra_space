@@ -1,18 +1,19 @@
-# Ground cover: vegetation, rocks and scattered things (Batch 5)
+# Ground cover: vegetation, rocks and scattered things (Batch 5, task 5.5)
 
 Decided 2026-11-15. The planet surface (Batch 2) has shape and biome colours but nothing
 growing or lying on it, so the land reads as empty from the ground and from low flight however
 dense the settlements are. Ground cover fills it: trees, bushes, grass, rocks, logs, and, where
 history left them, wrecks and debris. Planned for Batch 2 ("Vegetation, rocks and scattered
-props", planet-surface.md §7); the first tasks of Batch 5, whose gathering needs trees and rocks
-as things the player can cut and mine (planned as a Batch 4c, folded in when Batch 4 closed).
+props", planet-surface.md §7); planned as a Batch 4c, now task 5.5 of the refined world
+(Batch 5), in the low-poly style of visual-style.md. Batch 7's gathering will take the same
+trees and rocks.
 
 ## 1. Decisions
 
 - **Deterministic from the terrain:** what grows where is a function of the tile, the biome
   fields (temperature, moisture, height, slope), the climate's blight and the body's seed. The
   same place always has the same trees, so untouched cover is never saved (technical overview
-  §14, the "procedural, untouched" tier). Taking or destroying one makes it a delta (Batch 5).
+  §14, the "procedural, untouched" tier). Taking or destroying one makes it a delta (Batch 7).
 - **Placed on workers, per terrain tile:** when a tile at the detail levels is made, its cover
   is scattered with it on the worker threads, from the same terrain function the collision
   uses, so trees stand on the ground the player stands on.
@@ -70,4 +71,5 @@ LOD variants (or a card made by rendering the model).
 
 ## 5. Tasks (Batch 5)
 
-See development plan §7.7.
+Task 5.5 in development plan §7.7 (instancing, recipes, assets, levels and grass, collision
+near the player, condensed into one task).

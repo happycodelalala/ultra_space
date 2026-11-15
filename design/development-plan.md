@@ -296,22 +296,26 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
 | **4b** | **Density and the peoples of Meridian** *(2026-11-14)* | Meridian as the test bed for every stage: seven peoples from Stone Age to a ruined Modern nation, settlements from each people's settlement pattern and the land's area, the settlement hierarchy, a wasteland from generated history, layouts on approach, distant forms batched, CC0 stand-in kits and characters for every tier, roads and dwellings ([living-planet.md](living-planet.md) §8b) | 6–9 wk |
-| **5** | **Survival-builder loop** | Ground cover first (vegetation and rocks from the biomes, instanced: the trees and rocks there are to gather; [ground-cover.md](ground-cover.md)), then resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 3–4.5 mo |
+| **5** | **The world, refined** *(2026-11-15)* | Low-poly shapes with realistic light ([visual-style.md](visual-style.md)): lighting and camera, terrain in the style, water, ground cover ([ground-cover.md](ground-cover.md)), weather, effects; judged on a fixed set of review views | 2.5–3.5 mo |
+| **6** | **First playable loop** *(2026-11-15)* | Game shell (menus, save slots, pause, settings), the player's record (money, standing, journal), discoveries, contracts from settlements, basic audio, first-time guidance | 1.5–2.5 mo |
+| **7** | **Survival-builder loop** | Resource gathering (the ground cover's trees and rocks), inventory, crafting, base building on tangent grids, production chains (parallel factory networks), fuel and power consumption, terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
-| **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
-| **7** | **Living galaxy** | Multiple star systems simulated in parallel, tiered simulation, economy, factions, trade ships, galaxy map | 2–4 mo |
-| **8** | **LLM gateway + first content** | AI gateway with Anthropic/OpenAI/replay adapters, caching, validation, budgets, fallbacks; generated culture profiles; galaxy and system history; codex text | 1–2 mo |
-| **9** | **Cultures and people** | Settlements from building kits, NPC schedules, notable characters with LLM dialogue, director-generated quests | 3–4 mo |
-| **10** | **Medieval warfare** | Directional melee, mounts, formation AI, 200+ soldier battles (GPU crowd animation), campaign-map battle promotion, auto-resolve | 3–5 mo |
+| **8** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
+| **9** | **Living galaxy** | Multiple star systems simulated in parallel, tiered simulation, economy, factions, trade ships, galaxy map | 2–4 mo |
+| **10** | **LLM gateway + first content** | AI gateway with Anthropic/OpenAI/replay adapters, caching, validation, budgets, fallbacks; generated culture profiles; galaxy and system history; codex text | 1–2 mo |
+| **11** | **Cultures and people** | Settlements from building kits, NPC schedules, notable characters with LLM dialogue, director-generated quests | 3–4 mo |
+| **12** | **Medieval warfare** | Directional melee, mounts, formation AI, 200+ soldier battles (GPU crowd animation), campaign-map battle promotion, auto-resolve | 3–5 mo |
 | | ⭐ **Checkpoint B** | **A full game loop:** explore, build, trade, talk, fight wars | |
-| **11** | **Mixed-tech and orbital** | Morale and doctrine AI, supply limits, orbital strikes, layered battles | 2–3 mo |
-| **12** | **Capital ships** | Ship interiors, hull walking, bridge stations, EVA, boarding, hangars | 3–4 mo |
-| **13** | **Breadth and polish** | Mechs, airships, sieges, diplomacy, more tech tiers, performance, modding, release prep | ongoing |
+| **13** | **Mixed-tech and orbital** | Morale and doctrine AI, supply limits, orbital strikes, layered battles | 2–3 mo |
+| **14** | **Capital ships** | Ship interiors, hull walking, bridge stations, EVA, boarding, hangars | 3–4 mo |
+| **15** | **Breadth and polish** | Mechs, airships, sieges, diplomacy, more tech tiers, performance, modding, release prep | ongoing |
 
 **Honest total:** roughly 3–4+ years to Checkpoint B and 4–5+ years to the full vision, part
-of it in early access. Checkpoint A should come within roughly the first year.
+of it in early access. Checkpoint A should come within roughly the first year and a half
+(2026-11-15: the refined world and the first playable loop, Batches 5 and 6, now come before
+the survival loop: about 4–6 months more before Checkpoint A).
 
-Until Batch 8, earlier systems use a simple placeholder interface for generated text
+Until Batch 10, earlier systems use a simple placeholder interface for generated text
 (names, codex entries), so they plug into the AI gateway later without changes.
 
 ### 7.2 Batch 1 tasks
@@ -456,7 +460,7 @@ Known gaps for later:
 - the descent test now has one or two frames just over 50 ms (Batch 2 had none)
 - the Bastion's frame rate fell to ~22 fps after its stance change and is back to 66–89 fps in
   this round, for reasons not pinned down
-- no save list menu yet (with the first menus, Batch 5); fuel and power come in Batch 5
+- no save list menu yet (with the first menus, Batch 6); fuel and power come in Batch 7
 
 ### 7.5 Batch 4 tasks
 
@@ -494,7 +498,7 @@ save-load, deorbit-land) still pass, descent with one 53 ms frame; CI passes. Kn
 - the Kenney and Quaternius stand-ins (bright cartoon palette, the colony's identical domes,
   coveralls) until the design track's kits and characters;
 - towns have no walls or gates and no fields yet; trees are single models;
-- people don't sit (no benches), carry nothing and don't talk to the player (Batch 9).
+- people don't sit (no benches), carry nothing and don't talk to the player (Batch 11).
 
 **Exit criteria:** flying over Meridian, both cultures' settlements are visible and sensibly
 placed; land at a medieval village and at a colony and walk among people going about their
@@ -551,42 +555,54 @@ frame on average against the bare fly-in. Loading: the loading overlay's longest
 later: city density and sprawl (no core-to-suburb gradient), the Kenney palette (teal flat
 roofs, pink stone), skin-tight painted suits for the modern peoples, roads straight between
 settlements, hedges as slabs from the ground, ports by role only where the coast allows, the
-bare land between it all (ground cover, Batch 5).
+bare land between it all (ground cover, Batch 5: the world, refined).
 
 **Batch 4 is closed (2026-11-15).** Batch 4 grew from two cultures (Batch 4) to seven peoples
 with density, kits, walls, fields, dwellings and roads (4b); a planned Batch 4c of ground cover
-was folded into Batch 5, where gathering gives trees and rocks their purpose. The rough edges
+was folded into Batch 5, the world refined (2026-11-15: the world before the shell and the
+survival loop, Batches 6 and 7). The rough edges
 above are **known issues, not tasks**: each is taken up when a later batch works on that system
 (or on the design track, for the art), not as an extension of Batch 4:
 
 | Known issue | Where it belongs |
 |---|---|
-| Big cities sprawl beyond their walls; no dense core | Batch 9 (cultures and people: city life) |
+| Big cities sprawl beyond their walls; no dense core | Batch 11 (cultures and people: city life) |
 | Kenney stand-in palette (teal flat roofs, pink stone) | Design track (the game's own kits) |
 | Modern and industrial people in painted, skin-tight suits | Design track (characters) |
-| Roads straight between settlements: no routing round hills, no bridges | Batch 7 (traffic and trade on the road graph) |
+| Roads straight between settlements: no routing round hills, no bridges | Batch 9 (traffic and trade on the road graph) |
 | Hedges and field walls as plain boxes | Batch 5 (instanced props with the ground cover) |
 | Props and signs of life (smoke, cooking fires) | Batch 5 (instancing) |
 
-### 7.7 Batch 5, first tasks: ground cover (planned 2026-11-15)
+### 7.7 Batch 5 tasks: the world, refined
 
-The land between and around settlements is bare (developer, 2026-11-15). Planned as Batch 4c,
-folded into Batch 5 when Batch 4 was closed: Batch 5's gathering needs the trees and rocks as
-things to take. Design: [ground-cover.md](ground-cover.md). The rest of Batch 5's tasks are
-planned when it starts.
+Decided 2026-11-15 (developer): the world still reads as a placeholder, and it comes before the
+game shell and the survival loop. The style is low-poly shapes with realistic light, weather and
+effects ([visual-style.md](visual-style.md)), in the manner of Dyson Sphere Program; the ground
+cover planned as Batch 4c is task 5.5 ([ground-cover.md](ground-cover.md)). The finish line is a
+fixed set of review views judged against the style guide; anything off outside them is a known
+issue, not a new task. The game's own settlement and character art continues on the design
+track in the same style, in parallel, and doesn't hold this batch open.
 
 | # | Task | Done when |
 |---|---|---|
-| 5.1 | **Instanced drawing:** one draw per kind per tile from an instance buffer made on a worker; only the tile root moves; settlement props move to it | 100,000 instances near the camera within the frame budget; no frame over 50 ms when tiles stream |
-| 5.2 | **Cover recipes and scattering:** recipes per biome as data with a schema; scattering per tile from the terrain fields, seed and blight; clearings, stands, scree; cleared by layouts and roads | Forests, grassland, deserts and blighted land each read as themselves from the ground and from low flight; the same place always the same |
-| 5.3 | **Stand-in nature assets:** CC0 nature packs as kinds with levels of detail (cards for trees far) | Every biome has its kinds |
-| 5.4 | **Levels and grass:** near, middle and far levels by budget; grass cards round the camera | No popping close by; the frame budget held flying low at 300 m/s |
-| 5.5 | **Collision near the player:** trunks and big rocks collide within ~100 m of the player and vehicles | The walker and rovers can't pass through trees |
+| 5.1 | **Style guide and review views:** visual-style.md with reference images; the review views as a test round (orbit, low flight over each biome and the Kesh waste, on foot in forest, beach, village and field; day, dusk, night, rain, snow, fog; landing and take-off) | The views run in one round; the guide is agreed with the developer |
+| 5.2 | **Lighting and camera:** shadow cascades tuned for the planet, ambient occlusion, exposure, tonemapping, bloom, haze and ground fog, time-of-day grading; quality tiers | The views read as warm day, golden dusk, dark night with lit towns |
+| 5.3 | **Terrain in the style:** faceted low-poly ground, biomes blended rather than banded, rock on slopes and snow with soft edges, smooth coasts, distant mountains softened | No hard bands or staircase coasts in the views |
+| 5.4 | **Water:** depth colour, shore foam, gentle low-poly waves, sky reflection | Coasts and lakes read as water from the ground and from the air |
+| 5.5 | **Ground cover:** low-poly trees, bushes, grass and rocks by biome, instanced per tile on workers, levels of detail by budget, cleared round settlements and dead in blighted land, trunks and big rocks collide near the player; settlement props (hedges, field walls) move to the instancing | Each biome reads as itself; the same place always the same; flying low at 300 m/s holds the frame budget |
+| 5.6 | **Weather:** cloud cover seen from the ground, rain, snow and dust, wind moving trees and grass, overcast light, fog; weather changing over time by climate | Each weather in the views |
+| 5.7 | **Effects:** engine plumes and heat shimmer, landing dust, splashes, chimney smoke | Visible in the views; no frame over 50 ms |
+| 5.8 | **Batch review** | The views judged against the style guide by the developer, from screenshots |
 
-**Done when (ground cover, before the gathering tasks):** walking or flying low anywhere on
-Meridian the land is covered by what its biome grows, cleared round settlements, dead in the
-Kesh waste; no frame over 50 ms flying low at 300 m/s or landing; loading no slower than
-Batch 4b; CI passes.
+**Exit criteria:** the review views read as one low-poly world in realistic light: covered land,
+water, weather and effects; no frame over 50 ms flying low at 300 m/s or landing at default
+quality; loading no slower than Batch 4b; CI passes.
+
+**Then (planned when it starts):** Batch 6, the first playable loop: the game shell (main menu,
+new game and continue, save slots, pause, settings, controls), the player's record (money,
+standing with factions, journal), discoveries that fill the journal, contracts from settlements
+(carry, visit, survey, passengers; rule-made templates, the format the director later writes in
+Batch 10), basic audio, first-time guidance. Batch 7, the survival-builder loop, follows.
 
 ### 7.1 When the object system is built
 
@@ -601,9 +617,10 @@ guesses.
 | **2** Seamless planet | Procedural keys and terrain deltas; streaming rules (gradual spawning, prefetch from travel); **hitch-budget stress test** (orbit → surface, no frame over 50 ms) | Terrain is the first procedural content and the first big streaming load |
 | **3** Vehicle builder | Builder UI editing a vehicle instance's parts; attachment graph; object records and the **first versioned save file** with a format version and migration hook | The first thing worth saving is a vehicle the player built. Builder levels, data format additions and design compilation: [ships-stations-interiors.md](ships-stations-interiors.md) |
 | **4** Living planet | Culture, faction and settlement records (generated from seeds, so untouched ones aren't saved); settlement state (population, stocks) and met people in saves; people promoted from counts near the player and demoted back | The first population: the simulation must keep places alive whether or not the player is there ([living-planet.md](living-planet.md)) |
-| **5** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
+| **6** First playable loop | Save slots with their names, times and places; the player's record (money, standing, journal, contracts) in saves; discovered places | The first menus and the first thing the player owns besides vehicles |
+| **7** Survival-builder loop | Base definitions loaded from `content/data/` with schemas; containers and inventory (stackable items and unique items); per-region saves of bases and changed terrain; expiry rules for dropped junk | Gathering, crafting and building create items, containers and lots of world changes |
 | ⭐ **Checkpoint A** | **Save format frozen:** golden save files and strict migrations start with the first public build | Before this, no player has a save, so the format may be reset freely |
-| **5+** | Quest references by `ObjectId`, NPC ownership, unique items with generated histories | Combat, factions, quests and LLM content need them |
+| **7+** | Quest references by `ObjectId`, NPC ownership, unique items with generated histories | Combat, factions, quests and LLM content need them |
 
 A first implementation attempt from Batch 0 is parked on the `batch0/object-model` branch for
 reference. It isn't merged; each batch rebuilds what it needs from it.

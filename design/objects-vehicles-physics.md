@@ -172,7 +172,7 @@ of the load (loads under 0.25 count as 0.25); the top speed falls in proportion 
 above 1; above 4 the drive won't engage. The small drive is rated for 24 t (3 s, 30°/s): the
 20 t Kestrel charges in 2.8 s and turns 33°/s, three times heavier 4.8 s and 19°/s. The
 builder shows the load, charge, turn and top speed, and flags an overloaded drive. Ship class
-and final tuning come in Batch 7.
+and final tuning come in Batch 9.
 
 Because speed is proportional to distance, a ship heading straight at a body slows
 exponentially and can never reach it; the drop altitude ends the approach about 15 s after
@@ -212,13 +212,13 @@ compilation: [ships-stations-interiors.md](ships-stations-interiors.md).
 |---|---|
 | Object records and saving to disk | 3 |
 | Builder UI, attachment graph, symmetry, structural joints | 3 |
-| Fuel, power and heat | 3–4 |
-| Containers and inventory | 4 |
+| Fuel, power and heat | 3 (data and estimates); consumption 7 |
+| Containers and inventory | 7 |
 | Procedural keys and terrain changes | 2 |
 | Streaming regions in and out | 2 |
-| Damage, parts breaking off | 5 |
+| Damage, parts breaking off | 8 |
 | Atmospheric lift and drag | 2–3 |
-| Per-ship cruise characteristics: from mass done in Batch 3 (task 3.14, §5); ship class and tuning | 6 |
+| Per-ship cruise characteristics: from mass done in Batch 3 (task 3.14, §5); ship class and tuning | 9 |
 
 ## 9. Many ships and stations
 
@@ -248,7 +248,7 @@ them affordable is **simulation level of detail** (technical overview §3).
 - **Most stations are on rails** (orbiting a body or fixed in a frame), so like planets their
   position is a formula of time and costs almost nothing per tick.
 - **Large stations and capital ships get their own frame** (overview §12): docking moves a ship
-  into the station's frame; interiors live there (Batch 12).
+  into the station's frame; interiors live there (Batch 14).
 
 ### 9.3 Fleets
 
@@ -279,7 +279,7 @@ precise.
 | Performance summary computed with mass properties | Lower tiers and AI need it; cheap and testable |
 | Regions hold any number of objects; no single-player-ship assumptions | Fleets and stations use the same paths |
 
-Reduced and Abstract tiers, fleets, stations and spatial indexes are implemented in Batch 7
+Reduced and Abstract tiers, fleets, stations and spatial indexes are implemented in Batch 9
 (living galaxy), when there are other ships.
 
 ## 10. Batch 1 defaults: starting ship, controls, camera

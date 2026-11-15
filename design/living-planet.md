@@ -3,7 +3,7 @@
 Meridian gets people: two cultures at different tech levels living side by side, their
 factions, settlements from hamlets to towns and colonies, and a population that lives its days
 whether or not the player is there. This batch brings forward a first slice of the living
-galaxy, the LLM content and the cultures-and-people batches (development plan §7: Batches 7–9)
+galaxy, the LLM content and the cultures-and-people batches (development plan §7: Batches 9–11)
 so the world has places to go and the planet size can be decided with settlements on it
 (universe design §1).
 
@@ -16,7 +16,7 @@ other planets' populations, the real LLM gateway.
 | Topic | Decision |
 |---|---|
 | Cultures | Two on Meridian, side by side: a **medieval** culture and a **spacefaring colony** culture, different tech tiers on one planet (overview §6) |
-| Generated lore and text | Through the **content director** interface (overview §13): requests for culture profiles, faction and settlement lore, names and codex text. Until the real gateway (Batch 8), a **replay provider** answers them from recorded responses in `content/lore/`, written in this batch the way the LLM would answer (structured JSON, validated by the same schemas). Swapping in the real gateway changes no caller |
+| Generated lore and text | Through the **content director** interface (overview §13): requests for culture profiles, faction and settlement lore, names and codex text. Until the real gateway (Batch 10), a **replay provider** answers them from recorded responses in `content/lore/`, written in this batch the way the LLM would answer (structured JSON, validated by the same schemas). Swapping in the real gateway changes no caller |
 | What generation decides | The rules and seeds place settlements, size populations and pick names from naming rules; the content director only writes text and picks among existing kits and parameters (overview §13.2, §13.9) |
 | People | Third-party CC0 humanoids on one shared skeleton with its shared animation set (walk, run, idle, sit, work), dressed per culture; replaced by original characters on the same skeleton later (design track) |
 | Buildings | Building kits per culture: the medieval kit from CC0 village and town packs; the colony kit a CC0 sci-fi kit as a stand-in until the design track's own |
@@ -225,7 +225,7 @@ Measured on Windows (round q0051, quiet machine): flying at the biggest town fro
 - **Level of detail:** people far from the player update rarely and simply; close ones every
   frame.
 - **Meeting people:** looking at someone shows their name and role (and their culture's look);
-  conversation comes with dialogue (Batch 9).
+  conversation comes with dialogue (Batch 11).
 
 **As built (task 4.7):** characters are assembled offline like the kits
 (`tools/build-characters.sh`, recipes in `content/data/clothing_sets/`) from three CC0
@@ -421,7 +421,7 @@ through the same levels; no case needs its own script.
   lending, jobs from the quest system's supported verbs, invitations (a festival, a wedding),
   messages in the space age; close friends can become companions or crew. Rivals and enemies
   have their own: warning others, sabotage, revenge.
-- **Talking (dialogue, Batch 9):** the director gets a character card (personality, voice,
+- **Talking (dialogue, Batch 11):** the director gets a character card (personality, voice,
   background), the relationship and its summary, the few memories most relevant now, and what
   they know of the world (news travels along the roads, §8c); it answers with lines plus
   structured intents the game validates (offers, requests, quest proposals). Afterwards the
@@ -483,8 +483,8 @@ experiments showed the simulation must express is listed in technical overview �
 
 Built in Batch 4: promotion from counts, schedules by local time, street paths, the near level
 of detail, looking at people. Next, with the density task: schedule variants and places that
-offer activities. With trade and factions (Batches 7, 9): real work and stalls, situations,
-war and conquest, the chronicle, noted and known people, dialogue. With cities (Batch 9): the
+offer activities. With trade and factions (Batches 9, 11): real work and stalls, situations,
+war and conquest, the chronicle, noted and known people, dialogue. With cities (Batch 11): the
 metropolis model and crowd layers. With orbital strikes (technical overview §11): the
 bombardment chain.
 
@@ -833,7 +833,7 @@ words what happened and picks among existing things. Saves keep the chronicle an
 version.
 
 **Scope.** Batch 4 writes lore once (recorded responses). The chronicle and versioned lore
-come with the first systems that make events: faction conflict and trade (Batches 7, 9), with
+come with the first systems that make events: faction conflict and trade (Batches 9, 11), with
 the generated planetary history (wasteland and ruins) when a planet first needs one.
 
 ## 8d. Settlement surroundings: what makes a place more than its houses
@@ -861,7 +861,7 @@ cell, made on workers with the layout. Only walls and big props get colliders.
 
 **Order.** Fields, boundaries, defences and landmarks with task 4b.8 (roads and dwellings: the
 land between settlements is fields first). Props and signs of life when the kits for every
-tier exist (task 4b.7) and with the ground cover's instancing (Batch 5). People in the fields
+tier exist (task 4b.7) and with the ground cover's instancing (Batch 5, the world refined). People in the fields
 and on the roads come with their work routines (§6.3).
 
 **As built (task 4b.8).**
@@ -898,4 +898,4 @@ and on the roads come with their work routines (§6.3).
 ## 9. Open questions
 
 - Planet size: decided (§8a); sizes vary per planet.
-- How cultures interact (trade, uplift, conflict): Batches 7 and 9.
+- How cultures interact (trade, uplift, conflict): Batches 9 and 11.
