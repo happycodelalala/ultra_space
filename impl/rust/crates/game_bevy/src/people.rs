@@ -86,6 +86,9 @@ pub(crate) struct PersonLabel(pub String);
 struct Shown {
     crowd: Crowd,
     entities: Vec<Entity>,
+    /// The next of its people to spawn (a few a frame: each is a skinned scene of dozens of
+    /// entities, and a crowd at once made hitches).
+    next: usize,
 }
 
 fn load_characters(mut commands: Commands, assets: Res<AssetServer>) {
@@ -284,48 +287,14 @@ fn stream_people(
                     promoted(site.settlement.population),
                 );
                 crowd.settle(local_day(&universe, site, render.0));
-                let mut entities = Vec::with_capacity(crowd.people.len());
-                for (k, person) in crowd.people.iter().enumerate() {
-                    let h = mix(site.seed ^ (k as u64 + 1).wrapping_mul(0x9e37_79b9));
-                    // A character who takes the role (any, if none does).
-                    let fit: Vec<&Kind> = set
-                        .kinds
-                        .iter()
-                        .filter(|c| c.roles.contains(&person.role))
-                        .collect();
-                    let kind = if fit.is_empty() {
-                        &set.kinds[(h >> 8) as usize % set.kinds.len()]
-                    } else {
-                        fit[(h >> 8) as usize % fit.len()]
-                    };
-                    let Some(ready) = &kind.ready else { continue };
-                    let e = commands
-                        .spawn((
-                            Name::new(format!("{} ({})", person.name, person.role)),
-                            PersonLabel(format!(
-                                "{}, {} ({})",
-                                person.name,
-                                site.role_names.get(&person.role).unwrap_or(&person.role),
-                                site.culture.1
-                            )),
-                            WorldAssetRoot(ready.scene.clone()),
-                            Transform::default(),
-                            Visibility::Hidden,
-                            Resident {
-                                index: k,
-                                graph: ready.graph.clone(),
-                                nodes: ready.nodes.clone(),
-                                playing: None,
-                                player: None,
-                                offset: ((h >> 40) % 1000) as f32 / 1000.0 * 2.0,
-                            },
-                            ChildOf(site.root),
-                        ))
-                        .observe(found_animator)
-                        .id();
-                    entities.push(e);
-                }
-                characters.shown.insert(i, Shown { crowd, entities });
+                characters.shown.insert(
+                    i,
+                    Shown {
+                        crowd,
+                        entities: Vec::new(),
+                        next: 0,
+                    },
+                );
             }
             (false, true) => {
                 if let Some(shown) = characters.shown.remove(&i) {
@@ -337,7 +306,64 @@ fn stream_people(
             _ => {}
         }
     }
+    // Spawn the next few people.
+    let mut budget = PEOPLE_PER_FRAME;
+    for (&i, shown) in characters.shown.iter_mut() {
+        let site = &draw.sites[i];
+        let Some(set) = characters.sets.get(&site.clothing) else {
+            continue;
+        };
+        while shown.next < shown.crowd.people.len() && budget > 0 {
+            budget -= 1;
+            let k = shown.next;
+            shown.next += 1;
+            let person = &shown.crowd.people[k];
+            {
+                let h = mix(site.seed ^ (k as u64 + 1).wrapping_mul(0x9e37_79b9));
+                // A character who takes the role (any, if none does).
+                let fit: Vec<&Kind> = set
+                    .kinds
+                    .iter()
+                    .filter(|c| c.roles.contains(&person.role))
+                    .collect();
+                let kind = if fit.is_empty() {
+                    &set.kinds[(h >> 8) as usize % set.kinds.len()]
+                } else {
+                    fit[(h >> 8) as usize % fit.len()]
+                };
+                let Some(ready) = &kind.ready else { continue };
+                let e = commands
+                    .spawn((
+                        Name::new(format!("{} ({})", person.name, person.role)),
+                        PersonLabel(format!(
+                            "{}, {} ({})",
+                            person.name,
+                            site.role_names.get(&person.role).unwrap_or(&person.role),
+                            site.culture.1
+                        )),
+                        WorldAssetRoot(ready.scene.clone()),
+                        Transform::default(),
+                        Visibility::Hidden,
+                        Resident {
+                            index: k,
+                            graph: ready.graph.clone(),
+                            nodes: ready.nodes.clone(),
+                            playing: None,
+                            player: None,
+                            offset: ((h >> 40) % 1000) as f32 / 1000.0 * 2.0,
+                        },
+                        ChildOf(site.root),
+                    ))
+                    .observe(found_animator)
+                    .id();
+                shown.entities.push(e);
+            }
+        }
+    }
 }
+
+/// Most people spawned per frame, all settlements together.
+const PEOPLE_PER_FRAME: usize = 4;
 
 /// Steps every promoted crowd by the settlement's local time and moves its people: on the
 /// ground, facing where they go, hidden indoors, animated for what they do.
