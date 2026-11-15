@@ -1,6 +1,6 @@
 //! Settlements from afar (task 4b.6; living-planet.md §5): every settlement of the body the
 //! camera is at, drawn from its record (no layout needed) and batched per chunk of the planet
-//! (cube-sphere tiles about 120 km across), so thousands of settlements are a few dozen meshes.
+//! (cube-sphere tiles about 60 km across), so thousands of settlements are a few dozen meshes.
 //!
 //! - **Forms:** a cluster of boxes per settlement, as many and as big as its size and tier
 //!   (huts for the Stone Age, blocks and towers for industrial cities), in its culture's
@@ -26,8 +26,9 @@ use crate::settlements::{SettlementDraw, SettlementSet, add_box, estimated_exten
 use crate::sim::{RenderTime, Sim};
 use crate::universe::{InGame, Universe};
 
-/// Chunk tiles: this level of the cube sphere (about 120 km on Meridian).
-const LEVEL: u8 = 3;
+/// Chunk tiles: this level of the cube sphere (about 60 km on Meridian: a rebuild, when a
+/// settlement's own layout comes or goes, is small).
+const LEVEL: u8 = 4;
 /// Chunks within this distance of the camera (m) are drawn.
 const RANGE: f64 = 250_000.0;
 /// The glow shows from this height above the ground (m).
@@ -330,7 +331,7 @@ fn stream_chunks(
             .copied()
             .filter(|&k| !draw.sites[k].drawn.is_empty())
             .collect();
-        let near = cam.distance(chunk.origin) < RANGE + 90_000.0;
+        let near = cam.distance(chunk.origin) < RANGE + 45_000.0;
         // A finished build: swap its meshes in.
         if let Some(task) = &mut chunk.task
             && task.is_finished()

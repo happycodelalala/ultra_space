@@ -37,6 +37,8 @@ use crate::universe::{GameState, InGame, Universe, buildings_dir};
 /// [`NEAR_OFF`] (a margin so they don't flicker at the boundary).
 const NEAR_ON: f64 = 1_200.0;
 const NEAR_OFF: f64 = 1_500.0;
+/// Most buildings spawned per settlement per frame.
+const NEAR_PER_FRAME: usize = 300;
 /// Farthest a settlement is drawn (m).
 const FAR: f64 = 250_000.0;
 /// How far the distant boxes reach into the ground (m).
@@ -82,8 +84,10 @@ pub(crate) struct Site {
     /// its layout is made.
     pub(crate) extent: f64,
     pub(crate) root: Entity,
-    /// Its buildings, while the camera is near.
+    /// Its buildings, while the camera is near (spawned a few hundred a frame: `near_next` is
+    /// the next building of its layout to spawn).
     pub(crate) near: Option<Vec<Entity>>,
+    near_next: usize,
     /// Its layout once made (on approach, task 4b.5), and the entities drawn from it far away
     /// (distant form, streets, lights; the first is the distant form).
     pub(crate) layout: Option<std::sync::Arc<Layout>>,
@@ -103,6 +107,13 @@ pub(crate) struct Site {
     pub(crate) palette: Vec<[f64; 3]>,
 }
 
+/// Each building model's roof and wall colours (for distant forms built on workers).
+type Colours = HashMap<(String, usize), ([f32; 3], [f32; 3])>;
+
+/// A layout made on a worker, with its distant form, lights and streets (and whether it is a
+/// colony's, for its lamps).
+type Made = (Layout, Option<(Mesh, Mesh, Mesh, bool)>);
+
 #[derive(Resource)]
 pub(crate) struct SettlementDraw {
     pub(crate) kits: std::sync::Arc<Kits>,
@@ -114,8 +125,11 @@ pub(crate) struct SettlementDraw {
     pub(crate) sites: Vec<Site>,
     /// Each body's terrain as last applied (with the foundations of the layouts made).
     pub(crate) terrains: HashMap<usize, std::sync::Arc<sim_planet::Terrain>>,
-    /// Layouts being made on workers, by site.
-    pending: HashMap<usize, bevy::tasks::Task<Layout>>,
+    /// Layouts being made on workers, by site, and the meshes of those made, waiting to be
+    /// drawn.
+    pending: HashMap<usize, bevy::tasks::Task<Made>>,
+    ready: HashMap<usize, (Mesh, Mesh, Mesh, bool)>,
+    colours: std::sync::Arc<Colours>,
 }
 
 impl SettlementDraw {
@@ -303,7 +317,28 @@ const LAYOUT_OFF: f64 = 7_000.0;
 /// Most layouts being made at once.
 const LAYOUTS_IN_FLIGHT: usize = 6;
 
+/// A settlement's frame: its centre on the ground (surface frame, m) and its tangent frame's
+/// rotation (what its meshes are drawn relative to).
+#[derive(Clone, Copy)]
+pub(crate) struct Frame {
+    origin: DVec3,
+    basis: DQuat,
+}
+
 impl Site {
+    fn frame(&self) -> Frame {
+        Frame {
+            origin: self.origin,
+            basis: self.basis,
+        }
+    }
+
+    fn building_pose(&self, layout: &Layout, i: usize, radius: f64) -> (Vec3, Quat) {
+        self.frame().building_pose(layout, i, radius)
+    }
+}
+
+impl Frame {
     /// Building `i`'s model origin in the settlement's frame (curvature included) and its
     /// turn.
     fn building_pose(&self, layout: &Layout, i: usize, radius: f64) -> (Vec3, Quat) {
@@ -412,6 +447,7 @@ fn setup_settlements(
                 extent: estimated_extent(settlement.size),
                 root,
                 near: None,
+                near_next: 0,
                 layout: None,
                 drawn: Vec::new(),
                 clothing: profile.clothing.clone(),
@@ -439,6 +475,10 @@ fn setup_settlements(
         sites.len(),
         models.len()
     );
+    let colours: Colours = models
+        .iter()
+        .map(|(k, m)| (k.clone(), (m.roof, m.wall)))
+        .collect();
     commands.insert_resource(SettlementDraw {
         kits,
         models,
@@ -448,6 +488,8 @@ fn setup_settlements(
         sites,
         terrains,
         pending: HashMap::new(),
+        ready: HashMap::new(),
+        colours: std::sync::Arc::new(colours),
     });
 }
 
@@ -547,18 +589,34 @@ fn stream_layouts(
                 rl.natural.clone(),
             );
             let kit_id = site.kit.clone();
+            let (frame, colours, index) = (site.frame(), draw.colours.clone(), site.index);
+            // The layout and its meshes, all on the worker.
             let task = crate::workers::workers().spawn(async move {
-                match kits.0.get(&kit_id) {
-                    Some(kit) => sim_society::generate_layout(&s, tier, kit, &natural),
-                    None => Layout {
+                let Some(kit) = kits.0.get(&kit_id) else {
+                    let empty = Layout {
                         kit: kit_id,
                         center: s.direction,
                         buildings: Vec::new(),
                         nodes: Vec::new(),
                         streets: Vec::new(),
                         unplaced: 0,
-                    },
-                }
+                    };
+                    return (empty, None);
+                };
+                let layout = sim_society::generate_layout(&s, tier, kit, &natural);
+                let radius = natural.radius;
+                let (far, lights) = distant_meshes(frame, &layout, kit, &colours, radius);
+                // Streets on its own foundations.
+                let own = sim_planet::Foundations::new(vec![
+                    layout.site(kit, radius).with_id(index as u32),
+                ]);
+                let ground = natural.with_foundations(std::sync::Arc::new(own));
+                let streets = street_mesh(frame, &layout, kit, &ground);
+                let colony = kit
+                    .buildings
+                    .iter()
+                    .any(|b| b.uses.iter().any(|u| u == "pad"));
+                (layout, Some((far, lights, streets, colony)))
             });
             draw.pending.insert(k, task);
         } else if made && distance > LAYOUT_OFF && site.near.is_none() {
@@ -574,7 +632,10 @@ fn stream_layouts(
         .collect();
     for k in done {
         if let Some(task) = draw.pending.remove(&k) {
-            let layout = bevy::tasks::block_on(task);
+            let (layout, made) = bevy::tasks::block_on(task);
+            if let Some(m) = made {
+                draw.ready.insert(k, m);
+            }
             rl.insert(draw.sites[k].index, std::sync::Arc::new(layout));
             changed = true;
         }
@@ -610,7 +671,12 @@ fn stream_layouts(
     };
     let material = draw.material.clone();
     let (lanterns, lamps) = (draw.lanterns.clone(), draw.lamps.clone());
-    for site in draw.sites.iter_mut().filter(|s| s.body == body) {
+    let mut ready = std::mem::take(&mut draw.ready);
+    let colours = draw.colours.clone();
+    for (k, site) in draw.sites.iter_mut().enumerate() {
+        if site.body != body {
+            continue;
+        }
         let made = rl.layouts.get(&site.index).cloned();
         match (&site.layout, made) {
             (None, Some(layout)) => {
@@ -623,12 +689,18 @@ fn stream_layouts(
                     .iter()
                     .map(|p| (p.x * p.x + p.z * p.z).sqrt() + 20.0)
                     .fold(50.0, f64::max);
-                let (far, lights) = distant_meshes(site, &layout, kit, &draw.models, radius);
-                let streets = street_mesh(site, &layout, kit, &terrain);
-                let colony = kit
-                    .buildings
-                    .iter()
-                    .any(|b| b.uses.iter().any(|u| u == "pad"));
+                // Made on a worker with the layout, or (a layout made elsewhere, such as the
+                // debug start's) here.
+                let (far, lights, streets, colony) = ready.remove(&k).unwrap_or_else(|| {
+                    let (far, lights) =
+                        distant_meshes(site.frame(), &layout, kit, &colours, radius);
+                    let streets = street_mesh(site.frame(), &layout, kit, &terrain);
+                    let colony = kit
+                        .buildings
+                        .iter()
+                        .any(|b| b.uses.iter().any(|u| u == "pad"));
+                    (far, lights, streets, colony)
+                });
                 let far = commands
                     .spawn((
                         FarForm,
@@ -673,6 +745,7 @@ fn stream_layouts(
             _ => {}
         }
     }
+    draw.ready = ready;
 }
 
 /// Marks a settlement's distant form (hidden while its buildings are shown).
@@ -681,10 +754,10 @@ struct FarForm;
 
 /// A settlement's distant boxes and its lights, in its own frame.
 fn distant_meshes(
-    site: &Site,
+    site: Frame,
     layout: &Layout,
     kit: &Kit,
-    models: &HashMap<(String, usize), Model>,
+    colours: &Colours,
     radius: f64,
 ) -> (Mesh, Mesh) {
     let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -701,8 +774,10 @@ fn distant_meshes(
             Vec3::new(b.min_m[0] as f32, 0.0, b.min_m[2] as f32),
             Vec3::new(b.max_m[0] as f32, b.max_m[1] as f32, b.max_m[2] as f32),
         );
-        let model = models.get(&(kit.id.clone(), placed.building));
-        let (roof, wall) = model.map_or(([0.5; 3], [0.5; 3]), |m| (m.roof, m.wall));
+        let (roof, wall) = colours
+            .get(&(kit.id.clone(), placed.building))
+            .copied()
+            .unwrap_or(([0.5; 3], [0.5; 3]));
         // Trees as narrow cones would be fussy: a slim box in their colour.
         let tree = b.uses.iter().any(|u| u == "tree");
         let shrink = if tree { 0.45 } else { 1.0 };
@@ -767,7 +842,7 @@ fn distant_meshes(
 
 /// Street surfaces: a ribbon along every street following the ground (dirt lanes and a paved
 /// square for the medieval style, concrete for the colony), a little above it.
-fn street_mesh(site: &Site, layout: &Layout, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
+fn street_mesh(site: Frame, layout: &Layout, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
     let colony = kit
         .buildings
         .iter()
@@ -881,19 +956,32 @@ fn stream_settlements(
             };
         match (&site.near, near) {
             (None, true) => {
-                let Some(layout) = site.layout.clone() else {
+                site.near = Some(Vec::new());
+                site.near_next = 0;
+            }
+            (Some(_), false) => {
+                for e in site.near.take().unwrap_or_default() {
+                    commands.entity(e).despawn();
+                }
+            }
+            _ => {}
+        }
+        // Spawn the next few hundred of its buildings (a city has thousands).
+        if site.near.is_some()
+            && let Some(layout) = site.layout.clone()
+            && site.near_next < layout.buildings.len()
+            && let Some(kit) = draw.kits.0.get(&layout.kit)
+        {
+            let end = (site.near_next + NEAR_PER_FRAME).min(layout.buildings.len());
+            let mut spawned = Vec::with_capacity(end - site.near_next);
+            for i in site.near_next..end {
+                let placed = &layout.buildings[i];
+                let Some(model) = draw.models.get(&(kit.id.clone(), placed.building)) else {
                     continue;
                 };
-                let Some(kit) = draw.kits.0.get(&layout.kit) else {
-                    continue;
-                };
-                let mut entities = Vec::with_capacity(layout.buildings.len());
-                for (i, placed) in layout.buildings.iter().enumerate() {
-                    let Some(model) = draw.models.get(&(kit.id.clone(), placed.building)) else {
-                        continue;
-                    };
-                    let (translation, rotation) = site.building_pose(&layout, i, radius);
-                    let e = commands
+                let (translation, rotation) = site.building_pose(&layout, i, radius);
+                spawned.push(
+                    commands
                         .spawn((
                             Mesh3d(model.mesh.clone()),
                             MeshMaterial3d(draw.material.clone()),
@@ -904,19 +992,20 @@ fn stream_settlements(
                             },
                             ChildOf(site.root),
                         ))
-                        .id();
-                    entities.push(e);
-                }
-                site.near = Some(entities);
+                        .id(),
+                );
             }
-            (Some(_), false) => {
-                for e in site.near.take().unwrap_or_default() {
-                    commands.entity(e).despawn();
-                }
+            site.near_next = end;
+            if let Some(near) = &mut site.near {
+                near.extend(spawned);
             }
-            _ => {}
         }
-        let far_visible = if site.near.is_some() {
+        // The distant form stays until every building is there.
+        let complete = site
+            .layout
+            .as_ref()
+            .is_some_and(|l| site.near_next >= l.buildings.len());
+        let far_visible = if site.near.is_some() && complete {
             Visibility::Hidden
         } else {
             Visibility::Inherited
