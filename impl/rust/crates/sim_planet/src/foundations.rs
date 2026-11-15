@@ -6,7 +6,11 @@
 //! sample first finds the few sites (settlements) whose cap holds it (one dot product each),
 //! then the footprints in its cell of the site's grid.
 
+use std::collections::HashMap;
+
 use glam::{DMat3, DQuat, DVec2, DVec3};
+
+use crate::quadtree::{TileKey, locate};
 
 /// A site's tangent frame at `center` (unit direction, surface frame): x east, y up, z south
 /// (right-handed, Y up). East is along the planet's spin (+Y is north).
@@ -78,6 +82,8 @@ pub struct Site {
     south: DVec3,
     /// Cosine of the cap's angular radius: samples with `dir · center` below it are outside.
     cos_reach: f64,
+    /// The body's radius (m).
+    radius: f64,
     blend: f64,
     footprints: Vec<Footprint>,
     structures: Vec<Structure>,
@@ -154,6 +160,7 @@ impl Site {
             south,
             turns: footprints.iter().map(|f| f.yaw.sin_cos()).collect(),
             cos_reach: ((extent + CELL) / radius).min(std::f64::consts::PI).cos(),
+            radius,
             blend,
             footprints,
             structures,
@@ -220,11 +227,71 @@ impl Site {
 #[derive(Clone, Debug, Default)]
 pub struct Foundations {
     sites: Vec<Site>,
+    /// Sites by the cube-sphere tile (at `level`) their caps touch: a sample only checks the
+    /// sites of its own tile, so thousands of settlements cost no more than a few.
+    level: u8,
+    index: HashMap<TileKey, Vec<u32>>,
+}
+
+/// Unit directions on a ring of angular radius `angle` round `dir`, and `dir` itself.
+fn ring(dir: DVec3, angle: f64) -> impl Iterator<Item = DVec3> {
+    let a = dir.any_orthonormal_vector();
+    let b = dir.cross(a);
+    std::iter::once(dir).chain((0..12).map(move |k| {
+        let t = std::f64::consts::TAU * f64::from(k) / 12.0;
+        (dir + (a * t.cos() + b * t.sin()) * angle.tan()).normalize()
+    }))
 }
 
 impl Foundations {
     pub fn new(sites: Vec<Site>) -> Self {
-        Self { sites }
+        // Tiles at least four times as wide as the widest site.
+        let widest = sites.iter().map(Site::reach).fold(1e-6, f64::max);
+        let mut level = 0u8;
+        while level < 20
+            && std::f64::consts::FRAC_PI_2 / f64::from(1u32 << (level + 1)) > 4.0 * widest
+        {
+            level += 1;
+        }
+        let mut index: HashMap<TileKey, Vec<u32>> = HashMap::new();
+        for (i, s) in sites.iter().enumerate() {
+            let mut keys: Vec<TileKey> = ring(s.center, s.reach())
+                .map(|d| locate(d, level))
+                .collect();
+            keys.sort_by_key(|k| (k.face, k.x, k.y));
+            keys.dedup();
+            for k in keys {
+                index.entry(k).or_default().push(i as u32);
+            }
+        }
+        Self {
+            sites,
+            level,
+            index,
+        }
+    }
+
+    /// Sites whose caps may reach within `angle` radians of `dir`.
+    fn near(&self, dir: DVec3, angle: f64) -> Vec<u32> {
+        // Wider than a tile, a ring of samples could skip one: check every site.
+        if angle > std::f64::consts::FRAC_PI_2 / f64::from(1u32 << self.level) {
+            return (0..self.sites.len() as u32).collect();
+        }
+        let mut out: Vec<u32> = if angle <= 1e-9 {
+            self.index
+                .get(&locate(dir, self.level))
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            ring(dir, angle)
+                .filter_map(|d| self.index.get(&locate(d, self.level)))
+                .flatten()
+                .copied()
+                .collect()
+        };
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     pub fn sites(&self) -> &[Site] {
@@ -233,9 +300,12 @@ impl Foundations {
 
     /// `height` (natural ground at unit direction `dir`, body `radius`) with the foundations.
     pub fn apply(&self, dir: DVec3, radius: f64, height: f64) -> f64 {
-        self.sites
-            .iter()
-            .fold(height, |h, s| s.apply(dir, radius, h))
+        match self.index.get(&locate(dir, self.level)) {
+            Some(sites) => sites
+                .iter()
+                .fold(height, |h, &i| self.sites[i as usize].apply(dir, radius, h)),
+            None => height,
+        }
     }
 
     /// Buildings within `distance` m (horizontally, by their bounding spheres) of unit
@@ -245,13 +315,11 @@ impl Foundations {
         dir: DVec3,
         distance: f64,
     ) -> impl Iterator<Item = ((u32, u32), &Structure)> {
-        self.sites
-            .iter()
-            .enumerate()
-            .filter(move |(_, s)| {
-                let r = s.structures.first().map_or(1.0, |b| b.center.length());
-                dir.angle_between(s.center) * r <= s.reach() * r + distance
-            })
+        let radius = self.sites.first().map_or(1.0, |s| s.radius);
+        self.near(dir, distance / radius)
+            .into_iter()
+            .map(move |i| (i as usize, &self.sites[i as usize]))
+            .filter(move |(_, s)| dir.angle_between(s.center) <= s.reach() + distance / s.radius)
             .flat_map(move |(i, s)| {
                 s.structures.iter().enumerate().filter_map(move |(k, b)| {
                     let r = b.center.length();
@@ -263,9 +331,10 @@ impl Foundations {
 
     /// Whether any foundation lies within `spread` radians of `center`.
     pub fn touches(&self, center: DVec3, spread: f64) -> bool {
-        self.sites
-            .iter()
-            .any(|s| s.center.angle_between(center) <= spread + s.reach())
+        self.near(center, spread).iter().any(|&i| {
+            self.sites[i as usize].center.angle_between(center)
+                <= spread + self.sites[i as usize].reach()
+        })
     }
 }
 

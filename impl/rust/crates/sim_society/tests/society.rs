@@ -32,17 +32,13 @@ fn meridian_has_both_cultures_and_their_factions() {
     let tiers: Vec<TechTier> = s.cultures.iter().map(|c| c.profile.tech_tier).collect();
     assert_eq!(tiers, vec![TechTier::Medieval, TechTier::Spacefaring]);
     assert_eq!(s.factions.len(), 5);
-    for (ci, c) in s.cultures.iter().enumerate() {
-        let held: u32 = s
-            .factions
-            .iter()
-            .filter(|f| f.culture == ci)
-            .map(|f| f.settlements)
-            .sum();
-        assert_eq!(
-            held, c.people.settlements,
-            "{} settlements shared out",
-            c.profile.id
+    // Strengths decide how much land each holds once settlements are placed.
+    for f in &s.factions {
+        assert!(
+            (0.5..=1.5).contains(&f.strength),
+            "{}: {}",
+            f.name,
+            f.strength
         );
     }
     let mut names: Vec<&str> = s.factions.iter().map(|f| f.name.as_str()).collect();

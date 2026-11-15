@@ -166,15 +166,15 @@ pub struct Atmosphere {
 }
 
 /// A people living on a body (living-planet.md §3): which culture (its profile comes from the
-/// content director, `culture/<culture>`), its home region, and how many factions and
-/// settlements it has. Interpreted by `sim_society`.
+/// content director, `culture/<culture>`), its home region and how many factions it has; how
+/// many settlements follows from its settlement pattern and the land (living-planet.md §8b).
+/// Interpreted by `sim_society`.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PeopleData {
     pub culture: String,
     pub home: HomeRegion,
     pub factions: u32,
-    pub settlements: u32,
 }
 
 /// A region on a body's surface: a centre (latitude and longitude, degrees; longitude east
@@ -622,9 +622,9 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                     b.id, p.culture
                 ));
             }
-            if p.factions == 0 || p.settlements < p.factions {
+            if p.factions == 0 {
                 problems.push(format!(
-                    "{}: {} needs at least one faction and a settlement per faction",
+                    "{}: {} needs at least one faction",
                     b.id, p.culture
                 ));
             }

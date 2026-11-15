@@ -28,7 +28,16 @@ fn main() {
         ReplayProvider::load_dir(content.join("lore")).unwrap(),
     ));
     let mut society = generate(&system, body, &director);
-    let settlements = generate_settlements(&system, &mut society, &director);
+    let settlements = generate_settlements(
+        &system,
+        &mut society,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    );
     let b = &system.bodies[body];
     let mut img = biome_map(&Terrain::of(b).unwrap(), &Climate::of(b).unwrap(), width);
     let mut put = |x: i64, y: i64, c: [f64; 3]| {

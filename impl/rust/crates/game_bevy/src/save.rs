@@ -61,6 +61,7 @@ fn quick_save_load(
     universe: Res<Universe>,
     catalog: Res<Catalog>,
     lore: Res<Lore>,
+    patterns: Res<crate::universe::Patterns>,
     ship: Option<Res<PlayerShip>>,
     on_foot: Option<Res<OnFoot>>,
     mut pilot: ResMut<PilotState>,
@@ -133,7 +134,7 @@ fn quick_save_load(
                 .extend(sim_society::aggregate::restore(&mut sim.0, system, &saved));
         }
         _ => {
-            sim_society::aggregate::install(&mut sim.0, &lore.0);
+            sim_society::aggregate::install(&mut sim.0, &lore.0, &patterns.0);
         }
     }
     for p in &report.problems {

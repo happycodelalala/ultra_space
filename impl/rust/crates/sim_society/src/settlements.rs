@@ -4,14 +4,15 @@
 //! a name and lore. The same body, society and director answers give the same settlements.
 
 use ai_gateway::{ContentDirector, ContentRequest, Source};
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use serde_json::json;
 use sim_core::StarSystem;
 use sim_planet::map::direction;
-use sim_planet::{Biome, Climate, Terrain, fibonacci_directions};
+use sim_planet::{Biome, Climate, Terrain};
 
 use crate::lore::{SettlementLore, TechTier};
 use crate::names;
+use crate::patterns::SettlementPatterns;
 use crate::rng::Rng;
 use crate::society::Society;
 use serde::{Deserialize, Serialize};
@@ -203,8 +204,6 @@ pub fn settlement_word(
 const MIN_HEIGHT: f64 = 5.0;
 /// Steepest ground a settlement takes (radians).
 const MAX_SLOPE: f64 = 0.14;
-/// Candidate sites: this many directions over the whole sphere (those inside a home region).
-const CANDIDATES: usize = 200_000;
 
 /// Scores a site for a people of `tier` (0 unusable … 1 ideal) and returns its height.
 fn score_site(
@@ -255,180 +254,253 @@ fn score_site(
     Some((score.clamp(0.0, 1.0), s.height))
 }
 
-/// The settlements of every people on body `body`, in the society's culture order.
+/// The settlements of every people on body `body`, in the society's culture order, each
+/// people settling its home region by its settlement pattern (living-planet.md §8b):
+///
+/// 1. **Candidates** on a lattice over the home region (a third of the smallest spacing apart),
+///    scored by the land for the people's tier; the best `settled_share` of the usable land is
+///    settled, wherever in the region it lies.
+/// 2. **Seats**, one per faction: the first the best site near the middle (the people's
+///    capital), the others the best sites far from the seats before.
+/// 3. **Classes**, biggest first: the settled land's best sites (with a little chance), each
+///    keeping its class's spacing (0.8–1.2 times) from every settlement placed before.
+/// 4. **Territories:** each settlement belongs to the faction whose seat is nearest, distances
+///    shrunk by the faction's strength, so stronger factions hold more land.
+///
+/// Peoples without a pattern get no settlements (noted as a fallback). The same body,
+/// society, patterns and director answers give the same settlements.
 pub fn generate_settlements(
     system: &StarSystem,
     society: &mut Society,
     director: &ContentDirector,
+    patterns: &SettlementPatterns,
 ) -> Vec<Settlement> {
     let body = &system.bodies[society.body];
     let (Some(terrain), Some(climate)) = (Terrain::of(body), Climate::of(body)) else {
         return Vec::new();
     };
+    let r = terrain.radius;
     let mut out = Vec::new();
     for ci in 0..society.cultures.len() {
         let culture = society.cultures[ci].clone();
-        let tier = culture.profile.tech_tier;
+        let profile = &culture.profile;
+        let tier = profile.tech_tier;
+        let Some(pattern) = patterns.for_people(tier, profile.polity).cloned() else {
+            society.fallbacks.push(format!(
+                "{}: no settlement pattern for a {:?} {:?}",
+                profile.id, tier, profile.polity
+            ));
+            continue;
+        };
         let home = culture.people.home;
         let centre = direction(
             home.latitude_deg.to_radians(),
             home.longitude_deg.to_radians(),
         );
         let reach = home.radius_deg.to_radians();
-        let count = culture.people.settlements as usize;
-
-        // Candidate sites with their scores (the home region's edge counts less).
-        let sites: Vec<(f64, DVec3, f64)> = fibonacci_directions(CANDIDATES)
-            .filter(|d| d.angle_between(centre) < reach)
-            .filter_map(|d| {
-                let (score, height) = score_site(&terrain, &climate, tier, d)?;
-                let edge = d.angle_between(centre) / reach;
-                Some((score * (1.0 - 0.5 * edge * edge), d, height))
-            })
-            .collect();
-        // Best sites first (with a little chance, so the pattern isn't a lattice), each keeping
-        // its own distance (between 0.6 and 1.4 times the spacing) from those before it;
-        // closer spacing if the region is too small.
-        let mut pick = Rng::derive(society.seed, &format!("sites/{}", culture.profile.id));
-        let mut ranked: Vec<(f64, usize, f64)> = sites
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.0 + 0.15 * pick.unit(), i, 0.6 + 0.8 * pick.unit()))
-            .collect();
-        ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let mut spacing = reach * 1.6 / (count as f64).sqrt();
-        let chosen = loop {
-            let mut chosen: Vec<(f64, DVec3, f64)> = Vec::new();
-            for &(_, i, own) in &ranked {
-                if chosen.len() == count {
-                    break;
-                }
-                let s = sites[i];
-                if chosen
-                    .iter()
-                    .all(|c| c.1.angle_between(s.1) >= spacing * own)
-                {
-                    chosen.push(s);
-                }
-            }
-            if chosen.len() == count || spacing < reach * 0.05 {
-                break chosen;
-            }
-            spacing *= 0.8;
+        let (east, north) = {
+            let (e, south) = sim_planet::tangent_frame(centre);
+            (e, -south)
         };
 
-        // Faction territories: wedges around the people's centre, in bearing order, sized to
-        // each faction's share (always contiguous, always the right size); the first faction's
-        // wedge holds the best site. Each faction's seat is the best site near the middle of
-        // its wedge.
+        // 1. Candidates: a hex lattice on the region's tangent plane (km), scored in parallel.
+        let smallest = pattern
+            .classes
+            .iter()
+            .map(|c| c.spacing_km)
+            .fold(f64::MAX, f64::min)
+            .min(20.0);
+        let step = (smallest / 3.0).max(0.8);
+        let extent = reach * r / 1000.0;
+        let rows = (extent / (step * 0.866)).ceil() as i64;
+        let cols = (extent / step).ceil() as i64;
+        let mut lattice: Vec<(DVec2, DVec3)> = Vec::new();
+        for j in -rows..=rows {
+            for i in -cols..=cols {
+                let x = (i as f64 + if j % 2 == 0 { 0.0 } else { 0.5 }) * step;
+                let y = j as f64 * step * 0.866;
+                let d = (centre * r + (east * x + north * y) * 1000.0).normalize();
+                if d.angle_between(centre) < reach {
+                    lattice.push((DVec2::new(x, y), d));
+                }
+            }
+        }
+        let threads = std::thread::available_parallelism()
+            .map_or(4, |n| n.get())
+            .min(16);
+        let chunk = lattice.len().div_ceil(threads).max(1);
+        let scored: Vec<Option<(f64, f64)>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = lattice
+                .chunks(chunk)
+                .map(|part| {
+                    let (terrain, climate) = (&terrain, &climate);
+                    scope.spawn(move || {
+                        part.iter()
+                            .map(|&(_, d)| {
+                                // The land alone decides where people settle; only the
+                                // capital prefers the middle.
+                                score_site(terrain, climate, tier, d)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().expect("scoring thread"))
+                .collect()
+        });
+        // The settled land: the best share of the usable sites.
+        let mut usable: Vec<usize> = (0..lattice.len())
+            .filter(|&i| scored[i].is_some())
+            .collect();
+        usable.sort_by(|&a, &b| {
+            let s = |i: usize| scored[i].map_or(0.0, |x| x.0);
+            s(b).total_cmp(&s(a))
+        });
+        let settled: Vec<usize> = usable
+            .iter()
+            .copied()
+            .take(((usable.len() as f64) * pattern.settled_share).ceil() as usize)
+            .collect();
+        if settled.is_empty() {
+            society
+                .fallbacks
+                .push(format!("{}: no land to settle", profile.id));
+            continue;
+        }
+        let score = |i: usize| scored[i].map_or(0.0, |x| x.0);
+        let plane = |i: usize| lattice[i].0;
+
+        // 2. Seats.
         let factions: Vec<usize> = (0..society.factions.len())
             .filter(|&f| society.factions[f].culture == ci)
             .collect();
-        let middle = chosen.iter().map(|c| c.1).sum::<DVec3>().normalize();
-        let east = DVec3::Y
-            .cross(middle)
-            .normalize_or(middle.any_orthonormal_vector());
-        let north = middle.cross(east);
-        let bearing = |d: DVec3| d.dot(north).atan2(d.dot(east));
-        let mut around: Vec<usize> = (0..chosen.len()).collect();
-        around.sort_by(|&x, &y| bearing(chosen[x].1).total_cmp(&bearing(chosen[y].1)));
-        let best = (0..chosen.len())
-            .max_by(|&x, &y| chosen[x].0.total_cmp(&chosen[y].0))
-            .unwrap_or(0);
-        let at = around.iter().position(|&i| i == best).unwrap_or(0);
-        let first = factions
-            .first()
-            .map_or(0, |&f| society.factions[f].settlements as usize);
-        around.rotate_left((at + chosen.len() - first / 2) % chosen.len().max(1));
-        let mut owner: Vec<usize> = vec![0; chosen.len()];
         let mut seats: Vec<usize> = Vec::new();
-        let mut next = 0;
-        for (k, &f) in factions.iter().enumerate() {
-            let take = (society.factions[f].settlements as usize).min(chosen.len() - next);
-            let wedge = &around[next..next + take];
-            next += take;
-            for &i in wedge {
-                owner[i] = k;
-            }
-            let mid = wedge
-                .iter()
-                .map(|&i| chosen[i].1)
-                .sum::<DVec3>()
-                .normalize_or(middle);
-            let spread = wedge
-                .iter()
-                .map(|&i| chosen[i].1.angle_between(mid))
-                .fold(1e-6, f64::max);
-            let seat = wedge.iter().copied().max_by(|&x, &y| {
-                let worth =
-                    |i: usize| chosen[i].0 * (1.0 - 0.5 * chosen[i].1.angle_between(mid) / spread);
-                worth(x).total_cmp(&worth(y))
+        for k in 0..factions.len() {
+            let best = settled.iter().copied().max_by(|&a, &b| {
+                let worth = |i: usize| {
+                    if seats.is_empty() {
+                        let edge = plane(i).length() / extent;
+                        score(i) * (1.0 - 0.6 * edge)
+                    } else {
+                        let far = seats
+                            .iter()
+                            .map(|&q| plane(q).distance(plane(i)))
+                            .fold(f64::MAX, f64::min);
+                        score(i) * (far / extent).min(1.0)
+                    }
+                };
+                worth(a).total_cmp(&worth(b))
             });
-            if let Some(i) = seat {
+            if let Some(i) = best
+                && !seats.contains(&i)
+            {
                 seats.push(i);
+            } else {
+                let _ = k;
+                break;
             }
         }
-        let owner: Vec<Option<usize>> = owner.into_iter().map(Some).collect();
 
-        // Kinds, populations, names and lore.
-        let mut rng = Rng::derive(society.seed, &format!("settlements/{}", culture.profile.id));
-        let mut used: Vec<String> = Vec::new();
-        for (i, &(score, dir, height)) in chosen.iter().enumerate() {
-            let k = owner[i].unwrap_or(0);
+        // 3. Classes by spacing, on a grid of what's placed so far.
+        let mut pick = Rng::derive(society.seed, &format!("sites/{}", profile.id));
+        let mut placed: Vec<(usize, Option<usize>)> = seats.iter().map(|&i| (i, None)).collect();
+        for (c, class) in pattern.classes.iter().enumerate() {
+            let cell = class.spacing_km * 1.2;
+            let key = |p: DVec2| ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64);
+            let mut grid: std::collections::HashMap<(i64, i64), Vec<DVec2>> =
+                std::collections::HashMap::new();
+            for &(i, _) in &placed {
+                grid.entry(key(plane(i))).or_default().push(plane(i));
+            }
+            let mut order: Vec<(f64, usize, f64)> = settled
+                .iter()
+                .map(|&i| (score(i) + 0.15 * pick.unit(), i, 0.8 + 0.4 * pick.unit()))
+                .collect();
+            order.sort_by(|a, b| b.0.total_cmp(&a.0));
+            for (_, i, own) in order {
+                let p = plane(i);
+                let need = class.spacing_km * own;
+                let (kx, ky) = key(p);
+                let clear = (-1..=1).all(|dy| {
+                    (-1..=1).all(|dx| {
+                        grid.get(&(kx + dx, ky + dy))
+                            .is_none_or(|v| v.iter().all(|q| q.distance(p) >= need))
+                    })
+                });
+                if clear {
+                    grid.entry((kx, ky)).or_default().push(p);
+                    placed.push((i, Some(c)));
+                }
+            }
+        }
+
+        // 4. Territories by strength-weighted distance to the seats.
+        let strengths: Vec<f64> = factions
+            .iter()
+            .map(|&f| society.factions[f].strength.sqrt())
+            .collect();
+        let owner = |i: usize| -> usize {
+            if let Some(k) = seats.iter().position(|&q| q == i) {
+                return k;
+            }
+            (0..seats.len())
+                .min_by(|&a, &b| {
+                    let d = |k: usize| plane(seats[k]).distance(plane(i)) / strengths[k];
+                    d(a).total_cmp(&d(b))
+                })
+                .unwrap_or(0)
+        };
+
+        // Sizes, populations, names and lore.
+        let mut rng = Rng::derive(society.seed, &format!("settlements/{}", profile.id));
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (n, &(i, class)) in placed.iter().enumerate() {
+            let (site_score, height) = scored[i].unwrap_or((0.0, 0.0));
+            let dir = lattice[i].1;
+            let k = owner(i);
             let faction = factions.get(k).copied().unwrap_or(0);
-            let seat = seats.get(k) == Some(&i);
-            use SettlementRole::*;
-            let (size, settlement_roles, population) = match tier {
-                TechTier::Spacefaring => match (seat, k) {
-                    (true, 0) => (
-                        SizeClass::Town,
-                        vec![Seat, Capital, Port],
-                        2500 + (2500.0 * score) as u32,
-                    ),
-                    (true, _) => (
-                        SizeClass::Town,
-                        vec![Seat, Port],
-                        900 + (900.0 * score) as u32,
-                    ),
-                    _ => (
-                        SizeClass::Hamlet,
-                        vec![Outpost],
-                        80 + (400.0 * score * rng.unit()) as u32,
-                    ),
-                },
-                _ => {
-                    if seat {
-                        (
-                            SizeClass::Town,
-                            vec![Seat, Market],
-                            900 + (1600.0 * score * (0.6 + 0.4 * rng.unit())) as u32,
-                        )
-                    } else if score * (0.6 + 0.8 * rng.unit()) > 0.55 {
-                        (
-                            SizeClass::Village,
-                            vec![],
-                            150 + (350.0 * score * rng.unit()) as u32,
-                        )
-                    } else {
-                        (SizeClass::Hamlet, vec![], 25 + (90.0 * rng.unit()) as u32)
+            let seat = class.is_none();
+            let capital = seat && k == 0;
+            let (size, settlement_roles, range) = match class {
+                None => {
+                    let s = &pattern.seat;
+                    let mut roles = s.roles.clone();
+                    let mut range = s.people;
+                    if capital {
+                        roles.extend(s.capital_roles.iter().copied());
+                        range = s.capital_people.unwrap_or(range);
+                    }
+                    (s.size, roles, range)
+                }
+                Some(c) => {
+                    let c = &pattern.classes[c];
+                    (c.size, c.roles.clone(), c.people)
+                }
+            };
+            let spread = f64::from(range[1].saturating_sub(range[0]));
+            let population =
+                range[0] + (spread * (0.5 * site_score + 0.5 * rng.unit())).round() as u32;
+            let name = {
+                let mut name = String::new();
+                for _ in 0..50 {
+                    name = names::place_for(
+                        &profile.naming,
+                        kind_word(size, &settlement_roles),
+                        &mut rng,
+                    );
+                    if !used.contains(&name) {
+                        break;
                     }
                 }
+                used.insert(name.clone());
+                name
             };
-            let name = loop {
-                let n = names::place_for(
-                    &culture.profile.naming,
-                    kind_word(size, &settlement_roles),
-                    &mut rng,
-                );
-                if !used.contains(&n) {
-                    used.push(n.clone());
-                    break n;
-                }
-            };
-            let roles = role_counts(&culture.profile.roles, population);
+            let roles = role_counts(&profile.roles, population);
             let founded_years_ago = match tier {
-                TechTier::Spacefaring => {
-                    if settlement_roles.contains(&Capital) {
+                TechTier::Spacefaring | TechTier::Interstellar => {
+                    if settlement_roles.contains(&SettlementRole::Capital) {
                         62
                     } else {
                         5 + (50.0 * rng.unit()) as u32
@@ -442,16 +514,11 @@ pub fn generate_settlements(
                     }
                 }
             };
-            let id = format!("{}/{}", culture.profile.id, i);
+            let id = format!("{}/{}", profile.id, n);
             let faction_name = society.factions[faction].name.clone();
-            let word = settlement_word(
-                &culture.profile.settlement_words,
-                tier,
-                size,
-                &settlement_roles,
-            );
-            let mut probe = Settlement {
-                id: id.clone(),
+            let word = settlement_word(&profile.settlement_words, tier, size, &settlement_roles);
+            let mut settlement = Settlement {
+                id,
                 name: name.clone(),
                 culture: ci,
                 faction,
@@ -469,12 +536,12 @@ pub fn generate_settlements(
                     description: String::new(),
                     landmark: String::new(),
                 },
-                site_score: score,
+                site_score,
             };
-            let lore_kind = probe.lore_kind();
+            let lore_kind = settlement.lore_kind();
             let request = ContentRequest::new(
                 "settlement_lore",
-                format!("settlement/{}/{lore_kind}/{i}", culture.profile.id),
+                format!("settlement/{}/{lore_kind}/{n}", profile.id),
                 json!({"name": name, "faction": faction_name, "kind": lore_kind, "word": word, "population": population}),
             );
             let answer = director.request(&request, || SettlementLore {
@@ -487,16 +554,17 @@ pub fn generate_settlements(
             let fill = |t: &str| {
                 t.replace("{settlement}", &name)
                     .replace("{faction}", &faction_name)
-                    .replace("{people}", &culture.profile.name)
-                    .replace("{culture}", &culture.profile.adjective)
+                    .replace("{people}", &profile.name)
+                    .replace("{culture}", &profile.adjective)
                     .replace("{kind}", &word)
             };
-            probe.layout_seed = rng.next_u64();
-            probe.lore = SettlementLore {
+            settlement.layout_seed = rng.next_u64();
+            settlement.lore = SettlementLore {
                 description: fill(&answer.value.description),
                 landmark: fill(&answer.value.landmark),
             };
-            out.push(probe);
+            society.factions[faction].settlements += 1;
+            out.push(settlement);
         }
     }
     out

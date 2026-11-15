@@ -39,6 +39,10 @@ pub struct Catalog(pub PartCatalog);
 #[derive(Resource, Clone)]
 pub struct Lore(pub Arc<ai_gateway::ContentDirector>);
 
+/// How each people settles its land (content/data/settlement_patterns).
+#[derive(Resource)]
+pub struct Patterns(pub Arc<sim_society::SettlementPatterns>);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -72,6 +76,7 @@ struct Loaded {
     designs: Designs,
     catalog: PartCatalog,
     lore: Arc<ai_gateway::ContentDirector>,
+    patterns: Arc<sim_society::SettlementPatterns>,
     /// Each society generated: body, people, settlements.
     societies: Vec<(usize, u32, usize)>,
     /// Settlement layouts: buildings placed, and the time taken (ms).
@@ -117,7 +122,10 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     let provider =
         ai_gateway::ReplayProvider::load_dir(dir.join("lore")).map_err(|e| e.to_string())?;
     let lore = Arc::new(ai_gateway::ContentDirector::new(Box::new(provider)));
-    let societies = sim_society::aggregate::install(&mut sim, &lore);
+    let patterns = Arc::new(sim_society::SettlementPatterns::load_dir(
+        &dir.join("data/settlement_patterns"),
+    )?);
+    let societies = sim_society::aggregate::install(&mut sim, &lore, &patterns);
     // Their settlements on the ground: layouts from the building kits, and the foundations
     // under them in each body's terrain (physics and drawing share it).
     let laid = Instant::now();
@@ -153,6 +161,7 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         designs,
         catalog,
         lore,
+        patterns,
         societies,
         layouts,
         seconds: start.elapsed().as_secs_f64(),
@@ -218,6 +227,7 @@ fn finish_loading(
                 loaded.layouts.0, loaded.layouts.1
             );
             commands.insert_resource(Lore(loaded.lore));
+            commands.insert_resource(Patterns(loaded.patterns));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }

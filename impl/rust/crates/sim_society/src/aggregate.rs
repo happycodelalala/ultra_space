@@ -23,6 +23,7 @@ use sim_core::time::GAME_TIME_SCALE;
 use sim_core::{Simulation, StarSystem};
 
 use crate::lore::TechTier;
+use crate::patterns::SettlementPatterns;
 use crate::rng::Rng;
 use crate::settlements::{Settlement, generate_settlements};
 use crate::society::{Society, generate};
@@ -108,13 +109,30 @@ pub struct RegionSociety {
     soil: Vec<f64>,
     /// Game days simulated so far.
     pub days: f64,
+    /// Days each slice of the settlements is behind (see [`RegionSociety::step_slice`]).
+    behind: [f64; SLICES],
+    /// The slice stepped next.
+    next_slice: usize,
 }
+
+/// The settlements are stepped in this many slices, one per tick (each about every second at
+/// 30 Hz), so thousands of settlements cost a tick what a few hundred would.
+const SLICES: usize = 32;
+
+/// How settlements are generated; a save from another generation starts its societies fresh
+/// (its ids would name other places). 2: settlement patterns (Batch 4b).
+pub const GENERATION: u32 = 2;
 
 impl RegionSociety {
     /// The society of body `body` with its settlements, at their starting state.
-    pub fn generate(system: &StarSystem, body: usize, director: &ContentDirector) -> Self {
+    pub fn generate(
+        system: &StarSystem,
+        body: usize,
+        director: &ContentDirector,
+        patterns: &SettlementPatterns,
+    ) -> Self {
         let mut society = generate(system, body, director);
-        let settlements = generate_settlements(system, &mut society, director);
+        let settlements = generate_settlements(system, &mut society, director, patterns);
         let radius = system.bodies[body].radius;
         let seat = |f: usize| settlements.iter().find(|s| s.faction == f && s.seat);
         let n = society.factions.len();
@@ -158,6 +176,8 @@ impl RegionSociety {
             targets,
             soil,
             days: 0.0,
+            behind: [0.0; SLICES],
+            next_slice: 0,
         }
     }
 
@@ -174,6 +194,31 @@ impl RegionSociety {
             let culture = &self.society.cultures[s.culture].profile;
             step_settlement(&mut self.states[i], s, culture, self.soil[i], days);
         }
+        self.behind = [0.0; SLICES];
+        self.step_relations(days);
+    }
+
+    /// Advances by `days` game days, stepping one slice of the settlements (by the days it
+    /// is behind) and the relations; over [`SLICES`] calls every settlement catches up.
+    pub fn step_slice(&mut self, days: f64) {
+        if days <= 0.0 {
+            return;
+        }
+        for b in &mut self.behind {
+            *b += days;
+        }
+        let slice = self.next_slice;
+        self.next_slice = (slice + 1) % SLICES;
+        let behind = std::mem::take(&mut self.behind[slice]);
+        for i in (slice..self.settlements.len()).step_by(SLICES) {
+            let s = &self.settlements[i];
+            let culture = &self.society.cultures[s.culture].profile;
+            step_settlement(&mut self.states[i], s, culture, self.soil[i], behind);
+        }
+        self.step_relations(days);
+    }
+
+    fn step_relations(&mut self, days: f64) {
         // Relations: toward the target, which swings a little month to month.
         let month = (self.days / 30.0).floor() as u64;
         let pull = 1.0 - (-days / RELATION_DAYS).exp();
@@ -265,7 +310,7 @@ fn step_settlement(
 pub fn society_system(clock: Res<SimClock>, society: Option<ResMut<RegionSociety>>) {
     if let Some(mut s) = society {
         let days = clock.dt * GAME_TIME_SCALE as f64 / 86_400.0;
-        s.step(days);
+        s.step_slice(days);
     }
 }
 
@@ -276,7 +321,11 @@ pub fn add_society_systems(schedule: &mut Schedule) {
 
 /// Generates the society of every body with peoples and puts it in the body's region. Returns
 /// the bodies' societies (index, people, settlements) for logs.
-pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(usize, u32, usize)> {
+pub fn install(
+    sim: &mut Simulation,
+    director: &Arc<ContentDirector>,
+    patterns: &SettlementPatterns,
+) -> Vec<(usize, u32, usize)> {
     let Some(system) = sim.star_system().cloned() else {
         return Vec::new();
     };
@@ -285,7 +334,7 @@ pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(us
         if body.peoples.is_empty() {
             continue;
         }
-        let rs = RegionSociety::generate(&system, i, director);
+        let rs = RegionSociety::generate(&system, i, director, patterns);
         out.push((i, rs.population().round() as u32, rs.settlements.len()));
         if let Some(region) = sim.regions.get_mut(i) {
             region.world.insert_resource(rs);
@@ -298,9 +347,16 @@ pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(us
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SavedSociety {
     pub body: String,
+    /// How the settlements were generated ([`GENERATION`]); saves from before it have 1.
+    #[serde(default = "first_generation")]
+    pub generation: u32,
     pub days: f64,
     pub settlements: Vec<(String, SettlementState)>,
     pub relations: Vec<(String, String, f64)>,
+}
+
+fn first_generation() -> u32 {
+    1
 }
 
 /// Every body's society state, for a save.
@@ -323,6 +379,7 @@ pub fn capture(sim: &Simulation, system: &StarSystem) -> Vec<SavedSociety> {
         }
         out.push(SavedSociety {
             body: body.id.clone(),
+            generation: GENERATION,
             days: rs.days,
             settlements: rs
                 .settlements
@@ -341,6 +398,13 @@ pub fn capture(sim: &Simulation, system: &StarSystem) -> Vec<SavedSociety> {
 pub fn restore(sim: &mut Simulation, system: &StarSystem, saved: &[SavedSociety]) -> Vec<String> {
     let mut problems = Vec::new();
     for s in saved {
+        if s.generation != GENERATION {
+            problems.push(format!(
+                "society of {} saved by an older generation of settlements: it starts fresh",
+                s.body
+            ));
+            continue;
+        }
         let Some(i) = system.bodies.iter().position(|b| b.id == s.body) else {
             problems.push(format!("society of unknown body {:?} dropped", s.body));
             continue;

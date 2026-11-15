@@ -21,8 +21,11 @@ pub struct Faction {
     pub culture: usize,
     /// Banner colour (sRGB 0–1).
     pub colour: [f64; 3],
-    /// How many of the culture's settlements it holds.
+    /// How many of the culture's settlements it holds (set when they are placed).
     pub settlements: u32,
+    /// Its strength relative to its people's other factions (0.5–1.5): stronger factions hold
+    /// more land.
+    pub strength: f64,
     pub lore: FactionLore,
 }
 
@@ -90,21 +93,11 @@ pub fn generate(system: &StarSystem, body: usize, director: &ContentDirector) ->
         let profile = answer.value;
         let ci = cultures.len();
         let mut rng = Rng::derive(seed, &format!("factions/{}", people.culture));
-        // Each faction holds at least one settlement; the rest are shared out by weight.
+        // Each faction's strength: stronger ones hold more land (settlements are placed later).
         let n = people.factions as usize;
         let weights: Vec<f64> = (0..n).map(|_| 0.5 + rng.unit()).collect();
-        let total: f64 = weights.iter().sum();
-        let spare = people.settlements - people.factions;
-        let mut shares: Vec<u32> = weights
-            .iter()
-            .map(|w| 1 + (f64::from(spare) * w / total).floor() as u32)
-            .collect();
-        let left = people.settlements - shares.iter().sum::<u32>();
-        for k in 0..left as usize {
-            shares[k % n] += 1;
-        }
         let mut used = Vec::new();
-        for (k, &settlements) in shares.iter().enumerate() {
+        for (k, &strength) in weights.iter().enumerate() {
             let name = loop {
                 let root = names::word(&profile.naming, &mut rng);
                 let name = names::faction(&profile.naming, &root, &mut rng);
@@ -142,7 +135,8 @@ pub fn generate(system: &StarSystem, body: usize, director: &ContentDirector) ->
                 name,
                 culture: ci,
                 colour: base.map(|c| (c * shade).clamp(0.0, 1.0)),
-                settlements,
+                settlements: 0,
+                strength,
                 lore,
             });
         }

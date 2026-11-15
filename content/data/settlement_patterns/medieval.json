@@ -7,7 +7,7 @@
   "classes": [
     {"size": "town", "spacing_km": 25, "people": [1000, 4000], "roles": ["market"]},
     {"size": "village", "spacing_km": 4.5, "people": [150, 400], "roles": []},
-    {"size": "hamlet", "spacing_km": 3.0, "people": [30, 100], "roles": []}
+    {"size": "hamlet", "spacing_km": 3.6, "people": [30, 100], "roles": []}
   ],
   "dwelling_spacing_km": 1.25
 }

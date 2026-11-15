@@ -608,6 +608,20 @@ what is simulated, level of detail) and never show on screen:
   hamlets every 3 km, half the good land settled, dwellings every 1.25 km) and the young
   colony (chosen by the charter colony polity at any tier: a capital of 2,500–5,000, port
   seats, outposts every 40 km). Patterns for other tiers come with them.
+- **As built (task 4b.2):** `generate_settlements` places each people by its pattern: a hex
+  lattice of candidate sites a third of the smallest spacing apart over the home region,
+  scored in parallel by the land for its tier; the best `settled_share` of usable sites is
+  settled wherever it lies; seats first (the capital the best site toward the middle, the
+  others the best far from them), then each class by spacing (0.8–1.2 times its own) from
+  everything placed before; territories go to the nearest seat, distances shrunk by the
+  faction's strength (0.5–1.5, so the stronger hold more land). Meridian now has 2,286 Hollish
+  settlements (3 cities, 80 holds, 1,403 villages, 800 steadings; ~750,000 people) and 17 of
+  the Compact (the landing, a port, 15 outposts; ~10,500), generated in about 0.5 s. The
+  aggregate steps one of 32 slices of the settlements per tick (each catches up about once a
+  second): 0.05 ms per tick for all 2,303. Saves carry the generation of their settlements
+  and one from before starts its societies fresh. Foundations are indexed by cube-sphere tile
+  so terrain sampling checks only the sites near it. Until 4b.5, every layout is still made
+  while loading (295,000 buildings, about 4 s).
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

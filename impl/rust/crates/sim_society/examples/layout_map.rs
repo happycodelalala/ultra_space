@@ -50,7 +50,16 @@ fn main() {
     ));
     let kits = Kits::load_dir(&root.join("assets/export/buildings")).unwrap();
     let mut society = generate(&system, body, &director);
-    let settlements = generate_settlements(&system, &mut society, &director);
+    let settlements = generate_settlements(
+        &system,
+        &mut society,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    );
     let terrain = Terrain::of(&system.bodies[body]).unwrap();
 
     let start = Instant::now();

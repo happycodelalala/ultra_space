@@ -24,7 +24,16 @@ fn meridian() -> (StarSystem, Society, Vec<Settlement>) {
         ReplayProvider::load_dir(content().join("lore")).unwrap(),
     ));
     let mut society = generate(&system, body, &director);
-    let settlements = generate_settlements(&system, &mut society, &director);
+    let settlements = generate_settlements(
+        &system,
+        &mut society,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    );
     (system, society, settlements)
 }
 
@@ -35,7 +44,25 @@ fn settlements_land_on_good_ground_in_their_home_regions() {
     let terrain = Terrain::of(&system.bodies[society.body]).unwrap();
     for (ci, c) in society.cultures.iter().enumerate() {
         let mine: Vec<&Settlement> = settlements.iter().filter(|s| s.culture == ci).collect();
-        assert_eq!(mine.len() as u32, c.people.settlements, "{}", c.profile.id);
+        // Counts follow from the pattern and the land: the medieval realm in the thousands,
+        // the young colony a score or so.
+        let expected = match c.profile.id.as_str() {
+            "hollin" => 1_000..=2_500,
+            _ => 10..=40,
+        };
+        assert!(
+            expected.contains(&mine.len()),
+            "{}: {}",
+            c.profile.id,
+            mine.len()
+        );
+        let held: u32 = society
+            .factions
+            .iter()
+            .filter(|f| f.culture == ci)
+            .map(|f| f.settlements)
+            .sum();
+        assert_eq!(held as usize, mine.len(), "{}", c.profile.id);
         let h = c.people.home;
         let centre = direction(h.latitude_deg.to_radians(), h.longitude_deg.to_radians());
         for s in &mine {
@@ -55,11 +82,21 @@ fn settlements_land_on_good_ground_in_their_home_regions() {
                 s.name
             );
         }
-        // Spread out, not stacked.
+        // Spread out, not stacked: no two closer than 0.8 of the smallest class's spacing
+        // (3.6 km for steadings, 40 km for outposts).
+        let least = match c.profile.id.as_str() {
+            "hollin" => 3.6,
+            _ => 40.0,
+        };
         for (i, a) in mine.iter().enumerate() {
             for b in &mine[i + 1..] {
                 let km = a.direction.angle_between(b.direction) * terrain.radius / 1000.0;
-                assert!(km > 5.0, "{} and {} {km:.1} km apart", a.name, b.name);
+                assert!(
+                    km > 0.8 * least - 0.3,
+                    "{} and {} {km:.1} km apart",
+                    a.name,
+                    b.name
+                );
             }
         }
     }
@@ -143,6 +180,7 @@ fn settlements_have_a_size_roles_and_their_people_s_word() {
     for s in &settlements {
         let culture = &society.cultures[s.culture].profile.id;
         let expect = match (culture.as_str(), s.size, s.lore_kind()) {
+            ("hollin", SizeClass::City, _) => "city",
             ("hollin", SizeClass::Town, _) => "hold",
             ("hollin", SizeClass::Village, _) => "village",
             ("hollin", SizeClass::Hamlet, _) => "steading",

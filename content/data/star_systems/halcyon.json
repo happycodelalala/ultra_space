@@ -77,8 +77,8 @@
       "terrain": { "seed": 1, "relief_km": 6, "ocean_depth_km": 5, "ocean_coverage": 0.62, "mountains": 0.35, "roughness": 0.5 },
       "climate": { "equator_temperature_c": 27, "pole_temperature_c": -25, "moisture": 0.6 },
       "peoples": [
-        {"culture": "hollin", "home": {"latitude_deg": 20, "longitude_deg": 3, "radius_deg": 14}, "factions": 3, "settlements": 24},
-        {"culture": "compact", "home": {"latitude_deg": 9, "longitude_deg": 77, "radius_deg": 9}, "factions": 2, "settlements": 8}
+        {"culture": "hollin", "home": {"latitude_deg": 20, "longitude_deg": 3, "radius_deg": 14}, "factions": 3},
+        {"culture": "compact", "home": {"latitude_deg": 9, "longitude_deg": 77, "radius_deg": 9}, "factions": 2}
       ],
       "description": "Temperate home world with oceans and seasons: the baseline planet and future home of many cultures."
     },

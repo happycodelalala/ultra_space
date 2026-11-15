@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Kits, Layout, RegionLayouts, RegionSociety};
+use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, Settlement, SizeClass};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -34,7 +34,16 @@ fn world() -> &'static World {
         let director = ContentDirector::new(Box::new(
             ReplayProvider::load_dir(content.join("lore")).unwrap(),
         ));
-        let society = RegionSociety::generate(&system, body, &director);
+        let society = RegionSociety::generate(
+            &system,
+            body,
+            &director,
+            &sim_society::SettlementPatterns::load_dir(
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../../content/data/settlement_patterns"),
+            )
+            .unwrap(),
+        );
         let kits = Arc::new(Kits::load_dir(&root().join("assets/export/buildings")).unwrap());
         let terrain = Terrain::of(&system.bodies[body]).unwrap();
         let layouts = RegionLayouts::generate(&society, kits, &terrain);
@@ -93,7 +102,7 @@ fn every_settlement_is_laid_out_with_what_it_needs() {
         );
         assert!(!l.streets.is_empty(), "{}: no streets", s.name);
         match s.lore_kind() {
-            "town" => {
+            "town" | "city" => {
                 for u in [
                     "square", "hall", "shrine", "inn", "market", "smithy", "home",
                 ] {
@@ -145,10 +154,22 @@ fn distance(f: &sim_planet::Footprint, p: DVec2, margin: f64) -> f64 {
         .length()
 }
 
+/// Every city and every 20th other settlement (towns, villages, steadings, outposts): the
+/// expensive checks don't need all two thousand.
+fn sample(w: &World) -> impl Iterator<Item = (&Settlement, &Layout)> {
+    w.society
+        .settlements
+        .iter()
+        .zip(&w.layouts.layouts)
+        .enumerate()
+        .filter(|(i, (s, _))| s.size >= SizeClass::City || s.seat || i % 20 == 0)
+        .map(|(_, p)| p)
+}
+
 #[test]
 fn buildings_keep_clear_of_each_other_and_the_streets() {
     let w = world();
-    for (s, l) in w.society.settlements.iter().zip(&w.layouts.layouts) {
+    for (s, l) in sample(w) {
         let kit = &w.layouts.kits.0[&l.kit];
         let rects: Vec<_> = l
             .buildings
@@ -171,7 +192,7 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
                 DVec2::new(a.x + cs * v.x + sn * v.y, a.z - sn * v.x + cs * v.y)
             });
             for (j, b) in rects.iter().enumerate() {
-                if i != j {
+                if i != j && (b.x - a.x).abs() < 40.0 && (b.z - a.z).abs() < 40.0 {
                     for c in corners {
                         assert!(
                             distance(b, c, 0.8) > 0.0,
@@ -187,6 +208,9 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
             for k in 0..=10 {
                 let p = a.lerp(b, k as f64 / 10.0);
                 for (i, r) in rects.iter().enumerate() {
+                    if (r.x - p.x).abs() > 40.0 || (r.z - p.y).abs() > 40.0 {
+                        continue;
+                    }
                     let kind = &kit.buildings[l.buildings[i].building];
                     // The colony's streets run between plots; small props may stand by them.
                     if kind.uses.iter().any(|u| u == "prop" || u == "tree") {

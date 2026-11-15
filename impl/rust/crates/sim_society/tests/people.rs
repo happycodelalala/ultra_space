@@ -25,7 +25,16 @@ fn meridian() -> (RegionSociety, RegionLayouts) {
     let director = ContentDirector::new(Box::new(
         ReplayProvider::load_dir(content.join("lore")).unwrap(),
     ));
-    let society = RegionSociety::generate(&system, body, &director);
+    let society = RegionSociety::generate(
+        &system,
+        body,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    );
     let kits = Arc::new(Kits::load_dir(&root().join("assets/export/buildings")).unwrap());
     let terrain = Terrain::of(&system.bodies[body]).unwrap();
     let layouts = RegionLayouts::generate(&society, kits, &terrain);
