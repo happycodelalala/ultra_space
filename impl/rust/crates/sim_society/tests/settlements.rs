@@ -7,7 +7,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use sim_core::StarSystem;
 use sim_planet::Terrain;
 use sim_planet::map::direction;
-use sim_society::{Settlement, SettlementKind, Society, generate, generate_settlements};
+use sim_society::{Settlement, SettlementRole, SizeClass, Society, generate, generate_settlements};
 
 fn content() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../content")
@@ -73,10 +73,8 @@ fn each_faction_holds_its_share_around_one_seat() {
         assert_eq!(held.len() as u32, f.settlements, "{}", f.name);
         let seats: Vec<&&Settlement> = held.iter().filter(|s| s.seat).collect();
         assert_eq!(seats.len(), 1, "{} has one seat", f.name);
-        assert!(matches!(
-            seats[0].kind,
-            SettlementKind::Town | SettlementKind::Colony | SettlementKind::Port
-        ));
+        assert!(seats[0].size >= SizeClass::Town, "{}", seats[0].name);
+        assert!(seats[0].has(SettlementRole::Seat), "{}", seats[0].name);
         // A faction's settlements are nearer its own seat than most others' (contiguous).
         let others: Vec<&Settlement> = settlements
             .iter()
@@ -119,7 +117,7 @@ fn populations_names_and_lore_are_complete() {
             "{}",
             s.lore.description
         );
-        if s.kind == SettlementKind::Outpost {
+        if s.has(SettlementRole::Outpost) {
             assert!(!s.name.starts_with("Port "), "an outpost named {}", s.name);
         }
     }
@@ -137,4 +135,85 @@ fn populations_names_and_lore_are_complete() {
 #[test]
 fn the_same_seed_gives_the_same_settlements() {
     assert_eq!(meridian().2, meridian().2);
+}
+
+#[test]
+fn settlements_have_a_size_roles_and_their_people_s_word() {
+    let (_, society, settlements) = meridian();
+    for s in &settlements {
+        let culture = &society.cultures[s.culture].profile.id;
+        let expect = match (culture.as_str(), s.size, s.lore_kind()) {
+            ("hollin", SizeClass::Town, _) => "hold",
+            ("hollin", SizeClass::Village, _) => "village",
+            ("hollin", SizeClass::Hamlet, _) => "steading",
+            ("compact", _, "colony") => "landing",
+            ("compact", _, "port") => "port",
+            ("compact", _, "outpost") => "outpost",
+            other => panic!("unexpected settlement {}: {other:?}", s.name),
+        };
+        assert_eq!(s.word, expect, "{}", s.name);
+    }
+    // The capital is the first faction's seat, and only one per people.
+    for (ci, c) in society.cultures.iter().enumerate() {
+        let capitals = settlements
+            .iter()
+            .filter(|s| s.culture == ci && s.has(SettlementRole::Capital))
+            .count();
+        let expected = usize::from(c.profile.id == "compact");
+        assert_eq!(capitals, expected, "{}", c.profile.id);
+    }
+    // The tiers' defaults where a culture has no word.
+    use sim_society::{TechTier, default_word};
+    assert_eq!(
+        default_word(TechTier::StoneAge, SizeClass::Town),
+        "hill fort"
+    );
+    assert_eq!(
+        default_word(TechTier::Medieval, SizeClass::Dwelling),
+        "farmstead"
+    );
+    assert_eq!(
+        default_word(TechTier::Spacefaring, SizeClass::Metropolis),
+        "arcology"
+    );
+    assert_eq!(default_word(TechTier::Industrial, SizeClass::City), "city");
+}
+
+#[test]
+fn each_people_has_a_settlement_pattern() {
+    use sim_society::{Polity, SettlementPatterns, TechTier};
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../content/data/settlement_patterns");
+    let patterns = SettlementPatterns::load_dir(&dir).unwrap();
+    let hollin = patterns
+        .for_people(TechTier::Medieval, Polity::Realm)
+        .unwrap();
+    assert_eq!(hollin.id, "medieval");
+    // A charter colony settles as a young colony, whatever its tier.
+    for tier in [TechTier::Spacefaring, TechTier::Industrial] {
+        let p = patterns.for_people(tier, Polity::CharterColony).unwrap();
+        assert_eq!(p.id, "young_colony");
+    }
+    assert!(
+        patterns
+            .for_people(TechTier::StoneAge, Polity::Chiefdom)
+            .is_none()
+    );
+    for p in &patterns.0 {
+        // Classes biggest first, each a size below the seat's, spacing growing with size.
+        for w in p.classes.windows(2) {
+            assert!(
+                w[0].size > w[1].size && w[0].spacing_km > w[1].spacing_km,
+                "{}",
+                p.id
+            );
+        }
+        for c in &p.classes {
+            assert!(
+                c.size <= p.seat.size && c.people[0] <= c.people[1],
+                "{}",
+                p.id
+            );
+        }
+    }
 }

@@ -63,7 +63,7 @@ fn main() {
         println!(
             "{:<12} {:<8} {:>5} people: {:>3} buildings, {:>2} unplaced, {:>3} streets, {:.1} ms",
             s.name,
-            s.kind.name(),
+            s.lore_kind(),
             s.population,
             l.buildings.len(),
             l.unplaced,
@@ -83,7 +83,7 @@ fn main() {
     let mut shown: Vec<usize> = Vec::new();
     for kind in ["town", "village", "hamlet", "colony", "port", "outpost"] {
         if let Some(i) = (0..settlements.len())
-            .filter(|&i| settlements[i].kind.name() == kind)
+            .filter(|&i| settlements[i].lore_kind() == kind)
             .max_by_key(|&i| settlements[i].population)
         {
             shown.push(i);
@@ -170,7 +170,7 @@ fn main() {
         println!(
             "panel {n}: {} ({}), {:.0} m across",
             settlements[i].name,
-            settlements[i].kind.name(),
+            settlements[i].lore_kind(),
             2.0 * extent
         );
     }

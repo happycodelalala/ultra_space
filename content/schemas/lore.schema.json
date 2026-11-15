@@ -52,6 +52,12 @@
         "adjective": {"$ref": "#/$defs/text"},
         "tech_tier": {"enum": ["stone_age", "ancient", "medieval", "early_modern", "industrial", "modern", "spacefaring", "interstellar"], "description": "What the people can make (living-planet.md §8b)."},
         "polity": {"enum": ["band", "tribe", "chiefdom", "realm", "empire", "city_state", "republic", "nation", "charter_colony", "federation"], "description": "How the people is organised, independent of the tech tier."},
+        "settlement_words": {
+          "type": "object",
+          "description": "The culture's own words for kinds of settlement, by size class or settlement role; the tier's defaults fill the rest (living-planet.md §8b).",
+          "propertyNames": {"enum": ["dwelling", "hamlet", "village", "town", "city", "metropolis", "megalopolis", "seat", "capital", "port", "fort", "market", "mine", "farm", "temple", "research", "outpost", "enclave", "arcology", "station"]},
+          "additionalProperties": {"$ref": "#/$defs/text"}
+        },
         "government": {"$ref": "#/$defs/text"},
         "values": {"$ref": "#/$defs/texts"},
         "taboos": {"$ref": "#/$defs/texts"},

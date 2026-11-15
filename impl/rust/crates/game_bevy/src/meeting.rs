@@ -157,7 +157,7 @@ fn entering(
                 "{}\n{} {} of {}{seat}\n{} people",
                 st.name.to_uppercase(),
                 article(&s.culture.1),
-                st.kind.name(),
+                st.word,
                 // "of the Gostkod March" mid-sentence.
                 s.faction
                     .strip_prefix("The ")
@@ -169,10 +169,7 @@ fn entering(
         meeting.banner_left = BANNER_TIME;
         info!(
             "entered {} ({} {}, {})",
-            st.name,
-            s.culture.1,
-            st.kind.name(),
-            s.faction
+            st.name, s.culture.1, st.word, s.faction
         );
     } else if inside.is_none() && !still {
         meeting.inside = None;
@@ -240,7 +237,7 @@ fn inspect(
         out,
         "  {} {}, {}{}, {} people, founded {} years ago",
         site.culture.1,
-        s.kind.name(),
+        s.word,
         site.faction,
         if s.seat { " (seat)" } else { "" },
         s.population,

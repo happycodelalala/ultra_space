@@ -198,6 +198,10 @@ pub struct CultureProfile {
     /// A history summary, a paragraph or two.
     pub history: String,
     pub naming: NamingRules,
+    /// Its own words for kinds of settlement, by size class or settlement role ("town":
+    /// "hold", "capital": "Landing"); the tier's defaults fill the rest (living-planet §8b).
+    #[serde(default)]
+    pub settlement_words: std::collections::BTreeMap<String, String>,
     /// One of the tier's building kits.
     pub building_kit: String,
     /// One of the tier's clothing sets.

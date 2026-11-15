@@ -14,27 +14,117 @@ use crate::lore::{SettlementLore, TechTier};
 use crate::names;
 use crate::rng::Rng;
 use crate::society::Society;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum SettlementKind {
+/// How big a settlement is, the same for every culture and tier (living-planet.md §8b, the
+/// settlement hierarchy). Drives spacing, layout scale and level of detail; never shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SizeClass {
+    /// 1–3 households (decoration, not simulated).
+    Dwelling,
+    /// Up to ~100 people.
     Hamlet,
+    /// 100–500.
     Village,
+    /// 500–5,000.
     Town,
-    Outpost,
-    Port,
-    Colony,
+    /// 5,000–100,000.
+    City,
+    /// Over 100,000.
+    Metropolis,
+    /// Millions.
+    Megalopolis,
 }
 
-impl SettlementKind {
+impl SizeClass {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Dwelling => "dwelling",
             Self::Hamlet => "hamlet",
             Self::Village => "village",
             Self::Town => "town",
-            Self::Outpost => "outpost",
-            Self::Port => "port",
-            Self::Colony => "colony",
+            Self::City => "city",
+            Self::Metropolis => "metropolis",
+            Self::Megalopolis => "megalopolis",
         }
+    }
+}
+
+/// What a settlement is for, on top of its size (any number of them).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SettlementRole {
+    /// A faction's seat.
+    Seat,
+    /// The people's capital (the first faction's seat).
+    Capital,
+    /// A port, by sea or for spacecraft.
+    Port,
+    Fort,
+    Market,
+    Mine,
+    Farm,
+    Temple,
+    Research,
+    /// A post without settled families.
+    Outpost,
+    /// A protected city in a wasteland.
+    Enclave,
+    Arcology,
+    /// A settlement whose place is an orbit.
+    Station,
+}
+
+impl SettlementRole {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Seat => "seat",
+            Self::Capital => "capital",
+            Self::Port => "port",
+            Self::Fort => "fort",
+            Self::Market => "market",
+            Self::Mine => "mine",
+            Self::Farm => "farm",
+            Self::Temple => "temple",
+            Self::Research => "research",
+            Self::Outpost => "outpost",
+            Self::Enclave => "enclave",
+            Self::Arcology => "arcology",
+            Self::Station => "station",
+        }
+    }
+
+    /// Roles whose word names a settlement before its size's (the first a settlement has).
+    const NAMING: [SettlementRole; 6] = [
+        Self::Capital,
+        Self::Seat,
+        Self::Port,
+        Self::Outpost,
+        Self::Enclave,
+        Self::Arcology,
+    ];
+}
+
+/// The default word for a settlement of `size` at `tier`, when its culture's lore has none
+/// (living-planet.md §8b, the hierarchy table).
+pub fn default_word(tier: TechTier, size: SizeClass) -> &'static str {
+    use SizeClass::*;
+    use TechTier::*;
+    match (tier, size) {
+        (_, Dwelling) => match tier {
+            StoneAge => "camp",
+            Ancient | Medieval => "farmstead",
+            EarlyModern | Industrial | Modern => "farm",
+            Spacefaring | Interstellar => "hab",
+        },
+        (StoneAge, Hamlet) => "camp",
+        (StoneAge, Town) => "hill fort",
+        (Spacefaring | Interstellar, Hamlet) => "outpost",
+        (Spacefaring | Interstellar, Village) => "settlement",
+        (Spacefaring | Interstellar, Town) => "colony town",
+        (Spacefaring | Interstellar, Metropolis | Megalopolis) => "arcology",
+        _ => size.name(),
     }
 }
 
@@ -51,7 +141,11 @@ pub struct Settlement {
     pub faction: usize,
     /// The faction's seat.
     pub seat: bool,
-    pub kind: SettlementKind,
+    pub size: SizeClass,
+    /// What it is for (seat, port, outpost...): its roles in the settlement hierarchy.
+    pub settlement_roles: Vec<SettlementRole>,
+    /// What its people call a place like it ("hold", "outpost", "the Landing").
+    pub word: String,
     /// Centre (unit direction in the body's surface frame).
     pub direction: DVec3,
     /// Ground height at the centre (m above the reference radius).
@@ -65,6 +159,44 @@ pub struct Settlement {
     pub lore: SettlementLore,
     /// How good its site was (0–1).
     pub site_score: f64,
+}
+
+impl Settlement {
+    pub fn has(&self, role: SettlementRole) -> bool {
+        self.settlement_roles.contains(&role)
+    }
+
+    /// The key of its kind of lore (`settlement/<culture>/<kind>/*` in content/lore):
+    /// "colony" for a capital that is a port, then "port", "outpost", else its size.
+    pub fn lore_kind(&self) -> &'static str {
+        use SettlementRole::*;
+        if self.has(Capital) && self.has(Port) {
+            "colony"
+        } else if self.has(Port) {
+            "port"
+        } else if self.has(Outpost) {
+            "outpost"
+        } else {
+            self.size.name()
+        }
+    }
+}
+
+/// The word a culture uses for a settlement: its lore's word for the first naming role it has
+/// (capital, seat, port, outpost, ...), else for its size, else the tier's default.
+pub fn settlement_word(
+    words: &std::collections::BTreeMap<String, String>,
+    tier: TechTier,
+    size: SizeClass,
+    roles: &[SettlementRole],
+) -> String {
+    SettlementRole::NAMING
+        .iter()
+        .filter(|r| roles.contains(r))
+        .find_map(|r| words.get(r.name()))
+        .or_else(|| words.get(size.name()))
+        .cloned()
+        .unwrap_or_else(|| default_word(tier, size).to_string())
 }
 
 /// Sites closer than this to the sea (m above sea level) are too low.
@@ -245,33 +377,49 @@ pub fn generate_settlements(
             let k = owner[i].unwrap_or(0);
             let faction = factions.get(k).copied().unwrap_or(0);
             let seat = seats.get(k) == Some(&i);
-            let (kind, population) = match tier {
+            use SettlementRole::*;
+            let (size, settlement_roles, population) = match tier {
                 TechTier::Spacefaring => match (seat, k) {
-                    (true, 0) => (SettlementKind::Colony, 2500 + (2500.0 * score) as u32),
-                    (true, _) => (SettlementKind::Port, 900 + (900.0 * score) as u32),
+                    (true, 0) => (
+                        SizeClass::Town,
+                        vec![Seat, Capital, Port],
+                        2500 + (2500.0 * score) as u32,
+                    ),
+                    (true, _) => (
+                        SizeClass::Town,
+                        vec![Seat, Port],
+                        900 + (900.0 * score) as u32,
+                    ),
                     _ => (
-                        SettlementKind::Outpost,
+                        SizeClass::Hamlet,
+                        vec![Outpost],
                         80 + (400.0 * score * rng.unit()) as u32,
                     ),
                 },
                 _ => {
                     if seat {
                         (
-                            SettlementKind::Town,
+                            SizeClass::Town,
+                            vec![Seat, Market],
                             900 + (1600.0 * score * (0.6 + 0.4 * rng.unit())) as u32,
                         )
                     } else if score * (0.6 + 0.8 * rng.unit()) > 0.55 {
                         (
-                            SettlementKind::Village,
+                            SizeClass::Village,
+                            vec![],
                             150 + (350.0 * score * rng.unit()) as u32,
                         )
                     } else {
-                        (SettlementKind::Hamlet, 25 + (90.0 * rng.unit()) as u32)
+                        (SizeClass::Hamlet, vec![], 25 + (90.0 * rng.unit()) as u32)
                     }
                 }
             };
             let name = loop {
-                let n = names::place_for(&culture.profile.naming, kind_word(kind), &mut rng);
+                let n = names::place_for(
+                    &culture.profile.naming,
+                    kind_word(size, &settlement_roles),
+                    &mut rng,
+                );
                 if !used.contains(&n) {
                     used.push(n.clone());
                     break n;
@@ -279,21 +427,55 @@ pub fn generate_settlements(
             };
             let roles = role_counts(&culture.profile.roles, population);
             let founded_years_ago = match tier {
-                TechTier::Spacefaring => match kind {
-                    SettlementKind::Colony => 62,
-                    _ => 5 + (50.0 * rng.unit()) as u32,
-                },
-                _ => match kind {
-                    SettlementKind::Town => 600 + (280.0 * rng.unit()) as u32,
-                    _ => 60 + (700.0 * rng.unit()) as u32,
-                },
+                TechTier::Spacefaring => {
+                    if settlement_roles.contains(&Capital) {
+                        62
+                    } else {
+                        5 + (50.0 * rng.unit()) as u32
+                    }
+                }
+                _ => {
+                    if size >= SizeClass::Town {
+                        600 + (280.0 * rng.unit()) as u32
+                    } else {
+                        60 + (700.0 * rng.unit()) as u32
+                    }
+                }
             };
             let id = format!("{}/{}", culture.profile.id, i);
             let faction_name = society.factions[faction].name.clone();
+            let word = settlement_word(
+                &culture.profile.settlement_words,
+                tier,
+                size,
+                &settlement_roles,
+            );
+            let mut probe = Settlement {
+                id: id.clone(),
+                name: name.clone(),
+                culture: ci,
+                faction,
+                seat,
+                size,
+                settlement_roles,
+                word: word.clone(),
+                direction: dir,
+                height,
+                population,
+                roles,
+                founded_years_ago,
+                layout_seed: 0,
+                lore: SettlementLore {
+                    description: String::new(),
+                    landmark: String::new(),
+                },
+                site_score: score,
+            };
+            let lore_kind = probe.lore_kind();
             let request = ContentRequest::new(
                 "settlement_lore",
-                format!("settlement/{}/{}/{i}", culture.profile.id, kind.name()),
-                json!({"name": name, "faction": faction_name, "kind": kind.name(), "population": population}),
+                format!("settlement/{}/{lore_kind}/{i}", culture.profile.id),
+                json!({"name": name, "faction": faction_name, "kind": lore_kind, "word": word, "population": population}),
             );
             let answer = director.request(&request, || SettlementLore {
                 description: "{settlement} is a {kind} of {people}.".into(),
@@ -307,41 +489,35 @@ pub fn generate_settlements(
                     .replace("{faction}", &faction_name)
                     .replace("{people}", &culture.profile.name)
                     .replace("{culture}", &culture.profile.adjective)
-                    .replace("{kind}", kind.name())
+                    .replace("{kind}", &word)
             };
-            out.push(Settlement {
-                id,
-                name: name.clone(),
-                culture: ci,
-                faction,
-                seat,
-                kind,
-                direction: dir,
-                height,
-                population,
-                roles,
-                founded_years_ago,
-                layout_seed: rng.next_u64(),
-                lore: SettlementLore {
-                    description: fill(&answer.value.description),
-                    landmark: fill(&answer.value.landmark),
-                },
-                site_score: score,
-            });
+            probe.layout_seed = rng.next_u64();
+            probe.lore = SettlementLore {
+                description: fill(&answer.value.description),
+                landmark: fill(&answer.value.landmark),
+            };
+            out.push(probe);
         }
     }
     out
 }
 
-/// The word a place pattern uses for this kind of settlement ("Port {name}" only for ports).
-fn kind_word(kind: SettlementKind) -> &'static str {
-    match kind {
-        SettlementKind::Port => "Port",
-        SettlementKind::Outpost => "Outpost",
-        SettlementKind::Colony => "Station",
-        SettlementKind::Town => "Town",
-        SettlementKind::Village => "Village",
-        SettlementKind::Hamlet => "Hamlet",
+/// The word a place-name pattern uses for this kind of settlement ("Port {name}" only for
+/// ports, "{name} Station" for a capital).
+fn kind_word(size: SizeClass, roles: &[SettlementRole]) -> &'static str {
+    use SettlementRole::*;
+    if roles.contains(&Capital) && roles.contains(&Port) {
+        "Station"
+    } else if roles.contains(&Port) {
+        "Port"
+    } else if roles.contains(&Outpost) {
+        "Outpost"
+    } else {
+        match size {
+            SizeClass::Hamlet | SizeClass::Dwelling => "Hamlet",
+            SizeClass::Village => "Village",
+            _ => "Town",
+        }
     }
 }
 

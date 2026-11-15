@@ -1,0 +1,10 @@
+{
+  "id": "young_colony",
+  "description": "A young colony under a charter (living-planet.md §8b), at any tier: the landing site as its capital, each faction's seat a port town, outposts far apart over its claim.",
+  "polities": ["charter_colony"],
+  "settled_share": 1.0,
+  "seat": {"size": "town", "people": [900, 1800], "roles": ["seat", "port"], "capital_people": [2500, 5000], "capital_roles": ["capital"]},
+  "classes": [
+    {"size": "hamlet", "spacing_km": 40, "people": [80, 480], "roles": ["outpost"]}
+  ]
+}

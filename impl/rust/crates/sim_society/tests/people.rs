@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Activity, Crowd, Kits, Layout, RegionLayouts, RegionSociety, SettlementKind};
+use sim_society::{Activity, Crowd, Kits, Layout, RegionLayouts, RegionSociety};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -49,9 +49,9 @@ fn count(crowd: &Crowd, a: Activity) -> usize {
 #[test]
 fn people_live_out_the_day_in_a_town_and_the_colony() {
     let (society, layouts) = meridian();
-    for kind in [SettlementKind::Town, SettlementKind::Colony] {
+    for kind in ["town", "colony"] {
         let i = (0..society.settlements.len())
-            .filter(|&i| society.settlements[i].kind == kind)
+            .filter(|&i| society.settlements[i].lore_kind() == kind)
             .max_by_key(|&i| society.settlements[i].population)
             .unwrap();
         let s = &society.settlements[i];

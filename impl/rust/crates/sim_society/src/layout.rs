@@ -28,7 +28,7 @@ use sim_planet::{Footprint, Foundations, PlacedBox, Site, Terrain, tangent_frame
 use crate::aggregate::RegionSociety;
 use crate::lore::TechTier;
 use crate::rng::Rng;
-use crate::settlements::{Settlement, SettlementKind};
+use crate::settlements::{Settlement, SettlementRole, SizeClass};
 
 /// A building of a kit, as `tools/build-kits.sh` measured it (kit.json).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -405,8 +405,8 @@ fn demand(s: &Settlement, tier: TechTier) -> Vec<(&'static str, usize)> {
     let ceil = |n: usize, per: usize| n.div_ceil(per);
     match tier {
         TechTier::Spacefaring => {
-            let colony = s.kind == SettlementKind::Colony;
-            let port = colony || s.kind == SettlementKind::Port;
+            let colony = s.has(SettlementRole::Capital);
+            let port = colony || s.has(SettlementRole::Port);
             vec![
                 ("pad", 1 + role("pilot") / 15),
                 ("hangar", ceil(role("pilot"), 10)),
@@ -425,10 +425,7 @@ fn demand(s: &Settlement, tier: TechTier) -> Vec<(&'static str, usize)> {
             ]
         }
         _ => {
-            let (town, village) = (
-                s.kind == SettlementKind::Town,
-                s.kind == SettlementKind::Village,
-            );
+            let (town, village) = (s.size >= SizeClass::Town, s.size == SizeClass::Village);
             let households = (pop / 5).max(3);
             let shops = if town || village {
                 (role("merchant") * 2 / 3).min(households / 2)
@@ -517,9 +514,11 @@ fn village(
         .filter(|(u, _)| matches!(*u, "home" | "shop"))
         .map(|w| w.1)
         .sum::<usize>();
-    let (square, mains, length) = match s.kind {
-        SettlementKind::Town => (18.0, 5 + rng.range(0, 1) as usize, 100.0),
-        SettlementKind::Village => (12.0, 3, 90.0),
+    let (square, mains, length) = match s.size {
+        SizeClass::Town | SizeClass::City | SizeClass::Metropolis | SizeClass::Megalopolis => {
+            (18.0, 5 + rng.range(0, 1) as usize, 100.0)
+        }
+        SizeClass::Village => (12.0, 3, 90.0),
         _ => (8.0, 2, 45.0),
     };
     // Longer streets for more households (each street side holds a house every ~10 m).
@@ -595,15 +594,11 @@ fn village(
         let len = length * (0.7 + 0.6 * rng.unit());
         let main = walk(&mut nodes, &mut streets, rng, from, bearing, len);
         // Side lanes off the main street (and, in towns, off those).
-        let depth = if s.kind == SettlementKind::Town { 2 } else { 1 };
+        let depth = if s.size >= SizeClass::Town { 2 } else { 1 };
         let mut queue = vec![(main, 0)];
         while let Some((lane, d)) = queue.pop() {
             if d < depth {
-                let branch = if s.kind == SettlementKind::Town {
-                    0.8
-                } else {
-                    0.55
-                };
+                let branch = if s.size >= SizeClass::Town { 0.8 } else { 0.55 };
                 for (k, &(node, heading)) in lane.iter().enumerate() {
                     if k % 2 == 1 && rng.unit() < branch / (d + 1) as f64 {
                         let side = if rng.unit() < 0.5 { 1.0 } else { -1.0 };

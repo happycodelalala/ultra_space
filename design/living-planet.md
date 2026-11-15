@@ -597,9 +597,17 @@ what is simulated, level of detail) and never show on screen:
   or a relay post by who lives there). Every 1–1.5 km in settled land, with roads joining the
   settlements and travellers on the roads near the player, they keep the land between
   settlements from feeling empty.
-- As built (4.3), `SettlementKind` mixes size and purpose (a colony is a town that is a
-  capital and a port; an outpost is a hamlet with the outpost role); the density task replaces
-  it with size class and roles.
+- **As built (task 4b.1):** `sim_society::SizeClass` and `SettlementRole` replace the old
+  settlement kind (the Compact's colony is a town that is seat, capital and port; an outpost a
+  hamlet with the outpost role); culture profiles carry `settlement_words` (the Hollin: a town
+  is a "hold", a hamlet a "steading", a dwelling a "croft"; the Compact: the capital is the
+  "landing", ports and outposts), the tiers' defaults (`default_word`) filling the rest; lore
+  pools stay keyed by kind (`Settlement::lore_kind`). Settlement patterns are data
+  (`content/data/settlement_patterns/`, schema `settlement_pattern.schema.json`): the
+  medieval pattern (seats as cities of 8–20k, towns every 25 km, villages every 4.5 km,
+  hamlets every 3 km, half the good land settled, dwellings every 1.25 km) and the young
+  colony (chosen by the charter colony polity at any tier: a capital of 2,500–5,000, port
+  seats, outposts every 40 km). Patterns for other tiers come with them.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

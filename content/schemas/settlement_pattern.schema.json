@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "settlement_pattern.schema.json",
+  "title": "Settlement pattern",
+  "description": "How a people settles its land (living-planet.md §8b): its seats, then classes of settlement filling the land by spacing. Chosen by polity first (if the pattern lists polities), else by tech tier.",
+  "type": "object",
+  "required": ["id", "settled_share", "seat", "classes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "description": {"type": "string"},
+    "tiers": {"type": "array", "items": {"$ref": "#/$defs/tier"}},
+    "polities": {"type": "array", "items": {"$ref": "#/$defs/polity"}},
+    "settled_share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Share of the home region's usable land that is settled (the best sites first)."},
+    "seat": {
+      "type": "object",
+      "required": ["size", "people", "roles"],
+      "additionalProperties": false,
+      "description": "Each faction's seat; the first faction's is the people's capital.",
+      "properties": {
+        "size": {"$ref": "#/$defs/size"},
+        "people": {"$ref": "#/$defs/range"},
+        "roles": {"$ref": "#/$defs/roles"},
+        "capital_people": {"$ref": "#/$defs/range"},
+        "capital_roles": {"$ref": "#/$defs/roles"}
+      }
+    },
+    "classes": {
+      "type": "array",
+      "description": "Biggest first: each fills the settled land at its spacing, away from those placed before.",
+      "items": {
+        "type": "object",
+        "required": ["size", "spacing_km", "people", "roles"],
+        "additionalProperties": false,
+        "properties": {
+          "size": {"$ref": "#/$defs/size"},
+          "spacing_km": {"type": "number", "exclusiveMinimum": 0},
+          "people": {"$ref": "#/$defs/range"},
+          "roles": {"$ref": "#/$defs/roles"}
+        }
+      }
+    },
+    "dwelling_spacing_km": {"type": "number", "exclusiveMinimum": 0, "description": "Dwellings (decoration) between settlements; none without it."}
+  },
+  "$defs": {
+    "tier": {"enum": ["stone_age", "ancient", "medieval", "early_modern", "industrial", "modern", "spacefaring", "interstellar"]},
+    "polity": {"enum": ["band", "tribe", "chiefdom", "realm", "empire", "city_state", "republic", "nation", "charter_colony", "federation"]},
+    "size": {"enum": ["hamlet", "village", "town", "city", "metropolis", "megalopolis"]},
+    "range": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 2},
+    "roles": {"type": "array", "items": {"enum": ["seat", "capital", "port", "fort", "market", "mine", "farm", "temple", "research", "outpost", "enclave", "arcology", "station"]}}
+  }
+}

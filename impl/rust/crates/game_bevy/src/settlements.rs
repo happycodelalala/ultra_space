@@ -811,7 +811,12 @@ pub fn start_near(
     let s = society
         .settlements
         .iter()
-        .filter(|s| s.name.to_lowercase() == what || s.kind.name() == what)
+        .filter(|s| {
+            s.name.to_lowercase() == what
+                || s.lore_kind() == what
+                || s.size.name() == what
+                || s.word.to_lowercase() == what
+        })
         .max_by_key(|s| s.population)?;
     let (east, south) = tangent_frame(s.direction);
     let r = terrain.radius;
@@ -856,8 +861,7 @@ pub fn start_near(
     state.state.angular_velocity = frame.angular_velocity;
     info!(
         "debug: starting {distance:.0} m south of {} ({}), {lift:.0} m up, at {t:.0} s",
-        s.name,
-        s.kind.name()
+        s.name, s.word
     );
     Some((state, t, height > 0.0))
 }

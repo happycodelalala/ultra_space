@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, SettlementKind};
+use sim_society::{Kits, Layout, RegionLayouts, RegionSociety};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -92,28 +92,28 @@ fn every_settlement_is_laid_out_with_what_it_needs() {
             l.unplaced
         );
         assert!(!l.streets.is_empty(), "{}: no streets", s.name);
-        match s.kind {
-            SettlementKind::Town => {
+        match s.lore_kind() {
+            "town" => {
                 for u in [
                     "square", "hall", "shrine", "inn", "market", "smithy", "home",
                 ] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
+                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
                 }
             }
-            SettlementKind::Village => {
+            "village" => {
                 for u in ["square", "shrine", "home"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
+                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
                 }
             }
-            SettlementKind::Hamlet => assert!(count("home") >= 3, "{}", s.name),
-            SettlementKind::Colony | SettlementKind::Port => {
+            "hamlet" => assert!(count("home") >= 3, "{}", s.name),
+            "colony" | "port" => {
                 for u in ["pad", "port", "home", "hall", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
+                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
                 }
             }
-            SettlementKind::Outpost => {
+            _ => {
                 for u in ["pad", "home", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
+                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
                 }
             }
         }

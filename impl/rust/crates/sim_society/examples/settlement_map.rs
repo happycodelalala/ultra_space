@@ -10,7 +10,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use sim_core::StarSystem;
 use sim_planet::map::{biome_map, direction, pixel};
 use sim_planet::{Climate, Terrain};
-use sim_society::{SettlementKind, generate, generate_settlements};
+use sim_society::{SizeClass, generate, generate_settlements};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -54,9 +54,9 @@ fn main() {
     }
     for s in &settlements {
         let (x, y) = pixel(s.direction, width);
-        let r: i64 = match s.kind {
-            SettlementKind::Town | SettlementKind::Colony => 4,
-            SettlementKind::Port | SettlementKind::Village => 3,
+        let r: i64 = match s.size {
+            SizeClass::Town | SizeClass::City | SizeClass::Metropolis | SizeClass::Megalopolis => 4,
+            SizeClass::Village => 3,
             _ => 2,
         };
         let colour = society.factions[s.faction].colour;
@@ -82,7 +82,7 @@ fn main() {
             "{:12} {:22} {:8} {:5} people  {:24} score {:.2}{}",
             s.id,
             s.name,
-            s.kind.name(),
+            s.word,
             s.population,
             society.factions[s.faction].name,
             s.site_score,
@@ -92,18 +92,12 @@ fn main() {
     for (ci, c) in society.cultures.iter().enumerate() {
         let mine: Vec<_> = settlements.iter().filter(|s| s.culture == ci).collect();
         let mut kinds: Vec<String> = Vec::new();
-        for k in [
-            SettlementKind::Colony,
-            SettlementKind::Port,
-            SettlementKind::Town,
-            SettlementKind::Village,
-            SettlementKind::Outpost,
-            SettlementKind::Hamlet,
-        ] {
-            let n = mine.iter().filter(|s| s.kind == k).count();
-            if n > 0 {
-                kinds.push(format!("{n} {}", k.name()));
-            }
+        let mut words: Vec<&str> = mine.iter().map(|s| s.word.as_str()).collect();
+        words.sort_unstable();
+        words.dedup();
+        for w in words {
+            let n = mine.iter().filter(|s| s.word == w).count();
+            kinds.push(format!("{n} {w}"));
         }
         println!(
             "{}: {} settlements ({}), {} people",

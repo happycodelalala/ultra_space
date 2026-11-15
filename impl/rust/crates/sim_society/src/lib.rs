@@ -18,6 +18,7 @@ pub mod aggregate;
 pub mod layout;
 pub mod lore;
 pub mod names;
+pub mod patterns;
 pub mod people;
 pub mod rng;
 pub mod settlements;
@@ -29,6 +30,9 @@ pub use lore::{
     Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Polity, Role, SettlementLore,
     TechTier,
 };
+pub use patterns::{SettlementPattern, SettlementPatterns};
 pub use people::{Activity, Crowd, Person};
-pub use settlements::{Settlement, SettlementKind, generate_settlements};
+pub use settlements::{
+    Settlement, SettlementRole, SizeClass, default_word, generate_settlements, settlement_word,
+};
 pub use society::{Culture, Faction, Society, generate};

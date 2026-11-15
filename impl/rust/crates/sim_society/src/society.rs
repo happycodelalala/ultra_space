@@ -191,6 +191,7 @@ fn plain_profile(id: &str) -> CultureProfile {
         adjective: id.into(),
         tech_tier: TechTier::Medieval,
         polity: Polity::Tribe,
+        settlement_words: Default::default(),
         government: "Village elders.".into(),
         values: vec![],
         taboos: vec![],
