@@ -57,8 +57,8 @@
    ],
    "recipe": {
     "house": {
-     "width": 3,
-     "depth": 3,
+     "width": 2,
+     "depth": 4,
      "storeys": 3,
      "walls": "stone",
      "chimney": true
@@ -72,7 +72,7 @@
    ],
    "recipe": {
     "house": {
-     "width": 3,
+     "width": 2,
      "depth": 6,
      "storeys": 3,
      "walls": "stone",

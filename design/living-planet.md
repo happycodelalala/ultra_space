@@ -694,6 +694,27 @@ what is simulated, level of detail) and never show on screen:
   the loading overlay by primers. The fly-in at 300 m/s from 30 km went from 17 frames over
   50 ms (worst 340 ms) to 2–3 (worst 60–95 ms), the average frame from ~17 ms to 6–11 ms when
   the machine is quiet.
+- **As built (task 4b.7): every people looks like its stage.** Stand-in kits from Kenney's CC0
+  packs (`content/data/building_kits/`, built by `tools/build-kits.sh`; pieces may come from
+  several packs at their own scale): the Tayu's tents, lean-tos, fires and stone circles
+  (Survival Kit); the Velani's stone houses, colonnaded temples and palace (Fantasy Town); the
+  Corvantines' tall houses, churches, windmills and harbours with ships (Fantasy Town, Pirate
+  Kit); the Aldmark's houses, tenements, shops, factories with chimneys and power stations
+  (City Kits Suburban, Commercial, Industrial); the Kesh enclaves' apartment blocks, admin
+  tower, workshops, solar fields and container barricades. Characters are the Quaternius base
+  bodies in the fantasy outfits dyed (`outfit_colour`: hides and furs, red-clad soldiers, navy
+  sailors, olive guards) or painted work suits (overalls, white coats, hazmat yellow). Three
+  layout styles serve the seven peoples: the **village** (organic lanes round a square; ports
+  get a harbour on the nearest shore with a street down to it), the **camp** (huts in rings
+  round fires, trails between, the stone circle apart, trees in groves) and the **grid** (blocks
+  of 3 × 3 plots with streets round the blocks; a factory or a pad takes a whole block; the
+  colony, industrial and modern towns). Big places have bigger buildings, not more of them (at
+  most 4,500 a layout: tenements, apartment blocks), and their streets branch more rather than
+  running for kilometres. A people's ports are placed on its coast (lattice points next to the
+  sea), and a port inland loses the role. Known for later: big cities sprawl like suburbs
+  (walls and denser cores come with the surroundings, §8d); the Kenney pieces' cartoon palette
+  (teal flat roofs, pink stone); industrial and modern people in painted suits read as
+  skin-tight.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

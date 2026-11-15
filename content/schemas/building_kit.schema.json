@@ -73,7 +73,10 @@
                 "port",
                 "comms",
                 "power",
-                "harbour"
+                "harbour",
+                "wall",
+                "tower",
+                "gate"
               ]
             }
           },

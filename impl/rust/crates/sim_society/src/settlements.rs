@@ -342,12 +342,12 @@ pub fn generate_settlements(
                     (c.size, c.roles.clone(), c.people)
                 }
             };
-            // A port by sea needs the sea: within reach of its harbour (the layout looks 900 m
-            // out), else it is a port in name only and isn't one. Spacecraft ports need none.
+            // A port by sea needs the sea within reach of its harbour, else it isn't one (a seat
+            // inland). Spacecraft ports need none.
             let mut settlement_roles = settlement_roles;
             if profile.tech_tier != TechTier::Spacefaring
                 && settlement_roles.contains(&SettlementRole::Port)
-                && !coastal(&terrain, dir, 900.0)
+                && !coastal(&terrain, dir, SHORE_REACH)
             {
                 settlement_roles.retain(|r| *r != SettlementRole::Port);
             }
@@ -491,12 +491,14 @@ pub(crate) fn place(
     let rows = (extent / (step * 0.866)).ceil() as i64;
     let cols = (extent / step).ceil() as i64;
     let mut lattice: Vec<(DVec2, DVec3)> = Vec::new();
+    let mut at: std::collections::HashMap<(i64, i64), usize> = std::collections::HashMap::new();
     for j in -rows..=rows {
         for i in -cols..=cols {
             let x = (i as f64 + if j % 2 == 0 { 0.0 } else { 0.5 }) * step;
             let y = j as f64 * step * 0.866;
             let d = (centre * r + (east * x + north * y) * 1000.0).normalize();
             if d.angle_between(centre) < reach {
+                at.insert((i, j), lattice.len());
                 lattice.push((DVec2::new(x, y), d));
             }
         }
@@ -505,7 +507,9 @@ pub(crate) fn place(
         .map_or(4, |n| n.get())
         .min(16);
     let chunk = lattice.len().div_ceil(threads).max(1);
-    let scored: Vec<Option<(f64, f64)>> = std::thread::scope(|scope| {
+    // Each point's score and height, and whether it is under the sea (a site next to one is on
+    // the coast: ports go there).
+    let scored: Vec<(Option<(f64, f64)>, bool)> = std::thread::scope(|scope| {
         let handles: Vec<_> = lattice
             .chunks(chunk)
             .map(|part| {
@@ -515,9 +519,14 @@ pub(crate) fn place(
                         .map(|&(_, d)| {
                             // The land alone decides where people settle (away from
                             // hazards); only the capital prefers the middle.
-                            let (score, height) = score_site(terrain, climate, tier, d)?;
-                            let z = hazard(d);
-                            (z < 0.35).then_some((score * (1.0 - z).powi(2), height))
+                            let site = score_site(terrain, climate, tier, d).and_then(
+                                |(score, height)| {
+                                    let z = hazard(d);
+                                    (z < 0.35).then_some((score * (1.0 - z).powi(2), height))
+                                },
+                            );
+                            let wet = site.is_none() && terrain.height(d, 200.0) < 0.0;
+                            (site, wet)
                         })
                         .collect::<Vec<_>>()
                 })
@@ -528,6 +537,21 @@ pub(crate) fn place(
             .flat_map(|h| h.join().expect("scoring thread"))
             .collect()
     });
+    let wet: Vec<bool> = scored.iter().map(|s| s.1).collect();
+    let scored: Vec<Option<(f64, f64)>> = scored.into_iter().map(|s| s.0).collect();
+    let mut coastal = vec![false; lattice.len()];
+    for (&(i, j), &k) in &at {
+        let odd = j.rem_euclid(2);
+        let near = [
+            (i - 1, j),
+            (i + 1, j),
+            (i - 1 + odd, j - 1),
+            (i + odd, j - 1),
+            (i - 1 + odd, j + 1),
+            (i + odd, j + 1),
+        ];
+        coastal[k] = near.iter().any(|n| at.get(n).is_some_and(|&m| wet[m]));
+    }
     // The settled land: the best share of the usable sites.
     let mut usable: Vec<usize> = (0..lattice.len())
         .filter(|&i| scored[i].is_some())
@@ -579,6 +603,7 @@ pub(crate) fn place(
     let mut pick = Rng::derive(seed, &format!("sites/{label}"));
     let mut placed: Vec<(usize, Option<usize>)> = seats.iter().map(|&i| (i, None)).collect();
     for (c, class) in pattern.classes.iter().enumerate() {
+        let port = class.roles.contains(&SettlementRole::Port);
         let cell = class.spacing_km * 1.2;
         let key = |p: DVec2| ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64);
         let mut grid: std::collections::HashMap<(i64, i64), Vec<DVec2>> =
@@ -592,6 +617,9 @@ pub(crate) fn place(
             .collect();
         order.sort_by(|a, b| b.0.total_cmp(&a.0));
         for (_, i, own) in order {
+            if port && !coastal[i] {
+                continue;
+            }
             let p = plane(i);
             let need = class.spacing_km * own;
             let (kx, ky) = key(p);
@@ -636,6 +664,9 @@ pub(crate) fn place(
         })
         .collect()
 }
+
+/// How far from a port's centre its harbour may be (m): the layout looks this far for the shore.
+pub const SHORE_REACH: f64 = 1_800.0;
 
 /// Whether the sea is within `reach` m of unit direction `dir` (sampled round it).
 fn coastal(terrain: &Terrain, dir: DVec3, reach: f64) -> bool {

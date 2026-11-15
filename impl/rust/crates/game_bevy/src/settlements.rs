@@ -881,17 +881,23 @@ fn building_box(
         .get(&(kit.id.clone(), placed.building))
         .copied()
         .unwrap_or(([0.5; 3], [0.5; 3]));
-    // Trees as narrow cones would be fussy: a slim box in their colour.
+    // Trees as cones would be fussy: a box for the crown (from a third of the height up) in
+    // its leaves' colour, so a distant tree isn't a pole.
     let tree = b.uses.iter().any(|u| u == "tree");
-    let shrink = if tree { 0.45 } else { 1.0 };
+    let (shrink, base) = if tree {
+        (0.7, 0.3 * hi.y)
+    } else {
+        (1.0, -SKIRT)
+    };
+    let wall = if tree { roof } else { wall };
     let half = Vec3::new(
         0.5 * (hi.x - lo.x) * shrink,
-        0.5 * (hi.y + SKIRT),
+        0.5 * (hi.y - base),
         0.5 * (hi.z - lo.z) * shrink,
     );
     let centre_local = Vec3::new(
         0.5 * (lo.x + hi.x),
-        0.5 * (hi.y - SKIRT),
+        0.5 * (hi.y + base),
         0.5 * (lo.z + hi.z),
     );
     let centre = origin + rotation * centre_local;
@@ -923,13 +929,15 @@ fn distant_meshes(
         building_box(
             site, layout, kit, colours, radius, i, &mut p, &mut n, &mut c, &mut idx,
         );
-        // A lantern by the door of every building people use (not trees, wells or carts).
-        let lit = b.uses.iter().any(|u| {
-            !matches!(
-                u.as_str(),
-                "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms" | "harbour"
-            )
-        });
+        // A lantern by the door of every building people use (not trees, wells or carts, nor
+        // tents and huts too low to hang one on).
+        let lit = hi.y > 3.5
+            && b.uses.iter().any(|u| {
+                !matches!(
+                    u.as_str(),
+                    "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms" | "harbour"
+                )
+            });
         if lit {
             let door = origin + rotation * Vec3::new(0.5 * (lo.x + hi.x), 2.4, hi.z + 0.3);
             add_box(

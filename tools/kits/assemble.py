@@ -7,7 +7,7 @@ the layouts. Run through tools/build-kits.sh:
 
 Recipes: `house` (cells of `unit_m`: width across X, depth along Z, storeys, walls wood|stone|mixed,
 roof high|low|flat, chimney, banners, lanterns, tower N storeys at the back), `temple` (a
-colonnade of pillars round width × depth cells, `height` units tall, a flat roof, and a walled
+colonnade of pillars round width × depth cells, `height` units tall, a tiled roof, and a walled
 inner room when there is space), and/or `pieces` (a piece at a position in kit units with a turn
 about the vertical, degrees; optionally from another `source` folder and at a `scale`, for packs
 of other units). Fronts (doors) face +Z.
@@ -59,6 +59,33 @@ def place(source, name, x, y, z, rot_deg, scale=1.0):
     return new
 
 
+def roof_over(source, w, d, top, roof):
+    """A roof over w × d cells at height `top`: hipped (slopes on the long sides, corner pieces
+    at the ends; a pyramid over one cell), high or low; flat; or none."""
+    cx = lambda i: i - (w - 1) / 2
+    cz = lambda j: j - (d - 1) / 2
+    slope, corner = ("roof-high", "roof-high-corner") if roof == "high" else ("roof", "roof-corner")
+    if roof == "none":
+        pass
+    elif roof == "flat":
+        for i in range(w):
+            for j in range(d):
+                place(source, "roof-flat", cx(i), top, cz(j), 0)
+    elif w == 1 and d == 1:
+        place(source, "roof-high-point" if roof == "high" else "roof-point", 0, top, 0, 0)
+    else:
+        for i in range(w):
+            for j in range(d):
+                x, z = cx(i), cz(j)
+                west = i == 0
+                if 0 < j < d - 1:
+                    place(source, slope, x, top, z, 0 if west else 180)
+                else:
+                    front = j == d - 1
+                    rot = {(True, True): 0, (False, True): 90, (False, False): 180, (True, False): -90}[(west, front)]
+                    place(source, corner, x, top, z, rot)
+
+
 def house(source, h):
     """A house on a grid of cells: walls round the edge each storey (door and windows at the
     front, +Z), a hipped roof, and its extras."""
@@ -89,29 +116,8 @@ def house(source, h):
                     place(source, wall(front, s), x, s, z, -90)
                 if j == 0:
                     place(source, wall("window" if s else "plain", s), x, s, z, 90)
-    # Hipped roof: slopes on the long sides, corner pieces at the ends (one cell deep houses
-    # get a pyramid).
     top = storeys
-    slope, corner = ("roof-high", "roof-high-corner") if roof == "high" else ("roof", "roof-corner")
-    if roof == "none":
-        pass
-    elif roof == "flat":
-        for i in range(w):
-            for j in range(d):
-                place(source, "roof-flat", cx(i), top, cz(j), 0)
-    elif w == 1 and d == 1:
-        place(source, "roof-high-point" if roof == "high" else "roof-point", 0, top, 0, 0)
-    else:
-        for i in range(w):
-            for j in range(d):
-                x, z = cx(i), cz(j)
-                west = i == 0
-                if 0 < j < d - 1:
-                    place(source, slope, x, top, z, 0 if west else 180)
-                else:
-                    front = j == d - 1
-                    rot = {(True, True): 0, (False, True): 90, (False, False): 180, (True, False): -90}[(west, front)]
-                    place(source, corner, x, top, z, rot)
+    roof_over(source, w, d, top, roof)
     if h.get("chimney"):
         place(source, "chimney", cx(w - 1), top, cz(max(0, d // 2 - 1)), 0)
     if h.get("banners"):
@@ -140,9 +146,7 @@ def temple(source, t):
             x, z = i - w / 2, j - d / 2
             for s in range(height):
                 place(source, "pillar-stone", x, s, z, 0)
-    for i in range(w):
-        for j in range(d):
-            place(source, "roof-flat", i - (w - 1) / 2, height, j - (d - 1) / 2, 0)
+    roof_over(source, w, d, height, t.get("roof", "high"))
     if w >= 3 and d >= 3:
         house(source, {"width": w - 2, "depth": d - 2, "storeys": height, "walls": "stone",
                        "roof": "none"})

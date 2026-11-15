@@ -377,7 +377,14 @@ impl Plots<'_> {
         let clash = Self::cells(&rect)
             .filter_map(|c| self.grid.get(&c))
             .flatten()
-            .any(|&i| overlaps(&rect, &self.rects[i]));
+            .any(|&i| overlaps(&rect, &self.rects[i]))
+            || Self::cells(&rect)
+                .filter_map(|c| self.street_grid.get(&c))
+                .flatten()
+                .any(|&i| {
+                    let (a, b) = self.streets[i];
+                    segment_hits(&rect, a, b, STREET_HALF - MARGIN)
+                });
         if clash {
             return None;
         }
@@ -794,16 +801,19 @@ fn village(
                 // Harbours on the nearest shore, reaching out to sea, with a street to them.
                 "port" => {
                     let b = pick(kit, "port", Some(rng));
-                    match (b, shore(plots, 900.0)) {
+                    match (b, shore(plots, crate::settlements::SHORE_REACH)) {
                         (Some(b), Some((at, out))) => {
                             let ok = plots.place_on_shore(b, at, facing(out)).is_some();
+                            // The street ends short of the harbour's back.
+                            let back = kit.buildings[b].min_m[2] - STREET_HALF - MARGIN - 1.0;
+                            let at = at + out * back;
                             if ok && at.length() > square + 12.0 {
                                 let from = (out * square).clamp_length_max(square);
                                 let steps = ((at.length() - square) / 12.0).ceil() as usize;
                                 let mut prev = nodes.len();
                                 nodes.push(from);
                                 for k in 1..=steps {
-                                    let q = from.lerp(at - out * 6.0, k as f64 / steps as f64);
+                                    let q = from.lerp(at, k as f64 / steps as f64);
                                     nodes.push(q);
                                     let i = nodes.len() - 1;
                                     streets.push((prev as u32, i as u32));
@@ -983,6 +993,7 @@ fn camp(wanted: &[(&'static str, usize)], kit: &Kit, plots: &mut Plots, rng: &mu
         }
     }
     let mut ring_of = vec![0usize; centres.len()];
+    let mut grove: Vec<DVec2> = Vec::new();
     for &(use_, count) in wanted {
         if use_ == "square" {
             continue; // the fires, above
@@ -1013,19 +1024,25 @@ fn camp(wanted: &[(&'static str, usize)], kit: &Kit, plots: &mut Plots, rng: &mu
                         placed
                     })
                 }
-                // The stone circle and the trees a little apart.
+                // The stone circle a little apart; trees in groves among and round the camp (most
+                // start next to an earlier tree).
                 _ => {
                     let edge = reach - 25.0;
                     (0..40).any(|_| {
                         let a = rng.unit() * tau;
-                        let r = edge
-                            + if use_ == "shrine" {
-                                15.0
-                            } else {
-                                10.0 + 30.0 * rng.unit()
-                            };
-                        let p = DVec2::new(a.cos(), a.sin()) * r;
-                        plots.try_place(b, p, rng.unit() * tau).is_some()
+                        let p = if use_ == "shrine" {
+                            DVec2::new(a.cos(), a.sin()) * (edge + 15.0)
+                        } else if !grove.is_empty() && rng.unit() < 0.7 {
+                            *rng.pick(&grove)
+                                + DVec2::new(a.cos(), a.sin()) * (5.0 + 7.0 * rng.unit())
+                        } else {
+                            DVec2::new(a.cos(), a.sin()) * (reach * 1.3 * rng.unit().sqrt())
+                        };
+                        let placed = plots.try_place(b, p, rng.unit() * tau).is_some();
+                        if placed && use_ == "tree" {
+                            grove.push(p);
+                        }
+                        placed
                     })
                 }
             };
@@ -1188,11 +1205,13 @@ fn prune(nodes: &[DVec2], streets: Vec<(u32, u32)>, plots: &Plots, ring: usize) 
         .collect()
 }
 
-/// Extra width of the colony's avenues between blocks of plots (m).
-const AVENUE: f64 = 14.0;
+/// Width of the streets between blocks of plots (m): the street and a margin each side.
+const AVENUE: f64 = 2.0 * (STREET_HALF + MARGIN) + 2.0;
 
 /// The grid style: the colony's blocks round its pads, the industrial and modern towns' blocks
-/// round their squares (the first uses wanted at the centre, the last at the edge).
+/// round their squares (the first uses wanted at the centre, the last at the edge). Blocks of
+/// 3 × 3 plots with streets round the blocks; a plot is sized for most of the kit's buildings,
+/// and a bigger one (a factory, a pad) takes a whole block.
 fn grid(
     _s: &Settlement,
     wanted: &[(&'static str, usize)],
@@ -1200,41 +1219,87 @@ fn grid(
     plots: &mut Plots,
     rng: &mut Rng,
 ) -> Graph {
-    // Plot pitch: the largest building plus a street.
-    let pitch = kit
-        .buildings
-        .iter()
-        .map(|b| b.half().max_element() * 2.0)
-        .fold(0.0, f64::max)
-        + 2.0 * (STREET_HALF + MARGIN)
+    let size = |b: usize| kit.buildings[b].half().max_element() * 2.0;
+    // Plot pitch: three in four of the kit's buildings (not trees or props) fit one plot.
+    let mut sizes: Vec<f64> = (0..kit.buildings.len())
+        .filter(|&b| {
+            !kit.buildings[b]
+                .uses
+                .iter()
+                .any(|u| u == "tree" || u == "prop")
+        })
+        .map(size)
+        .collect();
+    sizes.sort_by(f64::total_cmp);
+    let pitch = sizes
+        .get(sizes.len() * 3 / 4)
+        .copied()
+        .unwrap_or(10.0)
+        .max(8.0)
+        + 2.0 * MARGIN
         + 1.0;
+    let span = 3.0 * pitch;
     let total: usize = wanted.iter().map(|w| w.1).sum();
-    // Room to spare: plots on steep or wet ground are passed over.
-    let side = ((total as f64 * 4.0).sqrt().ceil() as i32 + 6) | 1;
+    // Room to spare (plots on steep or wet ground are passed over): blocks per side.
+    let side = ((total as f64 * 4.0).sqrt() / 3.0).ceil() as i32 + 3;
     let half = side / 2;
     let turn = (rng.unit() - 0.5) * std::f64::consts::FRAC_PI_2;
-    // Blocks of 3 × 3 plots with an avenue between blocks.
-    let g = |i: i32| f64::from(i) * pitch + f64::from((i + 1).div_euclid(3)) * AVENUE;
-    let plot_at = |i: i32, j: i32| rotate(DVec2::new(g(i), g(j)), turn);
-    // The street line before plot i (between plots i - 1 and i).
-    let line = |i: i32| 0.5 * (g(i - 1) + g(i));
-    let mut cells: Vec<(f64, i32, i32)> = (-half..=half)
-        .flat_map(|j| (-half..=half).map(move |i| (i, j)))
-        .map(|(i, j)| ((i * i + j * j) as f64 + 0.8 * rng.unit(), i, j))
+    let origin = |b: i32| f64::from(b) * (span + AVENUE);
+    let block = |i: i32| (i + 1).div_euclid(3);
+    let local = |i: i32| (i + 1).rem_euclid(3) - 1;
+    let unturned = |i: i32, j: i32| {
+        DVec2::new(
+            origin(block(i)) + f64::from(local(i)) * pitch,
+            origin(block(j)) + f64::from(local(j)) * pitch,
+        )
+    };
+    let plot_at = |i: i32, j: i32| rotate(unturned(i, j), turn);
+    // The street line before block b (between blocks b - 1 and b).
+    let line = |b: i32| origin(b) - 0.5 * span - 0.5 * AVENUE;
+    let reach = 3 * half + 1;
+    let mut cells: Vec<(f64, i32, i32)> = (-reach..=reach)
+        .flat_map(|j| (-reach..=reach).map(move |i| (i, j)))
+        .map(|(i, j)| (unturned(i, j).length() / pitch + 0.8 * rng.unit(), i, j))
         .collect();
     cells.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut blocks: Vec<(f64, i32, i32)> = (-half..=half)
+        .flat_map(|j| (-half..=half).map(move |i| (i, j)))
+        .map(|(i, j)| ((i * i + j * j) as f64 + 0.5 * rng.unit(), i, j))
+        .collect();
+    blocks.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // Which plots are taken, and by which building (index into the placed).
     let mut used: HashMap<(i32, i32), usize> = HashMap::new();
     let mut unplaced = 0;
     // Plots are taken nearest first; `next` is the first not yet taken.
     let mut next = 0;
+    // The smallest building that failed on a plot or a block (steep, wet): smaller ones may
+    // still fit.
     let mut failed: HashMap<(i32, i32), f64> = HashMap::new();
+    let mut failed_block: HashMap<(i32, i32), f64> = HashMap::new();
+    // Facing the street: the plot's side of its block (the middle plot toward the town's
+    // centre).
+    let facing_of = |i: i32, j: i32| {
+        let (li, lj) = (local(i), local(j));
+        let dir = if li == 0 && lj == 0 {
+            let toward = |v: i32| if v >= 0 { -1.0 } else { 1.0 };
+            if block(i).abs() > block(j).abs() {
+                DVec2::new(toward(block(i)), 0.0)
+            } else {
+                DVec2::new(0.0, toward(block(j)))
+            }
+        } else if li.abs() >= lj.abs() {
+            DVec2::new(f64::from(li), 0.0)
+        } else {
+            DVec2::new(0.0, f64::from(lj))
+        };
+        facing(rotate(dir, turn))
+    };
     for &(use_, count) in wanted {
         // A use the kit has no building for is passed over (as in the village style).
         if pick(kit, use_, None).is_none() {
             continue;
         }
-        // Trees and props: in plots too rough for a building, or spare ones near the built,
-        // without taking them (no streets round a tree).
+        // Trees and props: in spare plots near the built, without taking them.
         if matches!(use_, "tree" | "prop") {
             let spare: Vec<(i32, i32)> = cells
                 .iter()
@@ -1271,12 +1336,7 @@ fn grid(
         let smallest = kit
             .with_use(use_)
             .into_iter()
-            .min_by(|&x, &y| {
-                kit.buildings[x]
-                    .half()
-                    .max_element()
-                    .total_cmp(&kit.buildings[y].half().max_element())
-            })
+            .min_by(|&x, &y| size(x).total_cmp(&size(y)))
             .unwrap_or(0);
         for _ in 0..count {
             let chosen = pick(kit, use_, Some(rng)).unwrap_or(0);
@@ -1285,33 +1345,49 @@ fn grid(
                 if placed {
                     break;
                 }
-                // A plot one building didn't fit (steep, wet) stays open to smaller ones: each
-                // remembers the smallest building that failed there.
-                let size = kit.buildings[b].half().max_element();
-                let mut k = next;
-                while k < cells.len() {
-                    let (_, i, j) = cells[k];
-                    k += 1;
-                    if used.contains_key(&(i, j)) || failed.get(&(i, j)).is_some_and(|&f| size >= f)
-                    {
-                        continue;
+                let sz = size(b);
+                if sz > pitch - 2.0 * MARGIN {
+                    // A big building: a whole free block, at its middle.
+                    for &(_, bi, bj) in &blocks {
+                        let plots_of = (-1..=1)
+                            .flat_map(|dj| (-1..=1).map(move |di| (3 * bi + di, 3 * bj + dj)));
+                        if plots_of.clone().any(|c| used.contains_key(&c))
+                            || failed_block.get(&(bi, bj)).is_some_and(|&f| sz >= f)
+                        {
+                            continue;
+                        }
+                        let (i, j) = (3 * bi, 3 * bj);
+                        let yaw = facing_of(i, j);
+                        let c = rotate(kit.buildings[b].centre(), yaw);
+                        if let Some(k) = plots.try_place(b, plot_at(i, j) - c, yaw) {
+                            for c in plots_of {
+                                used.insert(c, k);
+                            }
+                            placed = true;
+                            break;
+                        }
+                        failed_block.insert((bi, bj), sz);
                     }
-                    // Face the street toward the centre (the nearer axis).
-                    let toward = |v: i32| if v >= 0 { -1.0 } else { 1.0 };
-                    let dir = if i.abs() > j.abs() {
-                        DVec2::new(toward(i), 0.0)
-                    } else {
-                        DVec2::new(0.0, toward(j))
-                    };
-                    let yaw = facing(rotate(dir, turn));
-                    // The building's centre on the plot's centre.
-                    let c = rotate(kit.buildings[b].centre(), yaw);
-                    if let Some(k) = plots.try_place(b, plot_at(i, j) - c, yaw) {
-                        used.insert((i, j), k);
-                        placed = true;
-                        break;
+                } else {
+                    let mut k = next;
+                    while k < cells.len() {
+                        let (_, i, j) = cells[k];
+                        k += 1;
+                        if used.contains_key(&(i, j))
+                            || failed.get(&(i, j)).is_some_and(|&f| sz >= f)
+                        {
+                            continue;
+                        }
+                        let yaw = facing_of(i, j);
+                        // The building's centre on the plot's centre.
+                        let c = rotate(kit.buildings[b].centre(), yaw);
+                        if let Some(k) = plots.try_place(b, plot_at(i, j) - c, yaw) {
+                            used.insert((i, j), k);
+                            placed = true;
+                            break;
+                        }
+                        failed.insert((i, j), sz);
                     }
-                    failed.insert((i, j), size);
                 }
                 if chosen == smallest {
                     break;
@@ -1325,28 +1401,25 @@ fn grid(
             }
         }
     }
-    // Streets: the grid lines round every built plot (corner nodes).
+    // Streets: round every block with something built (corner nodes).
     let mut nodes = Vec::new();
     let mut index: HashMap<(i32, i32), u32> = HashMap::new();
-    let mut node = |nodes: &mut Vec<DVec2>, i: i32, j: i32| {
-        *index.entry((i, j)).or_insert_with(|| {
-            nodes.push(rotate(DVec2::new(line(i), line(j)), turn));
+    let mut node = |nodes: &mut Vec<DVec2>, bi: i32, bj: i32| {
+        *index.entry((bi, bj)).or_insert_with(|| {
+            nodes.push(rotate(DVec2::new(line(bi), line(bj)), turn));
             (nodes.len() - 1) as u32
         })
     };
-    let mut edges = std::collections::BTreeSet::new();
-    let mut built: Vec<_> = used
-        .iter()
-        .filter(|(_, k)| **k != usize::MAX)
-        .map(|(c, _)| *c)
-        .collect();
+    let mut built: Vec<(i32, i32)> = used.keys().map(|&(i, j)| (block(i), block(j))).collect();
     built.sort();
-    for (i, j) in built {
+    built.dedup();
+    let mut edges = std::collections::BTreeSet::new();
+    for (bi, bj) in built {
         let c = [
-            node(&mut nodes, i, j),
-            node(&mut nodes, i + 1, j),
-            node(&mut nodes, i + 1, j + 1),
-            node(&mut nodes, i, j + 1),
+            node(&mut nodes, bi, bj),
+            node(&mut nodes, bi + 1, bj),
+            node(&mut nodes, bi + 1, bj + 1),
+            node(&mut nodes, bi, bj + 1),
         ];
         for k in 0..4 {
             let (a, b) = (c[k], c[(k + 1) % 4]);
