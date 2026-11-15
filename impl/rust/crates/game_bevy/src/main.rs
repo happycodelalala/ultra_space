@@ -3,6 +3,7 @@
 //! Game logic lives in the engine-independent `sim_*` crates; this crate only renders, handles
 //! input and wires plugins together.
 
+mod blocks;
 mod builder;
 mod camera;
 mod capture;
@@ -27,6 +28,7 @@ mod universe;
 mod vehicle_visual;
 mod walk;
 mod warmup;
+mod weather;
 mod workers;
 
 use bevy::log::{BoxedLayer, LogPlugin};
@@ -88,6 +90,8 @@ fn main() {
             people::PeoplePlugin,
             meeting::MeetingPlugin,
             distant::DistantPlugin,
+            blocks::BlocksPlugin,
+            weather::WeatherPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

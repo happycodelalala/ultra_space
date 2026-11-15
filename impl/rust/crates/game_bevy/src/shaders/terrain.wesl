@@ -12,6 +12,8 @@ struct TerrainUniform {
     params: vec4<f32>,    // x baked map present, y blend start (m), z blend end (m), w detail fade (m)
     surface: vec4<f32>,   // x has ocean, y has atmosphere
     palette: array<vec4<f32>, 12>, // linear biome colours by biome index
+    blocks: vec4<f32>,    // xyz block ground centre (body frame, unit), w cosine of its angular radius
+    hide: vec4<f32>,      // x: tiles this close (horizontally) to the camera inside the block ground are hidden
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> terrain: TerrainUniform;
@@ -101,6 +103,14 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let dir = normalize(local);
     let n = normalize(in.world_normal);
     let dist = length(p - view.world_position);
+    // Inside the block ground near the camera the blocks are drawn instead.
+    if terrain.hide.x > 0.0 && dot(dir, terrain.blocks.xyz) > terrain.blocks.w {
+        let v = p - view.world_position;
+        let cup = normalize(view.world_position - terrain.center.xyz);
+        if length(v - cup * dot(v, cup)) < terrain.hide.x {
+            discard;
+        }
+    }
 
         // Surface fields: interpolated from the vertices close up, from the baked map far away.
     // Biomes are decided per pixel from the interpolated fields, so boundaries (coasts, snow

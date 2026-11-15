@@ -4,6 +4,7 @@
 //! function per body gives heights, climate and biomes, shared by rendering, collision and
 //! gameplay.
 
+pub mod blocks;
 pub mod climate;
 pub mod foundations;
 pub mod map;
@@ -12,6 +13,7 @@ pub mod noise;
 pub mod quadtree;
 pub mod terrain;
 
+pub use blocks::{BlockGround, VillageGround};
 pub use climate::{Biome, Climate, latitude, subsolar_latitude};
 pub use foundations::{Footprint, Foundations, PlacedBox, Site, Structure, tangent_frame};
 pub use mesh::{CollisionPatch, TileMesh, build_tile, collision_patch, tile_indices};

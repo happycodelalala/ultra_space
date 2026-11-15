@@ -1,0 +1,16 @@
+# The demo village's review views (Batch 5, task 5.6): the style renders' viewpoints
+# (tools/blocks/scene.py), held fixed to the ground. Start in the village (the default start).
+1   log village views
+2   view 17 -26 9 0 -2 2.5 40
+6   shot village-wide.png
+7   view 3.5 -19.5 3.0 0.5 0 3.8 42
+10  shot village-house.png
+11  view -1.5 -14.5 1.7 4 -4 1.8 58
+14  shot village-close.png
+15  view 0.5 -10.5 1.6 0.5 -4.5 1.0 42
+18  shot village-people.png
+19  view -3.4 -12.6 3 -11 -12 1.5 45
+22  shot village-ship.png
+23  view 60 -70 40 0 0 0 50
+27  shot village-far.png
+28  quit

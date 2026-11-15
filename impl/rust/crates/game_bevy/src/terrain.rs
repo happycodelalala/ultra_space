@@ -632,6 +632,8 @@ fn place_tiles(
     real: Res<Time<Real>>,
     camera: Res<SpaceCamera>,
     maps: Res<BakedMapHandles>,
+    blocks: Option<Res<crate::blocks::BlockWorld>>,
+    coverage: Option<Res<crate::blocks::BlockCoverage>>,
     mut ground_materials: ResMut<Assets<TerrainMaterial>>,
     mut water_materials: ResMut<Assets<WaterMaterial>>,
     mut tiles: Query<(&TerrainTile, &Visibility, &mut Transform)>,
@@ -657,10 +659,35 @@ fn place_tiles(
         let center = position.as_vec3().extend(bt.extent.radius as f32);
         let q = rotation.as_quat().normalize();
         let q = Vec4::new(q.x, q.y, q.z, q.w);
+        // Tiles give way to the block ground round the camera.
+        let (blocks_at, hide) = match blocks.as_deref().filter(|b| b.body == bt.body) {
+            Some(b) => {
+                let g = &b.ground;
+                let cam = rotation.inverse() * (-position);
+                let low = cam.length() - g.radius - g.base < crate::blocks::DRAW_REACH;
+                let inside = g.plane(cam.normalize()).is_some();
+                (
+                    g.center.as_vec3().extend((g.reach / g.radius).cos() as f32),
+                    Vec4::new(
+                        if low && inside {
+                            coverage.as_deref().map_or(0.0, |c| c.0) as f32
+                        } else {
+                            0.0
+                        },
+                        0.0,
+                        0.0,
+                        0.0,
+                    ),
+                )
+            }
+            None => (Vec4::ZERO, Vec4::ZERO),
+        };
         if let Some(mut m) = ground_materials.get_mut(&bt.ground) {
             m.data.star = star;
             m.data.center = center;
             m.data.rotation = q;
+            m.data.blocks = blocks_at;
+            m.data.hide = hide;
             if m.field_map.is_none()
                 && let Some(map) = maps.fields.get(&bt.body)
             {

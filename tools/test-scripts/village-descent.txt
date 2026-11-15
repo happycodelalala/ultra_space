@@ -1,0 +1,13 @@
+# From high above down to the demo village (task 5.6): the block ground fills in as the camera
+# comes down; frame times count (perf).
+1   view 0 -3000 3000 0 0 0 50
+5   shot descent-3km.png
+6   view 0 -900 700 0 0 0 50
+10  shot descent-900m.png
+11  view 0 -250 160 0 0 0 50
+15  shot descent-250m.png
+16  view 0 -70 40 0 0 0 50
+20  shot descent-70m.png
+21  view 5 -28 6 0 0 3 50
+25  shot descent-near.png
+26  quit

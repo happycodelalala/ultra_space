@@ -13,6 +13,7 @@
 //! 9.5  log reached cloud deck
 //! 9.7  orbit 135 -20       # chase camera at yaw 135°, pitch -20° (degrees)
 //! 10   wait landed 20     # pause the script clock until the ship is landed and still (max 20 s)
+//! 11   view 17 -26 9 0 -2 2.5 40   # camera held at a village viewpoint (eye, target; fov)
 //! 12   quit               # exit (after pending screenshots), logging a frame summary
 //! ```
 //!
@@ -55,6 +56,9 @@ pub enum Action {
     /// Set the chase camera's orbit around the ship: yaw and pitch (degrees, as
     /// `ULTRA_SPACE_CHASE_ORBIT`).
     Orbit(f64, f64),
+    /// Hold the camera at a viewpoint in the demo village: eye and target (grid metres: x east,
+    /// y north, z up from the village floor) and the vertical field of view (degrees).
+    View([f64; 6], f64),
     /// Pause the script clock until a condition holds (at most this many seconds).
     Wait(Condition, f64),
     Quit,
@@ -241,6 +245,17 @@ pub fn parse(text: &str) -> Result<Vec<Step>, String> {
             ),
             "log" => Action::Log(rest.join(" ")),
             "orbit" => Action::Orbit(number(0)?, number(1)?),
+            "view" => Action::View(
+                [
+                    number(0)?,
+                    number(1)?,
+                    number(2)?,
+                    number(3)?,
+                    number(4)?,
+                    number(5)?,
+                ],
+                if rest.len() > 6 { number(6)? } else { 50.0 },
+            ),
             "wait" => {
                 let condition = match rest.first().map(|w| w.to_ascii_lowercase()).as_deref() {
                     Some("landed") => Condition::Landed,
@@ -412,6 +427,14 @@ fn run_script(
             Action::Log(text) => info!("script: {text}"),
             Action::Orbit(yaw, pitch) => {
                 pilot.orbit = (yaw.to_radians(), pitch.to_radians().clamp(-1.4, 1.4));
+            }
+            Action::View(v, fov) => {
+                pilot.flying = false;
+                commands.insert_resource(crate::blocks::VillageView {
+                    eye: glam::DVec3::new(v[0], v[1], v[2]),
+                    target: glam::DVec3::new(v[3], v[4], v[5]),
+                    fov,
+                });
             }
             Action::Wait(condition, limit) => script.waiting = Some((condition, now, limit)),
             Action::Quit => script.quit_at = Some(now),

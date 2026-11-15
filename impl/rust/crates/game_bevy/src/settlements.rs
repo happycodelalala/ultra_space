@@ -651,10 +651,13 @@ const PARKED: DVec3 = DVec3::splat(1.0e12);
 /// Dwellings are asked for again once the camera has moved this far (m), within
 /// [`LAYOUT_ON`] of it; a dwelling's site is freed beyond [`LAYOUT_OFF`].
 const DWELLINGS_EVERY: f64 = 500.0;
+/// No dwellings this close to the demo village (m).
+const VILLAGE_CLEAR: f64 = 400.0;
 
 /// Keeps the dwellings near the camera as sites (task 4b.8): the decoration layer between
 /// settlements, placed from the seed (`sim_society::dwellings_near`), laid out, drawn and
 /// peopled like settlements while near, their sites reused after.
+#[allow(clippy::too_many_arguments)]
 fn stream_dwellings(
     mut commands: Commands,
     draw: Option<ResMut<SettlementDraw>>,
@@ -663,6 +666,7 @@ fn stream_dwellings(
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
+    blocks: Option<Res<crate::blocks::BlockWorld>>,
 ) {
     let _slow = crate::debug_overlay::SlowSystem::new("stream_dwellings");
     let (Some(mut draw), Some(patterns)) = (draw, patterns) else {
@@ -715,6 +719,13 @@ fn stream_dwellings(
     };
     for (id, d) in sim_society::dwellings_near(rs, &patterns.0, &terrain, up, LAYOUT_ON) {
         if draw.dwellings.contains_key(&id) {
+            continue;
+        }
+        // None in or near the demo village's block ground (its own ground and buildings).
+        if let Some(b) = blocks.as_deref()
+            && b.body == body
+            && b.ground.center.angle_between(d.direction) * radius < VILLAGE_CLEAR
+        {
             continue;
         }
         let site = new_site(&mut commands, body, id as usize, &d, rs, radius);
@@ -1875,7 +1886,7 @@ pub fn start_near(
 }
 
 /// The first universe time (s) when it is `hour` (local solar time) at surface direction `up`.
-fn at_local_hour(system: &StarSystem, body: usize, up: DVec3, hour: f64) -> f64 {
+pub(crate) fn at_local_hour(system: &StarSystem, body: usize, up: DVec3, hour: f64) -> f64 {
     let b = &system.bodies[body];
     let longitude = (-up.z).atan2(up.x);
     let fraction = |t: f64| {
@@ -1909,7 +1920,7 @@ fn at_local_hour(system: &StarSystem, body: usize, up: DVec3, hour: f64) -> f64 
 
 /// The first universe time (s) in the body's first day when the sun at surface direction `up`
 /// stands as `when` says: "day" (35° up, rising), "dusk" (3° up, setting), "night" (lowest).
-fn time_of_day(system: &StarSystem, body: usize, up: DVec3, when: &str) -> f64 {
+pub(crate) fn time_of_day(system: &StarSystem, body: usize, up: DVec3, when: &str) -> f64 {
     let b = &system.bodies[body];
     let spin = system
         .frames

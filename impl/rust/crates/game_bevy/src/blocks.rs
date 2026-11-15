@@ -1,0 +1,899 @@
+//! The block world in the game (Batch 5; design: block-world.md): the demo village's ground as
+//! blocks round the player, its block models, and the start there.
+//!
+//! At load the village (exported by `tools/blocks`) is given a site on Meridian and becomes the
+//! terrain's block ground ([`sim_planet::BlockGround`]), so physics and everything that reads
+//! the ground stand on its blocks. Here the ground's chunks are meshed on workers round the
+//! camera and the models drawn; everything hangs on one root placed like a settlement.
+
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::prelude::*;
+use bevy::tasks::{Task, block_on, poll_once};
+use glam::{DQuat, DVec2, DVec3, IVec3};
+use serde::Deserialize;
+use sim_blocks::{BlockModel, MeshData, Palette};
+use sim_planet::{BlockGround, VillageGround};
+
+use crate::camera::SpaceCamera;
+use crate::sim::RenderTime;
+use crate::universe::{InGame, Universe};
+
+/// Blocks are drawn this far round the camera (m).
+pub(crate) const DRAW_REACH: f64 = 90.0;
+/// Terrain tiles are hidden this far round the camera inside the block ground (m).
+pub(crate) const HIDE_TILES: f64 = 80.0;
+/// ... and dropped beyond this (m).
+const DROP_REACH: f64 = 115.0;
+/// The disc of block ground round the village (m).
+const GROUND_REACH: f64 = 1_500.0;
+/// Chunk meshes being made at once.
+const CHUNKS_IN_FLIGHT: usize = 12;
+/// Most finished chunks shown per frame.
+const CHUNKS_PER_FRAME: usize = 6;
+
+pub struct BlocksPlugin;
+
+impl Plugin for BlocksPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<BlockCoverage>()
+            .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
+            .add_systems(
+                Update,
+                (stream_chunks, place_root, night_glow)
+                    .chain()
+                    .after(crate::camera::CameraSet)
+                    .in_set(InGame),
+            )
+            .add_systems(
+                Update,
+                hold_view
+                    .after(crate::camera::CameraStage::Follow)
+                    .before(crate::camera::CameraStage::Anchor)
+                    .in_set(InGame),
+            );
+    }
+}
+
+// ---- the village file ------------------------------------------------------------------------------
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct GroundFile {
+    pub size: f64,
+    pub origin: [i32; 2],
+    pub dims: [i32; 2],
+    pub tops: Vec<i32>,
+    pub palette: Vec<String>,
+    pub colours: Vec<usize>,
+    pub carved: Vec<[i32; 3]>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Placement {
+    pub model: String,
+    pub pos: [f64; 3],
+    pub rot: f64,
+    pub scale: f64,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Light {
+    pub kind: String,
+    pub pos: [f64; 3],
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Pose {
+    pub pos: [f64; 3],
+    #[serde(default)]
+    pub rot: f64,
+    #[serde(default)]
+    pub facing: f64,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct VillageFile {
+    pub name: String,
+    pub ground: GroundFile,
+    pub placements: Vec<Placement>,
+    pub lights: Vec<Light>,
+    pub ship: Pose,
+    pub start: Pose,
+}
+
+/// The block world: its ground, the village and its models.
+#[derive(Resource, Clone)]
+pub struct BlockWorld {
+    pub ground: Arc<BlockGround>,
+    pub body: usize,
+    pub village: Arc<VillageFile>,
+    pub models: Arc<HashMap<String, BlockModel>>,
+    pub palette: Arc<Palette>,
+}
+
+impl BlockWorld {
+    /// Ground surface (m above the grid's floor) in the village file's own ground at (x, y).
+    fn file_ground_z(&self, x: f64, y: f64) -> Option<f64> {
+        let g = &self.village.ground;
+        let (i, j) = BlockGround::column(x, y);
+        let (a, b) = (i - g.origin[0], j - g.origin[1]);
+        if a < 0 || b < 0 || a >= g.dims[0] || b >= g.dims[1] {
+            return None;
+        }
+        Some(f64::from(g.tops[(a + b * g.dims[0]) as usize] + 1) * g.size)
+    }
+
+    /// A placement's grid point, lifted or lowered by however the game's ground differs from
+    /// the file's there (the edge, where the village eases into the natural ground).
+    pub fn grid_point(&self, p: [f64; 3]) -> DVec3 {
+        let dz = self
+            .file_ground_z(p[0], p[1])
+            .map_or(0.0, |f| self.ground.ground_z(p[0], p[1]) - f);
+        DVec3::new(p[0], p[1], p[2] + dz)
+    }
+
+    /// Unit direction (surface frame) and the transform in the village frame of a pose.
+    pub fn local_transform(&self, p: [f64; 3], rot_deg: f64, scale: f64) -> Transform {
+        let local = self.ground.local(self.grid_point(p));
+        Transform {
+            translation: local.as_vec3(),
+            rotation: Quat::from_rotation_y(rot_deg.to_radians() as f32),
+            scale: Vec3::splat(scale as f32),
+        }
+    }
+}
+
+/// The folder of block models: `ULTRA_SPACE_BLOCKS`, else `assets/blocks` (exported) or
+/// `assets/export/blocks` (repo) next to the executable or the working directory.
+pub fn blocks_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("ULTRA_SPACE_BLOCKS") {
+        return Some(PathBuf::from(dir));
+    }
+    let starts = [std::env::current_exe().ok(), std::env::current_dir().ok()];
+    starts.into_iter().flatten().find_map(|start| {
+        start.ancestors().find_map(|dir| {
+            ["assets/blocks", "assets/export/blocks"]
+                .iter()
+                .map(|sub| dir.join(sub))
+                .find(|d| d.join("village.json").is_file())
+        })
+    })
+}
+
+/// Model names that collide, and how: a box round the whole model, or a trunk.
+fn collision_of(name: &str) -> Option<bool> {
+    let kind = name.rsplit_once('_').map_or(name, |(k, _)| k);
+    match kind {
+        "house" | "woodshed" | "well" | "fence" | "barrel" | "crates" | "wagon"
+        | "lantern_post" | "bed" | "stump" | "mined" | "rock" => Some(false),
+        "oak" | "birch" | "pine" => Some(true),
+        _ => None,
+    }
+}
+
+/// Loads the village and its models, finds its site on `body` and installs the block ground in
+/// the body's terrain. Runs on the loading worker.
+pub fn load(
+    sim: &mut sim_core::Simulation,
+    system: &sim_core::StarSystem,
+    body: usize,
+) -> Result<Option<BlockWorld>, String> {
+    let Some(dir) = blocks_dir() else {
+        warn!("block models not found (assets/export/blocks): no demo village");
+        return Ok(None);
+    };
+    let read = |p: &Path| std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
+    let village: VillageFile = serde_json::from_str(&read(&dir.join("village.json"))?)
+        .map_err(|e| format!("village.json: {e}"))?;
+    let palette = Palette::parse(&read(&dir.join("palette.json"))?).map_err(|e| e.to_string())?;
+    let mut models = HashMap::new();
+    for key in village
+        .placements
+        .iter()
+        .map(|p| p.model.clone())
+        .collect::<HashSet<_>>()
+    {
+        let model =
+            BlockModel::load(&dir.join(format!("{key}.json"))).map_err(|e| e.to_string())?;
+        models.insert(key, model);
+    }
+    let region = sim
+        .regions
+        .get_mut(body)
+        .ok_or("no region for the village's body")?;
+    let current = region
+        .world
+        .get_resource::<sim_vehicle::flight::RegionTerrain>()
+        .and_then(|t| t.0.clone())
+        .or_else(|| sim_planet::Terrain::of(&system.bodies[body]).map(Arc::new))
+        .ok_or("the village's body has no terrain")?;
+    let center = choose_site(&region.world, &current, &system.bodies[body])
+        .ok_or("no site for the demo village")?;
+    let g = &village.ground;
+    let own = VillageGround {
+        origin: g.origin,
+        dims: g.dims,
+        tops: g.tops.clone(),
+        colours: g.colours.iter().map(|&c| g.palette[c].clone()).collect(),
+        carved: g
+            .carved
+            .iter()
+            .map(|c| IVec3::new(c[0], c[1], c[2]))
+            .collect(),
+    };
+    let mut ground = BlockGround::new(current.clone(), center, GROUND_REACH, Some(own));
+    let world = BlockWorld {
+        ground: Arc::new(BlockGround::new(
+            current.clone(),
+            center,
+            GROUND_REACH,
+            None,
+        )),
+        body,
+        village: Arc::new(village),
+        models: Arc::new(models),
+        palette: Arc::new(palette),
+    };
+    // Collision boxes: buildings and props whole, trees by their trunks.
+    for p in &world.village.placements {
+        let Some(trunk) = collision_of(&p.model) else {
+            continue;
+        };
+        let Some(model) = world.models.get(&p.model) else {
+            continue;
+        };
+        let at = DVec3::from_array(p.pos);
+        if trunk {
+            ground.add_box(
+                at + DVec3::new(0.0, 0.0, 1.5),
+                0.0,
+                DVec3::new(0.3, 0.3, 1.5),
+            );
+            continue;
+        }
+        let (mut lo, mut hi) = (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN));
+        for part in &model.parts {
+            let s = part.size;
+            lo = lo.min(part.grid.origin.as_dvec3() * s);
+            hi = hi.max(part.grid.end().as_dvec3() * s);
+        }
+        let mid = (lo + hi) * 0.5 * p.scale;
+        let yaw = p.rot.to_radians();
+        let turned = DQuat::from_rotation_z(yaw) * mid;
+        ground.add_box(at + turned, yaw, (hi - lo) * 0.5 * p.scale);
+    }
+    let ground = Arc::new(ground);
+    let terrain = Arc::new(current.with_blocks(ground.clone()));
+    region
+        .world
+        .insert_resource(sim_vehicle::flight::RegionTerrain(Some(terrain)));
+    let world = BlockWorld { ground, ..world };
+    info!(
+        "demo village {:?}: {} models, {} placed, at {:.9},{:.9},{:.9} (ground {:.1} m)",
+        world.village.name,
+        world.models.len(),
+        world.village.placements.len(),
+        center.x,
+        center.y,
+        center.z,
+        world.ground.base
+    );
+    Ok(Some(world))
+}
+
+/// The village's site: temperate, gently sloped land away from the cube's face seams and from
+/// other settlements, not far from a medieval people's settlements (the village is theirs).
+fn choose_site(
+    world: &bevy::ecs::world::World,
+    terrain: &sim_planet::Terrain,
+    body: &sim_core::Body,
+) -> Option<DVec3> {
+    if let Ok(spec) = std::env::var("ULTRA_SPACE_VILLAGE_AT") {
+        let v: Vec<f64> = spec
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        if v.len() == 3 {
+            return Some(DVec3::new(v[0], v[1], v[2]).normalize());
+        }
+    }
+    let climate = sim_planet::Climate::of(body);
+    let society = world.get_resource::<sim_society::RegionSociety>();
+    let medieval: Vec<DVec3> = society
+        .map(|s| {
+            s.settlements
+                .iter()
+                .filter(|x| {
+                    s.society.cultures[x.culture].profile.tech_tier
+                        == sim_society::TechTier::Medieval
+                })
+                .map(|x| x.direction)
+                .collect()
+        })
+        .unwrap_or_default();
+    let all: Vec<DVec3> = society
+        .map(|s| s.settlements.iter().map(|x| x.direction).collect())
+        .unwrap_or_default();
+    let r = terrain.radius;
+    let mut best: Option<(f64, DVec3)> = None;
+    for (n, dir) in sim_planet::fibonacci_directions(400_000).enumerate() {
+        let h = terrain.height(dir, 1.0);
+        if h < 15.0 {
+            continue;
+        }
+        if let Some(c) = &climate {
+            let t = c.temperature(dir, h, 0.0);
+            if !(8.0..=20.0).contains(&t) {
+                continue;
+            }
+        }
+        // Away from the cube's face seams.
+        let key = sim_planet::locate(dir, 12);
+        let n_cells = f64::from(1u32 << 12);
+        let (u, v) = (f64::from(key.x) / n_cells, f64::from(key.y) / n_cells);
+        if !(0.08..0.92).contains(&u) || !(0.08..0.92).contains(&v) {
+            continue;
+        }
+        let near_medieval = medieval.iter().any(|m| m.angle_between(dir) * r < 6_000.0);
+        if !medieval.is_empty() && !near_medieval {
+            continue;
+        }
+        if all.iter().any(|m| m.angle_between(dir) * r < 1_500.0) {
+            continue;
+        }
+        let (east, south) = sim_planet::tangent_frame(dir);
+        let mut lo = f64::MAX;
+        let mut hi = f64::MIN;
+        for (x, z) in [
+            (-60.0, -60.0),
+            (60.0, -60.0),
+            (-60.0, 60.0),
+            (60.0, 60.0),
+            (0.0, 0.0),
+            (-30.0, 0.0),
+            (30.0, 0.0),
+            (0.0, 30.0),
+            (0.0, -30.0),
+        ] {
+            let d = (dir * r + east * x + south * z).normalize();
+            let g = terrain.height(d, 1.0);
+            lo = lo.min(g);
+            hi = hi.max(g);
+        }
+        let rough = hi - lo;
+        if rough < 2.5 && best.is_none_or(|b| rough < b.0) {
+            best = Some((rough, dir));
+            if rough < 0.8 || n > 300_000 {
+                break;
+            }
+        }
+    }
+    best.map(|b| b.1)
+}
+
+// ---- drawing ---------------------------------------------------------------------------------------
+
+#[derive(Component)]
+struct BlockRoot;
+
+#[derive(Component)]
+struct ChunkMesh;
+
+/// How far round the camera the block ground is ready (m): tiles are hidden only that far.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct BlockCoverage(pub f64);
+
+/// What is drawn: the root, chunks shown and being made, the materials.
+#[derive(Resource)]
+struct BlockDraw {
+    root: Entity,
+    chunks: HashMap<(i32, i32), Option<Entity>>,
+    pending: HashMap<(i32, i32), Task<Option<MeshData>>>,
+    solid: Handle<StandardMaterial>,
+    glow: Handle<StandardMaterial>,
+    windows: Handle<StandardMaterial>,
+    lights: Vec<Entity>,
+}
+
+/// A Bevy mesh from block mesh data, colours by `colour`.
+fn bevy_mesh(m: &MeshData, colour: impl Fn(u16) -> [f32; 4]) -> Mesh {
+    let colours: Vec<[f32; 4]> = m.colours.iter().map(|&c| colour(c)).collect();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, m.positions.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, m.normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+    .with_inserted_indices(Indices::U32(m.indices.clone()))
+}
+
+/// Splits `m` into the triangles whose colour `keep` accepts and the rest.
+fn split(m: &MeshData, keep: impl Fn(u16) -> bool) -> (MeshData, MeshData) {
+    let (mut a, mut b) = (MeshData::default(), MeshData::default());
+    for t in m.indices.chunks(3) {
+        let target = if keep(m.colours[t[0] as usize]) {
+            &mut a
+        } else {
+            &mut b
+        };
+        for &i in t {
+            let i = i as usize;
+            target.indices.push(target.positions.len() as u32);
+            target.positions.push(m.positions[i]);
+            target.normals.push(m.normals[i]);
+            target.colours.push(m.colours[i]);
+        }
+    }
+    (a, b)
+}
+
+/// A model part's mesh in the village frame's axes (x east, y up, z south).
+fn part_axes(m: &mut MeshData) {
+    for p in &mut m.positions {
+        *p = [p[0], p[2], -p[1]];
+    }
+    for n in &mut m.normals {
+        *n = [n[0], n[2], -n[1]];
+    }
+}
+
+fn setup_blocks(
+    mut commands: Commands,
+    world: Option<Res<BlockWorld>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let Some(world) = world else { return };
+    let solid = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.8,
+        reflectance: 0.2,
+        ..default()
+    });
+    let glow = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.6,
+        emissive: LinearRgba::rgb(1.0, 0.6, 0.25) * 4.0,
+        ..default()
+    });
+    let windows = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.15,
+        reflectance: 0.5,
+        ..default()
+    });
+    let root = commands
+        .spawn((
+            BlockRoot,
+            Transform::default(),
+            Visibility::Visible,
+            Name::new("blocks"),
+        ))
+        .id();
+    // Models: one mesh per model part (shared by its placements), split into what glows by
+    // night (windows), what always glows (lanterns) and the rest.
+    let palette = world.palette.clone();
+    let mut made: HashMap<String, Vec<(Handle<Mesh>, u8)>> = HashMap::new();
+    for (key, model) in world.models.iter() {
+        let mut list = Vec::new();
+        for part in &model.parts {
+            let mut m = part.mesh();
+            part_axes(&mut m);
+            let colour = |c: u16| {
+                let [r, g, b] = palette.linear(part.colour_name(c));
+                [r, g, b, 1.0]
+            };
+            let glows = |c: u16| part.glow.iter().any(|g| g == part.colour_name(c));
+            let window = |c: u16| matches!(part.colour_name(c), "glass" | "glasshi");
+            let (lit, rest) = split(&m, |c| glows(c) && !window(c));
+            let (win, rest) = split(&rest, window);
+            for (mesh, kind) in [(rest, 0u8), (lit, 1), (win, 2)] {
+                if !mesh.is_empty() {
+                    list.push((meshes.add(bevy_mesh(&mesh, colour)), kind));
+                }
+            }
+        }
+        made.insert(key.clone(), list);
+    }
+    for p in &world.village.placements {
+        let Some(list) = made.get(&p.model) else {
+            continue;
+        };
+        let transform = world.local_transform(p.pos, p.rot, p.scale);
+        let e = commands
+            .spawn((transform, Visibility::Inherited, ChildOf(root)))
+            .id();
+        for (mesh, kind) in list {
+            let material = match kind {
+                1 => glow.clone(),
+                2 => windows.clone(),
+                _ => solid.clone(),
+            };
+            commands.spawn((
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material),
+                Transform::default(),
+                ChildOf(e),
+            ));
+        }
+    }
+    // Lanterns and lit windows: point lights, on at dusk.
+    let mut lights = Vec::new();
+    for l in &world.village.lights {
+        let t = world.local_transform(l.pos, 0.0, 1.0);
+        let (intensity, range) = if l.kind == "window" {
+            (0.0, 8.0)
+        } else {
+            (0.0, 14.0)
+        };
+        lights.push(
+            commands
+                .spawn((
+                    PointLight {
+                        intensity,
+                        range,
+                        color: Color::srgb(1.0, 0.68, 0.36),
+                        shadow_maps_enabled: false,
+                        ..default()
+                    },
+                    t,
+                    ChildOf(root),
+                ))
+                .id(),
+        );
+    }
+    commands.insert_resource(BlockDraw {
+        root,
+        chunks: HashMap::new(),
+        pending: HashMap::new(),
+        solid,
+        glow,
+        windows,
+        lights,
+    });
+}
+
+/// Chunks within reach of the camera are made on workers and shown; far ones go.
+#[allow(clippy::too_many_arguments)]
+fn stream_chunks(
+    mut commands: Commands,
+    world: Option<Res<BlockWorld>>,
+    draw: Option<ResMut<BlockDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut last_count: Local<usize>,
+    mut coverage: ResMut<BlockCoverage>,
+) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_chunks");
+    let (Some(world), Some(mut draw)) = (world, draw) else {
+        return;
+    };
+    let cam = crate::settlements::camera_on(&universe, &camera, world.body, render.0);
+    let ground = &world.ground;
+    let Some(here) = ground.plane(cam.normalize()) else {
+        return;
+    };
+    let height = cam.length() - ground.radius - ground.base;
+    // High above, nothing is drawn (the tiles show the land).
+    let wanted: HashSet<(i32, i32)> = if height < DRAW_REACH {
+        ground.chunks_near(here, DRAW_REACH).into_iter().collect()
+    } else {
+        HashSet::new()
+    };
+    // Start the nearest missing ones.
+    let mut missing: Vec<(i32, i32)> = wanted
+        .iter()
+        .filter(|k| !draw.chunks.contains_key(k) && !draw.pending.contains_key(k))
+        .copied()
+        .collect();
+    let size = f64::from(sim_planet::blocks::CHUNK) * sim_planet::blocks::CELL;
+    let dist = |k: &(i32, i32)| {
+        DVec2::new((f64::from(k.0) + 0.5) * size, (f64::from(k.1) + 0.5) * size).distance(here)
+    };
+    missing.sort_by(|a, b| dist(a).total_cmp(&dist(b)));
+    let pool = crate::workers::workers();
+    for key in missing
+        .into_iter()
+        .take(CHUNKS_IN_FLIGHT.saturating_sub(draw.pending.len()))
+    {
+        let g = world.ground.clone();
+        draw.pending
+            .insert(key, pool.spawn(async move { g.chunk(key.0, key.1) }));
+    }
+    let done: Vec<(i32, i32)> = draw
+        .pending
+        .iter_mut()
+        .filter_map(|(k, t)| t.is_finished().then_some(*k))
+        // A few a frame: each is a mesh upload.
+        .take(CHUNKS_PER_FRAME)
+        .collect();
+    let palette = world.palette.clone();
+    for key in done {
+        let Some(task) = draw.pending.remove(&key) else {
+            continue;
+        };
+        let m = block_on(poll_once(task)).flatten();
+        if m.is_none() {
+            debug!("block chunk {key:?}: nothing to draw");
+        }
+        let entity = m.map(|m| {
+            let mesh = bevy_mesh(&m, |c| {
+                let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[c as usize - 1]);
+                [r, g, b, 1.0]
+            });
+            commands
+                .spawn((
+                    ChunkMesh,
+                    Mesh3d(meshes.add(mesh)),
+                    MeshMaterial3d(draw.solid.clone()),
+                    Transform::default(),
+                    ChildOf(draw.root),
+                ))
+                .id()
+        });
+        draw.chunks.insert(key, entity);
+    }
+    // The ground is ready out to the nearest wanted chunk not yet shown.
+    let half_diagonal = size * 0.71;
+    let ready = wanted
+        .iter()
+        .filter(|k| !draw.chunks.contains_key(k))
+        .map(|k| dist(k) - half_diagonal)
+        .fold(HIDE_TILES, f64::min)
+        .max(0.0);
+    coverage.0 = if height < DRAW_REACH { ready } else { 0.0 };
+    if draw.chunks.len() != *last_count {
+        *last_count = draw.chunks.len();
+        debug!(
+            "block chunks: {} shown, {} empty, {} being made, camera at {:.1},{:.1} ({:.1} m up)",
+            draw.chunks.values().filter(|c| c.is_some()).count(),
+            draw.chunks.values().filter(|c| c.is_none()).count(),
+            draw.pending.len(),
+            here.x,
+            here.y,
+            height
+        );
+    }
+    // Drop far chunks.
+    let far: Vec<(i32, i32)> = draw
+        .chunks
+        .keys()
+        .filter(|k| height >= DRAW_REACH || dist(k) > DROP_REACH)
+        .copied()
+        .collect();
+    for key in far {
+        if let Some(Some(e)) = draw.chunks.remove(&key) {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+/// Places the root camera-relative, like a settlement.
+fn place_root(
+    world: Option<Res<BlockWorld>>,
+    draw: Option<Res<BlockDraw>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut roots: Query<&mut Transform, With<BlockRoot>>,
+) {
+    let (Some(world), Some(draw)) = (world, draw) else {
+        return;
+    };
+    let system = &universe.0;
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let s = system
+        .frames
+        .state_in(anchor, system.bodies[world.body].surface_frame, render.0);
+    let at = s.position + s.rotation * world.ground.origin();
+    if let Ok(mut t) = roots.get_mut(draw.root) {
+        t.translation = (at - camera.offset).as_vec3();
+        t.rotation = (s.rotation * world.ground.basis()).as_quat().normalize();
+    }
+}
+
+/// Lanterns and windows light up from dusk.
+fn night_glow(
+    world: Option<Res<BlockWorld>>,
+    draw: Option<Res<BlockDraw>>,
+    weather: Option<Res<crate::weather::Weather>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut lights: Query<(&mut PointLight, &Transform)>,
+) {
+    let (Some(world), Some(draw)) = (world, draw) else {
+        return;
+    };
+    let system = &universe.0;
+    let body = &system.bodies[world.body];
+    let star = system.frames.transform_point(
+        body.surface_frame,
+        system.star().inertial_frame,
+        render.0,
+        DVec3::ZERO,
+    );
+    let up = world.ground.center;
+    let sun = (star - up * world.ground.radius)
+        .normalize_or_zero()
+        .dot(up);
+    let night = (1.0 - smooth(-0.12, 0.08, sun)) as f32;
+    // Wet in the rain.
+    let rough = if weather.as_deref() == Some(&crate::weather::Weather::Rain) {
+        0.35
+    } else {
+        0.8
+    };
+    if let Some(m) = materials.get(&draw.solid)
+        && (m.perceptual_roughness - rough).abs() > 1e-3
+        && let Some(mut m) = materials.get_mut(&draw.solid)
+    {
+        m.perceptual_roughness = rough;
+    }
+    // Overcast days light the lanterns early.
+    let night = if weather
+        .as_deref()
+        .is_some_and(|w| *w != crate::weather::Weather::Clear)
+    {
+        night.max(0.5)
+    } else {
+        night
+    };
+    let exposure = bevy::camera::Exposure::default().exposure();
+    let want = LinearRgba::rgb(1.0, 0.6, 0.25) * (night * 6.0 / exposure);
+    if let Some(mut m) = materials.get_mut(&draw.glow)
+        && m.emissive != want
+    {
+        m.emissive = want;
+    }
+    let win = LinearRgba::rgb(1.0, 0.62, 0.3) * (night * 3.0 / exposure);
+    if let Some(mut m) = materials.get_mut(&draw.windows)
+        && m.emissive != win
+    {
+        m.emissive = win;
+    }
+    for &e in &draw.lights {
+        if let Ok((mut l, _)) = lights.get_mut(e) {
+            let target = night * if l.range > 10.0 { 60_000.0 } else { 120_000.0 };
+            if (l.intensity - target).abs() > 1.0 {
+                l.intensity = target;
+            }
+        }
+    }
+}
+
+fn smooth(e0: f64, e1: f64, x: f64) -> f64 {
+    let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// A camera held at a viewpoint in the village (review shots; script action `view`, or
+/// `ULTRA_SPACE_VILLAGE_VIEW=x,y,z,tx,ty,tz[,fov]`): grid metres, turning with the planet.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct VillageView {
+    pub eye: DVec3,
+    pub target: DVec3,
+    pub fov: f64,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn hold_view(
+    mut view: Option<ResMut<VillageView>>,
+    world: Option<Res<BlockWorld>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    mut camera: ResMut<SpaceCamera>,
+    mut pilot: ResMut<crate::ship::PilotState>,
+    mut projection: Query<&mut Projection, With<crate::space_render::MainCamera>>,
+    mut checked: Local<bool>,
+    mut commands: Commands,
+) {
+    let Some(world) = world else { return };
+    if !*checked {
+        *checked = true;
+        if let Ok(spec) = std::env::var("ULTRA_SPACE_VILLAGE_VIEW") {
+            let v: Vec<f64> = spec
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            if v.len() >= 6 {
+                commands.insert_resource(VillageView {
+                    eye: DVec3::new(v[0], v[1], v[2]),
+                    target: DVec3::new(v[3], v[4], v[5]),
+                    fov: v.get(6).copied().unwrap_or(50.0),
+                });
+                pilot.flying = false;
+            }
+        }
+    }
+    let Some(view) = view.as_deref_mut() else {
+        return;
+    };
+    let system = &universe.0;
+    let body = &system.bodies[world.body];
+    let s = system
+        .frames
+        .state_in(body.inertial_frame, body.surface_frame, render.0);
+    let g = &world.ground;
+    let eye = s.rotation * g.point(view.eye);
+    let target = s.rotation * g.point(view.target);
+    camera.anchor = world.body;
+    camera.offset = eye;
+    camera.rotation = crate::camera::look_rotation(target - eye, eye.normalize());
+    for mut p in &mut projection {
+        if let Projection::Perspective(pp) = p.as_mut() {
+            let fov = view.fov.to_radians() as f32;
+            if (pp.fov - fov).abs() > 1e-4 {
+                pp.fov = fov;
+            }
+        }
+    }
+}
+
+/// The start: the ship landed on its pad and the player on foot beside it, in the morning.
+/// (`ship` is the state to give the player's ship; `walker` the walker's.)
+pub fn start(
+    world: &BlockWorld,
+    system: &sim_core::StarSystem,
+    sim: &sim_core::Simulation,
+) -> Option<(sim_core::ObjectState, sim_core::ObjectState, f64)> {
+    let _ = sim;
+    let body = world.body;
+    let g = &world.ground;
+    let t = match start_time() {
+        Ok(hour) => crate::settlements::at_local_hour(system, body, g.center, hour),
+        Err(when) => crate::settlements::time_of_day(system, body, g.center, &when),
+    };
+    let frame = system.frames.state_in(
+        system.bodies[body].inertial_frame,
+        system.bodies[body].surface_frame,
+        t,
+    );
+    let pose = |p: [f64; 3], heading_deg: f64, lift: f64| {
+        let gp = world.grid_point(p) + DVec3::new(0.0, 0.0, lift);
+        let at = g.point(gp);
+        let up = at.normalize();
+        // Heading: the scene's turn (counter-clockwise from above) from north... the models face
+        // south (-y) unturned, so a heading of h faces south turned by h.
+        let a = heading_deg.to_radians();
+        let facing_grid = DVec3::new(a.sin(), -a.cos(), 0.0);
+        let forward = (g.east * facing_grid.x + g.north * facing_grid.y).normalize();
+        let forward = (forward - up * forward.dot(up)).normalize();
+        let position = frame.rotation * at;
+        let rotation = crate::camera::look_rotation(frame.rotation * forward, frame.rotation * up);
+        let mut s =
+            sim_core::ObjectState::at_rest(system.bodies[body].inertial_frame, position, rotation);
+        s.state.velocity = frame.angular_velocity.cross(position);
+        s.state.angular_velocity = frame.angular_velocity;
+        s
+    };
+    let ship = pose(world.village.ship.pos, world.village.ship.rot, 3.0);
+    let walker = pose(world.village.start.pos, world.village.start.facing, 1.0);
+    Some((ship, walker, t))
+}
+
+/// The start's time: `ULTRA_SPACE_START_TIME` as a local hour (`Ok`) or "day", "dusk" or
+/// "night" (`Err`); else mid-morning.
+fn start_time() -> Result<f64, String> {
+    match std::env::var("ULTRA_SPACE_START_TIME") {
+        Ok(v) => v.parse::<f64>().map_err(|_| v.to_lowercase()),
+        Err(_) => Ok(9.5),
+    }
+}
+
+/// Whether the game starts in the village (the default) or in orbit (`ULTRA_SPACE_START=orbit`,
+/// or any of the debug starts: near a settlement, at an altitude, at a sun angle).
+pub fn start_in_village() -> bool {
+    let set = |k: &str| std::env::var_os(k).is_some();
+    std::env::var("ULTRA_SPACE_START").map_or(true, |v| v != "orbit")
+        && !set("ULTRA_SPACE_START_NEAR")
+        && !set("ULTRA_SPACE_START_ALTITUDE")
+        && !set("ULTRA_SPACE_START_SUN_ANGLE")
+}

@@ -17,6 +17,7 @@ sim_core.workspace = true
 sim_planet.workspace = true
 sim_vehicle.workspace = true
 sim_society.workspace = true
+sim_blocks.workspace = true
 ai_gateway.workspace = true
 serde.workspace = true
 serde_json.workspace = true

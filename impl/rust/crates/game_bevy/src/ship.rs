@@ -26,7 +26,7 @@ use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{GameState, InGame, StartingVehicle, Universe};
 
-const START_BODY: &str = "meridian";
+pub(crate) const START_BODY: &str = "meridian";
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
@@ -218,6 +218,8 @@ fn spawn_player_ship(
     universe: Res<Universe>,
     start: Res<StartingVehicle>,
     mut sim: ResMut<Sim>,
+    blocks: Option<Res<crate::blocks::BlockWorld>>,
+    mut pilot: ResMut<PilotState>,
 ) {
     let vehicle = start.0.clone();
     let body = VehicleBody::of(&vehicle).expect("design has parts");
@@ -262,7 +264,21 @@ fn spawn_player_ship(
     }
 
     let mut airborne = false;
-    if let Some((near, t, up_high)) = crate::settlements::start_near(&mut sim.0, system, index) {
+    // The default start (Batch 5): landed in the demo village, on foot beside the ship.
+    let mut on_foot = None;
+    if crate::blocks::start_in_village()
+        && let Some(world) = blocks.as_deref()
+        && world.body == index
+        && let Some((ship, walker, t)) = crate::blocks::start(world, system, &sim.0)
+    {
+        state = ship;
+        on_foot = Some(walker);
+        sim.0
+            .set_universe_time(sim_core::time::UniverseTime::from_nanos((t * 1e9) as u64));
+        info!("starting in the demo village {:?}", world.village.name);
+    } else if let Some((near, t, up_high)) =
+        crate::settlements::start_near(&mut sim.0, system, index)
+    {
         state = near;
         airborne = up_high;
         sim.0
@@ -297,6 +313,20 @@ fn spawn_player_ship(
         }
     }
     commands.insert_resource(PlayerShip { id });
+    if let Some(walker) = on_foot
+        && let Ok(w) = sim.objects.spawn(
+            &mut sim.regions,
+            index,
+            walker,
+            (
+                sim_vehicle::Walker::default(),
+                sim_vehicle::WalkerControl::default(),
+            ),
+        )
+    {
+        commands.insert_resource(crate::walk::OnFoot { id: w, pitch: 0.0 });
+        pilot.on_foot = true;
+    }
 }
 
 /// Parking-orbit altitude above a body: a quarter of its radius (150 km for Meridian), at least
@@ -895,6 +925,10 @@ pub fn keep_above_ground(
 #[derive(Component)]
 struct Starlight;
 
+/// The starlight's pose and light.
+type StarlightParts = (&'static mut Transform, &'static mut DirectionalLight);
+type StarlightOnly = (With<Starlight>, Without<MainCamera>);
+
 fn spawn_starlight(mut commands: Commands) {
     let illuminance = STAR_LIGHT * std::f32::consts::PI / Exposure::default().exposure();
     commands.spawn((
@@ -921,8 +955,17 @@ fn aim_starlight(
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
-    mut lights: Query<&mut Transform, (With<Starlight>, Without<MainCamera>)>,
+    weather: Option<Res<crate::weather::Weather>>,
+    mut lights: Query<StarlightParts, StarlightOnly>,
 ) {
+    // Clouds soften the sun (rain, fog).
+    let dim = weather.map_or(1.0, |w| w.sun());
+    let illuminance = STAR_LIGHT * std::f32::consts::PI / Exposure::default().exposure() * dim;
+    for (_, mut light) in &mut lights {
+        if (light.illuminance - illuminance).abs() > 1.0 {
+            light.illuminance = illuminance;
+        }
+    }
     let system = &universe.0;
     let t = render.0;
     let star = system.frames.transform_point(
@@ -934,7 +977,7 @@ fn aim_starlight(
     // The light shines from the star toward the camera's neighbourhood.
     let direction = (-star).normalize_or_zero().as_vec3();
     if direction != Vec3::ZERO {
-        for mut transform in &mut lights {
+        for (mut transform, _) in &mut lights {
             *transform = Transform::default().looking_to(direction, Vec3::Y);
         }
     }
@@ -951,6 +994,7 @@ fn aim_sky(
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
+    weather: Option<Res<crate::weather::Weather>>,
     mut lights: Query<&mut EnvironmentMapLight, With<MainCamera>>,
 ) {
     let system = &universe.0;
@@ -972,7 +1016,7 @@ fn aim_sky(
     let strength = SKY_FLOOR + (1.0 - SKY_FLOOR) * day as f32 * in_air as f32;
     for mut light in &mut lights {
         light.rotation = Quat::from_rotation_arc(Vec3::Y, up.as_vec3());
-        light.intensity = SKY_LIGHT * strength;
+        light.intensity = SKY_LIGHT * strength * weather.as_deref().map_or(1.0, |w| w.sky());
     }
 }
 

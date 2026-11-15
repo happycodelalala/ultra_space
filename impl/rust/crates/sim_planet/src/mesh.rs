@@ -236,7 +236,7 @@ pub fn collision_patch(terrain: &Terrain, key: TileKey, min_wavelength: f64) -> 
     for j in 0..GRID {
         for i in 0..GRID {
             let dir = vertex_direction(key, i, j);
-            vertices.push(dir * (terrain.radius + terrain.surface_height(dir, min_wavelength)));
+            vertices.push(dir * (terrain.radius + terrain.collision_height(dir, min_wavelength)));
         }
     }
     let mut triangles = Vec::with_capacity(((GRID - 1) * (GRID - 1) * 2) as usize);

@@ -14,6 +14,7 @@ use std::sync::Arc;
 use glam::DVec3;
 use sim_core::{Body, TerrainData};
 
+use crate::blocks::BlockGround;
 use crate::foundations::Foundations;
 use crate::noise::{fbm, hash3, mix64, octaves_between, ridged, unit};
 
@@ -60,6 +61,9 @@ pub struct Terrain {
     pads: Vec<Pad>,
     /// Settlement foundations (generated from the layouts, not saved), under the pads.
     foundations: Option<Arc<Foundations>>,
+    /// The ground as blocks round the demo village (block-world.md): its surface replaces the
+    /// terrain's there.
+    blocks: Option<Arc<BlockGround>>,
 }
 
 /// A flattened area (task 2.11): inside `radius` the ground is at `height`; over the next
@@ -121,6 +125,7 @@ impl Terrain {
             seeds,
             pads: Vec::new(),
             foundations: None,
+            blocks: None,
         };
         terrain.coast = terrain.coast_threshold();
         terrain
@@ -156,6 +161,26 @@ impl Terrain {
         self.foundations.as_ref()
     }
 
+    /// This terrain with the block ground (the pads and foundations stay).
+    pub fn with_blocks(&self, blocks: Arc<BlockGround>) -> Terrain {
+        let mut t = self.clone();
+        t.blocks = Some(blocks);
+        t
+    }
+
+    pub fn blocks(&self) -> Option<&Arc<BlockGround>> {
+        self.blocks.as_ref()
+    }
+
+    /// Height of the coarse collision patches at `dir`: the surface, sunk below the block
+    /// ground (whose own collision meshes carry contact there).
+    pub fn collision_height(&self, dir: DVec3, min_wavelength: f64) -> f64 {
+        match self.blocks.as_ref().and_then(|b| b.surface(dir)) {
+            Some(h) => h - crate::blocks::PATCH_SINK,
+            None => self.surface_height(dir, min_wavelength),
+        }
+    }
+
     /// Whether `pad` reaches any point within `spread` radians of the unit direction `center`
     /// (e.g. a tile's centre and its corner spread).
     pub fn pad_touches(&self, pad: &Pad, center: DVec3, spread: f64) -> bool {
@@ -170,6 +195,9 @@ impl Terrain {
     /// Height of what vehicles and walkers stand on at `dir` (m): the ground, or the sea surface
     /// where there is water (a floor until swimming and floating exist).
     pub fn surface_height(&self, dir: DVec3, min_wavelength: f64) -> f64 {
+        if let Some(h) = self.blocks.as_ref().and_then(|b| b.surface(dir)) {
+            return h;
+        }
         let h = self.height(dir, min_wavelength);
         if self.has_ocean() { h.max(0.0) } else { h }
     }

@@ -81,6 +81,9 @@ struct Loaded {
     societies: Vec<(usize, u32, usize)>,
     /// Settlement layouts: buildings placed, and the time taken (ms).
     layouts: (usize, f64),
+    /// The demo village (block world), and the time taken to set it up (ms).
+    blocks: Option<crate::blocks::BlockWorld>,
+    village_ms: f64,
     seconds: f64,
 }
 
@@ -137,6 +140,17 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         }
     };
     sim_society::layout::install(&mut sim, Arc::new(kits));
+    // The demo village's block ground and models (Batch 5).
+    let village = Instant::now();
+    let meridian = system
+        .bodies
+        .iter()
+        .position(|b| b.id == crate::ship::START_BODY);
+    let blocks = match meridian {
+        Some(body) => crate::blocks::load(&mut sim, &system, body)?,
+        None => None,
+    };
+    let village_ms = village.elapsed().as_secs_f64() * 1e3;
     let buildings = 0;
     let layouts = (buildings, laid.elapsed().as_secs_f64() * 1e3);
     Ok(Loaded {
@@ -149,6 +163,8 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         patterns,
         societies,
         layouts,
+        blocks,
+        village_ms,
         seconds: start.elapsed().as_secs_f64(),
     })
 }
@@ -211,6 +227,10 @@ fn finish_loading(
                 "settlements ready to lay out on approach ({} buildings so far, {:.0} ms)",
                 loaded.layouts.0, loaded.layouts.1
             );
+            if let Some(blocks) = loaded.blocks {
+                info!("demo village ready ({:.0} ms)", loaded.village_ms);
+                commands.insert_resource(blocks);
+            }
             commands.insert_resource(Lore(loaded.lore));
             commands.insert_resource(Patterns(loaded.patterns));
             for (entity, _) in &mut text {

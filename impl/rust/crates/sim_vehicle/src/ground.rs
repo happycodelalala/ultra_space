@@ -45,6 +45,11 @@ fn changed_sites(
     out
 }
 
+/// Site key of the block ground's structures among the boxes.
+const BLOCK_SITE: u32 = u32::MAX;
+/// Block chunks with colliders this far round a body (m).
+const CHUNK_REACH: f64 = 12.0;
+
 /// Collision group of ground patches (resting bodies leave it out of their filter).
 pub(crate) const GROUND_GROUP: Group = Group::GROUP_1;
 
@@ -65,6 +70,9 @@ const WORKERS: usize = 2;
 const PATCHES_PER_TICK: usize = 8;
 
 type Job = Box<dyn FnOnce() + Send>;
+/// Block chunks finished by the workers: terrain generation, chunk, collision shape (none when
+/// the chunk is empty).
+type ChunksDone = Arc<Mutex<Vec<(u64, (i32, i32), Option<SharedShape>)>>>;
 
 /// The shared pool that builds patches.
 fn workers() -> &'static Mutex<Sender<Job>> {
@@ -107,8 +115,13 @@ pub(crate) struct Ground {
     patch_size: f64,
     pub(crate) body: RigidBodyHandle,
     patches: HashMap<TileKey, Patch>,
-    /// Buildings' collision boxes near bodies, by (site, building).
+    /// Buildings' collision boxes near bodies, by (site, building); the block ground's
+    /// structures under site `BLOCK_SITE`.
     boxes: HashMap<(u32, u32), Patch>,
+    /// The block ground's chunks near bodies (block-world.md), by chunk.
+    chunks: HashMap<(i32, i32), Patch>,
+    chunks_pending: HashSet<(i32, i32)>,
+    chunks_done: ChunksDone,
     pending: HashSet<TileKey>,
     /// Patches finished by the workers (with the terrain generation they were built from),
     /// waiting to be added.
@@ -134,6 +147,9 @@ impl Ground {
             body,
             patches: HashMap::new(),
             boxes: HashMap::new(),
+            chunks: HashMap::new(),
+            chunks_pending: HashSet::new(),
+            chunks_done: Arc::default(),
             pending: HashSet::new(),
             done: Arc::default(),
             generation: 0,
@@ -173,7 +189,7 @@ impl Ground {
             .map(|f| f.sites().iter().map(|s| s.id()).collect())
             .unwrap_or_default();
         for (&(site, _), b) in self.boxes.iter_mut() {
-            if !kept.contains(&site) {
+            if site != BLOCK_SITE && !kept.contains(&site) {
                 b.wanted_at = f64::NEG_INFINITY;
             }
         }
@@ -213,6 +229,40 @@ impl Ground {
             let Ok(shape) = SharedShape::trimesh(patch.vertices, patch.triangles) else {
                 return;
             };
+            if let Ok(mut done) = done.lock() {
+                done.push((generation, key, shape));
+            }
+        };
+        if self.inline {
+            job();
+        } else if let Ok(pool) = workers().lock() {
+            let _ = pool.send(Box::new(job));
+        }
+    }
+
+    fn request_chunk(&mut self, key: (i32, i32), blocks: &Arc<sim_planet::BlockGround>) {
+        if !self.chunks_pending.insert(key) {
+            return;
+        }
+        let blocks = Arc::clone(blocks);
+        let done = Arc::clone(&self.chunks_done);
+        let generation = self.generation;
+        let job = move || {
+            // The chunk's mesh, from the village frame into the surface frame.
+            let shape = blocks.chunk(key.0, key.1).and_then(|m| {
+                let (basis, origin) = (blocks.basis(), blocks.origin());
+                let vertices: Vec<DVec3> = m
+                    .positions
+                    .iter()
+                    .map(|p| {
+                        origin
+                            + basis * DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]))
+                    })
+                    .collect();
+                let triangles: Vec<[u32; 3]> =
+                    m.indices.chunks(3).map(|t| [t[0], t[1], t[2]]).collect();
+                SharedShape::trimesh(vertices, triangles).ok()
+            });
             if let Ok(mut done) = done.lock() {
                 done.push((generation, key, shape));
             }
@@ -282,6 +332,26 @@ impl Ground {
                 }
             }
         }
+        if let Some(b) = self.terrain.blocks().cloned() {
+            for (k, _) in b.structures_near(dir, radius) {
+                self.boxes
+                    .entry((BLOCK_SITE, k as u32))
+                    .or_insert(Patch {
+                        collider: ColliderHandle::invalid(),
+                        wanted_at: now,
+                    })
+                    .wanted_at = now;
+            }
+            if let Some(p) = b.plane(dir) {
+                for key in b.chunks_near(p, radius.min(CHUNK_REACH)) {
+                    if let Some(c) = self.chunks.get_mut(&key) {
+                        c.wanted_at = now;
+                    } else {
+                        self.request_chunk(key, &b);
+                    }
+                }
+            }
+        }
         for key in self.keys_around(dir, radius) {
             if let Some(p) = self.patches.get_mut(&key) {
                 p.wanted_at = now;
@@ -331,13 +401,69 @@ impl Ground {
                 },
             );
         }
+        // Block chunks finished.
+        let finished: Vec<_> = match self.chunks_done.lock() {
+            Ok(mut done) => {
+                let n = done.len().min(PATCHES_PER_TICK);
+                done.drain(..n).collect()
+            }
+            Err(_) => Vec::new(),
+        };
+        for (generation, key, shape) in finished {
+            if generation != self.generation || !self.chunks_pending.remove(&key) {
+                continue;
+            }
+            if let Some(old) = self.chunks.remove(&key)
+                && old.collider != ColliderHandle::invalid()
+            {
+                world.remove_collider(old.collider);
+            }
+            let collider = shape.map_or(ColliderHandle::invalid(), |shape| {
+                let builder = ColliderBuilder::new(shape)
+                    .density(0.0)
+                    .friction(GROUND_FRICTION)
+                    .collision_groups(InteractionGroups::new(
+                        GROUND_GROUP,
+                        Group::ALL,
+                        InteractionTestMode::And,
+                    ));
+                world.insert_collider(builder, Some(self.body))
+            });
+            self.chunks.insert(
+                key,
+                Patch {
+                    collider,
+                    wanted_at: now,
+                },
+            );
+        }
+        let gone: Vec<(i32, i32)> = self
+            .chunks
+            .iter()
+            .filter(|(_, c)| now - c.wanted_at > PATCH_LIFETIME)
+            .map(|(k, _)| *k)
+            .collect();
+        for key in gone {
+            if let Some(c) = self.chunks.remove(&key)
+                && c.collider != ColliderHandle::invalid()
+            {
+                world.remove_collider(c.collider);
+            }
+        }
         // Buildings wanted for the first time get their colliders; unwanted ones go.
-        if let Some(f) = self.terrain.foundations().cloned() {
+        let foundations = self.terrain.foundations().cloned();
+        let blocks = self.terrain.blocks().cloned();
+        {
             for (&(site, k), b) in self.boxes.iter_mut() {
                 if b.collider != ColliderHandle::invalid() {
                     continue;
                 }
-                let Some(s) = f.structure(site, k) else {
+                let s = if site == BLOCK_SITE {
+                    blocks.as_ref().and_then(|bl| bl.structures.get(k as usize))
+                } else {
+                    foundations.as_ref().and_then(|f| f.structure(site, k))
+                };
+                let Some(s) = s else {
                     continue;
                 };
                 let builder = ColliderBuilder::cuboid(s.half.x, s.half.y, s.half.z)

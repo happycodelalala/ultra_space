@@ -369,7 +369,7 @@ def pine(x, y, z, s, turn):
         m = 0
         while True:
             rr = r0 - m * 0.25
-            if rr < 0.45 or m > 6:
+            if rr < 0.2 or m > 7:
                 break
             k = math.floor(z0 / 0.25) + m
             for i in v.r(-rr, rr):
@@ -378,10 +378,10 @@ def pine(x, y, z, s, turn):
                     if max(px, py) <= rr and px + py <= rr * 1.35:
                         v.v[i, j, k] = "pine"
             m += 1
+    # The leader: the last tier tapers to a 2 x 2 point; one more course of it on top.
     top = max(k for (_, _, k) in v.v)
-    for kk in (top + 1, top + 2):
-        for (i, j) in [(-1, -1), (0, -1), (-1, 0), (0, 0)]:
-            v.v[i, j, kk] = "pine2"
+    for (i, j) in [(-1, -1), (0, -1), (-1, 0), (0, 0)]:
+        v.v[i, j, top + 1] = "pine2"
     v.shade({"pine"}, "pine2", "pine", "pine3", "pine3", 0.2)
     v.mesh("pine", (x, y, z), turn * 90)
 

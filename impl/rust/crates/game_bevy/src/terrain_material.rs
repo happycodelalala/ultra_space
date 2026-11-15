@@ -39,6 +39,12 @@ pub struct TerrainUniform {
     pub surface: Vec4,
     /// Linear biome colours by biome index.
     pub palette: [Vec4; 12],
+    /// The block ground (Batch 5): xyz = its centre (unit, body frame), w = cosine of its
+    /// angular radius.
+    pub blocks: Vec4,
+    /// x = round the camera, tiles within this horizontal distance (m) inside the block ground
+    /// are not drawn (the blocks are); 0 = off.
+    pub hide: Vec4,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
