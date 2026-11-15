@@ -11,7 +11,7 @@ universe design §1 and §5 (planet scale, climate). Tasks are in development pl
 | Where terrain is generated | **CPU, in `sim_planet`:** one deterministic `f64` height and climate function, run on worker threads | Collision, landing spots, resources and AI need the same heights as the picture; GPU generation would need slow readbacks. 16 cores make CPU tiles fast enough |
 | How the orbit view matches | The planet shader samples **cube maps baked from the same function** (height, biome color) at load | "One function, used everywhere" (development plan §4) without porting noise to a shader |
 | GPU's role | Shading only: lighting, fine detail noise, atmosphere, clouds, water | Detail that has no gameplay effect |
-| Terrain shape | **Heightmap** over a cube-sphere for Batch 2; voxel patches for digging later (overview §2) | Cheap, looks good, and enough for landing and walking |
+| Terrain shape | **Heightmap** over a cube-sphere for Batch 2; near the player, diggable blocks from Batch 5 (block-world.md) | Cheap, looks good, and enough for landing and walking |
 | Planet size | 600 km baseline stays; the size decision is **deferred** until there is content to judge it by (universe design §1). `ULTRA_SPACE_BODY_RADIUS` compares sizes when the time comes | Size only means something next to settlements, ground and space battles and real travel, none of which exist yet |
 | Climate | Rules compute temperature and moisture from parameters written by hand in the star system data; the LLM proposes these parameters from Batch 10 (universe design §5) | Same data format before and after LLM generation |
 

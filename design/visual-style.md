@@ -16,16 +16,26 @@ Sky's, is out of reach for a game of this scale made by one developer. The targe
 
 In one line: **No Man's Sky skies and weather over a Stonehearth world.** Volumetric clouds and
 storms are the costliest part, so they come in quality tiers (§4); they extend the clouds the
-atmosphere shader already draws rather than adding a second system. How blocky the shapes go
-(Stonehearth's near-voxel trees against Dyson Sphere Program's faceted forms) is decided with
-the first ground cover and kit models (tasks 5.1 and 5.5) and set down here.
+atmosphere shader already draws rather than adding a second system.
+
+**The shapes are blocks** (decided 2026-11-15 after comparison renders): voxel art in the
+Stonehearth manner, with a standard set of shaped blocks (block, 45-degree wedge, outer and
+valley corners) so roofs, hulls and hillsides are clean slopes rather than staircases, and block
+sizes that double from 3 cm to 8 m, chosen per object by its size and role. The world itself is
+made of them and can be dug, built and destroyed: design/block-world.md. Faceted low-poly in the
+manner of Dyson Sphere Program was the alternative; mixing the two was rejected because two shape
+languages side by side always show the seam.
 
 ## 1. Principles
 
-- **Shapes: low-poly and faceted.** Models are simple, readable at a distance, with their
-  detail in the silhouette (a roofline, a chimney, a crane) rather than in texture. This keeps
-  thousands of trees, rocks and buildings affordable on a whole planet, and lets the design
-  track make the game's own models at the same level.
+- **Shapes: blocks, chunky and readable.** Models are block art with toy-like proportions,
+  their detail in the silhouette (a roofline, a chimney, a crane) and in finer blocks where the
+  eye goes (windows, doors, faces) rather than in texture. Block size follows an object's size
+  and role, about 10 to 30 blocks across: 25 cm for building structure, terrain, trees and rocks;
+  6.25 cm for fixtures and people; 3 cm for small things; metres for ship hulls and stations.
+  One object uses only about three neighbouring sizes, and every slope is one of the standard
+  shapes (block-world.md §3–4). Low-poly does not mean simple: a house has its timber frame,
+  stones, shutters, flower boxes and lantern.
 - **Surfaces: flat colour from the palette.** Colour comes from the shared palette slots of the
   model format (part materials, `content/data/part_materials.json`), with roughness and
   metalness to tell stone from metal from paint; little or no texture detail. Colours are
@@ -50,9 +60,9 @@ the first ground cover and kit models (tasks 5.1 and 5.5) and set down here.
 
 | Piece | Now | In the style |
 |---|---|---|
-| Terrain | Flat biome colours, hard rock and snow bands, angular distant mountains, staircase coasts | Faceted low-poly ground; biomes blended, rock on slopes and snow by height and slope with soft edges; smooth coasts; distant mountains softened by haze |
+| Terrain | Flat biome colours, hard rock and snow bands, angular distant mountains, staircase coasts | 25 cm blocks with slopes between terraces (block-world.md), grass on top, soil and rock in every cut; biomes blended, rock on slopes and snow by height; distant land the same blocks, softened by haze |
 | Water | A flat plane | Depth colour (shallows to deep), foam along the shore, gentle low-poly waves, the sky reflected |
-| Ground cover | Bare land | Low-poly trees, bushes, grass and rocks by biome (ground-cover.md), moving in the wind |
+| Ground cover | Bare land | Block trees, bushes, grass and rocks by biome (ground-cover.md), moving in the wind |
 | Sky and atmosphere | Single scattering, clouds in the atmosphere shader | The same, tuned: cloud cover seen from the ground, haze and fog near the ground, sunsets that colour the land |
 | Settlements and people | Kenney and Quaternius stand-ins | The game's own kits and characters on the design track, in this style; until then the stand-ins under the new light |
 | Effects | A few (lights at night, engine glow) | Plumes, dust, splashes, smoke, precipitation |
