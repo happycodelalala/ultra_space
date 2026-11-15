@@ -45,10 +45,14 @@ fn settlements_land_on_good_ground_in_their_home_regions() {
     for (ci, c) in society.cultures.iter().enumerate() {
         let mine: Vec<&Settlement> = settlements.iter().filter(|s| s.culture == ci).collect();
         // Counts follow from the pattern and the land: the medieval realm in the thousands,
-        // the young colony a score or so.
+        // the young colony and the wasteland a score or so.
         let expected = match c.profile.id.as_str() {
             "hollin" => 1_000..=2_500,
-            _ => 10..=40,
+            "tayu" => 150..=600,
+            "velani" => 300..=1_200,
+            "corvantine" => 700..=2_500,
+            "aldmark" => 600..=2_000,
+            _ => 5..=40,
         };
         assert!(
             expected.contains(&mine.len()),
@@ -86,6 +90,10 @@ fn settlements_land_on_good_ground_in_their_home_regions() {
         // (3.6 km for steadings, 40 km for outposts).
         let least = match c.profile.id.as_str() {
             "hollin" => 3.6,
+            "tayu" => 5.0,
+            "velani" | "aldmark" => 4.0,
+            "corvantine" => 3.0,
+            "kesh" => 25.0,
             _ => 40.0,
         };
         for (i, a) in mine.iter().enumerate() {
@@ -184,12 +192,24 @@ fn settlements_have_a_size_roles_and_their_people_s_word() {
             ("hollin", SizeClass::Town, _) => "hold",
             ("hollin", SizeClass::Village, _) => "village",
             ("hollin", SizeClass::Hamlet, _) => "steading",
-            ("compact", _, "colony") => "landing",
+            ("compact", _, "capital") => "landing",
             ("compact", _, "port") => "port",
             ("compact", _, "outpost") => "outpost",
-            other => panic!("unexpected settlement {}: {other:?}", s.name),
+            ("tayu", SizeClass::Town, _) => "chief's hill",
+            ("tayu", SizeClass::Hamlet, _) => "camp",
+            ("velani", SizeClass::City, _) => "polis",
+            ("velani", SizeClass::Hamlet, _) => "farmstead",
+            ("corvantine", _, "capital") => "crown city",
+            ("corvantine", _, "town") => "villa",
+            ("corvantine", _, "port") => "port",
+            ("aldmark", _, "capital") => "capital",
+            ("aldmark", SizeClass::Metropolis, _) => "provincial capital",
+            ("kesh", _, "capital") => "first enclave",
+            ("kesh", _, "outpost") => "scavenger camp",
+            ("kesh", _, "enclave") => "enclave",
+            _ => s.size.name(),
         };
-        assert_eq!(s.word, expect, "{}", s.name);
+        assert_eq!(s.word, expect, "{} ({culture})", s.name);
     }
     // The capital is the first faction's seat, and only one per people.
     for (ci, c) in society.cultures.iter().enumerate() {
@@ -197,7 +217,12 @@ fn settlements_have_a_size_roles_and_their_people_s_word() {
             .iter()
             .filter(|s| s.culture == ci && s.has(SettlementRole::Capital))
             .count();
-        let expected = usize::from(c.profile.id == "compact");
+        // Peoples whose pattern names a capital (the colony, the kingdom, the republic, the
+        // wasteland's first enclave); realms of equals and city-states have none.
+        let expected = usize::from(matches!(
+            c.profile.id.as_str(),
+            "compact" | "corvantine" | "aldmark" | "kesh"
+        ));
         assert_eq!(capitals, expected, "{}", c.profile.id);
     }
     // The tiers' defaults where a culture has no word.
@@ -232,11 +257,21 @@ fn each_people_has_a_settlement_pattern() {
         let p = patterns.for_people(tier, Polity::CharterColony).unwrap();
         assert_eq!(p.id, "young_colony");
     }
+    // Every tier on Meridian has one; a wasteland's is chosen by name.
+    for (tier, id) in [
+        (TechTier::StoneAge, "stone_age"),
+        (TechTier::Ancient, "ancient"),
+        (TechTier::EarlyModern, "early_modern"),
+        (TechTier::Industrial, "industrial"),
+    ] {
+        assert_eq!(patterns.for_people(tier, Polity::Realm).unwrap().id, id);
+    }
     assert!(
         patterns
-            .for_people(TechTier::StoneAge, Polity::Chiefdom)
+            .for_people(TechTier::Interstellar, Polity::Federation)
             .is_none()
     );
+    assert!(patterns.by_id("wasteland_enclaves").is_some());
     for p in &patterns.0 {
         // Classes biggest first, each a size below the seat's, spacing growing with size.
         for w in p.classes.windows(2) {

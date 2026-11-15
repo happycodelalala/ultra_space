@@ -1,0 +1,12 @@
+{
+  "id": "stone_age",
+  "description": "Stone Age peoples (living-planet.md §8b): each chief's seat a hill fort or great gathering place, villages of huts every 8–12 km, small camps between, hunting camps in the wild.",
+  "tiers": ["stone_age"],
+  "settled_share": 0.6,
+  "seat": {"size": "town", "people": [1000, 3000], "roles": ["seat", "fort"]},
+  "classes": [
+    {"size": "village", "spacing_km": 10, "people": [80, 250], "roles": []},
+    {"size": "hamlet", "spacing_km": 5, "people": [20, 60], "roles": []}
+  ],
+  "dwelling_spacing_km": 3.0
+}

@@ -1,0 +1,13 @@
+{
+  "id": "industrial",
+  "description": "Industrial peoples (living-planet.md §8b): great cities of factories and railways, towns every 12 km, fewer and bigger villages, farms between.",
+  "tiers": ["industrial"],
+  "settled_share": 0.6,
+  "seat": {"size": "metropolis", "people": [150000, 400000], "roles": ["seat", "market"], "capital_people": [600000, 1200000], "capital_roles": ["capital"]},
+  "classes": [
+    {"size": "city", "spacing_km": 50, "people": [20000, 90000], "roles": ["market"]},
+    {"size": "town", "spacing_km": 12, "people": [1500, 5000], "roles": ["market"]},
+    {"size": "village", "spacing_km": 4, "people": [200, 500], "roles": []}
+  ],
+  "dwelling_spacing_km": 1.0
+}

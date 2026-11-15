@@ -1,0 +1,13 @@
+{
+  "id": "ancient",
+  "description": "Ancient peoples of bronze and iron (living-planet.md §8b): walled cities with temples as seats, towns every 30–40 km, farming villages every 6 km, hamlets between.",
+  "tiers": ["ancient"],
+  "settled_share": 0.5,
+  "seat": {"size": "city", "people": [6000, 30000], "roles": ["seat", "market", "temple", "fort"]},
+  "classes": [
+    {"size": "town", "spacing_km": 35, "people": [1000, 4000], "roles": ["market"]},
+    {"size": "village", "spacing_km": 6, "people": [100, 400], "roles": []},
+    {"size": "hamlet", "spacing_km": 4, "people": [30, 100], "roles": []}
+  ],
+  "dwelling_spacing_km": 1.5
+}

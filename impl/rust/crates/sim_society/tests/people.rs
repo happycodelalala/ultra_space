@@ -58,9 +58,12 @@ fn count(crowd: &Crowd, a: Activity) -> usize {
 #[test]
 fn people_live_out_the_day_in_a_town_and_the_colony() {
     let (society, layouts) = meridian();
-    for kind in ["town", "colony"] {
+    for (culture, kind) in [("hollin", "town"), ("compact", "capital")] {
         let i = (0..society.settlements.len())
-            .filter(|&i| society.settlements[i].lore_kind() == kind)
+            .filter(|&i| {
+                let s = &society.settlements[i];
+                s.lore_kind() == kind && society.society.cultures[s.culture].profile.id == culture
+            })
             .max_by_key(|&i| society.settlements[i].population)
             .unwrap();
         let s = &society.settlements[i];

@@ -175,6 +175,10 @@ pub struct PeopleData {
     pub culture: String,
     pub home: HomeRegion,
     pub factions: u32,
+    /// Its settlement pattern, when not its tier's and polity's (a ruined nation settles as a
+    /// wasteland's enclaves).
+    #[serde(default)]
+    pub pattern: Option<String>,
 }
 
 /// A region on a body's surface: a centre (latitude and longitude, degrees; longitude east

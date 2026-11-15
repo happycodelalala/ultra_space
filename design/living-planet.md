@@ -622,6 +622,29 @@ what is simulated, level of detail) and never show on screen:
   and one from before starts its societies fresh. Foundations are indexed by cube-sphere tile
   so terrain sampling checks only the sites near it. Until 4b.5, every layout is still made
   while loading (295,000 buildings, about 4 s).
+- **As built (task 4b.3): the peoples of Meridian.** Meridian is the test bed for every stage
+  (developer, 2026-11-14): seven peoples, each settled by its tier's pattern
+  (`content/data/settlement_patterns/`) and written as recorded responses
+  (`content/lore/meridian-peoples.json`):
+
+| People | Tier, polity | Home | Settlements | People |
+|---|---|---|---|---|
+| The Hollin | Medieval realm | central continent | 2,286 | ~750,000 |
+| The Compact | Spacefaring charter colony | eastern continent | 17 | ~10,500 |
+| The Tayu | Stone Age chiefdoms (3 clans) | the eastern continent's southern jungle, by the Compact | 346 | ~35,000 |
+| The Velani | Ancient city-states (4 poleis) | the western continent's south coast | 700 | ~240,000 |
+| The Corvantines | Early Modern kingdom and its trading company | the southern continent's north | 1,444 | ~940,000 |
+| The Aldmarkers | Industrial republic (3 provinces) | the north-eastern continent | 1,147 | ~3.2 million |
+| The Kesh | A Modern nation that destroyed itself: 2 enclaves and scavenger camps | the south-east island | 10 | ~44,000 |
+
+  About 5,950 settlements and 5.2 million people; the aggregate costs 0.15 ms per tick.
+  Workers produce by their tier (`TechTier::productivity`: industrial ×4, modern ×10), so an
+  industrial nation with 12% farmers feeds itself; foragers, like colonies, don't depend on
+  soil. A people can name its pattern in the star system data (the Kesh: `wasteland_enclaves`).
+  Lore pools are keyed by `capital`, `port`, `outpost`, `enclave`, else size. The new peoples'
+  kits and clothing (`stone_age_camp`, `ancient_city`, `early_modern_town`, `industrial_town`,
+  `wasteland_enclave`; their clothing sets) come with task 4b.7; until then they are generated
+  and simulated but not drawn.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

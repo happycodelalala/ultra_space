@@ -78,7 +78,12 @@
       "climate": { "equator_temperature_c": 27, "pole_temperature_c": -25, "moisture": 0.6 },
       "peoples": [
         {"culture": "hollin", "home": {"latitude_deg": 20, "longitude_deg": 3, "radius_deg": 14}, "factions": 3},
-        {"culture": "compact", "home": {"latitude_deg": 9, "longitude_deg": 77, "radius_deg": 9}, "factions": 2}
+        {"culture": "compact", "home": {"latitude_deg": 9, "longitude_deg": 77, "radius_deg": 9}, "factions": 2},
+        {"culture": "tayu", "home": {"latitude_deg": -12, "longitude_deg": 82, "radius_deg": 7}, "factions": 3},
+        {"culture": "velani", "home": {"latitude_deg": 8, "longitude_deg": -140, "radius_deg": 10}, "factions": 4},
+        {"culture": "corvantine", "home": {"latitude_deg": -33, "longitude_deg": -100, "radius_deg": 11}, "factions": 2},
+        {"culture": "aldmark", "home": {"latitude_deg": 40, "longitude_deg": 145, "radius_deg": 12}, "factions": 3},
+        {"culture": "kesh", "home": {"latitude_deg": -40, "longitude_deg": 127, "radius_deg": 9}, "factions": 2, "pattern": "wasteland_enclaves"}
       ],
       "description": "Temperate home world with oceans and seasons: the baseline planet and future home of many cultures."
     },

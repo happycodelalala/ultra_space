@@ -79,6 +79,11 @@ impl SettlementPatterns {
         Ok(Self(out))
     }
 
+    /// A pattern by id.
+    pub fn by_id(&self, id: &str) -> Option<&SettlementPattern> {
+        self.0.iter().find(|p| p.id == id)
+    }
+
     /// The pattern of a people of `tier` and `polity`: one listing its polity, else one listing
     /// its tier.
     pub fn for_people(&self, tier: TechTier, polity: Polity) -> Option<&SettlementPattern> {

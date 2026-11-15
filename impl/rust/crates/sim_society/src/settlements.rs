@@ -167,19 +167,14 @@ impl Settlement {
         self.settlement_roles.contains(&role)
     }
 
-    /// The key of its kind of lore (`settlement/<culture>/<kind>/*` in content/lore):
-    /// "colony" for a capital that is a port, then "port", "outpost", else its size.
+    /// The key of its kind of lore (`settlement/<culture>/<kind>/*` in content/lore): its
+    /// first of "capital", "port", "outpost", "enclave", else its size.
     pub fn lore_kind(&self) -> &'static str {
         use SettlementRole::*;
-        if self.has(Capital) && self.has(Port) {
-            "colony"
-        } else if self.has(Port) {
-            "port"
-        } else if self.has(Outpost) {
-            "outpost"
-        } else {
-            self.size.name()
-        }
+        [Capital, Port, Outpost, Enclave]
+            .into_iter()
+            .find(|r| self.has(*r))
+            .map_or(self.size.name(), SettlementRole::name)
     }
 }
 
@@ -285,7 +280,11 @@ pub fn generate_settlements(
         let culture = society.cultures[ci].clone();
         let profile = &culture.profile;
         let tier = profile.tech_tier;
-        let Some(pattern) = patterns.for_people(tier, profile.polity).cloned() else {
+        let chosen = match &culture.people.pattern {
+            Some(id) => patterns.by_id(id),
+            None => patterns.for_people(tier, profile.polity),
+        };
+        let Some(pattern) = chosen.cloned() else {
             society.fallbacks.push(format!(
                 "{}: no settlement pattern for a {:?} {:?}",
                 profile.id, tier, profile.polity

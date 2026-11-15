@@ -1,0 +1,14 @@
+{
+  "id": "early_modern",
+  "description": "Early Modern peoples of gunpowder and sail (living-planet.md §8b): port cities, many market towns, villages every 4 km, farms between.",
+  "tiers": ["early_modern"],
+  "settled_share": 0.55,
+  "seat": {"size": "city", "people": [30000, 90000], "roles": ["seat", "market", "port", "fort"], "capital_people": [90000, 99000], "capital_roles": ["capital"]},
+  "classes": [
+    {"size": "city", "spacing_km": 70, "people": [10000, 40000], "roles": ["port", "market"]},
+    {"size": "town", "spacing_km": 17, "people": [1000, 5000], "roles": ["market"]},
+    {"size": "village", "spacing_km": 4, "people": [150, 500], "roles": []},
+    {"size": "hamlet", "spacing_km": 3, "people": [30, 100], "roles": []}
+  ],
+  "dwelling_spacing_km": 1.0
+}

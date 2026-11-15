@@ -134,7 +134,7 @@
     {
       "request": {
         "kind": "settlement_lore",
-        "key": "settlement/compact/colony/*"
+        "key": "settlement/compact/capital/*"
       },
       "response": {
         "description": "{settlement} is the first landing site of the Meridian Venture and the heart of the Compact: habitat rings, greenhouses and fabrication halls around the landing field, home of the Board of Stewards.",

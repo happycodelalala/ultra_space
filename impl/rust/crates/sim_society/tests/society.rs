@@ -26,12 +26,24 @@ fn meridian() -> Society {
 }
 
 #[test]
-fn meridian_has_both_cultures_and_their_factions() {
+fn meridian_has_its_seven_peoples_and_their_factions() {
     let s = meridian();
     assert!(s.fallbacks.is_empty(), "{:?}", s.fallbacks);
+    // Seven peoples, one of every stage the game has (task 4b.3).
     let tiers: Vec<TechTier> = s.cultures.iter().map(|c| c.profile.tech_tier).collect();
-    assert_eq!(tiers, vec![TechTier::Medieval, TechTier::Spacefaring]);
-    assert_eq!(s.factions.len(), 5);
+    assert_eq!(
+        tiers,
+        vec![
+            TechTier::Medieval,
+            TechTier::Spacefaring,
+            TechTier::StoneAge,
+            TechTier::Ancient,
+            TechTier::EarlyModern,
+            TechTier::Industrial,
+            TechTier::Modern,
+        ]
+    );
+    assert_eq!(s.factions.len(), 3 + 2 + 3 + 4 + 2 + 3 + 2);
     // Strengths decide how much land each holds once settlements are placed.
     for f in &s.factions {
         assert!(
@@ -44,7 +56,7 @@ fn meridian_has_both_cultures_and_their_factions() {
     let mut names: Vec<&str> = s.factions.iter().map(|f| f.name.as_str()).collect();
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 5, "unique faction names");
+    assert_eq!(names.len(), s.factions.len(), "unique faction names");
     for f in &s.factions {
         for text in [&f.lore.motto, &f.lore.description, &f.lore.history] {
             assert!(!text.contains('{'), "placeholders filled: {text}");

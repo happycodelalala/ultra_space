@@ -44,6 +44,7 @@ fn goods_per_day(role: &str) -> f64 {
     match role {
         "smith" | "carpenter" | "crafter" | "potter" | "engineer" => 3.0,
         "technician" | "worker" => 2.0,
+        "sailor" => 1.0,
         "laborer" => 0.5,
         _ => 0.0,
     }
@@ -158,7 +159,8 @@ impl RegionSociety {
         let soil = settlements
             .iter()
             .map(|s| match society.cultures[s.culture].profile.tech_tier {
-                TechTier::Spacefaring => 1.0,
+                // Domes and hydroponics, and foragers living off the wild land.
+                TechTier::Spacefaring | TechTier::StoneAge => 1.0,
                 _ => 0.5 + 0.8 * s.site_score,
             })
             .collect();
@@ -251,9 +253,10 @@ fn step_settlement(
     let n = state.population().max(1.0);
     // Production and use.
     let (mut food, mut goods) = (0.0, 0.0);
+    let output = culture.tech_tier.productivity();
     for (k, (role, _)) in s.roles.iter().enumerate() {
-        food += food_per_day(role) * soil * state.people[k];
-        goods += goods_per_day(role) * state.people[k];
+        food += food_per_day(role) * soil * output * state.people[k];
+        goods += goods_per_day(role) * output * state.people[k];
     }
     state.food += (food - n) * days;
     state.goods += (goods - n * GOODS_USE) * days;

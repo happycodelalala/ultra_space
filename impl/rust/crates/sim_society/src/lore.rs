@@ -106,18 +106,40 @@ impl TechTier {
     /// Building kits made for this tier.
     pub fn building_kits(self) -> &'static [&'static str] {
         match self {
+            Self::StoneAge => &["stone_age_camp"],
+            Self::Ancient => &["ancient_city"],
             Self::Medieval => &["medieval_village"],
+            Self::EarlyModern => &["early_modern_town"],
+            Self::Industrial => &["industrial_town"],
+            Self::Modern => &["wasteland_enclave"],
             Self::Spacefaring => &["colony_standin"],
-            _ => &[],
+            Self::Interstellar => &[],
         }
     }
 
     /// Clothing sets made for this tier.
     pub fn clothing_sets(self) -> &'static [&'static str] {
         match self {
+            Self::StoneAge => &["stone_age_hides"],
+            Self::Ancient => &["ancient_tunics"],
             Self::Medieval => &["medieval_commoner"],
+            Self::EarlyModern => &["early_modern_dress"],
+            Self::Industrial => &["industrial_workwear"],
+            Self::Modern => &["wasteland_gear"],
             Self::Spacefaring => &["colony_workwear"],
-            _ => &[],
+            Self::Interstellar => &[],
+        }
+    }
+
+    /// How much a worker makes compared with a medieval one (tools, ploughs, machines):
+    /// food and goods per person per day scale with it.
+    pub fn productivity(self) -> f64 {
+        match self {
+            Self::StoneAge | Self::Ancient | Self::Medieval => 1.0,
+            Self::EarlyModern => 1.4,
+            Self::Industrial => 4.0,
+            Self::Modern => 10.0,
+            Self::Spacefaring | Self::Interstellar => 1.0, // growers already count hydroponics
         }
     }
 }

@@ -263,7 +263,8 @@
                   "radius_deg": {"type": "number", "exclusiveMinimum": 0, "maximum": 90, "description": "Angular radius, so the region fits any body size."}
                 }
               },
-              "factions": {"type": "integer", "minimum": 1}
+              "factions": {"type": "integer", "minimum": 1},
+              "pattern": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Its settlement pattern by id, when not its tier's and polity's (a ruined nation: wasteland_enclaves)."}
             }
           }
         },

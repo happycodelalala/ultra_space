@@ -90,7 +90,7 @@ fn main() {
 
     // One of each kind (the biggest).
     let mut shown: Vec<usize> = Vec::new();
-    for kind in ["town", "village", "hamlet", "colony", "port", "outpost"] {
+    for kind in ["town", "village", "hamlet", "capital", "port", "outpost"] {
         if let Some(i) = (0..settlements.len())
             .filter(|&i| settlements[i].lore_kind() == kind)
             .max_by_key(|&i| settlements[i].population)

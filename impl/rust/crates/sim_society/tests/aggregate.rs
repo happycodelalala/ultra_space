@@ -55,19 +55,22 @@ fn per_culture(rs: &RegionSociety, tier: TechTier) -> f64 {
 #[test]
 fn well_fed_peoples_grow_slowly_over_years() {
     let mut rs = meridian();
-    let (h0, c0) = (
-        per_culture(&rs, TechTier::Medieval),
-        per_culture(&rs, TechTier::Spacefaring),
-    );
+    let tiers: Vec<TechTier> = rs
+        .society
+        .cultures
+        .iter()
+        .map(|c| c.profile.tech_tier)
+        .collect();
+    let before: Vec<f64> = tiers.iter().map(|&t| per_culture(&rs, t)).collect();
     for _ in 0..(10 * 365) {
         rs.step(1.0);
     }
-    let (h1, c1) = (
-        per_culture(&rs, TechTier::Medieval),
-        per_culture(&rs, TechTier::Spacefaring),
-    );
-    println!("10 years: Hollin {h0:.0} -> {h1:.0}, Compact {c0:.0} -> {c1:.0}");
-    for (grown, start) in [(h1, h0), (c1, c0)] {
+    let after: Vec<f64> = tiers.iter().map(|&t| per_culture(&rs, t)).collect();
+    for (c, (b, a)) in rs.society.cultures.iter().zip(before.iter().zip(&after)) {
+        println!("10 years: {} {b:.0} -> {a:.0}", c.profile.name);
+    }
+    // Every people holds its own (the wasteland's included: rationed, not starving).
+    for (grown, start) in after.into_iter().zip(before) {
         let yearly = (grown / start).powf(0.1) - 1.0;
         assert!(
             (0.002..0.03).contains(&yearly),
