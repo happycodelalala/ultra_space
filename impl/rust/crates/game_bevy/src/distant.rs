@@ -270,6 +270,7 @@ fn stream_chunks(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_chunks");
     let Some(draw) = draw else { return };
     let distant = &mut *distant;
     let body = camera.anchor;
@@ -458,6 +459,7 @@ fn place_chunks(
     mut transforms: Query<&mut Transform>,
     mut visibility: Query<&mut Visibility>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("place_chunks");
     let system = &universe.0;
     let anchor = system.bodies[camera.anchor].inertial_frame;
     let star =

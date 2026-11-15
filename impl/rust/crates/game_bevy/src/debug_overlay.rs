@@ -272,3 +272,22 @@ fn update_overlay(
         ms(tick_max),
     );
 }
+
+/// Logs a system that took more than 8 ms (task 4b.6: finding hitches): create one at the
+/// start of the system; it measures until dropped.
+pub struct SlowSystem(&'static str, std::time::Instant);
+
+impl SlowSystem {
+    pub fn new(name: &'static str) -> Self {
+        Self(name, std::time::Instant::now())
+    }
+}
+
+impl Drop for SlowSystem {
+    fn drop(&mut self) {
+        let ms = self.1.elapsed().as_secs_f64() * 1e3;
+        if ms > 8.0 {
+            warn!("slow system: {} took {ms:.1} ms", self.0);
+        }
+    }
+}

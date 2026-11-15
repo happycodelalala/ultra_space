@@ -530,6 +530,7 @@ fn stream_layouts(
     camera: Res<SpaceCamera>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_layouts");
     let Some(mut draw) = draw else { return };
     let draw = &mut *draw;
     let body = camera.anchor;
@@ -926,6 +927,7 @@ fn stream_settlements(
     camera: Res<SpaceCamera>,
     mut visibility: Query<&mut Visibility>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_settlements");
     let Some(mut draw) = draw else {
         return;
     };
@@ -1029,6 +1031,7 @@ fn place_settlements(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&Visibility, &mut Transform)>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("place_settlements");
     let Some(draw) = draw else {
         return;
     };

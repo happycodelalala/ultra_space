@@ -329,6 +329,7 @@ fn update_terrain(
     mut visibility: Query<&mut Visibility, With<TerrainTile>>,
     mut spheres: Query<(&BodyVisual, &mut Visibility), Without<TerrainTile>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("update_terrain");
     let system = &universe.0;
     let t = render.0;
     let fov = projections

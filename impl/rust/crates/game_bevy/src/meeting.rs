@@ -347,6 +347,7 @@ fn look_at(
     people: Query<(&GlobalTransform, &InheritedVisibility, &PersonLabel)>,
     mut label: Query<(&mut Text, &mut Visibility), With<LookLabel>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("look_at");
     let Ok(cam) = cameras.single() else { return };
     // Render space (camera-relative, anchor axes) to the camera body's surface frame.
     let system = &universe.0;

@@ -245,6 +245,7 @@ fn stream_people(
     universe: Res<Universe>,
     render: Res<RenderTime>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_people");
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
     };
@@ -341,6 +342,7 @@ fn update_people(
     mut residents: Query<(&mut Resident, &mut Transform, &mut Visibility)>,
     mut players: Query<&mut AnimationPlayer>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("update_people");
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
     };
