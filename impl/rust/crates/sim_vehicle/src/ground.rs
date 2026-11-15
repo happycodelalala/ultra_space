@@ -52,6 +52,9 @@ const CHUNK_REACH: f64 = 12.0;
 
 /// Collision group of ground patches (resting bodies leave it out of their filter).
 pub(crate) const GROUND_GROUP: Group = Group::GROUP_1;
+/// Walls walkers bump into: the block village's buildings, props and trunks (ground to
+/// vehicles as well).
+pub(crate) const STRUCTURE_GROUP: Group = Group::GROUP_3;
 
 /// Target vertex spacing of collision patches (m).
 const PATCH_SPACING: f64 = 2.0;
@@ -466,12 +469,17 @@ impl Ground {
                 let Some(s) = s else {
                     continue;
                 };
+                let groups = if site == BLOCK_SITE {
+                    GROUND_GROUP | STRUCTURE_GROUP
+                } else {
+                    GROUND_GROUP
+                };
                 let builder = ColliderBuilder::cuboid(s.half.x, s.half.y, s.half.z)
                     .position(Pose::from_parts(s.center, s.rotation))
                     .density(0.0)
                     .friction(GROUND_FRICTION)
                     .collision_groups(InteractionGroups::new(
-                        GROUND_GROUP,
+                        groups,
                         Group::ALL,
                         InteractionTestMode::And,
                     ));

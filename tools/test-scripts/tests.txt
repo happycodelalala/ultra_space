@@ -66,4 +66,3 @@ village-rain  | village.txt  | ULTRA_SPACE_WEATHER=rain                     | vi
 village-fog   | village.txt  | ULTRA_SPACE_WEATHER=fog                      | visual | fog: the village fading into a pale fog within tens of metres, no hard edge between fog and sky
 village-walk  | village-walk.txt |                                          | visual | starts on foot beside the landed ship; walks the path to the house on the block ground (not sinking or floating), bumps the fence, runs to the pit's edge
 village-perf  | village-descent.txt |                                       | perf   | camera from 3 km above down to the village: block ground fills in without holes, no frame over 50 ms
-village-agx   | village.txt  | ULTRA_SPACE_TONEMAP=agx                      | visual | the day views with AgX tonemapping, to compare with the default (task 5.5)

@@ -31,7 +31,7 @@ use sim_core::ObjectId;
 use crate::allocation::Wrench;
 use crate::catalog::Shape;
 use crate::flight::{BodyEnv, MAX_SUBSTEP, MAX_SUBSTEPS, RigidState, ground_contact};
-use crate::ground::{GROUND_GROUP, Ground};
+use crate::ground::{GROUND_GROUP, Ground, STRUCTURE_GROUP};
 use crate::vehicle::{PartCollider, VehicleBody};
 use crate::wheels::{Drive, WheelMount};
 
@@ -42,6 +42,8 @@ const HULL_FRICTION: f64 = 0.8;
 const PATCH_ALTITUDE: f64 = 50.0;
 /// Collision group of vehicles.
 const VEHICLE_GROUP: Group = Group::GROUP_2;
+/// Ground and structures are kept this far round walkers (m).
+const WALKER_REACH: f64 = 8.0;
 /// Solver iterations per step while bodies are near the ground.
 const CONTACT_ITERATIONS: usize = 4;
 /// A body still on the ground (slower than these, relative to it) with no thrust for
@@ -114,6 +116,8 @@ pub struct PhysicsScene {
     time: f64,
     /// The ground's angular velocity in the last step.
     ground_spin: DVec3,
+    /// Walkers' positions (the region body's inertial frame) for the next step.
+    walkers: Vec<DVec3>,
     stats: PhysicsStats,
 }
 
@@ -151,6 +155,7 @@ impl Default for PhysicsScene {
             inline_patches: false,
             time: 0.0,
             ground_spin: DVec3::ZERO,
+            walkers: Vec::new(),
             stats: PhysicsStats::default(),
         }
     }
@@ -688,7 +693,7 @@ impl PhysicsScene {
     }
 
     /// Moves a walker's capsule (feet at `feet`, standing along `up`) by `desired`, against the
-    /// vehicles as the last step left them (not the ground: walkers stand on the terrain height,
+    /// vehicles and the block village's walls as the last step left them (not the ground: walkers stand on the terrain height,
     /// which the patches match). Returns the push out of any overlap, the movement actually made
     /// after it, and whether it stands on a vehicle.
     pub fn sweep_character(
@@ -712,9 +717,11 @@ impl PhysicsScene {
             DQuat::from_rotation_arc(DVec3::Y, up),
         );
         let world = &self.world;
+        // Vehicles and the block village's walls (in the ground group too, but also in the
+        // structure group the filter lets through).
         let vehicles_only = QueryFilter::default().groups(InteractionGroups::new(
             Group::ALL,
-            Group::ALL.difference(GROUND_GROUP),
+            Group::ALL.difference(GROUND_GROUP) | STRUCTURE_GROUP,
             InteractionTestMode::And,
         ));
         let queries = world.broad_phase.as_query_pipeline(
@@ -797,6 +804,12 @@ impl PhysicsScene {
         }
     }
 
+    /// Where the region's walkers are (the body's inertial frame): the ground and structures
+    /// near them are kept, so their sweeps meet the village's walls.
+    pub fn set_walkers(&mut self, positions: Vec<DVec3>) {
+        self.walkers = positions;
+    }
+
     fn update_ground(&mut self, env: &BodyEnv) {
         self.sync_ground(env);
         let Some(ground) = &mut self.ground else {
@@ -834,6 +847,11 @@ impl PhysicsScene {
             }
             let dir = to_surface * p.normalize();
             e.on_patches = ground.want(dir, e.radius + PATCH_MARGIN + ahead, e.radius + 2.0, now);
+        }
+        for &w in &self.walkers {
+            if w.length() - env.radius - env.ground_height(w) < WALKER_REACH {
+                ground.want(to_surface * w.normalize(), WALKER_REACH, 0.0, now);
+            }
         }
         ground.update(&mut self.world, now);
     }

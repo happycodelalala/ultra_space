@@ -657,6 +657,7 @@ pub fn flight_system(
         ),
         With<Vehicle>,
     >,
+    walkers: Query<&ObjectState, (With<crate::Walker>, Without<Vehicle>)>,
 ) {
     let system = &system.0;
     let t = clock.time.as_secs_f64();
@@ -763,6 +764,15 @@ pub fn flight_system(
     for (id, poses, generation) in &pending_poses {
         scene.set_poses(*id, poses, *generation);
     }
+    // Walkers bump into the block village's walls: the ground near them is wanted too.
+    let frame = system.bodies[region.0].inertial_frame;
+    let t = clock.time.as_secs_f64();
+    scene.set_walkers(
+        walkers
+            .iter()
+            .map(|s| s.in_frame(&system.frames, frame, t).state.position)
+            .collect(),
+    );
     scene.step(&env, clock.dt);
 
     for entity in integrating {
