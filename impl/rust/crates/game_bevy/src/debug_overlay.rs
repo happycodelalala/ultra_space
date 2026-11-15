@@ -37,9 +37,29 @@ impl Plugin for DebugOverlayPlugin {
         .add_systems(PreUpdate, mark("PreUpdate"))
         .add_systems(RunFixedMainLoop, mark("RunFixedMainLoop"))
         .add_systems(Update, mark("Update"))
+        .add_systems(SpawnScene, mark("SpawnScene"))
         .add_systems(PostUpdate, mark("PostUpdate"))
-        .add_systems(Last, report_frame_marks)
-        .add_systems(
+        .add_systems(Last, report_frame_marks);
+        if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            use bevy::render::{ExtractSchedule, Render, RenderSystems as R};
+            render_app
+                .init_resource::<FrameMarks>()
+                .add_systems(ExtractSchedule, mark("Extract"))
+                .add_systems(
+                    Render,
+                    (
+                        mark("ExtractCommands").in_set(R::ExtractCommands),
+                        mark("PrepareMeshes").in_set(R::PrepareMeshes),
+                        mark("Specialize").in_set(R::Specialize),
+                        mark("Queue").in_set(R::Queue),
+                        mark("PhaseSort").in_set(R::PhaseSort),
+                        mark("Prepare").in_set(R::Prepare),
+                        mark("Render").in_set(R::Render),
+                        report_render_marks.in_set(R::Cleanup),
+                    ),
+                );
+        }
+        app.add_systems(
             Update,
             (record_frame, toggle_overlay, update_overlay)
                 .chain()
@@ -334,4 +354,26 @@ fn report_frame_marks(mut m: ResMut<FrameMarks>) {
         );
     }
     m.last_end = Some(now);
+}
+
+/// The render world's frame (run on the render thread): logs its segments when it took
+/// more than 30 ms from extraction to cleanup.
+fn report_render_marks(mut m: ResMut<FrameMarks>) {
+    let now = std::time::Instant::now();
+    let marks = std::mem::take(&mut m.marks);
+    let Some(first) = marks.first() else { return };
+    if now - first.1 > Duration::from_millis(30) {
+        let mut parts: Vec<String> = marks
+            .windows(2)
+            .map(|w| format!("{} {:.1}", w[0].0, ms(w[1].1 - w[0].1)))
+            .collect();
+        if let Some(last) = marks.last() {
+            parts.push(format!("{}..Cleanup {:.1}", last.0, ms(now - last.1)));
+        }
+        warn!(
+            "slow render frame {:.1} ms: {} (ms)",
+            ms(now - first.1),
+            parts.join(", ")
+        );
+    }
 }
