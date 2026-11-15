@@ -861,7 +861,7 @@ cell, made on workers with the layout. Only walls and big props get colliders.
 
 **Order.** Fields, boundaries, defences and landmarks with task 4b.8 (roads and dwellings: the
 land between settlements is fields first). Props and signs of life when the kits for every
-tier exist (task 4b.7) and with the ground cover's instancing (Batch 4c). People in the fields
+tier exist (task 4b.7) and with the ground cover's instancing (Batch 5). People in the fields
 and on the roads come with their work routines (§6.3).
 
 **As built (task 4b.8).**
@@ -893,7 +893,7 @@ and on the roads come with their work routines (§6.3).
 - Known for later: big cities still sprawl beyond their walls (no density gradient); hedges
   read as dark slabs from the ground; landmarks are the kits' biggest buildings by the square
   (no skyline rule yet); props and signs of life (smoke, fires) wait for the instancing of
-  Batch 4c; roads are straight between settlements (no routing round hills or bridges).
+  Batch 5; roads are straight between settlements (no routing round hills or bridges).
 
 ## 9. Open questions
 

@@ -296,8 +296,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
 | **4b** | **Density and the peoples of Meridian** *(2026-11-14)* | Meridian as the test bed for every stage: seven peoples from Stone Age to a ruined Modern nation, settlements from each people's settlement pattern and the land's area, the settlement hierarchy, a wasteland from generated history, layouts on approach, distant forms batched, CC0 stand-in kits and characters for every tier, roads and dwellings ([living-planet.md](living-planet.md) §8b) | 6–9 wk |
-| **4c** | **Ground cover** *(2026-11-15)* | Vegetation, rocks and scattered things from the terrain's biomes, instanced per tile with levels of detail, cleared by settlements and dead in blighted land; instancing shared with settlement props ([ground-cover.md](ground-cover.md)) | 3–5 wk |
-| **5** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
+| **5** | **Survival-builder loop** | Ground cover first (vegetation and rocks from the biomes, instanced: the trees and rocks there are to gather; [ground-cover.md](ground-cover.md)), then resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 3–4.5 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
 | **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
 | **7** | **Living galaxy** | Multiple star systems simulated in parallel, tiered simulation, economy, factions, trade ships, galaxy map | 2–4 mo |
@@ -552,25 +551,42 @@ frame on average against the bare fly-in. Loading: the loading overlay's longest
 later: city density and sprawl (no core-to-suburb gradient), the Kenney palette (teal flat
 roofs, pink stone), skin-tight painted suits for the modern peoples, roads straight between
 settlements, hedges as slabs from the ground, ports by role only where the coast allows, the
-bare land between it all (Batch 4c).
+bare land between it all (ground cover, Batch 5).
 
-### 7.7 Batch 4c tasks: ground cover
+**Batch 4 is closed (2026-11-15).** Batch 4 grew from two cultures (Batch 4) to seven peoples
+with density, kits, walls, fields, dwellings and roads (4b); a planned Batch 4c of ground cover
+was folded into Batch 5, where gathering gives trees and rocks their purpose. The rough edges
+above are **known issues, not tasks**: each is taken up when a later batch works on that system
+(or on the design track, for the art), not as an extension of Batch 4:
 
-The land between and around settlements is bare (developer, 2026-11-15). Design:
-[ground-cover.md](ground-cover.md).
+| Known issue | Where it belongs |
+|---|---|
+| Big cities sprawl beyond their walls; no dense core | Batch 9 (cultures and people: city life) |
+| Kenney stand-in palette (teal flat roofs, pink stone) | Design track (the game's own kits) |
+| Modern and industrial people in painted, skin-tight suits | Design track (characters) |
+| Roads straight between settlements: no routing round hills, no bridges | Batch 7 (traffic and trade on the road graph) |
+| Hedges and field walls as plain boxes | Batch 5 (instanced props with the ground cover) |
+| Props and signs of life (smoke, cooking fires) | Batch 5 (instancing) |
+
+### 7.7 Batch 5, first tasks: ground cover (planned 2026-11-15)
+
+The land between and around settlements is bare (developer, 2026-11-15). Planned as Batch 4c,
+folded into Batch 5 when Batch 4 was closed: Batch 5's gathering needs the trees and rocks as
+things to take. Design: [ground-cover.md](ground-cover.md). The rest of Batch 5's tasks are
+planned when it starts.
 
 | # | Task | Done when |
 |---|---|---|
-| 4c.1 | **Instanced drawing:** one draw per kind per tile from an instance buffer made on a worker; only the tile root moves; settlement props move to it | 100,000 instances near the camera within the frame budget; no frame over 50 ms when tiles stream |
-| 4c.2 | **Cover recipes and scattering:** recipes per biome as data with a schema; scattering per tile from the terrain fields, seed and blight; clearings, stands, scree; cleared by layouts and roads | Forests, grassland, deserts and blighted land each read as themselves from the ground and from low flight; the same place always the same |
-| 4c.3 | **Stand-in nature assets:** CC0 nature packs as kinds with levels of detail (cards for trees far) | Every biome has its kinds |
-| 4c.4 | **Levels and grass:** near, middle and far levels by budget; grass cards round the camera | No popping close by; the frame budget held flying low at 300 m/s |
-| 4c.5 | **Collision near the player:** trunks and big rocks collide within ~100 m of the player and vehicles | The walker and rovers can't pass through trees |
-| 4c.6 | **Batch review** | Exit criteria met |
+| 5.1 | **Instanced drawing:** one draw per kind per tile from an instance buffer made on a worker; only the tile root moves; settlement props move to it | 100,000 instances near the camera within the frame budget; no frame over 50 ms when tiles stream |
+| 5.2 | **Cover recipes and scattering:** recipes per biome as data with a schema; scattering per tile from the terrain fields, seed and blight; clearings, stands, scree; cleared by layouts and roads | Forests, grassland, deserts and blighted land each read as themselves from the ground and from low flight; the same place always the same |
+| 5.3 | **Stand-in nature assets:** CC0 nature packs as kinds with levels of detail (cards for trees far) | Every biome has its kinds |
+| 5.4 | **Levels and grass:** near, middle and far levels by budget; grass cards round the camera | No popping close by; the frame budget held flying low at 300 m/s |
+| 5.5 | **Collision near the player:** trunks and big rocks collide within ~100 m of the player and vehicles | The walker and rovers can't pass through trees |
 
-**Exit criteria:** walking or flying low anywhere on Meridian the land is covered by what its
-biome grows, cleared round settlements, dead in the Kesh waste; no frame over 50 ms flying low
-at 300 m/s or landing; loading no slower than Batch 4b; CI passes.
+**Done when (ground cover, before the gathering tasks):** walking or flying low anywhere on
+Meridian the land is covered by what its biome grows, cleared round settlements, dead in the
+Kesh waste; no frame over 50 ms flying low at 300 m/s or landing; loading no slower than
+Batch 4b; CI passes.
 
 ### 7.1 When the object system is built
 

@@ -1,11 +1,11 @@
-# Ground cover: vegetation, rocks and scattered things (Batch 4c)
+# Ground cover: vegetation, rocks and scattered things (Batch 5)
 
 Decided 2026-11-15. The planet surface (Batch 2) has shape and biome colours but nothing
 growing or lying on it, so the land reads as empty from the ground and from low flight however
 dense the settlements are. Ground cover fills it: trees, bushes, grass, rocks, logs, and, where
 history left them, wrecks and debris. Planned for Batch 2 ("Vegetation, rocks and scattered
-props", planet-surface.md §7) and moved here; done before Batch 5, whose gathering needs trees
-and rocks as things the player can cut and mine.
+props", planet-surface.md §7); the first tasks of Batch 5, whose gathering needs trees and rocks
+as things the player can cut and mine (planned as a Batch 4c, folded in when Batch 4 closed).
 
 ## 1. Decisions
 
@@ -68,6 +68,6 @@ Stand-ins from CC0 packs (Quaternius nature packs, Kenney's nature kit), downloa
 converted like the building kits, until the design track makes the game's own. Each kind has
 LOD variants (or a card made by rendering the model).
 
-## 5. Tasks (Batch 4c)
+## 5. Tasks (Batch 5)
 
 See development plan §7.7.
