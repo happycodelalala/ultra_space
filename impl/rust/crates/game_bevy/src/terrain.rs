@@ -719,6 +719,41 @@ pub fn replace_terrain(
     invalidate(bt, commands, keys);
 }
 
+/// Replaces a body's terrain with one whose settlement foundations changed (task 4b.5): only
+/// the tiles within reach of `changed` (unit directions with their angular reach) are rebuilt,
+/// each old tile drawn until its replacement is ready.
+pub fn update_terrain_near(
+    terrains: &mut Terrains,
+    commands: &mut Commands,
+    body: usize,
+    terrain: Arc<Terrain>,
+    changed: &[(DVec3, f64)],
+) {
+    let Some(bt) = terrains.bodies.iter_mut().find(|bt| bt.body == body) else {
+        return;
+    };
+    bt.terrain = terrain;
+    if changed.is_empty() {
+        return;
+    }
+    let touched: Vec<TileKey> = bt
+        .tiles
+        .keys()
+        .filter(|key| {
+            let c = key.center();
+            let spread = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)]
+                .iter()
+                .map(|&(s, u)| c.angle_between(key.direction(s, u)))
+                .fold(0.0, f64::max);
+            changed
+                .iter()
+                .any(|&(centre, reach)| c.angle_between(centre) <= spread + reach)
+        })
+        .copied()
+        .collect();
+    invalidate(bt, commands, touched);
+}
+
 /// Landing pad size (m): flat radius and the blend back to natural terrain.
 const PAD_RADIUS: f64 = 30.0;
 const PAD_BLEND: f64 = 20.0;

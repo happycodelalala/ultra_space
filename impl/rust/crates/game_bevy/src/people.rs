@@ -227,7 +227,7 @@ fn animation(activity: Activity, role: &str) -> &'static str {
 /// Local solar time at a settlement (fraction of its day, 0 midnight) at universe time `t`.
 fn local_day(universe: &Universe, site: &crate::settlements::Site, t: f64) -> f64 {
     let system = &universe.0;
-    let c = site.layout.center;
+    let c = site.settlement.direction;
     local_solar_fraction(
         &system.frames,
         system.bodies[site.body].surface_frame,
@@ -258,12 +258,15 @@ fn stream_people(
                 if set.kinds.iter().any(|k| k.ready.is_none()) {
                     continue; // still loading
                 }
-                let Some(kit) = draw.kits.0.get(&site.layout.kit) else {
+                let Some(layout) = site.layout.clone() else {
+                    continue;
+                };
+                let Some(kit) = draw.kits.0.get(&layout.kit) else {
                     continue;
                 };
                 let mut crowd = Crowd::promote(
                     &site.settlement,
-                    &site.layout,
+                    &layout,
                     kit,
                     &site.naming,
                     promoted(site.settlement.population),
@@ -344,7 +347,11 @@ fn update_people(
     let dt = f64::from(time.delta_secs()).min(0.25);
     for (i, shown) in characters.shown.iter_mut() {
         let site = &draw.sites[*i];
-        let r = site.terrain.radius;
+        let (Some(layout), Some(terrain)) = (site.layout.clone(), draw.terrain(site.body).cloned())
+        else {
+            continue;
+        };
+        let r = terrain.radius;
         let day = local_day(&universe, site, render.0);
         // The player: the camera, on the settlement's plane, if within a few hundred metres.
         let cam = crate::settlements::camera_on(&universe, &camera, site.body, render.0);
@@ -370,8 +377,8 @@ fn update_people(
                 continue;
             }
             let p = person.position;
-            let up = site.layout.direction(p.x, p.y, r);
-            let ground = site.terrain.surface_height(up, 1.0);
+            let up = layout.direction(p.x, p.y, r);
+            let ground = terrain.surface_height(up, 1.0);
             transform.translation =
                 (site.basis.inverse() * (up * (r + ground) - site.origin)).as_vec3();
             transform.rotation = Quat::from_rotation_y(person.heading as f32);

@@ -659,6 +659,17 @@ what is simulated, level of detail) and never show on screen:
   warns the player in a hazard near the ground ("RADIATION: HIGH", logged), the inspector shows
   the level, and the debug start can target ruins (`ULTRA_SPACE_START_NEAR=ruin,...`). Ruins
   and the blighted look of the land are drawn with task 4b.6.
+- **As built (task 4b.5): layouts on approach.** Loading no longer lays out any settlement
+  (from about 5 s to about 0.6 s with 5,953 settlements). `RegionLayouts` starts empty with
+  the natural terrain; the game makes a settlement's layout on the worker threads when the
+  camera comes within 4 km of its edge (six at a time) and drops it beyond 7 km. Whenever the
+  made set changes, the foundations are rebuilt (each site keyed by its settlement's index, so
+  building colliders keep their keys) and the region's terrain gets them: physics rebuilds only
+  the patches near sites that came or went and drops the colliders of buildings gone; the drawn
+  terrain rebuilds only the tiles near them. Sites are made from settlement records at start,
+  with a size-based extent until their layout arrives. The debug start lays out its target at
+  once, so the ship never lands where a house will appear, and accepts `<people>:<kind>`
+  (`hollin:city`).
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,

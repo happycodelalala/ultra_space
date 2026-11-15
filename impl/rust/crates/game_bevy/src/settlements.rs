@@ -55,7 +55,7 @@ impl Plugin for SettlementsPlugin {
         app.add_systems(OnEnter(GameState::Running), setup_settlements)
             .add_systems(
                 Update,
-                (stream_settlements, place_settlements)
+                (stream_layouts, stream_settlements, place_settlements)
                     .chain()
                     .after(CameraSet)
                     .in_set(SettlementSet)
@@ -73,20 +73,27 @@ struct Model {
 
 pub(crate) struct Site {
     pub(crate) body: usize,
+    /// Its index among its body's settlements (in `RegionSociety` and `RegionLayouts`).
+    pub(crate) index: usize,
     /// Centre on the ground (surface frame, m) and the tangent frame's rotation there.
     pub(crate) origin: DVec3,
     pub(crate) basis: DQuat,
-    /// Distance from the centre to the farthest building (m).
+    /// Distance from the centre to the farthest building (m): estimated from its size until
+    /// its layout is made.
     pub(crate) extent: f64,
     pub(crate) root: Entity,
     /// Its buildings, while the camera is near.
     pub(crate) near: Option<Vec<Entity>>,
-    pub(crate) layout: Layout,
+    /// Its layout once made (on approach, task 4b.5), and the entities drawn from it far away
+    /// (distant form, streets, lights; the first is the distant form).
+    pub(crate) layout: Option<std::sync::Arc<Layout>>,
+    drawn: Vec<Entity>,
     /// Its people: the culture's clothing set and a seed for choices.
     pub(crate) clothing: String,
     pub(crate) seed: u64,
-    pub(crate) terrain: std::sync::Arc<sim_planet::Terrain>,
     pub(crate) settlement: sim_society::Settlement,
+    pub(crate) tier: sim_society::TechTier,
+    pub(crate) kit: String,
     pub(crate) naming: sim_society::NamingRules,
     /// Its culture (name and adjective), its faction, and its culture's word for each role.
     pub(crate) culture: (String, String),
@@ -103,6 +110,16 @@ pub(crate) struct SettlementDraw {
     lanterns: Handle<StandardMaterial>,
     lamps: Handle<StandardMaterial>,
     pub(crate) sites: Vec<Site>,
+    /// Each body's terrain as last applied (with the foundations of the layouts made).
+    pub(crate) terrains: HashMap<usize, std::sync::Arc<sim_planet::Terrain>>,
+    /// Layouts being made on workers, by site.
+    pending: HashMap<usize, bevy::tasks::Task<Layout>>,
+}
+
+impl SettlementDraw {
+    pub(crate) fn terrain(&self, body: usize) -> Option<&std::sync::Arc<sim_planet::Terrain>> {
+        self.terrains.get(&body)
+    }
 }
 
 /// The bytes of glTF buffer view `view` in the binary chunk `blob`.
@@ -264,17 +281,36 @@ fn vertex_mesh(
     .with_inserted_indices(Indices::U32(indices))
 }
 
+/// Rough reach of a settlement of each size before its layout is made (m).
+fn estimated_extent(size: sim_society::SizeClass) -> f64 {
+    use sim_society::SizeClass::*;
+    match size {
+        Dwelling => 60.0,
+        Hamlet => 200.0,
+        Village => 400.0,
+        Town => 800.0,
+        City => 1_500.0,
+        Metropolis | Megalopolis => 4_000.0,
+    }
+}
+
+/// The camera this close to a settlement's edge (m) has its layout made (on a worker), and this
+/// far drops it again.
+const LAYOUT_ON: f64 = 4_000.0;
+const LAYOUT_OFF: f64 = 7_000.0;
+/// Most layouts being made at once.
+const LAYOUTS_IN_FLIGHT: usize = 6;
+
 impl Site {
     /// Building `i`'s model origin in the settlement's frame (curvature included) and its
     /// turn.
-    fn building_pose(&self, i: usize, radius: f64) -> (Vec3, Quat) {
-        let p = &self.layout.buildings[i];
-        let up = self.layout.direction(p.x, p.z, radius);
+    fn building_pose(&self, layout: &Layout, i: usize, radius: f64) -> (Vec3, Quat) {
+        let p = &layout.buildings[i];
+        let up = layout.direction(p.x, p.z, radius);
         let world = up * (radius + p.height);
         let local = self.basis.inverse() * (world - self.origin);
         // The ground's tilt at the building against the centre's (a fraction of a degree).
-        let tilt =
-            self.basis.inverse() * DQuat::from_rotation_arc(self.layout.center, up) * self.basis;
+        let tilt = self.basis.inverse() * DQuat::from_rotation_arc(layout.center, up) * self.basis;
         (
             local.as_vec3(),
             (tilt * DQuat::from_rotation_y(p.yaw)).as_quat().normalize(),
@@ -315,7 +351,7 @@ fn setup_settlements(
     let mut kits: Option<std::sync::Arc<Kits>> = None;
     let mut models = HashMap::new();
     let mut sites = Vec::new();
-    let mut buildings = 0;
+    let mut terrains = HashMap::new();
     for (body, region) in sim.0.regions.iter().enumerate() {
         let (Some(layouts), Some(society)) = (
             region.world.get_resource::<RegionLayouts>(),
@@ -324,19 +360,8 @@ fn setup_settlements(
             continue;
         };
         let kits = kits.get_or_insert_with(|| layouts.kits.clone());
-        let radius = system.bodies[body].radius;
-        let Some(terrain) = region
-            .world
-            .get_resource::<sim_vehicle::flight::RegionTerrain>()
-            .and_then(|t| t.0.clone())
-        else {
-            continue;
-        };
-        for (layout, settlement) in layouts.layouts.iter().zip(&society.settlements) {
-            let Some(kit) = kits.0.get(&layout.kit) else {
-                continue;
-            };
-            // Models of this kit, loaded once.
+        // Every kit's models, loaded once.
+        for kit in kits.0.values() {
             for (i, b) in kit.buildings.iter().enumerate() {
                 let key = (kit.id.clone(), i);
                 if models.contains_key(&key) {
@@ -356,24 +381,20 @@ fn setup_settlements(
                     Err(e) => warn!("building model {}/{}: {e}", kit.id, b.model),
                 }
             }
-            let centre_height = layout
-                .buildings
-                .iter()
-                .map(|p| p.height)
-                .fold(f64::NAN, f64::min);
-            let centre_height = if centre_height.is_finite() {
-                centre_height
-            } else {
-                0.0
-            };
-            let origin = layout.center * (radius + centre_height);
-            let (east, south) = tangent_frame(layout.center);
-            let basis = DQuat::from_mat3(&DMat3::from_cols(east, layout.center, south));
-            let extent = layout
-                .buildings
-                .iter()
-                .map(|p| (p.x * p.x + p.z * p.z).sqrt() + 20.0)
-                .fold(50.0, f64::max);
+        }
+        if let Some(t) = region
+            .world
+            .get_resource::<sim_vehicle::flight::RegionTerrain>()
+            .and_then(|t| t.0.clone())
+        {
+            terrains.insert(body, t);
+        }
+        let radius = system.bodies[body].radius;
+        for (index, settlement) in society.settlements.iter().enumerate() {
+            let profile = &society.society.cultures[settlement.culture].profile;
+            let origin = settlement.direction * (radius + settlement.height);
+            let (east, south) = tangent_frame(settlement.direction);
+            let basis = DQuat::from_mat3(&DMat3::from_cols(east, settlement.direction, south));
             let root = commands
                 .spawn((
                     Name::new("settlement"),
@@ -381,78 +402,37 @@ fn setup_settlements(
                     Visibility::Hidden,
                 ))
                 .id();
-            let site = Site {
+            sites.push(Site {
                 body,
+                index,
                 origin,
                 basis,
-                extent,
+                extent: estimated_extent(settlement.size),
                 root,
                 near: None,
-                layout: layout.clone(),
-                clothing: society.society.cultures[settlement.culture]
-                    .profile
-                    .clothing
-                    .clone(),
+                layout: None,
+                drawn: Vec::new(),
+                clothing: profile.clothing.clone(),
                 seed: settlement.layout_seed,
-                terrain: terrain.clone(),
                 settlement: settlement.clone(),
-                naming: society.society.cultures[settlement.culture]
-                    .profile
-                    .naming
-                    .clone(),
-                culture: {
-                    let p = &society.society.cultures[settlement.culture].profile;
-                    (p.name.clone(), p.adjective.clone())
-                },
+                tier: profile.tech_tier,
+                kit: profile.building_kit.clone(),
+                naming: profile.naming.clone(),
+                culture: (profile.name.clone(), profile.adjective.clone()),
                 faction: society.society.factions[settlement.faction].name.clone(),
-                role_names: society.society.cultures[settlement.culture]
-                    .profile
+                role_names: profile
                     .roles
                     .iter()
                     .map(|r| (r.id.clone(), r.name.clone()))
                     .collect(),
-            };
-            // The distant form and the lights.
-            let (far, lights) = distant_meshes(&site, kit, &models, radius);
-            let streets = street_mesh(&site, kit, &terrain);
-            commands.entity(root).with_children(|p| {
-                p.spawn((
-                    FarForm,
-                    Mesh3d(meshes.add(far)),
-                    MeshMaterial3d(material.clone()),
-                    NotShadowCaster,
-                    Transform::IDENTITY,
-                ));
-                let colony = kit
-                    .buildings
-                    .iter()
-                    .any(|b| b.uses.iter().any(|u| u == "pad"));
-                p.spawn((
-                    Mesh3d(meshes.add(streets)),
-                    MeshMaterial3d(material.clone()),
-                    NotShadowCaster,
-                    Transform::IDENTITY,
-                ));
-                p.spawn((
-                    Mesh3d(meshes.add(lights)),
-                    MeshMaterial3d(if colony {
-                        lamps.clone()
-                    } else {
-                        lanterns.clone()
-                    }),
-                    NotShadowCaster,
-                    Transform::IDENTITY,
-                ));
             });
-            buildings += layout.buildings.len();
-            sites.push(site);
         }
     }
     let Some(kits) = kits else {
         return;
     };
     info!(
-        "settlements drawn: {} settlements, {buildings} buildings, {} models",
+        "settlements: {} sites, {} building models; layouts made on approach",
         sites.len(),
         models.len()
     );
@@ -463,7 +443,233 @@ fn setup_settlements(
         lanterns,
         lamps,
         sites,
+        terrains,
+        pending: HashMap::new(),
     });
+}
+
+/// Sites in one foundations and not the other (by id): their centres and angular reach.
+fn foundation_changes(
+    old: Option<&std::sync::Arc<sim_planet::Foundations>>,
+    new: Option<&std::sync::Arc<sim_planet::Foundations>>,
+) -> Vec<(DVec3, f64)> {
+    let ids =
+        |f: Option<&std::sync::Arc<sim_planet::Foundations>>| -> std::collections::HashSet<u32> {
+            f.map(|f| f.sites().iter().map(|s| s.id()).collect())
+                .unwrap_or_default()
+        };
+    let (a, b) = (ids(old), ids(new));
+    let mut out = Vec::new();
+    for (f, other) in [(old, &b), (new, &a)] {
+        for s in f.map(|f| f.sites()).unwrap_or_default() {
+            if !other.contains(&s.id()) {
+                out.push((s.center(), s.reach()));
+            }
+        }
+    }
+    out
+}
+
+/// Makes the layouts of settlements the camera comes near (on workers) and drops those it has
+/// left far behind; when the made set changes, rebuilds the region's foundations and gives the
+/// terrain (physics and drawn tiles near the changes) the new ones, then draws the new
+/// layouts' distant forms, streets and lights.
+#[allow(clippy::too_many_arguments)]
+fn stream_layouts(
+    mut commands: Commands,
+    draw: Option<ResMut<SettlementDraw>>,
+    mut sim: ResMut<Sim>,
+    mut terrains: ResMut<crate::terrain::Terrains>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let Some(mut draw) = draw else { return };
+    let draw = &mut *draw;
+    let body = camera.anchor;
+    let Some(rl) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<RegionLayouts>())
+        .cloned()
+    else {
+        return;
+    };
+    let mut rl = rl;
+    // The region's terrain changed elsewhere (a debug start, a loaded save): follow it.
+    if let Some(current) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>())
+        .and_then(|t| t.0.clone())
+        && draw
+            .terrains
+            .get(&body)
+            .is_none_or(|t| !std::sync::Arc::ptr_eq(t, &current))
+    {
+        let near = match draw.terrains.get(&body) {
+            Some(t) => foundation_changes(t.foundations(), current.foundations()),
+            None => Vec::new(),
+        };
+        crate::terrain::update_terrain_near(
+            &mut terrains,
+            &mut commands,
+            body,
+            current.clone(),
+            &near,
+        );
+        draw.terrains.insert(body, current);
+    }
+    let cam = camera_on(&universe, &camera, body, render.0);
+    let mut changed = false;
+    // Requests and drops.
+    for (k, site) in draw.sites.iter().enumerate() {
+        if site.body != body {
+            continue;
+        }
+        let distance = (cam.distance(site.origin) - site.extent).max(0.0);
+        let made = rl.layouts.contains_key(&site.index);
+        if !made
+            && distance < LAYOUT_ON
+            && !draw.pending.contains_key(&k)
+            && draw.pending.len() < LAYOUTS_IN_FLIGHT
+        {
+            let (s, tier, kits, natural) = (
+                site.settlement.clone(),
+                site.tier,
+                rl.kits.clone(),
+                rl.natural.clone(),
+            );
+            let kit_id = site.kit.clone();
+            let task = crate::workers::workers().spawn(async move {
+                match kits.0.get(&kit_id) {
+                    Some(kit) => sim_society::generate_layout(&s, tier, kit, &natural),
+                    None => Layout {
+                        kit: kit_id,
+                        center: s.direction,
+                        buildings: Vec::new(),
+                        nodes: Vec::new(),
+                        streets: Vec::new(),
+                        unplaced: 0,
+                    },
+                }
+            });
+            draw.pending.insert(k, task);
+        } else if made && distance > LAYOUT_OFF && site.near.is_none() {
+            rl.remove(site.index);
+            changed = true;
+        }
+    }
+    // Layouts made.
+    let done: Vec<usize> = draw
+        .pending
+        .iter_mut()
+        .filter_map(|(&k, t)| t.is_finished().then_some(k))
+        .collect();
+    for k in done {
+        if let Some(task) = draw.pending.remove(&k) {
+            let layout = bevy::tasks::block_on(task);
+            rl.insert(draw.sites[k].index, std::sync::Arc::new(layout));
+            changed = true;
+        }
+    }
+    if changed {
+        let old = rl.foundations.clone();
+        rl.rebuild_foundations();
+        let Some(region) = sim.0.regions.get_mut(body).map(|r| &mut r.world) else {
+            return;
+        };
+        let current = region
+            .get_resource::<sim_vehicle::flight::RegionTerrain>()
+            .and_then(|t| t.0.clone())
+            .unwrap_or_else(|| rl.natural.clone());
+        let terrain = std::sync::Arc::new(current.with_foundations(rl.foundations.clone()));
+        region.insert_resource(sim_vehicle::flight::RegionTerrain(Some(terrain.clone())));
+        // Tiles near sites that came or went.
+        let near = foundation_changes(Some(&old), Some(&rl.foundations));
+        crate::terrain::update_terrain_near(
+            &mut terrains,
+            &mut commands,
+            body,
+            terrain.clone(),
+            &near,
+        );
+        draw.terrains.insert(body, terrain);
+        region.insert_resource(rl.clone());
+    }
+    // Draw new layouts, forget dropped ones.
+    let radius = universe.0.bodies[body].radius;
+    let Some(terrain) = draw.terrains.get(&body).cloned() else {
+        return;
+    };
+    let material = draw.material.clone();
+    let (lanterns, lamps) = (draw.lanterns.clone(), draw.lamps.clone());
+    for site in draw.sites.iter_mut().filter(|s| s.body == body) {
+        let made = rl.layouts.get(&site.index).cloned();
+        match (&site.layout, made) {
+            (None, Some(layout)) => {
+                let Some(kit) = draw.kits.0.get(&layout.kit) else {
+                    site.layout = Some(layout);
+                    continue;
+                };
+                site.extent = layout
+                    .buildings
+                    .iter()
+                    .map(|p| (p.x * p.x + p.z * p.z).sqrt() + 20.0)
+                    .fold(50.0, f64::max);
+                let (far, lights) = distant_meshes(site, &layout, kit, &draw.models, radius);
+                let streets = street_mesh(site, &layout, kit, &terrain);
+                let colony = kit
+                    .buildings
+                    .iter()
+                    .any(|b| b.uses.iter().any(|u| u == "pad"));
+                let far = commands
+                    .spawn((
+                        FarForm,
+                        Mesh3d(meshes.add(far)),
+                        MeshMaterial3d(material.clone()),
+                        NotShadowCaster,
+                        Transform::IDENTITY,
+                        ChildOf(site.root),
+                    ))
+                    .id();
+                let streets = commands
+                    .spawn((
+                        Mesh3d(meshes.add(streets)),
+                        MeshMaterial3d(material.clone()),
+                        NotShadowCaster,
+                        Transform::IDENTITY,
+                        ChildOf(site.root),
+                    ))
+                    .id();
+                let lights = commands
+                    .spawn((
+                        Mesh3d(meshes.add(lights)),
+                        MeshMaterial3d(if colony {
+                            lamps.clone()
+                        } else {
+                            lanterns.clone()
+                        }),
+                        NotShadowCaster,
+                        Transform::IDENTITY,
+                        ChildOf(site.root),
+                    ))
+                    .id();
+                site.drawn = vec![far, streets, lights];
+                site.layout = Some(layout);
+            }
+            (Some(_), None) => {
+                for e in site.drawn.drain(..) {
+                    commands.entity(e).despawn();
+                }
+                site.layout = None;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Marks a settlement's distant form (hidden while its buildings are shown).
@@ -473,6 +679,7 @@ struct FarForm;
 /// A settlement's distant boxes and its lights, in its own frame.
 fn distant_meshes(
     site: &Site,
+    layout: &Layout,
     kit: &Kit,
     models: &HashMap<(String, usize), Model>,
     radius: f64,
@@ -483,9 +690,9 @@ fn distant_meshes(
         .buildings
         .iter()
         .any(|b| b.uses.iter().any(|u| u == "pad"));
-    for (i, placed) in site.layout.buildings.iter().enumerate() {
+    for (i, placed) in layout.buildings.iter().enumerate() {
         let b = &kit.buildings[placed.building];
-        let (origin, rotation) = site.building_pose(i, radius);
+        let (origin, rotation) = site.building_pose(layout, i, radius);
         let yaw = placed.yaw as f32;
         let (lo, hi) = (
             Vec3::new(b.min_m[0] as f32, 0.0, b.min_m[2] as f32),
@@ -534,9 +741,9 @@ fn distant_meshes(
     }
     // Colony street lamps: at every street corner, on 6 m posts.
     if colony {
-        for node in &site.layout.nodes {
-            let up = site.layout.direction(node.x, node.y, radius);
-            let ground = site.layout.buildings.first().map_or(0.0, |b| b.height);
+        for node in &layout.nodes {
+            let up = layout.direction(node.x, node.y, radius);
+            let ground = layout.buildings.first().map_or(0.0, |b| b.height);
             let world = up * (radius + ground + 6.0);
             let local = (site.basis.inverse() * (world - site.origin)).as_vec3();
             add_box(
@@ -557,7 +764,7 @@ fn distant_meshes(
 
 /// Street surfaces: a ribbon along every street following the ground (dirt lanes and a paved
 /// square for the medieval style, concrete for the colony), a little above it.
-fn street_mesh(site: &Site, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
+fn street_mesh(site: &Site, layout: &Layout, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
     let colony = kit
         .buildings
         .iter()
@@ -568,7 +775,7 @@ fn street_mesh(site: &Site, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
         (4.0, [0.28, 0.21, 0.13])
     };
     let r = terrain.radius;
-    let l = &site.layout;
+    let l = layout;
     let to_local = |x: f64, z: f64| {
         let up = l.direction(x, z, r);
         let world = up * (r + terrain.surface_height(up, 2.0) + 0.2);
@@ -639,8 +846,7 @@ fn stream_settlements(
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
-    mut far_forms: Query<(&ChildOf, &mut Visibility), With<FarForm>>,
-    mut roots: Query<&mut Visibility, Without<FarForm>>,
+    mut visibility: Query<&mut Visibility>,
 ) {
     let Some(mut draw) = draw else {
         return;
@@ -654,7 +860,7 @@ fn stream_settlements(
             .or_insert_with(|| camera_on(&universe, &camera, site.body, render.0));
         let distance = (cam.distance(site.origin) - site.extent).max(0.0);
         let shown = distance < FAR;
-        if let Ok(mut v) = roots.get_mut(site.root) {
+        if let Ok(mut v) = visibility.get_mut(site.root) {
             let want = if shown {
                 Visibility::Inherited
             } else {
@@ -664,19 +870,26 @@ fn stream_settlements(
                 *v = want;
             }
         }
-        let near = match site.near {
-            Some(_) => distance < NEAR_OFF,
-            None => distance < NEAR_ON,
-        };
+        // Buildings near, once the layout is made (and its kit exists).
+        let near = site.layout.is_some()
+            && match site.near {
+                Some(_) => distance < NEAR_OFF,
+                None => distance < NEAR_ON,
+            };
         match (&site.near, near) {
             (None, true) => {
-                let kit = &draw.kits.0[&site.layout.kit];
-                let mut entities = Vec::with_capacity(site.layout.buildings.len());
-                for (i, placed) in site.layout.buildings.iter().enumerate() {
+                let Some(layout) = site.layout.clone() else {
+                    continue;
+                };
+                let Some(kit) = draw.kits.0.get(&layout.kit) else {
+                    continue;
+                };
+                let mut entities = Vec::with_capacity(layout.buildings.len());
+                for (i, placed) in layout.buildings.iter().enumerate() {
                     let Some(model) = draw.models.get(&(kit.id.clone(), placed.building)) else {
                         continue;
                     };
-                    let (translation, rotation) = site.building_pose(i, radius);
+                    let (translation, rotation) = site.building_pose(&layout, i, radius);
                     let e = commands
                         .spawn((
                             Mesh3d(model.mesh.clone()),
@@ -705,10 +918,11 @@ fn stream_settlements(
         } else {
             Visibility::Inherited
         };
-        for (parent, mut v) in &mut far_forms {
-            if parent.0 == site.root && *v != far_visible {
-                *v = far_visible;
-            }
+        if let Some(&far) = site.drawn.first()
+            && let Ok(mut v) = visibility.get_mut(far)
+            && *v != far_visible
+        {
+            *v = far_visible;
         }
     }
 }
@@ -782,8 +996,27 @@ fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
     t * t * (3.0 - 2.0 * t)
 }
 
+/// Whether settlement `s` is the one asked for: by name, or by kind (lore kind, size or its
+/// people's word), optionally of one people (`hollin:city`).
+fn wanted(society: &sim_society::RegionSociety, s: &sim_society::Settlement, what: &str) -> bool {
+    let (people, what) = match what.split_once(':') {
+        Some((p, w)) => (Some(p), w),
+        None => (None, what),
+    };
+    if let Some(p) = people
+        && society.society.cultures[s.culture].profile.id != p
+    {
+        return false;
+    }
+    s.name.to_lowercase() == what
+        || s.lore_kind() == what
+        || s.size.name() == what
+        || s.word.to_lowercase() == what
+}
+
 /// Debug start (tasks 4.6–4.9): `ULTRA_SPACE_START_NEAR=<settlement name or kind>[,<distance
-/// m>[,<height m>[,day|dusk|night|<local hour>]]]` starts the ship `distance` m (default 300) south of that
+/// m>[,<height m>[,day|dusk|night|<local hour>]]]` (a kind may name its people: `hollin:city`)
+/// starts the ship `distance` m (default 300) south of that
 /// settlement (by name, or the biggest of a kind such as `town` or `colony`), `height` m
 /// (default 0: on the ground) above the ground there, level, nose toward it, keeping still over
 /// the ground. With a time of day, the universe time is first moved to when the sun stands so
@@ -791,7 +1024,7 @@ fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
 /// inertial frame), the universe time (s) to start at, and whether it starts in the air (the
 /// ship then starts in arcade flight, holding still).
 pub fn start_near(
-    sim: &Simulation,
+    sim: &mut Simulation,
     system: &StarSystem,
     body: usize,
 ) -> Option<(ObjectState, f64, bool)> {
@@ -801,6 +1034,33 @@ pub fn start_near(
     let distance: f64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(300.0);
     let height: f64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
     let when = parts.next().map(str::to_lowercase);
+    // Lay out the settlement now (it would be made on approach anyway), so the landing spot
+    // keeps clear of its buildings.
+    {
+        let region = &mut sim.regions.get_mut(body)?.world;
+        let society = region.get_resource::<sim_society::RegionSociety>()?.clone();
+        let i = society
+            .settlements
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| wanted(&society, s, &what))
+            .max_by_key(|(_, s)| s.population)
+            .map(|(i, _)| i);
+        if let (Some(i), Some(mut rl)) = (i, region.get_resource::<RegionLayouts>().cloned()) {
+            let layout = RegionLayouts::layout_of(&society, &rl.kits, &rl.natural, i);
+            rl.insert(i, std::sync::Arc::new(layout));
+            rl.rebuild_foundations();
+            if let Some(t) = region
+                .get_resource::<sim_vehicle::flight::RegionTerrain>()
+                .and_then(|t| t.0.clone())
+            {
+                region.insert_resource(sim_vehicle::flight::RegionTerrain(Some(
+                    std::sync::Arc::new(t.with_foundations(rl.foundations.clone())),
+                )));
+            }
+            region.insert_resource(rl);
+        }
+    }
     let region = sim.regions.get(body)?;
     let society = region.world.get_resource::<sim_society::RegionSociety>()?;
     let terrain = region
@@ -812,12 +1072,7 @@ pub fn start_near(
     let settlement = society
         .settlements
         .iter()
-        .filter(|s| {
-            s.name.to_lowercase() == what
-                || s.lore_kind() == what
-                || s.size.name() == what
-                || s.word.to_lowercase() == what
-        })
+        .filter(|s| wanted(society, s, &what))
         .max_by_key(|s| s.population)
         .map(|s| (s.name.clone(), s.word.clone(), s.direction));
     let ruin = || {

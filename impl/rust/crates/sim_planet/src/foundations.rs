@@ -77,6 +77,9 @@ const CELL: f64 = 16.0;
 /// One settlement's foundations.
 #[derive(Clone, Debug)]
 pub struct Site {
+    /// A stable id for the site (its settlement's index), so its buildings keep their keys
+    /// while other sites come and go.
+    id: u32,
     center: DVec3,
     east: DVec3,
     south: DVec3,
@@ -155,6 +158,7 @@ impl Site {
             }
         }
         Self {
+            id: 0,
             center,
             east,
             south,
@@ -172,6 +176,16 @@ impl Site {
 
     pub fn center(&self) -> DVec3 {
         self.center
+    }
+
+    /// This site with id `id`.
+    pub fn with_id(mut self, id: u32) -> Self {
+        self.id = id;
+        self
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
     }
 
     pub fn footprints(&self) -> &[Footprint] {
@@ -231,6 +245,8 @@ pub struct Foundations {
     /// sites of its own tile, so thousands of settlements cost no more than a few.
     level: u8,
     index: HashMap<TileKey, Vec<u32>>,
+    /// Sites by id.
+    by_id: HashMap<u32, u32>,
 }
 
 /// Unit directions on a ring of angular radius `angle` round `dir`, and `dir` itself.
@@ -264,10 +280,16 @@ impl Foundations {
                 index.entry(k).or_default().push(i as u32);
             }
         }
+        let by_id = sites
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.id, i as u32))
+            .collect();
         Self {
             sites,
             level,
             index,
+            by_id,
         }
     }
 
@@ -298,6 +320,12 @@ impl Foundations {
         &self.sites
     }
 
+    /// Building `k` of the site with id `site`.
+    pub fn structure(&self, site: u32, k: u32) -> Option<&Structure> {
+        let i = *self.by_id.get(&site)?;
+        self.sites[i as usize].structures.get(k as usize)
+    }
+
     /// `height` (natural ground at unit direction `dir`, body `radius`) with the foundations.
     pub fn apply(&self, dir: DVec3, radius: f64, height: f64) -> f64 {
         match self.index.get(&locate(dir, self.level)) {
@@ -309,7 +337,7 @@ impl Foundations {
     }
 
     /// Buildings within `distance` m (horizontally, by their bounding spheres) of unit
-    /// direction `dir`, as (site, index in the site) with the box.
+    /// direction `dir`, as (site id, index in the site) with the box.
     pub fn structures_near(
         &self,
         dir: DVec3,
@@ -320,11 +348,11 @@ impl Foundations {
             .into_iter()
             .map(move |i| (i as usize, &self.sites[i as usize]))
             .filter(move |(_, s)| dir.angle_between(s.center) <= s.reach() + distance / s.radius)
-            .flat_map(move |(i, s)| {
+            .flat_map(move |(_, s)| {
                 s.structures.iter().enumerate().filter_map(move |(k, b)| {
                     let r = b.center.length();
                     (dir.angle_between(b.center) * r <= b.half.length() + distance)
-                        .then_some(((i as u32, k as u32), b))
+                        .then_some(((s.id, k as u32), b))
                 })
             })
     }

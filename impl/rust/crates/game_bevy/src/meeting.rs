@@ -363,8 +363,8 @@ fn look_at(
         |v: Vec3| surface.rotation.inverse() * (v.as_dvec3() + camera.offset - surface.position);
     let foundations = draw
         .as_ref()
-        .and_then(|d| d.sites.first())
-        .and_then(|s| s.terrain.foundations().cloned());
+        .and_then(|d| d.terrain(body))
+        .and_then(|t| t.foundations().cloned());
     let (origin, forward) = (cam.translation(), cam.forward().as_vec3());
     let mut best: Option<(f32, &str)> = None;
     for (t, visible, l) in &people {

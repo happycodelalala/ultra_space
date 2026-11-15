@@ -965,47 +965,64 @@ fn colony(
     (nodes, edges.into_iter().collect(), unplaced)
 }
 
-/// A body's settlements on the ground: each settlement's layout (in the society's settlement
-/// order), the kits they use, and the foundations levelling the ground under them.
+/// A body's settlements on the ground, made on approach (task 4b.5): the layouts made so far
+/// (by settlement index), the kits they use, the natural terrain they are made on, and the
+/// foundations levelling the ground under them.
 #[derive(bevy_ecs::prelude::Resource, Clone, Debug)]
 pub struct RegionLayouts {
     pub kits: Arc<Kits>,
-    pub layouts: Vec<Layout>,
+    /// The body's terrain without foundations (layouts read the natural ground).
+    pub natural: Arc<Terrain>,
+    pub layouts: std::collections::BTreeMap<usize, Arc<Layout>>,
     pub foundations: Arc<Foundations>,
 }
 
 impl RegionLayouts {
-    /// Lays out every settlement of `society` on `terrain` (the natural ground), several at a
-    /// time on the machine's cores. Settlements whose culture has no kit get an empty layout.
+    /// No layouts yet.
+    pub fn new(kits: Arc<Kits>, natural: Arc<Terrain>) -> Self {
+        Self {
+            kits,
+            natural,
+            layouts: Default::default(),
+            foundations: Arc::new(Foundations::default()),
+        }
+    }
+
+    /// The layout of settlement `i` of `society` (empty when its culture has no kit yet),
+    /// made on the natural ground. Takes milliseconds: run it on a worker.
+    pub fn layout_of(society: &RegionSociety, kits: &Kits, natural: &Terrain, i: usize) -> Layout {
+        let s = &society.settlements[i];
+        let profile = &society.society.cultures[s.culture].profile;
+        match kits.0.get(&profile.building_kit) {
+            Some(kit) => generate_layout(s, profile.tech_tier, kit, natural),
+            None => Layout {
+                kit: profile.building_kit.clone(),
+                center: s.direction,
+                buildings: Vec::new(),
+                nodes: Vec::new(),
+                streets: Vec::new(),
+                unplaced: 0,
+            },
+        }
+    }
+
+    /// Every settlement laid out at once, several at a time on the machine's cores (tests and
+    /// tools; the game makes them on approach).
     pub fn generate(society: &RegionSociety, kits: Arc<Kits>, terrain: &Terrain) -> Self {
-        let settlements = &society.settlements;
+        let n = society.settlements.len();
         let threads = std::thread::available_parallelism()
             .map_or(4, |n| n.get())
             .min(16);
-        let chunk = settlements.len().div_ceil(threads).max(1);
+        let chunk = n.div_ceil(threads).max(1);
+        let indices: Vec<usize> = (0..n).collect();
         let layouts: Vec<Layout> = std::thread::scope(|scope| {
-            let handles: Vec<_> = settlements
+            let handles: Vec<_> = indices
                 .chunks(chunk)
                 .map(|part| {
                     let kits = &kits;
                     scope.spawn(move || {
                         part.iter()
-                            .map(|s| {
-                                let profile = &society.society.cultures[s.culture].profile;
-                                match kits.0.get(&profile.building_kit) {
-                                    Some(kit) => {
-                                        generate_layout(s, profile.tech_tier, kit, terrain)
-                                    }
-                                    None => Layout {
-                                        kit: profile.building_kit.clone(),
-                                        center: s.direction,
-                                        buildings: Vec::new(),
-                                        nodes: Vec::new(),
-                                        streets: Vec::new(),
-                                        unplaced: 0,
-                                    },
-                                }
-                            })
+                            .map(|&i| Self::layout_of(society, kits, terrain, i))
                             .collect::<Vec<_>>()
                     })
                 })
@@ -1015,41 +1032,55 @@ impl RegionLayouts {
                 .flat_map(|h| h.join().expect("layout thread"))
                 .collect()
         });
-        let sites = layouts
-            .iter()
-            .filter_map(|l| Some(l.site(kits.0.get(&l.kit)?, terrain.radius)))
-            .collect();
-        Self {
-            kits,
-            layouts,
-            foundations: Arc::new(Foundations::new(sites)),
-        }
+        let mut out = Self::new(kits, Arc::new(terrain.clone()));
+        out.layouts = layouts.into_iter().map(Arc::new).enumerate().collect();
+        out.rebuild_foundations();
+        out
     }
 
-    /// Buildings placed, over every settlement.
+    /// Adds (or replaces) settlement `i`'s layout; call [`Self::rebuild_foundations`] after.
+    pub fn insert(&mut self, i: usize, layout: Arc<Layout>) {
+        self.layouts.insert(i, layout);
+    }
+
+    /// Drops settlement `i`'s layout; call [`Self::rebuild_foundations`] after.
+    pub fn remove(&mut self, i: usize) -> Option<Arc<Layout>> {
+        self.layouts.remove(&i)
+    }
+
+    /// The foundations of the layouts made, each site keyed by its settlement's index.
+    pub fn rebuild_foundations(&mut self) {
+        let radius = self.natural.radius;
+        let sites = self
+            .layouts
+            .iter()
+            .filter(|(_, l)| !l.buildings.is_empty())
+            .filter_map(|(&i, l)| Some(l.site(self.kits.0.get(&l.kit)?, radius).with_id(i as u32)))
+            .collect();
+        self.foundations = Arc::new(Foundations::new(sites));
+    }
+
+    /// Buildings placed, over the layouts made.
     pub fn buildings(&self) -> usize {
-        self.layouts.iter().map(|l| l.buildings.len()).sum()
+        self.layouts.values().map(|l| l.buildings.len()).sum()
     }
 }
 
-/// Lays out the settlements of every region with a society (after
-/// [`crate::aggregate::install`]) and puts a [`RegionLayouts`] in each. Returns each body's
-/// foundations, for its terrain.
-pub fn install(sim: &mut Simulation, kits: Arc<Kits>) -> Vec<(usize, Arc<Foundations>)> {
+/// Puts an empty [`RegionLayouts`] (no layouts yet) in every region with a society (after
+/// [`crate::aggregate::install`]); the game fills it on approach.
+pub fn install(sim: &mut Simulation, kits: Arc<Kits>) {
     let Some(system) = sim.star_system().cloned() else {
-        return Vec::new();
+        return;
     };
-    let mut out = Vec::new();
     for (i, region) in sim.regions.iter_mut().enumerate() {
-        let (Some(society), Some(terrain)) = (
-            region.world.get_resource::<RegionSociety>(),
-            system.bodies.get(i).and_then(Terrain::of),
-        ) else {
+        if region.world.get_resource::<RegionSociety>().is_none() {
+            continue;
+        }
+        let Some(terrain) = system.bodies.get(i).and_then(Terrain::of) else {
             continue;
         };
-        let layouts = RegionLayouts::generate(society, kits.clone(), &terrain);
-        out.push((i, layouts.foundations.clone()));
-        region.world.insert_resource(layouts);
+        region
+            .world
+            .insert_resource(RegionLayouts::new(kits.clone(), Arc::new(terrain)));
     }
-    out
 }

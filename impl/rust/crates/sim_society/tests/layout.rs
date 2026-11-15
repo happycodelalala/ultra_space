@@ -85,7 +85,12 @@ fn kits_load_with_their_buildings() {
 fn every_settlement_is_laid_out_with_what_it_needs() {
     let w = world();
     assert_eq!(w.layouts.layouts.len(), w.society.settlements.len());
-    for (s, l) in w.society.settlements.iter().zip(&w.layouts.layouts) {
+    for (s, l) in w
+        .society
+        .settlements
+        .iter()
+        .zip(w.layouts.layouts.values().map(|l| l.as_ref()))
+    {
         let Some(kit) = w.layouts.kits.0.get(&l.kit) else {
             continue; // a people without a kit yet (task 4b.7)
         };
@@ -162,7 +167,7 @@ fn sample(w: &World) -> impl Iterator<Item = (&Settlement, &Layout)> {
     w.society
         .settlements
         .iter()
-        .zip(&w.layouts.layouts)
+        .zip(w.layouts.layouts.values().map(|l| l.as_ref()))
         .enumerate()
         .filter(|(i, (s, _))| s.size >= SizeClass::City || s.seat || i % 20 == 0)
         .map(|(_, p)| p)
@@ -238,7 +243,7 @@ fn foundations_level_the_ground_under_every_building() {
     let flat = w.terrain.with_foundations(w.layouts.foundations.clone());
     let mut worst: f64 = 0.0;
     let mut cut: f64 = 0.0;
-    for l in &w.layouts.layouts {
+    for l in w.layouts.layouts.values() {
         let Some(kit) = w.layouts.kits.0.get(&l.kit) else {
             continue; // a people without a kit yet (task 4b.7)
         };
@@ -280,7 +285,7 @@ fn terrain_sampling_stays_fast_with_foundations() {
     let town = w
         .layouts
         .layouts
-        .iter()
+        .values()
         .max_by_key(|l| l.buildings.len())
         .unwrap();
     let local: Vec<_> = (0..100_000)
@@ -314,4 +319,46 @@ fn terrain_sampling_stays_fast_with_foundations() {
     // footprint (10× and more in a town of 600 buildings).
     assert!(g1 < g0 * 2.0, "planet-wide sampling slowed {:.2}×", g1 / g0);
     assert!(l1 < l0 * 3.0, "sampling in a town slowed {:.2}×", l1 / l0);
+}
+
+#[test]
+fn layouts_come_and_go_and_the_ground_follows() {
+    let w = world();
+    // Start empty, as the game does, and make two settlements' layouts.
+    let mut rl = RegionLayouts::new(w.layouts.kits.clone(), Arc::new(w.terrain.clone()));
+    assert!(rl.foundations.sites().is_empty());
+    let hollin: Vec<usize> = (0..w.society.settlements.len())
+        .filter(|&i| {
+            w.society.society.cultures[w.society.settlements[i].culture]
+                .profile
+                .id
+                == "hollin"
+        })
+        .take(2)
+        .collect();
+    for &i in &hollin {
+        let l = RegionLayouts::layout_of(&w.society, &rl.kits, &rl.natural, i);
+        rl.insert(i, Arc::new(l));
+    }
+    rl.rebuild_foundations();
+    let ids: Vec<u32> = rl.foundations.sites().iter().map(|s| s.id()).collect();
+    assert_eq!(ids, hollin.iter().map(|&i| i as u32).collect::<Vec<_>>());
+    // The same as laying out everything at once, for these two.
+    for &i in &hollin {
+        assert_eq!(*rl.layouts[&i], *w.layouts.layouts[&i]);
+    }
+    // A building's box is found by its settlement's id.
+    let first = rl.foundations.sites()[0].id();
+    assert!(rl.foundations.structure(first, 0).is_some());
+    // Dropping one: its ground is natural again, the other's still level.
+    let gone = hollin[0];
+    let flat = w.terrain.with_foundations(rl.foundations.clone());
+    rl.remove(gone);
+    rl.rebuild_foundations();
+    let after = w.terrain.with_foundations(rl.foundations.clone());
+    let p = &w.layouts.layouts[&gone].buildings[0];
+    let at = w.layouts.layouts[&gone].direction(p.x, p.z, w.terrain.radius);
+    assert!((flat.height(at, 1.0) - p.height).abs() < 0.02);
+    assert_eq!(after.height(at, 1.0), w.terrain.height(at, 1.0));
+    assert!(rl.foundations.structure(gone as u32, 0).is_none());
 }

@@ -262,7 +262,7 @@ fn spawn_player_ship(
     }
 
     let mut airborne = false;
-    if let Some((near, t, up_high)) = crate::settlements::start_near(&sim.0, system, index) {
+    if let Some((near, t, up_high)) = crate::settlements::start_near(&mut sim.0, system, index) {
         state = near;
         airborne = up_high;
         sim.0

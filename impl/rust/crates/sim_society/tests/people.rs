@@ -67,7 +67,7 @@ fn people_live_out_the_day_in_a_town_and_the_colony() {
             .max_by_key(|&i| society.settlements[i].population)
             .unwrap();
         let s = &society.settlements[i];
-        let layout = &layouts.layouts[i];
+        let layout = &layouts.layouts[&i];
         let kit = &layouts.kits.0[&layout.kit];
         let naming = &society.society.cultures[s.culture].profile.naming;
         let mut crowd = Crowd::promote(s, layout, kit, naming, 64);
