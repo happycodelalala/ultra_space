@@ -11,7 +11,10 @@ DEST="${ULTRA_SPACE_EXPORT_DIR:-/mnt/c/Users/yangc/Apps/ultra_space}"
 TARGET=x86_64-pc-windows-gnu
 
 cd "$ROOT/impl/rust"
-cargo build --release -p game_bevy --target "$TARGET"
+# `ULTRA_SPACE_FEATURES=trace` builds with game_bevy's optional features (trace: a Chrome
+# trace of every frame, for finding hitches).
+cargo build --release -p game_bevy --target "$TARGET" \
+    ${ULTRA_SPACE_FEATURES:+--features "$ULTRA_SPACE_FEATURES"}
 
 # Honour a shared build folder (test runs use one to avoid full rebuilds).
 TARGET_DIR="${CARGO_TARGET_DIR:-target}"
