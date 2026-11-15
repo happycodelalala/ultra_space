@@ -6,6 +6,20 @@ Sky's, is out of reach for a game of this scale made by one developer. The targe
 **low-poly look of Dyson Sphere Program** and similar space sandboxes, made appealing by
 **realistic light, atmosphere, weather and effects**, with room to raise the quality later.
 
+## References (the developer's, 2026-11-15)
+
+| Reference | What we take from it |
+|---|---|
+| **No Man's Sky, after the Worlds Part 1 update** | The sky, weather and light: volumetric clouds with real form and shadow, storms with lightning, rain and fog that change the mood of a whole planet, water that catches the sky, light that shifts with the hour. The bar for the "realistic" half |
+| **Stonehearth** | The ground and everything on it: chunky low-poly shapes with toy-like proportions, warm saturated colours, soft light and long shadows, a cosy hand-made feel up close in villages, forests and fields. The bar for the "low-poly" half |
+| **Dyson Sphere Program** | Low-poly that holds up at scale: a whole planet of simple shapes read clearly from orbit, effects and lighting doing the work |
+
+In one line: **No Man's Sky skies and weather over a Stonehearth world.** Volumetric clouds and
+storms are the costliest part, so they come in quality tiers (§4); they extend the clouds the
+atmosphere shader already draws rather than adding a second system. How blocky the shapes go
+(Stonehearth's near-voxel trees against Dyson Sphere Program's faceted forms) is decided with
+the first ground cover and kit models (tasks 5.1 and 5.5) and set down here.
+
 ## 1. Principles
 
 - **Shapes: low-poly and faceted.** Models are simple, readable at a distance, with their
