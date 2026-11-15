@@ -815,6 +815,34 @@ version.
 come with the first systems that make events: faction conflict and trade (Batches 7, 9), with
 the generated planetary history (wasteland and ruins) when a planet first needs one.
 
+## 8d. Settlement surroundings: what makes a place more than its houses
+
+Decided 2026-11-15 (developer: settlements read as dull even with buildings). A layout of
+buildings and streets on bare ground looks like a model village. A real place is mostly what
+is around and between the houses: the land it works, the things it keeps, the marks of its
+people. Surroundings are part of the layout, generated with it on approach (§8b, task 4b.5) by
+the same rules for every tier, with the culture's kit and pattern choosing what.
+
+| Element | What | By tier |
+|---|---|---|
+| **Fields** | Patches of worked land around villages and towns, out to a distance from the population (the land that feeds it): strips, plots or big rectangles by tier, crops in rows by season | Stone Age: small gardens and cleared patches. Ancient to Early Modern: strip and plot fields, pasture with hedges or walls. Industrial: big fields, orchards. Modern: huge machine farms, greenhouses |
+| **Boundaries** | Fences, hedges, dry-stone walls, ditches between fields and round yards | Wattle and palisades; stone walls and hedges; wire fences; none or chain-link |
+| **Defences** | A town or city's wall and gates (where the pattern and polity call for them), a hill fort's earthworks, a star fort's bastions; enclaves' barriers | Palisade and ditch; stone walls and towers; bastions; barriers, checkpoints |
+| **Landmarks** | One or two buildings that stand out from far: temple, keep, church, town hall, factory chimneys, a comms mast; the seat of a faction most | Each kit names its landmarks; the layout puts them on the square or high ground |
+| **Yards and props** | Gardens, wells, woodpiles, carts, stalls on market days, crates, barrels, benches, washing lines, animals in pens | From the kit's props, scattered by building use (a smithy has an anvil and coal, a farm a cart) |
+| **Signs of life** | Chimney smoke, cooking fires, lights at night (done), dust on roads, boats at the shore | Smoke and fires for the early tiers; steam and smokestacks for industrial |
+| **Wear** | Paths worn from doors to the street and to the fields, trodden squares, the ground darker round houses | The terrain's look under the layout (a field the shader reads, as the blight is) |
+
+**How it is drawn.** Fields, worn paths and trodden ground are not objects: they are a layer the
+terrain shader reads (as the blight and the street meshes are), costing no entities. Fences,
+walls, props and crops are instanced like ground cover (ground-cover.md), one draw per kind per
+cell, made on workers with the layout. Only walls and big props get colliders.
+
+**Order.** Fields, boundaries, defences and landmarks with task 4b.8 (roads and dwellings: the
+land between settlements is fields first). Props and signs of life when the kits for every
+tier exist (task 4b.7) and with the ground cover's instancing (Batch 4c). People in the fields
+and on the roads come with their work routines (§6.3).
+
 ## 9. Open questions
 
 - Planet size: decided (§8a); sizes vary per planet.

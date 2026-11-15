@@ -296,6 +296,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
 | **4b** | **Density and the peoples of Meridian** *(2026-11-14)* | Meridian as the test bed for every stage: seven peoples from Stone Age to a ruined Modern nation, settlements from each people's settlement pattern and the land's area, the settlement hierarchy, a wasteland from generated history, layouts on approach, distant forms batched, CC0 stand-in kits and characters for every tier, roads and dwellings ([living-planet.md](living-planet.md) §8b) | 6–9 wk |
+| **4c** | **Ground cover** *(2026-11-15)* | Vegetation, rocks and scattered things from the terrain's biomes, instanced per tile with levels of detail, cleared by settlements and dead in blighted land; instancing shared with settlement props ([ground-cover.md](ground-cover.md)) | 3–5 wk |
 | **5** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
 | **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
@@ -524,16 +525,35 @@ at its own density (living-planet.md §8b), without loading or drawing everythin
 | 4b.3 | **The peoples of Meridian:** five new cultures with profiles, factions and settlement lore (recorded responses), settlement patterns for the Stone Age, Ancient, Early Modern, Industrial and wasteland, home regions; the planet map | Seven peoples placed sensibly, each at its density (from tens of thousands to millions); a map; tests |
 | 4b.4 | **A wasteland from history:** the Modern nation's catastrophe as generated history: hazard zones as a condition overlay, ruins of its old pattern, survivors in enclaves; hazards shown and felt (a warning, the look of the land) | The south-east continent reads as a ruined land with a few guarded enclaves |
 | 4b.5 | **Layouts and foundations on approach:** a settlement's layout, foundations and collision made on workers within a few km and dropped after; terrain tiles and physics follow | Loading no slower than Batch 4; no frame over 50 ms when a village appears; walls still stop the walker and vehicles |
-| 4b.6 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records, night lights from orbit, the real layout replacing them near; ruins drawn; hazard zones blight the land's look (a terrain field the shaders read) | Flying over any people from orbit to the ground, their land is full and lit at night; draw calls bounded; no popping beyond a few km |
+| 4b.6 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records, night lights from orbit, the real layout replacing them near; ruins drawn; hazard zones blight the land's look (a terrain field the shaders read) | Done (905ec8a): streaming hitches found and mostly fixed (near cells, models only close, people a few a frame, primers); the fly-in 2–3 frames over 50 ms |
 | 4b.7 | **Stand-in kits and characters for every tier:** CC0 packs (downloaded as before) built into kits and characters for the Stone Age, Ancient, Early Modern, Industrial and the wasteland, with layouts for their styles (camps, walled cities, ports, industrial grids) | Every people can be visited and looks like its stage up close |
-| 4b.8 | **Roads and dwellings:** roads joining settlements, dwellings of each era between them, made on approach | On foot, something built within about a kilometre in settled land; roads lead from settlement to settlement |
+| 4b.8 | **Roads, dwellings and surroundings** *(widened 2026-11-15)*: roads joining settlements, dwellings of each era between them; each settlement's surroundings (living-planet.md §8d): fields as a terrain layer, boundaries, walls and gates where the pattern calls for them, landmarks; all made on approach | On foot, something built within about a kilometre in settled land; roads lead from settlement to settlement; a village sits in its fields, a city behind its walls with its landmark on the skyline |
 | 4b.9 | **Batch review** | Exit criteria met |
 
-**Exit criteria:** seven peoples on Meridian, each visitable and at its own density; flying low
+**Exit criteria:** seven peoples on Meridian, each visitable and at its own density, each
+settlement in its surroundings; flying low
 over settled land, settlements every few minutes and several in view from a height; from orbit
 at night, the settled lands lit (the industrial nation brightest, the Stone Age barely, the
 wasteland dark but for its enclaves); loading no slower than Batch 4; no frame over 50 ms
 flying low at 300 m/s or landing by a settlement; CI passes.
+
+### 7.7 Batch 4c tasks: ground cover
+
+The land between and around settlements is bare (developer, 2026-11-15). Design:
+[ground-cover.md](ground-cover.md).
+
+| # | Task | Done when |
+|---|---|---|
+| 4c.1 | **Instanced drawing:** one draw per kind per tile from an instance buffer made on a worker; only the tile root moves; settlement props move to it | 100,000 instances near the camera within the frame budget; no frame over 50 ms when tiles stream |
+| 4c.2 | **Cover recipes and scattering:** recipes per biome as data with a schema; scattering per tile from the terrain fields, seed and blight; clearings, stands, scree; cleared by layouts and roads | Forests, grassland, deserts and blighted land each read as themselves from the ground and from low flight; the same place always the same |
+| 4c.3 | **Stand-in nature assets:** CC0 nature packs as kinds with levels of detail (cards for trees far) | Every biome has its kinds |
+| 4c.4 | **Levels and grass:** near, middle and far levels by budget; grass cards round the camera | No popping close by; the frame budget held flying low at 300 m/s |
+| 4c.5 | **Collision near the player:** trunks and big rocks collide within ~100 m of the player and vehicles | The walker and rovers can't pass through trees |
+| 4c.6 | **Batch review** | Exit criteria met |
+
+**Exit criteria:** walking or flying low anywhere on Meridian the land is covered by what its
+biome grows, cleared round settlements, dead in the Kesh waste; no frame over 50 ms flying low
+at 300 m/s or landing; loading no slower than Batch 4b; CI passes.
 
 ### 7.1 When the object system is built
 

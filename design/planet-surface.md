@@ -112,7 +112,7 @@ Rules:
 | Feature | Batch |
 |---|---|
 | Voxel patches (digging, caves) | 4 |
-| Vegetation, rocks and scattered props | 4 (with resources) |
+| Vegetation, rocks and scattered props | 4c, before the resources of Batch 5 ([ground-cover.md](ground-cover.md)) |
 | Rivers and erosion simulation | When terrain needs more realism; erosion would be precomputed per planet |
 | Weather that changes over time | After clouds; with seasons and time skips |
 | LLM-proposed terrain and climate parameters | 7 |
