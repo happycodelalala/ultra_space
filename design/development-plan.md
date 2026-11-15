@@ -295,7 +295,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **2** | **Seamless planet** | Cube-sphere LOD terrain, biomes, atmosphere and clouds matched to terrain, land from orbit, walk on foot, gravity transitions | 2.5–4 mo |
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
-| **4b** | **Density** *(2026-11-14)* | Settlements from each culture's settlement pattern and the land's area (hundreds per people), the settlement hierarchy (size class, roles, culture's words), layouts and foundations made on approach, distant forms batched, roads and dwellings between settlements ([living-planet.md](living-planet.md) §8b) | 3–5 wk |
+| **4b** | **Density and the peoples of Meridian** *(2026-11-14)* | Meridian as the test bed for every stage: seven peoples from Stone Age to a ruined Modern nation, settlements from each people's settlement pattern and the land's area, the settlement hierarchy, a wasteland from generated history, layouts on approach, distant forms batched, CC0 stand-in kits and characters for every tier, roads and dwellings ([living-planet.md](living-planet.md) §8b) | 6–9 wk |
 | **5** | **Survival-builder loop** | Resource gathering, base building on tangent grids, production chains (parallel factory networks), terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
 | **6** | **Combat core** | Unified damage pipeline, first-person weapons, per-part vehicle damage, hostile creatures and bandits | 1–2 mo |
@@ -504,23 +504,36 @@ in or fill with people; CI passes.
 
 ### 7.6 Batch 4b tasks
 
-Make Meridian's settled lands feel lived in (living-planet.md §8b): its two patterns (the
-Hollin's medieval realm and the Compact's young colony) at real density, without loading or
-drawing everything at once.
+Make Meridian the test bed for every stage of the game's peoples (developer, 2026-11-14), each
+at its own density (living-planet.md §8b), without loading or drawing everything at once.
+
+| People | Tier and polity | Where |
+|---|---|---|
+| The Hollin | Medieval realm | Central continent, 20°N 3°E |
+| The Compact | Spacefaring charter colony | Eastern continent, 9°N 77°E |
+| New | Stone Age chiefdoms | Eastern continent's southern jungle, ~12°S 82°E (near the Compact: contact) |
+| New | Ancient city-states | Western continent's south coast, ~8°N 140°W |
+| New | Early Modern maritime kingdom | Southern continent's north, ~30°S 100°W |
+| New | Industrial nation | North-eastern continent, ~40°N 140°E |
+| New | A Modern nation that destroyed itself: a wasteland with enclaves | South-east island continent, ~38°S 128°E |
 
 | # | Task | Done when |
 |---|---|---|
-| 4b.1 | **Settlement hierarchy and patterns:** size class (dwelling … megalopolis) and roles replace the settlement kind; each culture's words for them; settlement patterns as data per tier and polity (spacing and sizes per class, settled share, roles), with a schema | Generation and layouts read size and roles; the Hollin and the Compact read the same as before in their own words; tests |
-| 4b.2 | **Counts from area:** settlements placed by the pattern over the home region's good land (spacing per size class, seats as the largest), territories, populations by class; the aggregate simulation at that scale; saves made before keep their settlements or start fresh, never mixed | ~1,500–2,000 Hollish settlements, ~20 Compact; generation within the load budget; aggregate step < 1 ms on average; a map of them; tests |
-| 4b.3 | **Layouts and foundations on approach:** a settlement's layout, foundations and collision made on workers when the player comes within a few km and dropped after; terrain tiles and physics follow the changes | Loading no slower than before; no frame over 50 ms when a village appears; walls still stop the walker and vehicles |
-| 4b.4 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records (no layout needed), night lights from orbit, the real layout replacing them near | Flying over the Hollin from orbit to the ground, the land is full of settlements and lit at night; draw calls bounded; no popping beyond a few kilometres |
-| 4b.5 | **Roads and dwellings:** roads joining settlements following the terrain, farmsteads and other dwellings of the era every 1–1.5 km in settled land (decoration, not simulated), made on approach with foundations and collision | On foot, something built within about a kilometre anywhere in Hollish farmland; roads lead from village to village |
-| 4b.6 | **Batch review** | Exit criteria met |
+| 4b.1 | **Settlement hierarchy and patterns:** size class and roles replace the settlement kind; each culture's words; settlement patterns as data per tier and polity | Done (2ed075b) |
+| 4b.2 | **Counts from area:** settlements placed by each people's pattern over its home region's good land (seats, then classes by spacing), territories by faction strength, populations by class; the aggregate simulation at that scale (stepped in slices); saves from before start their societies fresh | The Hollin ~1,500–2,000 settlements, the Compact ~20; generation within the load budget; aggregate cost per tick < 1 ms; tests |
+| 4b.3 | **The peoples of Meridian:** five new cultures with profiles, factions and settlement lore (recorded responses), settlement patterns for the Stone Age, Ancient, Early Modern, Industrial and wasteland, home regions; the planet map | Seven peoples placed sensibly, each at its density (from tens of thousands to millions); a map; tests |
+| 4b.4 | **A wasteland from history:** the Modern nation's catastrophe as generated history: hazard zones as a condition overlay, ruins of its old pattern, survivors in enclaves; hazards shown and felt (a warning, the look of the land) | The south-east continent reads as a ruined land with a few guarded enclaves |
+| 4b.5 | **Layouts and foundations on approach:** a settlement's layout, foundations and collision made on workers within a few km and dropped after; terrain tiles and physics follow | Loading no slower than Batch 4; no frame over 50 ms when a village appears; walls still stop the walker and vehicles |
+| 4b.6 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records, night lights from orbit, the real layout replacing them near | Flying over any people from orbit to the ground, their land is full and lit at night; draw calls bounded; no popping beyond a few km |
+| 4b.7 | **Stand-in kits and characters for every tier:** CC0 packs (downloaded as before) built into kits and characters for the Stone Age, Ancient, Early Modern, Industrial and the wasteland, with layouts for their styles (camps, walled cities, ports, industrial grids) | Every people can be visited and looks like its stage up close |
+| 4b.8 | **Roads and dwellings:** roads joining settlements, dwellings of each era between them, made on approach | On foot, something built within about a kilometre in settled land; roads lead from settlement to settlement |
+| 4b.9 | **Batch review** | Exit criteria met |
 
-**Exit criteria:** flying low over the Hollish lands, a settlement every few minutes and
-several in view at once from a height; from orbit at night, the realm lit; on foot, farmsteads
-and roads between villages; loading no slower than Batch 4; no frame over 50 ms flying low at
-300 m/s or landing by a village; CI passes.
+**Exit criteria:** seven peoples on Meridian, each visitable and at its own density; flying low
+over settled land, settlements every few minutes and several in view from a height; from orbit
+at night, the settled lands lit (the industrial nation brightest, the Stone Age barely, the
+wasteland dark but for its enclaves); loading no slower than Batch 4; no frame over 50 ms
+flying low at 300 m/s or landing by a settlement; CI passes.
 
 ### 7.1 When the object system is built
 
