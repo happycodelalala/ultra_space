@@ -32,7 +32,8 @@ languages side by side always show the seam.
   their detail in the silhouette (a roofline, a chimney, a crane) and in finer blocks where the
   eye goes (windows, doors, faces) rather than in texture. Block size follows an object's size
   and role, about 10 to 30 blocks across: 25 cm for building structure, terrain, trees and rocks;
-  6.25 cm for fixtures and people; 3 cm for small things; metres for ship hulls and stations.
+  6.25 cm for fixtures and props; 3 cm for people and small things; metres for ship hulls and
+  stations.
   One object uses only about three neighbouring sizes, and every slope is one of the standard
   shapes (block-world.md §3–4). Low-poly does not mean simple: a house has its timber frame,
   stones, shutters, flower boxes and lantern.

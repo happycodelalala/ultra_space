@@ -59,7 +59,14 @@ inside of an L a valley corner; steps taller than one block stay sharp edges, so
 cliffs keep crisp cuts. Each model or material has a **recipe**: which up directions it smooths
 (the ground and roofs upward only, roof undersides and tree crowns up and down, trunks, barrels
 and rocks also around their sides, ship hulls in every direction, people not at all). Features
-one or two blocks wide are left as blocks, so small bumps don't turn into spikes.
+one or two blocks wide are left as blocks (a cell slopes only where the solid continues behind
+it), so small bumps don't turn into spikes.
+
+**Designing for the shapes** (learned from the style renders): a slope runs in one direction at a
+time, so a form should narrow in plan *or* in profile, not both at once (a nose that does both
+breaks into spiky corners; a wedge nose that narrows in plan under a flat top reads cleanly);
+and a colour border can only follow the grid or a slope edge, so stripes and bands run along
+the grid (a band along a 45-degree edge always zigzags).
 
 ## 4. Sizes
 
@@ -68,14 +75,16 @@ splits into eight children and eight equal children merge into their parent. The
 
 | Size | Typical use |
 |---|---|
-| 3.125 cm | Personal items, grass, faces and small fittings |
-| 6.25 cm | People, building fixtures (windows, doors, shutters, lanterns) |
+| 3.125 cm | People (about 16 blocks across the head), personal items, grass, small fittings |
+| 6.25 cm | Building fixtures (windows, doors, shutters, lanterns), props |
 | 12.5 cm | Bushes, props, small-ship detail |
 | 25 cm | Terrain, building structure, trees, rocks |
 | 50 cm – 2 m | Vehicles, ship hulls, large buildings |
 | 4 – 8 m | Capital ships, stations, megastructures |
 
 Larger things are many of the largest blocks, kept affordable by merging and by distance detail.
+A model designed at some other size moves to the next **finer** size of the set, never the
+coarser one: rounding up loses whatever was thinner than the new block (fence rails, caps, trim).
 
 **The visual rule (from Stonehearth):** block size follows an object's size and role, about 10
 to 30 blocks across each object; and within one object only **about three neighbouring sizes**
