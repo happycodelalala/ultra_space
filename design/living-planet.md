@@ -251,6 +251,200 @@ talk or work). Leaving demotes them. In a Windows round the town's square fills 
 empties for work at 9:00; flying in at ~300 m/s while the town fills had no hitch beyond the
 end screenshot.
 
+### 6.1 The people model (design ahead, decided 2026-11-14)
+
+How people behave, scale to a metropolis, react when things go wrong, and remember the player.
+Sections 6.2–6.6 build on two rules (6.2) that keep it cheap at any population.
+
+### 6.2 Two rules: what costs tokens, and who is remembered
+
+**The token rule.** The LLM (the content director) writes only text a player is about to read,
+once, cached in the save; the simulation never calls it. So:
+
+- routines, choices, movement, reactions, situations: rules and data, **no tokens**;
+- millions of people: counts in districts; names from the naming rules, looks from seeds,
+  **no tokens**;
+- remembered people: plain records (ids, numbers, flags, structured memories); their lives
+  off-screen follow rules, **no tokens**;
+- tokens are spent only when new text appears: a conversation, a place's description the first
+  time it is visited (one call per district or settlement visited, never per person), a lore
+  revision when it is read (§8c).
+
+Cost therefore scales with what the player reads and says, not with population or with how
+many people the world remembers. Anything whose token cost grows with population or per tick
+is a design error. Three controls bound it further:
+
+1. **Everything has a path without an LLM:** templates and recorded responses (the replay
+   provider) make the game fully playable offline; the LLM adds richness, nothing depends on it.
+2. **Caching:** every generated text is keyed and saved, never generated twice.
+3. **A budget per session** with priorities: conversations with known people first, new places
+   next, background lore revisions last and lazily; a small model for summaries and
+   descriptions, the stronger one for important conversations; local models where they serve
+   (technical overview §13.12).
+
+Rough cost: a conversation is about 1,500–3,000 tokens in (character card, relationship
+summary, the 3–5 most relevant memories, local news) and 200–400 out; a two-hour session with
+20–40 conversations, a few new places and some lore comes to about 100–200k tokens.
+
+**Persistence levels.** Only people the player has affected are saved, in four levels:
+
+| Level | Who | Saved | Tokens |
+|---|---|---|---|
+| **Ambient** | Everyone the player hasn't affected | Nothing: regenerated from seed and state | 0 |
+| **Noted** | Anyone the world must stay consistent about: killed, robbed, hired once, name learned | ~100 bytes: seed id, a few flags and numbers | 0 |
+| **Known** | A relationship past a threshold, or marked by the player: friend, rival, lover, quest giver | A few KB: relationship, key memories as data, a short summary | Only when talked to |
+| **Companion, crew** | The few who travel with the player | A full simulated object, moving between regions and planets like a vehicle | Only when talked to |
+
+- An ambient person's identity is already fixed by the seed (name, looks, role, home,
+  workplace); promotion freezes it and adds what's new, so nobody is ever regenerated
+  differently. Ambient generation reads the state: a dead baker isn't generated again; the
+  vacancy is filled later by a successor with a new seed.
+- **Noted people are forgotten** after a while (they fall back to ambient) unless the fact
+  matters, like a death.
+- **Known people are capped** (about 100–300 active); past the cap the weakest relationships
+  fade back to noted, as acquaintances do.
+
+### 6.3 Routines and places
+
+- **Schedule templates** per culture and role, as data, with variants: workday, market day,
+  rest or holy day, festival, season, shift work (the colony doesn't keep village hours).
+- **Places advertise activities** ("smart objects"): a bench offers sitting, a tavern table
+  eating and drinking with company, an anvil smithing, a stall trading, a shrine prayer, a
+  field work; each has slots and an animation. Layouts place them with the buildings.
+- **A small utility choice** within the schedule's window, weighed by a few needs (hunger,
+  rest, company, faith), made when a person finishes something (every few game minutes), never
+  per frame.
+- **Work is real:** time spent at work feeds the settlement's production in the aggregate
+  simulation, and a stall sells from the settlement's stocks, so the economy and what the
+  player sees agree.
+- **Detail by distance:** near the player, fully animated people moving every frame; promoted
+  but distant, positions only, stepped rarely; everyone else a count by place and hour, used
+  to fill a place when the player arrives; the planet keeps its aggregate.
+
+### 6.4 The metropolis: millions as statistics
+
+Nobody perceives millions at once (a busy street shows a few hundred, a great plaza a few
+thousand), so a city of millions is simulated as statistics and made into individuals only
+where the player can see.
+
+- **Districts, not people.** A metropolis is a few hundred districts and blocks, each holding
+  people by role, where they are at each hour (the schedule templates applied to the counts),
+  flows between districts (a commuting matrix), production, stocks and mood: a few hundred
+  small records stepped once per game hour.
+- **Ambient people from the statistics.** The block the player is in says how many people are
+  on this street, in this shop, on this plaza at this hour; they are spawned out of sight
+  (doors, corners, distance) and demoted when they walk out of view. They are deterministic:
+  the person behind a counter comes from the building and the hour, the same baker every
+  morning, stored nowhere. Interiors are filled from the building's share when entered.
+- **The crowd in layers:**
+
+| Distance | What | How many | Cost |
+|---|---|---|---|
+| Near (to ~50 m) | Full people: schedules, places, avoidance, talk | ~100–300 | CPU microseconds each; skinned animation on the GPU |
+| Middle (50–300 m) | Crowd agents on a shared flow over the street graph, simple choices | ~1,000–5,000 | Batched movement; low-poly, animation baked into textures, instanced |
+| Far | No agents: crowd density on streets and plazas, traffic as flows of lights, lit windows from occupancy | the millions | Shader cost only |
+
+- **Traffic** (carts, cars, trams, shuttles) is the same: flows on the road and air-lane graph,
+  individual vehicles near the player, consistent with the district statistics.
+- **Limits:** drawing comes first (about 300 detailed people and 5,000 crowd agents near the
+  player fit a mid-range GPU); memory stays small because ambient people aren't stored;
+  thinking scales with what's near the player, so a metropolis costs about a big town plus its
+  crowd layers.
+- **Consistency:** nobody appears or vanishes in view; someone the player follows stays an
+  individual until lost; what is seen matches the counts (a famine empties the market, a
+  festival fills the square, a war leaves the streets quiet).
+
+### 6.5 Interruptions and consequences
+
+The world is a generated baseline plus saved changes, and every change, small or huge, flows
+through the same levels; no case needs its own script.
+
+| Level | Holds | Changes by |
+|---|---|---|
+| Faction, world | Owners, relations, wars, armies on the map | Decisions and battles, as chronicle events (§8c) |
+| Settlement, district | Counts by role, stocks, mood, its **situation**, building states | Aggregate rules, events |
+| Building | Intact, damaged, burning, destroyed (rubble), under construction, new | Saved changes keyed by the layout's building id, like terrain pads |
+| Remembered person | Their record (6.2) | Saved |
+| Ambient person | Nothing | Read from the levels above |
+
+- **Events flow up and down.** Up: a guard is killed in the street; if ambient he becomes a
+  noted record (a body, a name, a family) and the settlement's guard count drops; witnesses
+  spread it as rumour; the faction's view of the player and the settlement's mood change;
+  notable events enter the chronicle. Down: a decision above (war, famine, plague) changes
+  what's below: curfews, conscription, rationing, evacuation.
+- **Situations override the routine:** each settlement or district has one (normal, festival,
+  market day, alarm, battle, siege, fire, disaster, occupation, plague, aftermath), and each
+  swaps the schedule templates and activities, as data. In an alarm civilians run home or to a
+  refuge (the keep, a shrine, a bunker) and guards to the walls; in the aftermath people gather
+  at the ruins, the injured go to healers, carpenters and masons work at damaged buildings.
+- **Individuals react before their schedule:** danger (flee, hide or fight, by role and
+  courage), injury, a witnessed crime, a blocked way (destroyed buildings change the street
+  graph and paths update); still a small choice made when something happens.
+- **Building and growing:** new buildings appear as construction sites that go up in stages
+  over game days, worked by people whose jobs come from the economy; layouts grow by the rules
+  that made them (new plots along streets, lanes at the edge); repair is the same path (rubble,
+  site, house), or the ruin stays if the settlement can't afford it or has shrunk.
+- **War between factions:** armies are aggregate units moving between settlements on the map;
+  battles away from the player are resolved from their numbers, near the player they are
+  promoted into real battles (technical overview §9, §10) and the outcome writes back.
+  Conquest changes owner, garrison, mood and population (refugees flee to other settlements),
+  perhaps the name; the chronicle and lore record it, each side its own way.
+- **A bombardment from orbit** (a spaceship strikes a medieval city) uses the same levels,
+  bigger: craters become terrain changes, buildings within each impact's radius rubble and
+  further out damaged, fires spread over buildings by a simple rule (wood burns, stone
+  resists, wind matters); casualties come from the district counts at that hour (homes at
+  night, the market at noon), and around the player they are those numbers made visible; the
+  situation goes to disaster, then aftermath; survivors flee as refugees to nearby settlements
+  (which crowd and go hungry); relations with the attacker fall to war; it is a major chronicle
+  event, and lore revises it (the Hollin may read it as the sky-folk returning in wrath, a new
+  taboo or sect); the city is rebuilt, abandoned or left a ruin with a condition overlay (§8b).
+  Away from the player all of it is applied statistically and heard of later as rumour.
+- **Cost:** events are rare, their consequences updates to counts and a list of building
+  changes; the expensive local simulations (fire, fleeing crowds, battles) run only near the
+  player. Saves hold the changes and the remembered people, never whole cities.
+
+### 6.6 Known people and memory
+
+- **The record:** identity (fixed by the seed), relationship numbers (affinity, trust, respect,
+  fear) and tags (friend, rival, lover, debtor, companion, crew), separate from the player's
+  reputation with their faction (a Hollish smith can like the player while his reave doesn't);
+  **memories** as small structured entries: what happened, when and where, how it felt, how
+  important, linked to chronicle events when part of history ("you saved my son at the ford",
+  "you sold me a bad blade"); unimportant ones fade, important ones stay; and a short
+  **summary** of the relationship.
+- **They live on while the player is away,** by rules: where they are at any hour comes from
+  their schedule template, computed when asked; life events (marriage, promotion, moving,
+  illness, conscription, losing a home in a bombardment) follow the world around them and are
+  dated, so the world has moved on when the player returns. Approaching their settlement, they
+  are always among those promoted (a reserved slot), where they should be.
+- **Relationship unlocks behaviour,** as data: greeting, coming over, sharing rumours, prices,
+  lending, jobs from the quest system's supported verbs, invitations (a festival, a wedding),
+  messages in the space age; close friends can become companions or crew. Rivals and enemies
+  have their own: warning others, sabotage, revenge.
+- **Talking (dialogue, Batch 9):** the director gets a character card (personality, voice,
+  background), the relationship and its summary, the few memories most relevant now, and what
+  they know of the world (news travels along the roads, §8c); it answers with lines plus
+  structured intents the game validates (offers, requests, quest proposals). Afterwards the
+  summary is updated once if the conversation mattered (a small model, a few hundred tokens),
+  or by template when nothing much happened.
+- **Finding them:** their record always knows where they are; the journal shows the people the
+  player knows with their last known place, and their neighbours know where they went.
+- **Interruptions touch them too:** a bombardment's casualty numbers decide whether known
+  people are among them, weighted by where their schedule had them; a friend's death is a
+  chronicle event and a memory for the player; friends hear of the player's deeds through
+  rumour and their people's lore.
+- **Scale:** at most a few hundred known people active, a few thousand noted ones before they
+  are forgotten: a few MB in the save; only those near the player are simulated in detail.
+
+### 6.7 Where each part lands
+
+Built in Batch 4: promotion from counts, schedules by local time, street paths, the near level
+of detail, looking at people. Next, with the density task: schedule variants and places that
+offer activities. With trade and factions (Batches 7, 9): real work and stalls, situations,
+war and conquest, the chronicle, noted and known people, dialogue. With cities (Batch 9): the
+metropolis model and crowd layers. With orbital strikes (technical overview §11): the
+bombardment chain.
+
 ## 7. Player-facing
 
 - Entering a settlement shows its name, faction and culture; the inspector shows its state and

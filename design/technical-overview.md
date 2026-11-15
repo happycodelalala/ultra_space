@@ -589,6 +589,10 @@ Galaxy history ──► Regions ──► Star systems ──► Planets ──
   tier-based limits.
 - **Economy and simulation state:** the LLM only describes it, never sets the numbers.
 - **Anything needed every frame:** the LLM is for slow, high-value content.
+- **Anything the player won't read:** the LLM writes only text a player is about to read,
+  once, cached; the simulation never calls it, so token cost scales with what the player reads
+  and says, not with population or with how many people the world remembers
+  (living-planet.md §6.2).
 
 ### 13.10 Other generative AI besides LLMs
 
