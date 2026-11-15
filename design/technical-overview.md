@@ -648,6 +648,87 @@ Each step uses the output of the step before, so the galaxy reads as if one auth
 
 ---
 
+### 13.14 Consequences: a language the simulation runs and the LLM writes in
+
+Decided 2026-11-14 (design ahead). Hand-written rules always have gaps: every new situation
+(a ship falling on a Stone Age chiefdom, on an industrial city, a plague, a coup) finds new
+ones. Letting the LLM drive the world directly would cost consistency, cost control and the
+offline game. So the LLM writes the rules for each situation, in a language the simulation can
+run, as a game master maps anything new onto a small, generic rulebook.
+
+**1. A generic simulation that runs data.** Instead of coding each phenomenon, the simulation
+offers a small set of building blocks:
+
+- **Things with properties and tags:** places, districts, buildings, zones, groups of people,
+  factions, cultures, people, networks (a district has a power capacity, a building needs
+  power, a zone is a radiation hazard).
+- **Modifiers:** source, target, property, amount, duration, decay ("power −80% in the eastern
+  districts for 6 days, recovering").
+- **A few generic processes over properties:** production and consumption, growth and decay,
+  spread along networks (fire, disease, knowledge, influence, panic), movement of people and
+  goods.
+- **Conditions in activities and customs** ("trading at a stall requires the market open; work
+  requires power"): routines read properties and tags, so they react to anything expressed
+  this way.
+
+A new phenomenon is a new combination, not new code:
+
+| Phenomenon | Expressed as |
+|---|---|
+| Power outage | A modifier on districts' power; activities needing power unavailable |
+| Holy crater | A zone tagged holy and forbidden for one people; a rite activity there |
+| Reactor leak | A hazard zone with a health modifier, decaying over years |
+| Arms race | Modifiers on a nation's research rate and on relations between nations |
+| Rumour | Spread along trade routes at the speed of the tier's communication |
+| Martial law | Customs: a curfew window, cordon zones, tags allowing arrest |
+
+**2. The LLM as adjudicator of significant events.** For a significant event, the content
+director (§13.6) gets the event, the local state, the culture, polity and tier, and the
+catalogue of building blocks, and returns structured consequences in the language
+(modifiers, zones, customs, new institutions or sects, stances) plus the narration (lore,
+headlines, myth). The game validates them before applying: the schema; only known properties,
+processes and activities; limits by tier and by the event's size (the total effect can't
+exceed the event); conservation (no people or goods from nothing). The rules keep the hard
+accounting (casualties, damage, physics, the economy's numbers, §13.9); the LLM decides the
+soft consequences (social, cultural, political, institutional) within those bounds, choosing
+among the stances the rules allow as likely for the culture's values and attitude. Its answer
+is canon, cached in the save, so replays are deterministic.
+
+**3. Nothing slips through silently.** A consequence the language can't express is marked
+narrative-only: it appears in the lore with no mechanical effect, and the game logs it. That
+log is a measured list of what the simulation can't yet express, which turns the open-ended
+gaps into a backlog ordered by how often they come up.
+
+**4. A rule library, so tokens fall over time.**
+- **Event signatures:** each consequence set is stored under its event's signature (kind, tier,
+  size bucket, culture traits); a similar event reuses it, with variation, without a call.
+- **Pre-generated at design time:** the director drafts thousands of consequence templates
+  offline; reviewed, they ship as content like the recorded lore, so the offline game is rich
+  and live calls are kept for the genuinely new.
+- **Lazy adjudication:** only events near the player, or that the player will meet, get a live
+  call; distant minor events use the library or coarse templates.
+
+**5. Safeguards.** Exploits and imbalance: bounds and conservation, the rules own the numbers.
+Inconsistency: canon once cached, and the context includes current state and the chronicle.
+Latency: the rules apply immediate consequences at once and the soft ones arrive seconds later
+(in the world, interpretation takes time too). Tests: the replay provider gives recorded
+consequences, and random consequence sets must keep the invariants (no negative populations,
+money conserved).
+
+**What the language must express** (found by two thought experiments, living-planet §6.8):
+customs in forms fitting each tier (taboos, rites and decrees early; laws, agencies and
+regulations later); how visible an event is and how fast news travels by tier's means (word
+of mouth, riders, telegraph, radio, instant links); tech progress and regression (artifacts,
+contact, research capacity, catastrophe) and its spread to other peoples; new peoples arriving
+at runtime (one generated culture profile each); hazards carried by ships and buildings
+(reactors, fuel, chemicals); infrastructure networks with dependencies (power, rail, roads,
+water) whose outages spread to the districts depending on them; institutions with capacities
+(emergency services, hospitals, armies) that set how fast a society responds and recovers;
+groups within a culture (factions, ideologies, sects with shares), so one event has several
+readings; laws that apply to the player (cordons, trespass, arrest, wanted status); media
+(newspapers, radio, broadcasts) written lazily within the token rule (living-planet §6.2).
+Each is a set of properties, tags, modifiers and processes, not a feature coded on its own.
+
 ## 14. Object model, persistence and streaming
 
 Goal: Bethesda-style persistence (anything the player moves, drops, builds or kills stays that

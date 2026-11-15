@@ -436,7 +436,50 @@ through the same levels; no case needs its own script.
 - **Scale:** at most a few hundred known people active, a few thousand noted ones before they
   are forgotten: a few MB in the save; only those near the player are simulated in detail.
 
-### 6.7 Where each part lands
+### 6.7 Customs: from lore to routines
+
+Routines change with the world through two channels. **Mechanical consequences** (rules):
+situations, counts, buildings, refugees, relations (6.5). **Cultural consequences**, how a
+people reads an event, which is the lore's domain but must change what people do: a new
+festival, a mourning day, a taboo, a law, a pilgrimage, a sect.
+
+- **Customs are data the routines read.** Every culture, faction and settlement has a book of
+  customs in a closed vocabulary: festivals and holy days (date, place, activities), mourning
+  and memorial days, taboos (a forbidden activity, place or time), laws (curfews, bans, levies,
+  conscription), rites (which activity, where, how often), holy or cursed places, pilgrimage
+  routes, shifts in role shares within limits. Schedule templates read them: a festival
+  replaces work, a curfew empties the evening square, a taboo filters activities, a
+  pilgrimage sends people along a road. No tokens, however many people follow them.
+- **The vocabulary fits the tier:** taboos, rites and elders' decrees for early tiers; laws,
+  agencies and regulations later.
+- **Lore revisions propose customs.** After an event, the director proposes customs along with
+  the lore, as part of its consequences (technical overview §13.14); the game validates them
+  (supported activities and places, sensible dates, magnitudes clamped by tier and event) and
+  saves them, versioned with the lore. Each takes effect on its own timescale: a curfew
+  tonight, a festival from next year. Without an LLM, a rule table per event kind proposes the
+  same kinds (a bombardment: a memorial day and a curfew; a conquest: the occupiers' laws; a
+  famine: rationing and a harvest rite).
+- **The loop runs both ways:** the simulation makes events, the director reads them into
+  customs, the customs change routines, which make new events (pilgrims draw bandits, a curfew
+  breeds resentment).
+
+**Two thought experiments (2026-11-14): a freighter falls.**
+
+| | On a Stone Age chiefdom (60,000) | On an industrial city (400,000) |
+|---|---|---|
+| Impact (rules) | Crater, forest fire, a camp burned, a reactor leak's hazard zone | Crater, a factory district destroyed at noon, a fuel depot and chemical works add a larger drifting hazard; power, rail and water fail in districts around |
+| Response | Flight to the hill fort | Organised: fire brigades, police cordons, hospitals to capacity, the army at the wreck, evacuation on the roads |
+| News | Weeks along trails, garbled | Hours by telegraph and radio |
+| Reading | Myth (the Burning Star): the crater holy and forbidden, new-moon vigils, elders and healers grow in share | Science and politics: a commission, martial law, rationing, a mourning day, a research agency; a minority sect reads an omen |
+| Tech | Metal from the wreck: slow drift toward the Ancient tier over generations | Reverse engineering: a leap within years, an arms race, spies |
+| Later | A town grows by the wreck ("Fallen Star"); centuries on, a people with a Keel of its own | A memorial, a museum, a research town, perhaps a rocket programme |
+| The player | Trespass on holy ground; revered or feared as sky-folk | A cordon, under suspicion, newspapers to read |
+| Cost | One LLM call at the event, a few when read | The same; the city at district level |
+
+The same pipeline gives a different world because the tier and culture data differ. What the
+experiments showed the simulation must express is listed in technical overview §13.14.
+
+### 6.8 Where each part lands
 
 Built in Batch 4: promotion from counts, schedules by local time, street paths, the near level
 of detail, looking at people. Next, with the density task: schedule variants and places that
@@ -650,7 +693,9 @@ is a base version from generation plus revisions, each caused by chronicle event
 The current text is the latest revision; older versions stay, because the world remembers:
 an old book in a ruin, an elder's tale or an archive shows the place as it was.
 
-**Revising lore.** When events touch a piece of lore, it is marked stale; the content director
+**Revising lore.** Significant events are adjudicated by the director into structured
+consequences and narration (technical overview §13.14), including customs (§6.7). When events
+touch a piece of lore, it is marked stale; the content director
 rewrites it from the current version, the events and the present state (the same request,
 validation, cache and fallback as all generated text, §3 and technical overview §13.1). To
 keep the cost to what the player meets, revisions are lazy: a stale settlement is rewritten
