@@ -270,6 +270,8 @@ struct Plots<'a> {
     /// Street segments that buildings keep off, and the grid cells each touches.
     streets: Vec<(DVec2, DVec2)>,
     street_grid: HashMap<(i32, i32), Vec<usize>>,
+    /// Placing a ring of wall: its pieces may overlap each other (they join end to end).
+    ring: bool,
 }
 
 const GRID: f64 = 24.0;
@@ -288,6 +290,7 @@ impl<'a> Plots<'a> {
             grid: HashMap::new(),
             streets: Vec::new(),
             street_grid: HashMap::new(),
+            ring: false,
         }
     }
 
@@ -345,7 +348,16 @@ impl<'a> Plots<'a> {
             .flatten()
             .copied()
             .collect();
-        if candidates.iter().any(|&i| overlaps(&rect, &self.rects[i])) {
+        let wall = |i: usize| {
+            self.kit.buildings[self.placed[i].building]
+                .uses
+                .iter()
+                .any(|u| matches!(u.as_str(), "wall" | "tower" | "gate"))
+        };
+        if candidates
+            .iter()
+            .any(|&i| overlaps(&rect, &self.rects[i]) && !(self.ring && wall(i)))
+        {
             return None;
         }
         let mut near: Vec<usize> = Self::cells(&rect)
@@ -660,6 +672,7 @@ fn ring_wall(kit: &Kit, plots: &mut Plots, radius: f64, rng: &mut Rng, gap: bool
     let length = (kit.buildings[wall].max_m[0] - kit.buildings[wall].min_m[0]).max(2.0);
     let n = ((tau * radius / length).ceil() as usize).max(8);
     let start = rng.unit() * tau;
+    plots.ring = true;
     for k in 0..n {
         if gap && k < 2 {
             continue;
@@ -687,6 +700,7 @@ fn ring_wall(kit: &Kit, plots: &mut Plots, radius: f64, rng: &mut Rng, gap: bool
         }
         plots.try_place(wall, at, yaw);
     }
+    plots.ring = false;
 }
 
 /// The radius of a walled town's core: room for its buildings (their footprints, with streets

@@ -197,6 +197,13 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
             .iter()
             .map(|p| Layout::footprint(kit, p))
             .collect();
+        // A town wall's pieces join end to end.
+        let wall = |i: usize| {
+            kit.buildings[l.buildings[i].building]
+                .uses
+                .iter()
+                .any(|u| matches!(u.as_str(), "wall" | "tower" | "gate"))
+        };
         // Corners of each building (without margin) stay outside every other footprint's own
         // rectangle, and every street point stays a street's half width off the walls.
         for (i, a) in rects.iter().enumerate() {
@@ -213,7 +220,11 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
                 DVec2::new(a.x + cs * v.x + sn * v.y, a.z - sn * v.x + cs * v.y)
             });
             for (j, b) in rects.iter().enumerate() {
-                if i != j && (b.x - a.x).abs() < 40.0 && (b.z - a.z).abs() < 40.0 {
+                if i != j
+                    && !(wall(i) && wall(j))
+                    && (b.x - a.x).abs() < 40.0
+                    && (b.z - a.z).abs() < 40.0
+                {
                     for c in corners {
                         assert!(
                             distance(b, c, 0.8) > 0.0,
@@ -262,12 +273,13 @@ fn foundations_level_the_ground_under_every_building() {
     let mut cut: f64 = 0.0;
     for l in w.layouts.layouts.values() {
         let kit = &w.layouts.kits.0[&l.kit];
-        // Harbours stand over the water, on no foundation.
+        // Harbours stand over the water, on no foundation; a town wall's pieces overlap where
+        // they join (each levelled at its own height, the joins hidden inside the wall).
         for p in l.buildings.iter().filter(|p| {
             !kit.buildings[p.building]
                 .uses
                 .iter()
-                .any(|u| u == "harbour")
+                .any(|u| matches!(u.as_str(), "harbour" | "wall" | "tower" | "gate"))
         }) {
             let f = Layout::footprint(kit, p);
             let (sn, cs) = f.yaw.sin_cos();
