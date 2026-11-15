@@ -1,0 +1,16 @@
+[package]
+name = "sim_blocks"
+description = "The block world: shaped blocks in power-of-two sizes, the slope rule, meshing, chunked storage and block models."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Engine-independent: must not depend on bevy or any rendering crate.
+[dependencies]
+glam = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

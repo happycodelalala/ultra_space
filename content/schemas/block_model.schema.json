@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Block model",
+  "description": "A block model exported by tools/blocks (block-world.md section 10): parts of cells in one power-of-two block size, run-length encoded over a box (x fastest, then y, then z; index 0 empty, else 1-based into the part's palette).",
+  "type": "object",
+  "required": ["name", "parts"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string"},
+    "parts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["size", "ups", "origin", "dims", "palette", "runs"],
+        "additionalProperties": false,
+        "properties": {
+          "size": {"enum": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1, 2, 4, 8]},
+          "ups": {"type": "array", "items": {"enum": ["+x", "-x", "+y", "-y", "+z", "-z"]}},
+          "origin": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+          "dims": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 3, "maxItems": 3},
+          "palette": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "runs": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+          "glow": {"type": "array", "items": {"type": "string"}},
+          "reference": {
+            "type": "object", "required": ["area"],
+            "properties": {"area": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}}}
+          }
+        }
+      }
+    }
+  }
+}

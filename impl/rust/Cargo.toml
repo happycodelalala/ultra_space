@@ -17,6 +17,7 @@ sim_economy = { path = "crates/sim_economy" }
 sim_combat = { path = "crates/sim_combat" }
 ai_gateway = { path = "crates/ai_gateway" }
 sim_society = { path = "crates/sim_society" }
+sim_blocks = { path = "crates/sim_blocks" }
 
 # Engine (pinned; upgrade deliberately between batches, never mid-batch)
 bevy = "=0.20.1"

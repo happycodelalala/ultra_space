@@ -5132,6 +5132,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sim_blocks"
+version = "0.1.0"
+dependencies = [
+ "glam 0.33.12",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sim_combat"
 version = "0.1.0"
 dependencies = [

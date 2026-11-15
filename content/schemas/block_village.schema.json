@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Block village",
+  "description": "A village laid out by tools/blocks: its ground (block column tops, top colours, carved cells), the placed block models, lights, the player's ship and start. x east, y north, z up; metres from the village centre.",
+  "type": "object",
+  "required": ["name", "ground", "placements", "lights", "ship", "start"],
+  "properties": {
+    "name": {"type": "string"},
+    "ground": {
+      "type": "object", "required": ["size", "origin", "dims", "tops", "palette", "colours", "carved"],
+      "properties": {
+        "size": {"type": "number"}, "origin": {"type": "array"}, "dims": {"type": "array"},
+        "tops": {"type": "array", "items": {"type": "integer"}},
+        "palette": {"type": "array", "items": {"type": "string"}},
+        "colours": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "carved": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3}}
+      }
+    },
+    "placements": {
+      "type": "array",
+      "items": {"type": "object", "required": ["model", "pos", "rot", "scale"],
+                "properties": {"model": {"type": "string"}, "pos": {"type": "array", "minItems": 3, "maxItems": 3}, "rot": {"type": "number"}, "scale": {"type": "number"}}}
+    },
+    "lights": {"type": "array", "items": {"type": "object", "required": ["kind", "pos"]}},
+    "ship": {"type": "object", "required": ["pos", "rot"]},
+    "start": {"type": "object", "required": ["pos", "facing"]}
+  }
+}

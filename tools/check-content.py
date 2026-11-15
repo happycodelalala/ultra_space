@@ -49,6 +49,23 @@ def main() -> int:
                 where = "/".join(str(p) for p in err.path) or "(root)"
                 errors.append(f"{path.relative_to(ROOT)}: {where}: {err.message}")
 
+    # Block models and the village exported by tools/blocks (assets/export/blocks).
+    blocks = ROOT.parent / "assets" / "export" / "blocks"
+    if blocks.is_dir():
+        kinds = {"village": "block_village"}
+        validators = {}
+        for path in sorted(blocks.glob("*.json")):
+            if path.stem == "palette":
+                continue
+            kind = kinds.get(path.stem, "block_model")
+            if kind not in validators:
+                validators[kind] = jsonschema.Draft202012Validator(json.loads((ROOT / "schemas" / f"{kind}.schema.json").read_text()))
+            checked += 1
+            data = json.loads(path.read_text())
+            for err in validators[kind].iter_errors(data):
+                where = "/".join(str(p) for p in err.path) or "(root)"
+                errors.append(f"{path.relative_to(ROOT.parent)}: {where}: {err.message}")
+
     if errors:
         print("check-content: content doesn't match its schema:", file=sys.stderr)
         for e in errors:
