@@ -803,7 +803,12 @@ fn fields(s: &Settlement, tier: TechTier, plots: &Plots, rng: &mut Rng) -> Vec<F
     let tau = std::f64::consts::TAU;
     let mut r = r0 + 0.5 * l;
     while r < r0 + depth + 0.5 * l && out.len() < MOST_FIELDS {
-        let n = ((tau * r / (w + 3.0)).floor() as usize).max(4);
+        // Spaced by the ring's inner edge, so neighbours don't overlap there.
+        let n = (tau * (r - 0.5 * l).max(0.0) / (w + 3.0)).floor() as usize;
+        if n < 3 {
+            r += l + 3.0;
+            continue;
+        }
         let start = rng.unit() * tau;
         for k in 0..n {
             let a = start + tau * k as f64 / n as f64;

@@ -165,3 +165,37 @@ fn roads_lead_from_settlement_to_settlement() {
         rs.settlements.len()
     );
 }
+
+#[test]
+fn fields_keep_clear_of_each_other() {
+    let (rs, patterns, terrain, kits) = meridian();
+    let town = rs
+        .settlements
+        .iter()
+        .filter(|s| rs.society.cultures[s.culture].profile.id == "hollin")
+        .max_by_key(|s| s.population)
+        .unwrap();
+    let here = east_of(town.direction, 6_000.0, terrain.radius);
+    let tier = rs.society.cultures[town.culture].profile.tech_tier;
+    let kit = &kits.0[&rs.society.cultures[town.culture].profile.building_kit];
+    let mut checked = 0;
+    for (_, d) in dwellings_near(&rs, &patterns, &terrain, here, 4_000.0)
+        .iter()
+        .chain(std::iter::once(&(0, town.clone())))
+    {
+        let l = generate_layout(d, tier, kit, &terrain);
+        for (i, a) in l.fields.iter().enumerate() {
+            for b in &l.fields[i + 1..] {
+                // Centres at least the narrower width apart (rings don't overlap).
+                let gap = glam::DVec2::new(a.x - b.x, a.z - b.z).length();
+                assert!(
+                    gap > 2.0 * a.half[0].min(b.half[0]) - 0.5,
+                    "{}: fields {gap:.1} m apart",
+                    d.name
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked > 20, "{checked} fields");
+}
