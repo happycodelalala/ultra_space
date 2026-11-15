@@ -87,7 +87,7 @@ pub(crate) struct Site {
     /// Its layout once made (on approach, task 4b.5), and the entities drawn from it far away
     /// (distant form, streets, lights; the first is the distant form).
     pub(crate) layout: Option<std::sync::Arc<Layout>>,
-    drawn: Vec<Entity>,
+    pub(crate) drawn: Vec<Entity>,
     /// Its people: the culture's clothing set and a seed for choices.
     pub(crate) clothing: String,
     pub(crate) seed: u64,
@@ -99,6 +99,8 @@ pub(crate) struct Site {
     pub(crate) culture: (String, String),
     pub(crate) faction: String,
     pub(crate) role_names: HashMap<String, String>,
+    /// Its culture's colours (sRGB 0–1), for its distant form.
+    pub(crate) palette: Vec<[f64; 3]>,
 }
 
 #[derive(Resource)]
@@ -228,7 +230,7 @@ fn load_model(path: &Path) -> Result<(Mesh, [f32; 3], [f32; 3]), String> {
 /// Adds a box (`centre`, `half` extents, turned `yaw` about Y) to a vertex-coloured mesh being
 /// built: top in `top`, sides in `side`, no bottom.
 #[allow(clippy::too_many_arguments)]
-fn add_box(
+pub(crate) fn add_box(
     positions: &mut Vec<[f32; 3]>,
     normals: &mut Vec<[f32; 3]>,
     colors: &mut Vec<[f32; 4]>,
@@ -265,7 +267,7 @@ fn add_box(
     }
 }
 
-fn vertex_mesh(
+pub(crate) fn vertex_mesh(
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     colors: Vec<[f32; 4]>,
@@ -282,7 +284,7 @@ fn vertex_mesh(
 }
 
 /// Rough reach of a settlement of each size before its layout is made (m).
-fn estimated_extent(size: sim_society::SizeClass) -> f64 {
+pub(crate) fn estimated_extent(size: sim_society::SizeClass) -> f64 {
     use sim_society::SizeClass::*;
     match size {
         Dwelling => 60.0,
@@ -425,6 +427,7 @@ fn setup_settlements(
                     .iter()
                     .map(|r| (r.id.clone(), r.name.clone()))
                     .collect(),
+                palette: profile.palette.clone(),
             });
         }
     }
@@ -994,6 +997,40 @@ fn place_settlements(
 fn smoothstep(e0: f64, e1: f64, x: f64) -> f64 {
     let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+/// A body's climate with its conditions' blight (task 4b.6): hazard zones dry and kill the
+/// land, the hot zones most, so drawn terrain and the maps seen from orbit show the waste.
+pub(crate) fn climate_of(
+    sim: &Simulation,
+    index: usize,
+    body: &sim_core::Body,
+) -> Option<sim_planet::Climate> {
+    let climate = sim_planet::Climate::of(body)?;
+    let Some(rs) = sim
+        .regions
+        .get(index)
+        .and_then(|r| r.world.get_resource::<sim_society::RegionSociety>())
+    else {
+        return Some(climate);
+    };
+    let zones: Vec<(DVec3, f64, f64)> = rs
+        .conditions
+        .iter()
+        .flat_map(|c| c.zones.iter())
+        .map(|z| {
+            (
+                z.center,
+                z.radius / body.radius,
+                (z.intensity * 2.5).min(1.0),
+            )
+        })
+        .collect();
+    Some(if zones.is_empty() {
+        climate
+    } else {
+        climate.with_blight(zones)
+    })
 }
 
 /// Whether settlement `s` is the one asked for: by name, or by kind (lore kind, size or its

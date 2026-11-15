@@ -183,7 +183,7 @@ fn setup_terrains(
                 ground,
                 water,
                 body: i,
-                climate: Climate::of(body).map(Arc::new),
+                climate: crate::settlements::climate_of(&sim.0, i, body).map(Arc::new),
                 terrain: Arc::new(terrain),
                 extent,
                 tiles: HashMap::new(),

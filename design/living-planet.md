@@ -670,6 +670,18 @@ what is simulated, level of detail) and never show on screen:
   with a size-based extent until their layout arrives. The debug start lays out its target at
   once, so the ship never lands where a house will appear, and accepts `<people>:<kind>`
   (`hollin:city`).
+- **As built (task 4b.6): the land from afar.** `game_bevy::distant`: every settlement of the
+  camera's body is drawn from its record, batched per chunk (cube-sphere tiles of level 3,
+  about 120 km on Meridian), built on the worker threads when the camera comes within 250 km:
+  a muted disc of its built-up area in its culture's colours (what reads from a height), and a
+  cluster of boxes by size and tier (6 for a hamlet to 300 for a metropolis; huts for the Stone
+  Age, blocks and towers for industrial cities); ruins as low broken grey forms on a rubble
+  disc. Settlements whose own layout is drawn are left out and their chunk rebuilt. At night, a
+  glow disc per settlement (fading to its rim, bright by tier and population: camp fires dim,
+  industrial cities bright), unlit and added, shown from 1.5 km up and lit by the sun's height
+  at its chunk: the Aldmark republic is thousands of lights to the horizon. Hazard zones blight
+  the land: the climate's moisture falls by their strength (`Climate::with_blight`), so drawn
+  tiles and the maps seen from orbit show the Kesh land dry and dead around its old cities.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,
