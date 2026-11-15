@@ -357,6 +357,7 @@ impl Frame {
 
 fn setup_settlements(
     mut commands: Commands,
+    cameras: Query<Entity, With<crate::space_render::MainCamera>>,
     sim: Res<Sim>,
     universe: Res<Universe>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -385,6 +386,29 @@ fn setup_settlements(
     };
     let lanterns = materials.add(glow(Color::srgb(0.35, 0.25, 0.12)));
     let lamps = materials.add(glow(Color::srgb(0.3, 0.32, 0.35)));
+    // Their pipelines compiled during the warm-up, not when the first settlement appears.
+    let camera = cameras.iter().next();
+    let (mut p, mut n, mut c, mut i) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    add_box(
+        &mut p,
+        &mut n,
+        &mut c,
+        &mut i,
+        Vec3::ZERO,
+        Vec3::ONE,
+        0.0,
+        [1.0; 3],
+        [1.0; 3],
+    );
+    let primer = meshes.add(vertex_mesh(p, n, c, i));
+    for m in [&material, &lanterns, &lamps] {
+        crate::warmup::spawn_primer(
+            &mut commands,
+            camera,
+            (Mesh3d(primer.clone()), MeshMaterial3d(m.clone())),
+        );
+    }
+    crate::distant::spawn_primers(&mut commands, camera, &mut materials, primer.clone());
     let mut kits: Option<std::sync::Arc<Kits>> = None;
     let mut models = HashMap::new();
     let mut sites = Vec::new();

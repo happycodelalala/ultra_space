@@ -155,9 +155,12 @@ fn load_characters(mut commands: Commands, assets: Res<AssetServer>) {
 
 /// Builds each loaded character's animation graph.
 fn prepare_characters(
+    mut commands: Commands,
     characters: Option<ResMut<Characters>>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    warm: Option<Res<crate::warmup::WarmupDone>>,
+    cameras: Query<Entity, With<crate::space_render::MainCamera>>,
 ) {
     let Some(mut characters) = characters else {
         return;
@@ -188,6 +191,14 @@ fn prepare_characters(
                 warn!("character {}: missing animations", kind.id);
             }
             let (graph, indices) = AnimationGraph::from_clips(named.iter().map(|n| n.1.clone()));
+            // Its pipelines (skinned meshes, its textures) compiled during the warm-up.
+            if warm.is_none() {
+                crate::warmup::spawn_primer(
+                    &mut commands,
+                    cameras.iter().next(),
+                    WorldAssetRoot(scene.clone()),
+                );
+            }
             kind.ready = Some(Ready {
                 scene,
                 graph: graphs.add(graph),

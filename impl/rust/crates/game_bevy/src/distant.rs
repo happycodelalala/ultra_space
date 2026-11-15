@@ -288,13 +288,7 @@ fn stream_chunks(
     let r = terrain.radius;
     let material = distant
         .material
-        .get_or_insert_with(|| {
-            materials.add(StandardMaterial {
-                base_color: Color::WHITE,
-                perceptual_roughness: 0.9,
-                ..default()
-            })
-        })
+        .get_or_insert_with(|| materials.add(forms_material()))
         .clone();
     // List the body's chunks once.
     if !distant.listed.contains(&body) {
@@ -356,16 +350,7 @@ fn stream_chunks(
                 Transform::IDENTITY,
                 ChildOf(root),
             ));
-            // Unlit and added (Bevy's additive mode multiplies colour by alpha, so alpha stays
-            // 1); its colour, times the discs' vertex colours (bright centres fading to the
-            // rim), is set by night.
-            let glow_material = materials.add(StandardMaterial {
-                base_color: Color::linear_rgba(0.0, 0.0, 0.0, 1.0),
-                unlit: true,
-                alpha_mode: AlphaMode::Add,
-                fog_enabled: false,
-                ..default()
-            });
+            let glow_material = materials.add(glow_material());
             let glow_entity = commands
                 .spawn((
                     Mesh3d(meshes.add(glow)),
@@ -427,6 +412,46 @@ fn stream_chunks(
             chunk.built = None;
             chunk.glow = None;
         }
+    }
+}
+
+/// The distant forms' and the night glow's pipelines, compiled during the warm-up.
+pub(crate) fn spawn_primers(
+    commands: &mut Commands,
+    camera: Option<Entity>,
+    materials: &mut Assets<StandardMaterial>,
+    mesh: Handle<Mesh>,
+) {
+    for m in [forms_material(), glow_material()] {
+        crate::warmup::spawn_primer(
+            commands,
+            camera,
+            (
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(materials.add(m)),
+                NotShadowCaster,
+            ),
+        );
+    }
+}
+
+fn forms_material() -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        ..default()
+    }
+}
+
+/// Unlit and added (Bevy's additive mode multiplies colour by alpha, so alpha stays 1); its
+/// colour, times the discs' vertex colours (bright centres fading to the rim), is set by night.
+fn glow_material() -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::linear_rgba(0.0, 0.0, 0.0, 1.0),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        fog_enabled: false,
+        ..default()
     }
 }
 
