@@ -3,10 +3,12 @@
 //! Every settlement of the body the camera is at has a root entity in its own tangent frame
 //! (x east, y up, z south at its centre), placed camera-relative every frame, with:
 //!
-//! - **near** (the camera within about a kilometre of its edge): its buildings' kit models
-//!   merged on a worker into one mesh per 400 m cell, in one vertex-coloured material (one
-//!   entity per building made thousands of entities a city, and hitches as the renderer
-//!   prepared them);
+//! - **near** (the camera within about a kilometre of its edge): by 200 m cells, each its
+//!   buildings' boxes merged into one mesh (made on a worker), and the cells within about
+//!   500 m of the camera their kit models, one entity per building sharing the model's mesh and
+//!   one vertex-coloured material (models for a whole city were thousands of entities, all
+//!   moved every frame, and merging the models themselves made meshes of millions of
+//!   vertices);
 //! - **far** (out to 250 km): one merged mesh of boxes, each building's footprint and height in
 //!   its roof and wall colours, so a settlement never pops into existence on approach; the boxes
 //!   reach a few metres into the ground so the coarser distant terrain doesn't show gaps;
@@ -38,9 +40,16 @@ use crate::universe::{GameState, InGame, Universe, buildings_dir};
 /// [`NEAR_OFF`] (a margin so they don't flicker at the boundary).
 const NEAR_ON: f64 = 1_200.0;
 const NEAR_OFF: f64 = 1_500.0;
-/// Near buildings are merged into one mesh per square cell this wide (m): tens of entities
-/// for a city rather than thousands, still culled by cell.
-const NEAR_CELL: f64 = 400.0;
+/// Near, a settlement is drawn by square cells this wide (m): each cell's buildings as one
+/// merged mesh of boxes, or (within [`DETAIL_ON`] of the camera) as their models.
+const NEAR_CELL: f64 = 200.0;
+/// The camera this close to a cell's buildings (m) shows their models; they go again beyond
+/// [`DETAIL_OFF`].
+const DETAIL_ON: f32 = 450.0;
+const DETAIL_OFF: f32 = 600.0;
+/// Most building models spawned per frame (all settlements together): each new entity costs
+/// the renderer a pipeline specialisation.
+const MODELS_PER_FRAME: usize = 200;
 /// Farthest a settlement is drawn (m).
 const FAR: f64 = 250_000.0;
 /// How far the distant boxes reach into the ground (m).
@@ -68,9 +77,16 @@ impl Plugin for SettlementsPlugin {
     }
 }
 
-/// A building model as loaded (kept on the CPU: near buildings are merged from it on
-/// workers) and its colours seen from above (roof) and the side.
+/// A building model as loaded: its mesh and its colours seen from above (roof) and the
+/// side.
 struct Model {
+    mesh: Handle<Mesh>,
+    roof: [f32; 3],
+    wall: [f32; 3],
+}
+
+/// A building model's vertices as read from its file.
+struct Loaded {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     colors: Vec<[f32; 4]>,
@@ -79,8 +95,21 @@ struct Model {
     wall: [f32; 3],
 }
 
-/// Every kit's building models, by (kit, building).
-type Models = HashMap<(String, usize), Model>;
+/// A near cell as made on a worker: its centre, reach, buildings and merged boxes.
+type CellMade = (Vec3, f32, Vec<usize>, Mesh);
+
+/// One cell of a near settlement (see [`NEAR_CELL`]).
+pub(crate) struct NearCell {
+    /// Centre of its buildings (settlement frame) and their reach from it (m).
+    centre: Vec3,
+    reach: f32,
+    buildings: Vec<usize>,
+    /// Its merged boxes, and its models while the camera is close (`next`: the next of its
+    /// buildings to spawn).
+    boxes: Entity,
+    models: Option<Vec<Entity>>,
+    next: usize,
+}
 
 pub(crate) struct Site {
     pub(crate) body: usize,
@@ -93,10 +122,10 @@ pub(crate) struct Site {
     /// its layout is made.
     pub(crate) extent: f64,
     pub(crate) root: Entity,
-    /// Its buildings, while the camera is near (merged by cell; `near_task` makes them on a
-    /// worker).
-    pub(crate) near: Option<Vec<Entity>>,
-    near_task: Option<bevy::tasks::Task<Vec<Mesh>>>,
+    /// Its buildings by cell, while the camera is near (`near_task` makes the cells' boxes on
+    /// a worker).
+    pub(crate) near: Option<Vec<NearCell>>,
+    near_task: Option<bevy::tasks::Task<Vec<CellMade>>>,
     /// Its layout once made (on approach, task 4b.5), and the entities drawn from it far away
     /// (distant form, streets, lights; the first is the distant form).
     pub(crate) layout: Option<std::sync::Arc<Layout>>,
@@ -126,7 +155,7 @@ type Made = (Layout, Option<(Mesh, Mesh, Mesh, bool)>);
 #[derive(Resource)]
 pub(crate) struct SettlementDraw {
     pub(crate) kits: std::sync::Arc<Kits>,
-    models: std::sync::Arc<Models>,
+    models: HashMap<(String, usize), Model>,
     material: Handle<StandardMaterial>,
     /// Lights: warm lanterns (medieval) and white lamps (colony).
     lanterns: Handle<StandardMaterial>,
@@ -159,7 +188,7 @@ fn linear(c: Color) -> [f32; 3] {
 
 /// Loads a building model: one mesh, colours baked into vertex colours (each primitive's
 /// material colour times its texture at the vertex's texture coordinate).
-fn load_model(path: &Path) -> Result<Model, String> {
+fn load_model(path: &Path) -> Result<Loaded, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let gltf = gltf::Gltf::from_slice(&bytes).map_err(|e| e.to_string())?;
     let blob = gltf.blob.as_deref().ok_or("no binary chunk")?;
@@ -239,7 +268,7 @@ fn load_model(path: &Path) -> Result<Model, String> {
     let mean = |c: [f32; 3], n: f32| {
         if n > 0.0 { c.map(|v| v / n) } else { [0.5; 3] }
     };
-    Ok(Model {
+    Ok(Loaded {
         positions,
         normals,
         colors,
@@ -249,9 +278,15 @@ fn load_model(path: &Path) -> Result<Model, String> {
     })
 }
 
-/// A layout's buildings merged into one mesh per [`NEAR_CELL`] cell, in the settlement's
-/// frame (made on a worker).
-fn near_meshes(frame: Frame, layout: &Layout, models: &Models, radius: f64) -> Vec<Mesh> {
+/// A layout's buildings by [`NEAR_CELL`] cell: each cell's centre, reach, buildings and
+/// merged boxes, in the settlement's frame (made on a worker).
+fn near_cells(
+    frame: Frame,
+    layout: &Layout,
+    kit: &Kit,
+    colours: &Colours,
+    radius: f64,
+) -> Vec<CellMade> {
     let mut cells: std::collections::BTreeMap<(i64, i64), Vec<usize>> = Default::default();
     for (i, p) in layout.buildings.iter().enumerate() {
         let cell = (
@@ -260,33 +295,27 @@ fn near_meshes(frame: Frame, layout: &Layout, models: &Models, radius: f64) -> V
         );
         cells.entry(cell).or_default().push(i);
     }
-    let mut out = Vec::with_capacity(cells.len());
-    for buildings in cells.into_values() {
-        let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
-        for i in buildings {
-            let Some(m) = models.get(&(layout.kit.clone(), layout.buildings[i].building)) else {
-                continue;
-            };
-            let (t, q) = frame.building_pose(layout, i, radius);
-            let base = p.len() as u32;
-            p.extend(
-                m.positions
-                    .iter()
-                    .map(|v| (t + q * Vec3::from_array(*v)).to_array()),
-            );
-            n.extend(
-                m.normals
-                    .iter()
-                    .map(|v| (q * Vec3::from_array(*v)).to_array()),
-            );
-            c.extend_from_slice(&m.colors);
-            idx.extend(m.indices.iter().map(|k| k + base));
-        }
-        if !idx.is_empty() {
-            out.push(vertex_mesh(p, n, c, idx));
-        }
-    }
-    out
+    cells
+        .into_values()
+        .map(|buildings| {
+            let poses: Vec<Vec3> = buildings
+                .iter()
+                .map(|&i| frame.building_pose(layout, i, radius).0)
+                .collect();
+            let centre = poses.iter().copied().sum::<Vec3>() / poses.len() as f32;
+            let reach = poses
+                .iter()
+                .map(|p| p.distance(centre) + 20.0)
+                .fold(0.0, f32::max);
+            let (mut p, mut n, mut c, mut idx) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+            for &i in &buildings {
+                building_box(
+                    frame, layout, kit, colours, radius, i, &mut p, &mut n, &mut c, &mut idx,
+                );
+            }
+            (centre, reach, buildings, vertex_mesh(p, n, c, idx))
+        })
+        .collect()
 }
 
 /// Adds a box (`centre`, `half` extents, turned `yaw` about Y) to a vertex-coloured mesh being
@@ -473,8 +502,20 @@ fn setup_settlements(
                     continue;
                 }
                 match load_model(&dir.join(&kit.id).join(&b.model)) {
-                    Ok(model) => {
-                        models.insert(key, model);
+                    Ok(l) => {
+                        models.insert(
+                            key,
+                            Model {
+                                mesh: meshes.add(vertex_mesh(
+                                    l.positions,
+                                    l.normals,
+                                    l.colors,
+                                    l.indices,
+                                )),
+                                roof: l.roof,
+                                wall: l.wall,
+                            },
+                        );
                     }
                     Err(e) => warn!("building model {}/{}: {e}", kit.id, b.model),
                 }
@@ -542,7 +583,7 @@ fn setup_settlements(
         .collect();
     commands.insert_resource(SettlementDraw {
         kits,
-        models: std::sync::Arc::new(models),
+        models,
         material,
         lanterns,
         lamps,
@@ -814,6 +855,49 @@ fn stream_layouts(
 #[derive(Component)]
 struct FarForm;
 
+/// Building `i`'s box (its footprint and height in its roof and wall colours, reaching a few
+/// metres into the ground) added to a mesh being built in the settlement's frame.
+#[allow(clippy::too_many_arguments)]
+fn building_box(
+    site: Frame,
+    layout: &Layout,
+    kit: &Kit,
+    colours: &Colours,
+    radius: f64,
+    i: usize,
+    p: &mut Vec<[f32; 3]>,
+    n: &mut Vec<[f32; 3]>,
+    c: &mut Vec<[f32; 4]>,
+    idx: &mut Vec<u32>,
+) {
+    let placed = &layout.buildings[i];
+    let b = &kit.buildings[placed.building];
+    let (origin, rotation) = site.building_pose(layout, i, radius);
+    let (lo, hi) = (
+        Vec3::new(b.min_m[0] as f32, 0.0, b.min_m[2] as f32),
+        Vec3::new(b.max_m[0] as f32, b.max_m[1] as f32, b.max_m[2] as f32),
+    );
+    let (roof, wall) = colours
+        .get(&(kit.id.clone(), placed.building))
+        .copied()
+        .unwrap_or(([0.5; 3], [0.5; 3]));
+    // Trees as narrow cones would be fussy: a slim box in their colour.
+    let tree = b.uses.iter().any(|u| u == "tree");
+    let shrink = if tree { 0.45 } else { 1.0 };
+    let half = Vec3::new(
+        0.5 * (hi.x - lo.x) * shrink,
+        0.5 * (hi.y + SKIRT),
+        0.5 * (hi.z - lo.z) * shrink,
+    );
+    let centre_local = Vec3::new(
+        0.5 * (lo.x + hi.x),
+        0.5 * (hi.y - SKIRT),
+        0.5 * (lo.z + hi.z),
+    );
+    let centre = origin + rotation * centre_local;
+    add_box(p, n, c, idx, centre, half, placed.yaw as f32, roof, wall);
+}
+
 /// A settlement's distant boxes and its lights, in its own frame.
 fn distant_meshes(
     site: Frame,
@@ -836,26 +920,8 @@ fn distant_meshes(
             Vec3::new(b.min_m[0] as f32, 0.0, b.min_m[2] as f32),
             Vec3::new(b.max_m[0] as f32, b.max_m[1] as f32, b.max_m[2] as f32),
         );
-        let (roof, wall) = colours
-            .get(&(kit.id.clone(), placed.building))
-            .copied()
-            .unwrap_or(([0.5; 3], [0.5; 3]));
-        // Trees as narrow cones would be fussy: a slim box in their colour.
-        let tree = b.uses.iter().any(|u| u == "tree");
-        let shrink = if tree { 0.45 } else { 1.0 };
-        let half = Vec3::new(
-            0.5 * (hi.x - lo.x) * shrink,
-            0.5 * (hi.y + SKIRT),
-            0.5 * (hi.z - lo.z) * shrink,
-        );
-        let centre_local = Vec3::new(
-            0.5 * (lo.x + hi.x),
-            0.5 * (hi.y - SKIRT),
-            0.5 * (lo.z + hi.z),
-        );
-        let centre = origin + rotation * centre_local;
-        add_box(
-            &mut p, &mut n, &mut c, &mut idx, centre, half, yaw, roof, wall,
+        building_box(
+            site, layout, kit, colours, radius, i, &mut p, &mut n, &mut c, &mut idx,
         );
         // A lantern by the door of every building people use (not trees, wells or carts).
         let lit = b.uses.iter().any(|u| {
@@ -995,6 +1061,7 @@ fn stream_settlements(
     };
     let draw = &mut *draw;
     let mut cameras: HashMap<usize, DVec3> = HashMap::new();
+    let mut budget = MODELS_PER_FRAME;
     for site in &mut draw.sites {
         let radius = universe.0.bodies[site.body].radius;
         let cam = *cameras
@@ -1012,7 +1079,8 @@ fn stream_settlements(
                 *v = want;
             }
         }
-        // Buildings near, once the layout is made: merged on a worker, then shown.
+        // Near, once the layout is made: its cells' boxes (made on a worker), and the
+        // models of the cells close to the camera.
         let near = site.layout.is_some()
             && if site.near.is_some() || site.near_task.is_some() {
                 distance < NEAR_OFF
@@ -1021,33 +1089,42 @@ fn stream_settlements(
             };
         if !near {
             site.near_task = None;
-            for e in site.near.take().unwrap_or_default() {
-                commands.entity(e).despawn();
+            for cell in site.near.take().unwrap_or_default() {
+                commands.entity(cell.boxes).despawn();
+                for e in cell.models.unwrap_or_default() {
+                    commands.entity(e).despawn();
+                }
             }
         } else if site.near.is_none() {
             match &site.near_task {
                 None => {
-                    if let Some(layout) = site.layout.clone() {
-                        let (frame, models) = (site.frame(), draw.models.clone());
-                        site.near_task =
-                            Some(crate::workers::workers().spawn(async move {
-                                near_meshes(frame, &layout, &models, radius)
-                            }));
+                    if let Some(layout) = site.layout.clone()
+                        && let Some(kit) = draw.kits.0.get(&layout.kit).cloned()
+                    {
+                        let (frame, colours) = (site.frame(), draw.colours.clone());
+                        site.near_task = Some(crate::workers::workers().spawn(async move {
+                            near_cells(frame, &layout, &kit, &colours, radius)
+                        }));
                     }
                 }
                 Some(t) if t.is_finished() => {
                     let made = bevy::tasks::block_on(site.near_task.take().unwrap());
                     site.near = Some(
                         made.into_iter()
-                            .map(|mesh| {
-                                commands
+                            .map(|(centre, reach, buildings, mesh)| NearCell {
+                                centre,
+                                reach,
+                                buildings,
+                                boxes: commands
                                     .spawn((
                                         Mesh3d(meshes.add(mesh)),
                                         MeshMaterial3d(draw.material.clone()),
                                         Transform::IDENTITY,
                                         ChildOf(site.root),
                                     ))
-                                    .id()
+                                    .id(),
+                                models: None,
+                                next: 0,
                             })
                             .collect(),
                     );
@@ -1055,7 +1132,75 @@ fn stream_settlements(
                 Some(_) => {}
             }
         }
-        // The distant form stays until the buildings are there.
+        if let (Some(cells), Some(layout)) = (&mut site.near, &site.layout)
+            && let Some(kit) = draw.kits.0.get(&layout.kit)
+        {
+            let local = (site.basis.inverse() * (cam - site.origin)).as_vec3();
+            let frame = Frame {
+                origin: site.origin,
+                basis: site.basis,
+            };
+            for cell in cells {
+                let d = local.distance(cell.centre) - cell.reach;
+                let close = if cell.models.is_some() {
+                    d < DETAIL_OFF
+                } else {
+                    d < DETAIL_ON
+                };
+                match (&mut cell.models, close) {
+                    (None, true) => {
+                        cell.models = Some(Vec::new());
+                        cell.next = 0;
+                    }
+                    (Some(_), false) => {
+                        for e in cell.models.take().unwrap_or_default() {
+                            commands.entity(e).despawn();
+                        }
+                        if let Ok(mut v) = visibility.get_mut(cell.boxes) {
+                            *v = Visibility::Inherited;
+                        }
+                    }
+                    _ => {}
+                }
+                let Some(models) = &mut cell.models else {
+                    continue;
+                };
+                while cell.next < cell.buildings.len() && budget > 0 {
+                    let i = cell.buildings[cell.next];
+                    cell.next += 1;
+                    let Some(model) = draw
+                        .models
+                        .get(&(kit.id.clone(), layout.buildings[i].building))
+                    else {
+                        continue;
+                    };
+                    budget -= 1;
+                    let (translation, rotation) = frame.building_pose(layout, i, radius);
+                    models.push(
+                        commands
+                            .spawn((
+                                Mesh3d(model.mesh.clone()),
+                                MeshMaterial3d(draw.material.clone()),
+                                Transform {
+                                    translation,
+                                    rotation,
+                                    ..default()
+                                },
+                                ChildOf(site.root),
+                            ))
+                            .id(),
+                    );
+                }
+                // The boxes go once every model is there.
+                if cell.next >= cell.buildings.len()
+                    && let Ok(mut v) = visibility.get_mut(cell.boxes)
+                    && *v != Visibility::Hidden
+                {
+                    *v = Visibility::Hidden;
+                }
+            }
+        }
+        // The distant form stays until the cells are there.
         let far_visible = if site.near.is_some() {
             Visibility::Hidden
         } else {
@@ -1407,7 +1552,7 @@ mod tests {
         assert!(kits.0.len() >= 2);
         for kit in kits.0.values() {
             for b in &kit.buildings {
-                let Model {
+                let Loaded {
                     colors, roof, wall, ..
                 } = load_model(&dir.join(&kit.id).join(&b.model))
                     .unwrap_or_else(|e| panic!("{}/{}: {e}", kit.id, b.model));
