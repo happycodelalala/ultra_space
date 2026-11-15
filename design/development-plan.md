@@ -528,7 +528,7 @@ at its own density (living-planet.md §8b), without loading or drawing everythin
 | 4b.6 | **Distant forms batched:** settlements far away drawn as merged forms per terrain region from their records, night lights from orbit, the real layout replacing them near; ruins drawn; hazard zones blight the land's look (a terrain field the shaders read) | Done (905ec8a): streaming hitches found and mostly fixed (near cells, models only close, people a few a frame, primers); the fly-in 2–3 frames over 50 ms |
 | 4b.7 | **Stand-in kits and characters for every tier:** CC0 packs (downloaded as before) built into kits and characters for the Stone Age, Ancient, Early Modern, Industrial and the wasteland, with layouts for their styles (camps, walled cities, ports, industrial grids) | Done: five kits and clothing sets, camp/grid/harbour layouts, ports on the coast (living-planet.md §8b as built) |
 | 4b.8 | **Roads, dwellings and surroundings** *(widened 2026-11-15)*: roads joining settlements, dwellings of each era between them; each settlement's surroundings (living-planet.md §8d): fields as a terrain layer, boundaries, walls and gates where the pattern calls for them, landmarks; all made on approach | Done: walls, fields, dwellings and roads (living-planet.md §8d as built); a test checks something built within 1.2 km between villages |
-| 4b.9 | **Batch review** | Exit criteria met |
+| 4b.9 | **Batch review** | Done (2026-11-15): see the review below |
 
 **Exit criteria:** seven peoples on Meridian, each visitable and at its own density, each
 settlement in its surroundings; flying low
@@ -536,6 +536,23 @@ over settled land, settlements every few minutes and several in view from a heig
 at night, the settled lands lit (the industrial nation brightest, the Stone Age barely, the
 wasteland dark but for its enclaves); loading no slower than Batch 4; no frame over 50 ms
 flying low at 300 m/s or landing by a settlement; CI passes.
+
+**Review (task 4b.9, 2026-11-15, round q0083 of all 59 tests, perf re-run q0084).** Seven
+peoples on Meridian (5,962 settlements, 5.2 M people), each laid out in its stage's style
+with its kit and people: Tayu camps round fires behind palisades, Velani stone towns with red
+roofs and colonnaded temples, the Hollin's walled towns in their hedged fields, Corvantine
+towns with churches, windmills and harbours, Aldmark grids of houses, tenements and factories,
+Kesh enclaves behind barricades in the dead land, the Compact's colony. Between them
+farmsteads every kilometre or so and roads from settlement to settlement; from orbit the
+settled lands lit at night. Every test ran to its end. Performance (tests run alone): the
+descent from orbit 1 frame over 50 ms (56 ms) and the fly-in to the biggest town at 300 m/s
+1 frame (61 ms), both at the final screenshot as in Batch 4; settlements cost about 1 ms a
+frame on average against the bare fly-in. Loading: the loading overlay's longest frame about
+1.2 s (generation of seven peoples' societies and the road networks). CI passes. Known for
+later: city density and sprawl (no core-to-suburb gradient), the Kenney palette (teal flat
+roofs, pink stone), skin-tight painted suits for the modern peoples, roads straight between
+settlements, hedges as slabs from the ground, ports by role only where the coast allows, the
+bare land between it all (Batch 4c).
 
 ### 7.7 Batch 4c tasks: ground cover
 
