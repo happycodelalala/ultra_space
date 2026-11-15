@@ -1,4 +1,4 @@
-# Visual style: low-poly shapes, realistic light (Batch 5)
+# Visual style: block art, realistic light (Batch 5)
 
 Decided 2026-11-15 (developer). The world still reads as a placeholder: bare land, flat biome
 colours, a flat sea, plain light and no weather. Realism at Starfield's level, or even No Man's
@@ -65,21 +65,22 @@ languages side by side always show the seam.
 | Water | A flat plane | Depth colour (shallows to deep), foam along the shore, gentle low-poly waves, the sky reflected |
 | Ground cover | Bare land | Block trees, bushes, grass and rocks by biome (ground-cover.md), moving in the wind |
 | Sky and atmosphere | Single scattering, clouds in the atmosphere shader | The same, tuned: cloud cover seen from the ground, haze and fog near the ground, sunsets that colour the land |
-| Settlements and people | Kenney and Quaternius stand-ins | The game's own kits and characters on the design track, in this style; until then the stand-ins under the new light |
+| Settlements and people | Kenney and Quaternius stand-ins | Block models: first the demo village (development plan §7.7), then the game's own kits and characters on the design track; the other settlements keep the stand-ins until then |
 | Effects | A few (lights at night, engine glow) | Plumes, dust, splashes, smoke, precipitation |
 
 ## 3. Review views
 
-The finish line of Batch 5 is a fixed set of **review views**, a test round
-(`tools/test-scripts/`) whose screenshots are judged against this guide:
+The finish line of Batch 5 is a fixed set of **review views of the demo village**, a test round
+(`tools/test-scripts/`) whose screenshots are judged against the style renders (the reference
+scene made by `tools/blocks/`):
 
-- from orbit by day and by night;
-- low flight over forest, plains, desert, coast, snow and the Kesh waste;
-- on foot in a forest, on a beach, in a village street, in a field;
-- each at day, dusk and night, and in rain, snow and fog where the climate has them;
-- the ship landing (dust) and taking off (plume).
+- wide over the village, the house front, close by the door, the people, the landed ship;
+- each by day, at golden hour, in fog, in rain and at night;
+- the descent from orbit to the village.
 
-Anything that looks off outside these views is a known issue for a later batch, not a new task.
+The planet-wide views (low flight over each biome, the coast, snow and the Kesh waste; landing
+dust and take-off plumes) join when water, ground cover and effects follow the village. Anything
+that looks off outside the views is a known issue for a later batch, not a new task.
 
 ## 4. Budgets
 

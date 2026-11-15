@@ -296,7 +296,7 @@ include the Bevy tooling overhead and are relative sizes, not commitments.
 | **3** | **Vehicle builder** | Part graph, merged rigid body, thruster/wheel control allocation, builder UI, a rover and a ship you built, save/load | 2.5–4 mo |
 | **4** | **Living planet** *(brought forward 2026-11-14)* | Two cultures at different tech levels on Meridian (a medieval culture and a spacefaring colony), factions, settlements generated from climate and terrain, aggregate population simulation, settlements on tangent grids from building kits, people with daily schedules near the player; lore through the content director with recorded responses ([living-planet.md](living-planet.md)) | 2–3 mo |
 | **4b** | **Density and the peoples of Meridian** *(2026-11-14)* | Meridian as the test bed for every stage: seven peoples from Stone Age to a ruined Modern nation, settlements from each people's settlement pattern and the land's area, the settlement hierarchy, a wasteland from generated history, layouts on approach, distant forms batched, CC0 stand-in kits and characters for every tier, roads and dwellings ([living-planet.md](living-planet.md) §8b) | 6–9 wk |
-| **5** | **The world, refined** *(2026-11-15)* | Low-poly shapes with realistic light ([visual-style.md](visual-style.md)): lighting and camera, terrain in the style, water, ground cover ([ground-cover.md](ground-cover.md)), weather, effects; judged on a fixed set of review views | 2.5–3.5 mo |
+| **5** | **The world, refined** *(2026-11-15)* | The block world ([block-world.md](block-world.md)) in realistic light ([visual-style.md](visual-style.md)), proven on a **demo village** on Meridian where the player starts: the block core and model format, the ground as blocks near the player, the village built from block models, light and weather matching the style renders, digging and placing; water, planet-wide ground cover and effects after the village is reviewed | 2.5–3.5 mo |
 | **6** | **First playable loop** *(2026-11-15)* | Game shell (menus, save slots, pause, settings), the player's record (money, standing, journal), discoveries, contracts from settlements, basic audio, first-time guidance | 1.5–2.5 mo |
 | **7** | **Survival-builder loop** | Resource gathering (the ground cover's trees and rocks), inventory, crafting, base building on tangent grids, production chains (parallel factory networks), fuel and power consumption, terrain deltas, simple creatures | 2.5–4 mo |
 | | ⭐ **Checkpoint A** | **A playable sandbox:** explore, build, fly. Candidate for a public demo or early access | |
@@ -570,33 +570,43 @@ above are **known issues, not tasks**: each is taken up when a later batch works
 | Kenney stand-in palette (teal flat roofs, pink stone) | Design track (the game's own kits) |
 | Modern and industrial people in painted, skin-tight suits | Design track (characters) |
 | Roads straight between settlements: no routing round hills, no bridges | Batch 9 (traffic and trade on the road graph) |
-| Hedges and field walls as plain boxes | Batch 5 (instanced props with the ground cover) |
-| Props and signs of life (smoke, cooking fires) | Batch 5 (instancing) |
+| Hedges and field walls as plain boxes | After the demo village (ground cover in the block style) |
+| Props and signs of life (smoke, cooking fires) | After the demo village (effects) |
 
 ### 7.7 Batch 5 tasks: the world, refined
 
 Decided 2026-11-15 (developer): the world still reads as a placeholder, and it comes before the
-game shell and the survival loop. The style is low-poly shapes with realistic light, weather and
-effects ([visual-style.md](visual-style.md)), in the manner of Dyson Sphere Program; the ground
-cover planned as Batch 4c is task 5.5 ([ground-cover.md](ground-cover.md)). The finish line is a
-fixed set of review views judged against the style guide; anything off outside them is a known
-issue, not a new task. The game's own settlement and character art continues on the design
-track in the same style, in parallel, and doesn't hold this batch open.
+game shell and the survival loop. Revised the same day after the style renders: the world is
+made of **shaped blocks** ([block-world.md](block-world.md)) in realistic light
+([visual-style.md](visual-style.md)), and the batch proves it on **one demo village** on
+Meridian before anything planet-wide. The village is the scene of the style renders made real:
+a timber house in its yard with a garden, a woodshed, a well and a wagon, a path out to the
+player's landed ship and a dug pit, woods around, villagers and chickens. **The player starts
+there.** Only this village is built from block models; every other settlement keeps its
+stand-in kit until the design track replaces them. The finish line is a fixed set of review
+views of the village; anything off outside them is a known issue, not a new task.
 
 | # | Task | Done when |
 |---|---|---|
-| 5.1 | **Style guide and review views:** visual-style.md with reference images; the review views as a test round (orbit, low flight over each biome and the Kesh waste, on foot in forest, beach, village and field; day, dusk, night, rain, snow, fog; landing and take-off) | The views run in one round; the guide is agreed with the developer |
-| 5.2 | **Lighting and camera:** shadow cascades tuned for the planet, ambient occlusion, exposure, tonemapping, bloom, haze and ground fog, time-of-day grading; quality tiers | The views read as warm day, golden dusk, dark night with lit towns |
-| 5.3 | **Terrain in the style:** faceted low-poly ground, biomes blended rather than banded, rock on slopes and snow with soft edges, smooth coasts, distant mountains softened | No hard bands or staircase coasts in the views |
-| 5.4 | **Water:** depth colour, shore foam, gentle low-poly waves, sky reflection | Coasts and lakes read as water from the ground and from the air |
-| 5.5 | **Ground cover:** low-poly trees, bushes, grass and rocks by biome, instanced per tile on workers, levels of detail by budget, cleared round settlements and dead in blighted land, trunks and big rocks collide near the player; settlement props (hedges, field walls) move to the instancing | Each biome reads as itself; the same place always the same; flying low at 300 m/s holds the frame budget |
-| 5.6 | **Weather:** cloud cover seen from the ground, rain, snow and dust, wind moving trees and grass, overcast light, fog; weather changing over time by climate | Each weather in the views |
-| 5.7 | **Effects:** engine plumes and heat shimmer, landing dust, splashes, chimney smoke | Visible in the views; no frame over 50 ms |
-| 5.8 | **Batch review** | The views judged against the style guide by the developer, from screenshots |
+| 5.1 | **Block core** (`sim_blocks`, engine-independent): cells in power-of-two sizes aligned to their own multiples, the shape set (block, wedge, outer and valley corners in any orientation) and the slope rule with per-model recipes, a mesher merging flat faces and runs of slopes, chunked sparse storage | Unit tests for the shape rule and meshing; a model exported by the style scripts meshes to the same faces as in Blender |
+| 5.2 | **Block models:** the model format (size, cells, palette colours, shape recipe; engine-agnostic files under `assets/` with a schema), the style scripts moved into the repo as the authoring tool (`tools/blocks/`) exporting every village model; the game loads and draws them | CI validates the exported models; each village model drawn in the game matches its render |
+| 5.3 | **The ground as blocks:** chunks of 25 cm blocks round the player (grass, soil, rock from the terrain function, the slope rule), made on workers and streamed, nearest first; the far tiles stepped to match; colliders (rapier voxels and slope pieces) for walking and landing; pads levelled under structures | Land, walk and drive on block ground near the village; flying low at 300 m/s holds the frame budget |
+| 5.4 | **The demo village:** one village of the Meridian peoples built from block models on levelled pads, its paths, gardens and props; nature round it (trees, bushes, rocks, flowers, grass) placed through an occupancy plot so nothing overlaps, on the grid in quarter turns; villagers and chickens standing or in simple idle poses (block groups on a skeleton; full animation later); the player starts there on foot beside their landed ship | A new game starts in the village; it reads as the style renders from the same views |
+| 5.5 | **Light and weather to match the renders:** sun shadows, ambient occlusion, exposure and AgX tonemapping, bloom, haze and ground fog; day, golden hour, night with lit windows and lanterns, rain, fog; quality tiers | The review views read as the reference renders in each light and weather |
+| 5.6 | **Review views:** a test round of the village (wide, house, close, people, ship) in day, golden hour, fog, rain and night, plus the descent from orbit to the village | The views run in one round; no frame over 50 ms |
+| 5.7 | **Digging and placing:** a mining tool removing blocks under the crosshair (a brush, timed by hardness), big blocks split into children first, drops to a small inventory (stacks by material, a simple panel, saved with the player), placing blocks from it on the grid; edits kept per chunk and saved; re-meshing and colliders updated within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
+| 5.8 | **Batch review** | The views judged against the renders by the developer, from screenshots |
 
-**Exit criteria:** the review views read as one low-poly world in realistic light: covered land,
-water, weather and effects; no frame over 50 ms flying low at 300 m/s or landing at default
-quality; loading no slower than Batch 4b; CI passes.
+**Exit criteria:** a new game starts in the demo village; it reads as the style renders by day,
+dusk, night, in rain and fog; the player can walk, dig and place blocks, and edits persist; no
+frame over 50 ms landing at or flying low over the village at default quality; loading no slower
+than Batch 4b; CI passes.
+
+**After the village (planned at its review, in this batch or the next):** water (depth colour,
+shore foam, low-poly waves), planet-wide ground cover in the block style
+([ground-cover.md](ground-cover.md)), weather changing over time by climate, effects (engine
+plumes, landing dust, splashes, chimney smoke), the block zone across cube-face seams, and the
+other settlements' kits in blocks (design track).
 
 **Then (planned when it starts):** Batch 6, the first playable loop: the game shell (main menu,
 new game and continue, save slots, pause, settings, controls), the player's record (money,

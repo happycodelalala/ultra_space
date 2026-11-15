@@ -43,7 +43,8 @@ Work runs on two tracks, each on its own branch and worktree (and its own sessio
   `design/design-track.md`.
 - **The handoff** between them is fixed: the part and vehicle schemas, the model format
   (glb, metres, part axes, material slot names, COLOR_0 occlusion, TEXCOORD_0 metres), the
-  palette slots and the joint/pose data. Changing any of it touches both tracks: agree it
+  palette slots, the joint/pose data and the block model format (`design/block-world.md` §10).
+  Changing any of it touches both tracks: agree it
   first and change both sides together.
 - **Importing designs into the game:** the design branch merges at milestones, after
   `tools/ci.sh` passes (it checks models, schemas and the design tests: interference in every

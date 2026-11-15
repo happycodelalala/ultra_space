@@ -170,10 +170,13 @@ as procedural recipes (code that places blocks, as in the style renders) or buil
 and stored as block data (sizes, shapes, orientations, palette materials) rather than meshes.
 People and mechs are block groups on their skeleton's bones, so they animate as rigid parts.
 
-**This changes the handoff between the tracks** (AGENTS.md): the design track currently delivers
-glb part models from Blender. Moving vehicles, mechs, ships and buildings to block data changes
-the model format and the part schema on both sides, so it is agreed and planned before either
-track changes; until then the imported designs stay as they are.
+**The handoff between the tracks** (AGENTS.md) gains the **block model format** (agreed
+2026-11-15): engine-agnostic files under `assets/` with a schema, holding a model's block size,
+cells, palette colours and shape recipe, meshed by the game with the rules above. The style
+scripts (`tools/blocks/`) are the first authoring tool and export the demo village's models on
+the game track (development plan §7.7); the design track takes the format up for buildings and
+objects afterwards. Vehicles, mechs and ships stay glb part models for now; moving them to block
+data is decided separately, with both tracks.
 
 ## 11. Inventory (brought forward)
 
@@ -199,10 +202,10 @@ batch.
 - **25 cm blocks** are 64 times as many as Minecraft's per volume; the zone's radius and depth are
   budgets, set by measurement, not constants.
 
-## 13. First step: a prototype
+## 13. First step: the demo village
 
-Before the plan is fixed, a prototype answers the risks on the smallest scope: the block zone
-round the player on Meridian with the shape set and two or three sizes, generated, meshed and
-collidable; digging and placing; walking and driving on it; crossing a face seam; frame times and
-memory on the test machine. Large structures, ships and stations come in the batches that first
-need them.
+The system is proven on the smallest scope that shows it whole (development plan §7.7): one
+village on Meridian where the player starts, built from block models on block ground, with
+digging and placing; frame times and memory measured on the test machine. The village sits away
+from the cube's face seams; crossing a seam, planet-wide ground cover, large structures, ships
+and stations come in the batches that first need them.
