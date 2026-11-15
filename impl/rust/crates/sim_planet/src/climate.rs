@@ -42,6 +42,10 @@ pub enum Biome {
 pub struct Climate {
     pub params: ClimateData,
     pub has_atmosphere: bool,
+    /// Blighted land (a wasteland's hazard zones, living-planet.md §8b): centre (unit
+    /// direction), angular radius and strength (0–1); moisture there falls toward nothing, so
+    /// the land dries and dies. Empty for most bodies.
+    pub blight: std::sync::Arc<Vec<(DVec3, f64, f64)>>,
 }
 
 impl Climate {
@@ -49,7 +53,25 @@ impl Climate {
         Some(Self {
             params: body.climate.clone()?,
             has_atmosphere: body.atmosphere.is_some(),
+            blight: Default::default(),
         })
+    }
+
+    /// This climate with blighted land (see [`Climate::blight`]).
+    pub fn with_blight(mut self, zones: Vec<(DVec3, f64, f64)>) -> Self {
+        self.blight = std::sync::Arc::new(zones);
+        self
+    }
+
+    /// How blighted the land is at unit direction `dir` (0–1).
+    pub fn blight_at(&self, dir: DVec3) -> f64 {
+        self.blight
+            .iter()
+            .map(|&(c, radius, strength)| {
+                let t = (dir.angle_between(c) / radius).min(1.0);
+                strength * (1.0 - t * t * (3.0 - 2.0 * t))
+            })
+            .fold(0.0, f64::max)
     }
 
     /// Temperature (°C) at `dir` (surface frame) and `height`, when the star stands over
@@ -95,7 +117,12 @@ impl Climate {
         };
         // Fractal sums span about ±0.5; stretch to [0, 1].
         let variation = (0.5 + terrain.climate_noise(dir, 0)).clamp(0.0, 1.0);
-        (wetness * (0.5 * band + 0.4 * coast + 0.7 * variation)).clamp(0.0, 1.0)
+        let wet = (wetness * (0.5 * band + 0.4 * coast + 0.7 * variation)).clamp(0.0, 1.0);
+        if self.blight.is_empty() {
+            wet
+        } else {
+            wet * (1.0 - self.blight_at(dir))
+        }
     }
 
     /// Biome from the climate fields, height and slope (radians).

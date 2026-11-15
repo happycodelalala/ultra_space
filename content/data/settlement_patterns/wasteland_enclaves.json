@@ -1,0 +1,9 @@
+{
+  "id": "wasteland_enclaves",
+  "description": "What is left of a people after its catastrophe (living-planet.md §8b, conditions): a few fortified enclaves far apart, scavenger camps in the waste. Chosen by name (a people's pattern in the star system data), never by tier.",
+  "settled_share": 0.15,
+  "seat": {"size": "city", "people": [8000, 25000], "roles": ["seat", "enclave", "fort"], "capital_roles": ["capital"]},
+  "classes": [
+    {"size": "hamlet", "spacing_km": 25, "people": [30, 150], "roles": ["outpost"]}
+  ]
+}

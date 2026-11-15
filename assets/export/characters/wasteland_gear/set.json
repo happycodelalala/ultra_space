@@ -1,0 +1,70 @@
+{
+  "id": "wasteland_gear",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "guard",
+      "model": "guard.glb",
+      "roles": [
+        "soldier",
+        "official"
+      ],
+      "height_m": 1.83
+    },
+    {
+      "id": "guard_f",
+      "model": "guard_f.glb",
+      "roles": [
+        "soldier",
+        "pilot"
+      ],
+      "height_m": 1.754
+    },
+    {
+      "id": "worker",
+      "model": "worker.glb",
+      "roles": [
+        "worker",
+        "engineer",
+        "farmer",
+        "merchant"
+      ],
+      "height_m": 1.772
+    },
+    {
+      "id": "scientist",
+      "model": "scientist.glb",
+      "roles": [
+        "scientist",
+        "doctor",
+        "teacher",
+        "clerk",
+        "engineer"
+      ],
+      "height_m": 1.736
+    },
+    {
+      "id": "survivor",
+      "model": "survivor.glb",
+      "roles": [
+        "worker",
+        "farmer",
+        "merchant",
+        "clerk",
+        "teacher",
+        "official"
+      ],
+      "height_m": 1.734
+    }
+  ]
+}

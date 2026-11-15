@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Activity, Crowd, Kits, Layout, RegionLayouts, RegionSociety, SettlementKind};
+use sim_society::{Activity, Crowd, Kits, Layout, RegionLayouts, RegionSociety};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -25,7 +25,16 @@ fn meridian() -> (RegionSociety, RegionLayouts) {
     let director = ContentDirector::new(Box::new(
         ReplayProvider::load_dir(content.join("lore")).unwrap(),
     ));
-    let society = RegionSociety::generate(&system, body, &director);
+    let society = RegionSociety::generate(
+        &system,
+        body,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    );
     let kits = Arc::new(Kits::load_dir(&root().join("assets/export/buildings")).unwrap());
     let terrain = Terrain::of(&system.bodies[body]).unwrap();
     let layouts = RegionLayouts::generate(&society, kits, &terrain);
@@ -49,13 +58,16 @@ fn count(crowd: &Crowd, a: Activity) -> usize {
 #[test]
 fn people_live_out_the_day_in_a_town_and_the_colony() {
     let (society, layouts) = meridian();
-    for kind in [SettlementKind::Town, SettlementKind::Colony] {
+    for (culture, kind) in [("hollin", "town"), ("compact", "capital")] {
         let i = (0..society.settlements.len())
-            .filter(|&i| society.settlements[i].kind == kind)
+            .filter(|&i| {
+                let s = &society.settlements[i];
+                s.lore_kind() == kind && society.society.cultures[s.culture].profile.id == culture
+            })
             .max_by_key(|&i| society.settlements[i].population)
             .unwrap();
         let s = &society.settlements[i];
-        let layout = &layouts.layouts[i];
+        let layout = &layouts.layouts[&i];
         let kit = &layouts.kits.0[&layout.kit];
         let naming = &society.society.cultures[s.culture].profile.naming;
         let mut crowd = Crowd::promote(s, layout, kit, naming, 64);

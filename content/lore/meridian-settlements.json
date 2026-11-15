@@ -1,53 +1,195 @@
 {
-  "description": "Recorded content-director responses for Meridian's settlements (task 4.3), written the way the LLM would answer. Settlements are generated, so keys are pools by culture and kind (settlement/<culture>/<kind>/*), each settlement getting one by its key; {settlement}, {faction}, {people}, {culture} and {kind} are filled in by the game.",
+  "description": "Recorded content-director responses for Meridian's settlements (tasks 4.3, 4b.2), written the way the LLM would answer. Settlements are generated, so keys are pools by culture and kind (settlement/<culture>/<kind>/*), each settlement getting one by its key; {settlement}, {faction}, {people}, {culture} and {kind} are filled in by the game.",
   "responses": [
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/town/*"},
-     "response": {"description": "{settlement} is the seat of {faction}: a walled market town on a rise above its fields, where the reave holds court and the chapmen of three valleys meet on market day.",
-                  "landmark": "The reave's hall, its roof beams said to be cut from the Keel's own timbers."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/town/*"},
-     "response": {"description": "{settlement}, seat of {faction}, grew from the oldest hold in the valley. Its streets wind up to a stone keep and a Keel shrine whose bell can be heard in every village of the reaveship.",
-                  "landmark": "The Oath Stone in the square, where every reave of {faction} has sworn."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/town/*"},
-     "response": {"description": "{settlement} is a busy town and the seat of {faction}, ringed by mills on its stream. Its fair draws Hollish traders from far away, and lately a few strangers nobody admits to having invited.",
-                  "landmark": "The great mill, the largest wheel in the reaveship."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/village/*"},
-     "response": {"description": "{settlement} is a farming village of {faction}: a green, a shrine, a smithy and a few dozen houses among its strip fields.",
-                  "landmark": "An old yew on the green where the village meets to settle disputes."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/village/*"},
-     "response": {"description": "{settlement} keeps sheep on the hills and barley in the valley, sends its tithe to {faction} and its young to the town fair, and has not changed much in three hundred years.",
-                  "landmark": "The shrine's bell, cracked in the Long Winter and never recast."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/village/*"},
-     "response": {"description": "{settlement} is a village of {people} by the water, where the fishers and the farmers argue every spring about the mill weir.",
-                  "landmark": "The weir and the fish traps below it."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/village/*"},
-     "response": {"description": "{settlement} sits at a crossing of two cart roads, and its inn earns more than its fields. Travellers of {faction} stop here on their way to the Moot.",
-                  "landmark": "The crossing inn, with a painted sign of the Fall over its door."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/hamlet/*"},
-     "response": {"description": "{settlement} is a hamlet of a few families farming a clearing at the edge of the woods, owing service to {faction}.",
-                  "landmark": "A wayside shrine with a scrap of old metal, polished smooth by hands."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/hamlet/*"},
-     "response": {"description": "{settlement} is a handful of herders' cottages on the high pasture, empty half the year when the flocks come down.",
-                  "landmark": "A drystone sheepfold older than anyone's memory."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/hollin/hamlet/*"},
-     "response": {"description": "{settlement} is a cluster of farms around a well, too small for a shrine, too stubborn to move.",
-                  "landmark": "The well, lined with stones carried up from the river."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/colony/*"},
-     "response": {"description": "{settlement} is the first landing site of the Meridian Venture and the heart of the Compact: habitat rings, greenhouses and fabrication halls around the landing field, home of the Board of Stewards.",
-                  "landmark": "The Venture's descent stage, kept where it landed as a monument."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/port/*"},
-     "response": {"description": "{settlement} is the Compact's second city and the seat of {faction}: landing pads, hangars and the workshops that build the colony's landers and rovers.",
-                  "landmark": "The launch tower, lit all night, visible from the far side of the plains."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/outpost/*"},
-     "response": {"description": "{settlement} is a survey outpost of {faction}: a few modules, a comms mast and a landing pad, crewed by surveyors on rotation.",
-                  "landmark": "The weather station, logging every hour since the outpost was founded."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/outpost/*"},
-     "response": {"description": "{settlement} is a farming outpost: greenhouse domes and fields of Earth crops in tested soil, feeding the colony and testing what Meridian can grow.",
-                  "landmark": "The seed vault, cut into the ground beneath the domes."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/outpost/*"},
-     "response": {"description": "{settlement} is a mining and power outpost of {faction}, its solar fields and drills feeding the colony's fabricators.",
-                  "landmark": "The solar field, a square kilometre of panels turning with the sun."}},
-    {"request": {"kind": "settlement_lore", "key": "settlement/compact/outpost/*"},
-     "response": {"description": "{settlement} is the Compact's watch post nearest the Hollish hills: a fenced compound with long-range cameras and a Contact Office annex that is not supposed to be used.",
-                  "landmark": "The observation tower facing west."}}
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/city/*"
+      },
+      "response": {
+        "description": "{settlement} is the seat of {faction}: a walled market town on a rise above its fields, where the reave holds court and the chapmen of three valleys meet on market day.",
+        "landmark": "The reave's hall, its roof beams said to be cut from the Keel's own timbers."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/city/*"
+      },
+      "response": {
+        "description": "{settlement}, seat of {faction}, grew from the oldest hold in the valley. Its streets wind up to a stone keep and a Keel shrine whose bell can be heard in every village of the reaveship.",
+        "landmark": "The Oath Stone in the square, where every reave of {faction} has sworn."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a busy city and the seat of {faction}, ringed by mills on its stream. Its fair draws Hollish traders from far away, and lately a few strangers nobody admits to having invited.",
+        "landmark": "The great mill, the largest wheel in the reaveship."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a market hold of {faction}: a palisade, a weekly market where the villages round about sell wool and barley, and a reave's man who keeps the peace and the tolls.",
+        "landmark": "The market cross, its stone worn smooth by generations of haggling."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a hold at a river crossing, grown rich on the toll bridge; its wrights and smiths serve half the valley, and its inn is never empty on market day.",
+        "landmark": "The toll bridge, its keeper's house built into the middle arch."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a hold on the old road, walled in a hurry after a raid in the reave's grandfather's time; it keeps a granary for the villages around it against the bad years.",
+        "landmark": "The granary tower, the tallest thing for a day's walk."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a farming village of {faction}: a green, a shrine, a smithy and a few dozen houses among its strip fields.",
+        "landmark": "An old yew on the green where the village meets to settle disputes."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/village/*"
+      },
+      "response": {
+        "description": "{settlement} keeps sheep on the hills and barley in the valley, sends its tithe to {faction} and its young to the town fair, and has not changed much in three hundred years.",
+        "landmark": "The shrine's bell, cracked in the Long Winter and never recast."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a village of {people} by the water, where the fishers and the farmers argue every spring about the mill weir.",
+        "landmark": "The weir and the fish traps below it."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/village/*"
+      },
+      "response": {
+        "description": "{settlement} sits at a crossing of two cart roads, and its inn earns more than its fields. Travellers of {faction} stop here on their way to the Moot.",
+        "landmark": "The crossing inn, with a painted sign of the Fall over its door."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a steading of a few families farming a clearing at the edge of the woods, owing service to {faction}.",
+        "landmark": "A wayside shrine with a scrap of old metal, polished smooth by hands."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a handful of herders' cottages on the high pasture, empty half the year when the flocks come down.",
+        "landmark": "A drystone sheepfold older than anyone's memory."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/hollin/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a cluster of farms around a well, too small for a shrine, too stubborn to move.",
+        "landmark": "The well, lined with stones carried up from the river."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/capital/*"
+      },
+      "response": {
+        "description": "{settlement} is the first landing site of the Meridian Venture and the heart of the Compact: habitat rings, greenhouses and fabrication halls around the landing field, home of the Board of Stewards.",
+        "landmark": "The Venture's descent stage, kept where it landed as a monument."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/port/*"
+      },
+      "response": {
+        "description": "{settlement} is the Compact's second city and the seat of {faction}: landing pads, hangars and the workshops that build the colony's landers and rovers.",
+        "landmark": "The launch tower, lit all night, visible from the far side of the plains."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is a survey outpost of {faction}: a few modules, a comms mast and a landing pad, crewed by surveyors on rotation.",
+        "landmark": "The weather station, logging every hour since the outpost was founded."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is a farming outpost: greenhouse domes and fields of Earth crops in tested soil, feeding the colony and testing what Meridian can grow.",
+        "landmark": "The seed vault, cut into the ground beneath the domes."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is a mining and power outpost of {faction}, its solar fields and drills feeding the colony's fabricators.",
+        "landmark": "The solar field, a square kilometre of panels turning with the sun."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/compact/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is the Compact's watch post nearest the Hollish hills: a fenced compound with long-range cameras and a Contact Office annex that is not supposed to be used.",
+        "landmark": "The observation tower facing west."
+      }
+    }
   ]
 }

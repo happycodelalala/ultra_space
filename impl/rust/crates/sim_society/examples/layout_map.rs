@@ -50,7 +50,17 @@ fn main() {
     ));
     let kits = Kits::load_dir(&root.join("assets/export/buildings")).unwrap();
     let mut society = generate(&system, body, &director);
-    let settlements = generate_settlements(&system, &mut society, &director);
+    let settlements = generate_settlements(
+        &system,
+        &mut society,
+        &director,
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+        &|_| 0.0,
+    );
     let terrain = Terrain::of(&system.bodies[body]).unwrap();
 
     let start = Instant::now();
@@ -63,7 +73,7 @@ fn main() {
         println!(
             "{:<12} {:<8} {:>5} people: {:>3} buildings, {:>2} unplaced, {:>3} streets, {:.1} ms",
             s.name,
-            s.kind.name(),
+            s.lore_kind(),
             s.population,
             l.buildings.len(),
             l.unplaced,
@@ -81,9 +91,9 @@ fn main() {
 
     // One of each kind (the biggest).
     let mut shown: Vec<usize> = Vec::new();
-    for kind in ["town", "village", "hamlet", "colony", "port", "outpost"] {
+    for kind in ["town", "village", "hamlet", "capital", "port", "outpost"] {
         if let Some(i) = (0..settlements.len())
-            .filter(|&i| settlements[i].kind.name() == kind)
+            .filter(|&i| settlements[i].lore_kind() == kind)
             .max_by_key(|&i| settlements[i].population)
         {
             shown.push(i);
@@ -170,7 +180,7 @@ fn main() {
         println!(
             "panel {n}: {} ({}), {:.0} m across",
             settlements[i].name,
-            settlements[i].kind.name(),
+            settlements[i].lore_kind(),
             2.0 * extent
         );
     }

@@ -25,3 +25,9 @@ gltf = { version = "=1.4.1", default-features = false, features = ["utils", "nam
 
 [lints]
 workspace = true
+
+[features]
+# Writes a Chrome trace (every system's span, per frame) to trace-<time>.json in the working
+# directory, or to $TRACE_CHROME: `ULTRA_SPACE_FEATURES=trace tools/export-windows.sh`, then open
+# it in https://ui.perfetto.dev. For finding hitches; slows the game a little.
+trace = ["bevy/trace_chrome"]

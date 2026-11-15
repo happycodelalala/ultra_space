@@ -1,0 +1,104 @@
+{
+  "id": "stone_age_hides",
+  "name": "Stone Age hides (placeholder)",
+  "description": "The Tayu: Quaternius base characters (CC0) in the fantasy pack's peasant and ranger outfits dyed as hides and furs, long hair; the shared animations. Placeholders until the design track's own characters.",
+  "characters": [
+    {
+      "id": "hunter",
+      "body": "male",
+      "hair": [
+        "Hair_Long",
+        "Hair_Beard"
+      ],
+      "roles": [
+        "hunter",
+        "warrior",
+        "crafter",
+        "elder"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Male_Peasant",
+      "outfit_colour": [
+        0.6,
+        0.42,
+        0.28
+      ]
+    },
+    {
+      "id": "man",
+      "body": "male",
+      "hair": [
+        "Hair_Buzzed"
+      ],
+      "roles": [
+        "gatherer",
+        "crafter",
+        "healer",
+        "elder",
+        "hunter"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Male_Ranger",
+      "outfit_colour": [
+        0.55,
+        0.5,
+        0.42
+      ]
+    },
+    {
+      "id": "woman",
+      "body": "female",
+      "hair": [
+        "Hair_Long"
+      ],
+      "roles": [
+        "gatherer",
+        "healer",
+        "crafter",
+        "elder"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Female_Peasant",
+      "outfit_colour": [
+        0.6,
+        0.42,
+        0.28
+      ]
+    },
+    {
+      "id": "woman_buns",
+      "body": "female",
+      "hair": [
+        "Hair_Buns"
+      ],
+      "roles": [
+        "gatherer",
+        "hunter",
+        "warrior"
+      ],
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ],
+      "outfit": "Female_Ranger",
+      "outfit_colour": [
+        0.55,
+        0.5,
+        0.42
+      ]
+    }
+  ]
+}

@@ -39,6 +39,10 @@ pub struct Catalog(pub PartCatalog);
 #[derive(Resource, Clone)]
 pub struct Lore(pub Arc<ai_gateway::ContentDirector>);
 
+/// How each people settles its land (content/data/settlement_patterns).
+#[derive(Resource)]
+pub struct Patterns(pub Arc<sim_society::SettlementPatterns>);
+
 const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
 const START_DESIGN: &str = "kestrel";
 
@@ -72,6 +76,7 @@ struct Loaded {
     designs: Designs,
     catalog: PartCatalog,
     lore: Arc<ai_gateway::ContentDirector>,
+    patterns: Arc<sim_society::SettlementPatterns>,
     /// Each society generated: body, people, settlements.
     societies: Vec<(usize, u32, usize)>,
     /// Settlement layouts: buildings placed, and the time taken (ms).
@@ -117,9 +122,12 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     let provider =
         ai_gateway::ReplayProvider::load_dir(dir.join("lore")).map_err(|e| e.to_string())?;
     let lore = Arc::new(ai_gateway::ContentDirector::new(Box::new(provider)));
-    let societies = sim_society::aggregate::install(&mut sim, &lore);
-    // Their settlements on the ground: layouts from the building kits, and the foundations
-    // under them in each body's terrain (physics and drawing share it).
+    let patterns = Arc::new(sim_society::SettlementPatterns::load_dir(
+        &dir.join("data/settlement_patterns"),
+    )?);
+    let societies = sim_society::aggregate::install(&mut sim, &lore, &patterns);
+    // Their settlements on the ground: the building kits; layouts and their foundations are
+    // made as the player comes near (task 4b.5).
     let laid = Instant::now();
     let kits = match buildings_dir() {
         Some(dir) => sim_society::Kits::load_dir(&dir)?,
@@ -128,23 +136,8 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
             sim_society::Kits::default()
         }
     };
-    let mut buildings = 0;
-    for (i, foundations) in sim_society::layout::install(&mut sim, Arc::new(kits)) {
-        let Some(region) = sim.regions.get_mut(i).map(|r| &mut r.world) else {
-            continue;
-        };
-        if let Some(l) = region.get_resource::<sim_society::RegionLayouts>() {
-            buildings += l.buildings();
-        }
-        let terrain = region
-            .get_resource::<sim_vehicle::flight::RegionTerrain>()
-            .and_then(|t| t.0.clone());
-        if let Some(t) = terrain {
-            region.insert_resource(sim_vehicle::flight::RegionTerrain(Some(Arc::new(
-                t.with_foundations(foundations),
-            ))));
-        }
-    }
+    sim_society::layout::install(&mut sim, Arc::new(kits));
+    let buildings = 0;
     let layouts = (buildings, laid.elapsed().as_secs_f64() * 1e3);
     Ok(Loaded {
         system,
@@ -153,6 +146,7 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
         designs,
         catalog,
         lore,
+        patterns,
         societies,
         layouts,
         seconds: start.elapsed().as_secs_f64(),
@@ -214,10 +208,11 @@ fn finish_loading(
                 );
             }
             info!(
-                "settlements laid out: {} buildings in {:.0} ms",
+                "settlements ready to lay out on approach ({} buildings so far, {:.0} ms)",
                 loaded.layouts.0, loaded.layouts.1
             );
             commands.insert_resource(Lore(loaded.lore));
+            commands.insert_resource(Patterns(loaded.patterns));
             for (entity, _) in &mut text {
                 commands.entity(entity).despawn();
             }

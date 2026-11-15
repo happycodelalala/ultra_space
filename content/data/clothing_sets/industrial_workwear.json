@@ -1,0 +1,215 @@
+{
+  "id": "industrial_workwear",
+  "name": "Industrial workwear (placeholder)",
+  "description": "The Aldmark: Quaternius base characters (CC0) in overalls, work clothes and dark suits painted on by the bones under them, with the shared animations. Placeholders until the design track's own characters.",
+  "characters": [
+    {
+      "id": "worker",
+      "body": "male",
+      "hair": [
+        "Hair_Buzzed"
+      ],
+      "roles": [
+        "worker",
+        "engineer",
+        "farmer"
+      ],
+      "suit": {
+        "suit": [
+          0.18,
+          0.22,
+          0.3
+        ],
+        "gloves": [
+          0.06,
+          0.05,
+          0.05
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "worker_brown",
+      "body": "male",
+      "hair": [
+        "Hair_SimpleParted",
+        "Hair_Beard"
+      ],
+      "roles": [
+        "worker",
+        "farmer",
+        "merchant"
+      ],
+      "suit": {
+        "suit": [
+          0.22,
+          0.17,
+          0.1
+        ],
+        "gloves": [
+          0.45,
+          0.3,
+          0.22
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ]
+    },
+    {
+      "id": "clerk",
+      "body": "male",
+      "hair": [
+        "Hair_SimpleParted"
+      ],
+      "roles": [
+        "clerk",
+        "official",
+        "merchant",
+        "teacher",
+        "engineer"
+      ],
+      "suit": {
+        "suit": [
+          0.16,
+          0.16,
+          0.18
+        ],
+        "gloves": [
+          0.45,
+          0.3,
+          0.22
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ]
+    },
+    {
+      "id": "doctor",
+      "body": "female",
+      "hair": [
+        "Hair_Buns"
+      ],
+      "roles": [
+        "doctor",
+        "teacher",
+        "clerk"
+      ],
+      "suit": {
+        "suit": [
+          0.85,
+          0.85,
+          0.85
+        ],
+        "gloves": [
+          0.45,
+          0.3,
+          0.22
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "soldier",
+      "body": "male",
+      "hair": [
+        "Hair_Buzzed"
+      ],
+      "roles": [
+        "soldier"
+      ],
+      "suit": {
+        "suit": [
+          0.28,
+          0.27,
+          0.16
+        ],
+        "gloves": [
+          0.3,
+          0.2,
+          0.12
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ]
+    },
+    {
+      "id": "woman",
+      "body": "female",
+      "hair": [
+        "Hair_Long"
+      ],
+      "roles": [
+        "worker",
+        "clerk",
+        "merchant",
+        "teacher",
+        "official",
+        "farmer"
+      ],
+      "suit": {
+        "suit": [
+          0.18,
+          0.22,
+          0.3
+        ],
+        "gloves": [
+          0.45,
+          0.3,
+          0.22
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.6,
+        0.45,
+        0.25
+      ]
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "id": "wasteland_gear",
+  "name": "Wasteland gear (placeholder)",
+  "description": "The Kesh survivors: Quaternius base characters (CC0); guards in ranger outfits dyed olive, survivors in patched peasant clothes, workers and scientists in painted work and protective suits; the shared animations. Placeholders until the design track's own characters.",
+  "characters": [
+    {
+      "id": "guard",
+      "body": "male",
+      "hair": [
+        "Hair_Buzzed"
+      ],
+      "roles": [
+        "soldier",
+        "official"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Male_Ranger",
+      "outfit_colour": [
+        0.45,
+        0.55,
+        0.32
+      ]
+    },
+    {
+      "id": "guard_f",
+      "body": "female",
+      "hair": [
+        "Hair_BuzzedFemale"
+      ],
+      "roles": [
+        "soldier",
+        "pilot"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Female_Ranger",
+      "outfit_colour": [
+        0.45,
+        0.55,
+        0.32
+      ]
+    },
+    {
+      "id": "worker",
+      "body": "male",
+      "hair": [
+        "Hair_Buzzed",
+        "Hair_Beard"
+      ],
+      "roles": [
+        "worker",
+        "engineer",
+        "farmer",
+        "merchant"
+      ],
+      "suit": {
+        "suit": [
+          0.3,
+          0.3,
+          0.18
+        ],
+        "gloves": [
+          0.06,
+          0.05,
+          0.05
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "scientist",
+      "body": "female",
+      "hair": [
+        "Hair_Buns"
+      ],
+      "roles": [
+        "scientist",
+        "doctor",
+        "teacher",
+        "clerk",
+        "engineer"
+      ],
+      "suit": {
+        "suit": [
+          0.6,
+          0.5,
+          0.15
+        ],
+        "gloves": [
+          0.06,
+          0.05,
+          0.05
+        ],
+        "boots": [
+          0.06,
+          0.05,
+          0.05
+        ]
+      },
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "survivor",
+      "body": "female",
+      "hair": [
+        "Hair_Long"
+      ],
+      "roles": [
+        "worker",
+        "farmer",
+        "merchant",
+        "clerk",
+        "teacher",
+        "official"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ],
+      "outfit": "Female_Peasant",
+      "outfit_colour": [
+        0.7,
+        0.68,
+        0.55
+      ]
+    }
+  ]
+}

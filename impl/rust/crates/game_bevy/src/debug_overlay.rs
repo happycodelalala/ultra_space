@@ -4,6 +4,7 @@
 //! each one is logged (rate-limited), and a startup summary is logged after the first seconds
 //! of play.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use bevy::prelude::*;
@@ -32,7 +33,34 @@ impl Plugin for DebugOverlayPlugin {
         .init_resource::<Hitches>()
         .add_systems(Startup, spawn_overlay)
         .add_systems(Update, watch_hitches)
-        .add_systems(
+        .init_resource::<FrameMarks>()
+        .add_systems(First, mark("First"))
+        .add_systems(PreUpdate, mark("PreUpdate"))
+        .add_systems(RunFixedMainLoop, mark("RunFixedMainLoop"))
+        .add_systems(Update, mark("Update"))
+        .add_systems(SpawnScene, mark("SpawnScene"))
+        .add_systems(PostUpdate, mark("PostUpdate"))
+        .add_systems(Last, (report_frame_marks, count_new_meshes));
+        if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            use bevy::render::{ExtractSchedule, Render, RenderSystems as R};
+            render_app
+                .init_resource::<FrameMarks>()
+                .add_systems(ExtractSchedule, mark("Extract"))
+                .add_systems(
+                    Render,
+                    (
+                        mark("ExtractCommands").in_set(R::ExtractCommands),
+                        mark("PrepareMeshes").in_set(R::PrepareMeshes),
+                        mark("Specialize").in_set(R::Specialize),
+                        mark("Queue").in_set(R::Queue),
+                        mark("PhaseSort").in_set(R::PhaseSort),
+                        mark("Prepare").in_set(R::Prepare),
+                        mark("Render").in_set(R::Render),
+                        report_render_marks.in_set(R::Cleanup),
+                    ),
+                );
+        }
+        app.add_systems(
             Update,
             (record_frame, toggle_overlay, update_overlay)
                 .chain()
@@ -271,4 +299,103 @@ fn update_overlay(
         ms(tick_avg),
         ms(tick_max),
     );
+}
+
+/// Logs a system that took more than 8 ms (task 4b.6: finding hitches): create one at the
+/// start of the system; it measures until dropped.
+pub struct SlowSystem(&'static str, std::time::Instant);
+
+impl SlowSystem {
+    pub fn new(name: &'static str) -> Self {
+        Self(name, std::time::Instant::now())
+    }
+}
+
+impl Drop for SlowSystem {
+    fn drop(&mut self) {
+        let ms = self.1.elapsed().as_secs_f64() * 1e3;
+        if ms > 8.0 {
+            warn!("slow system: {} took {ms:.1} ms", self.0);
+        }
+    }
+}
+
+/// Timestamps taken once in each main schedule this frame (task 4b.6: where a hitch frame's
+/// time went). Unordered within its schedule, so each mark is "some time during" it.
+#[derive(Resource, Default)]
+struct FrameMarks {
+    last_end: Option<std::time::Instant>,
+    marks: Vec<(&'static str, std::time::Instant)>,
+}
+
+fn mark(name: &'static str) -> impl FnMut(ResMut<FrameMarks>) {
+    move |mut m: ResMut<FrameMarks>| m.marks.push((name, std::time::Instant::now()))
+}
+
+/// On a frame over the budget, logs how long it spent between the marks: "outside" is the
+/// time between the last frame's end and this one's First (render extraction, waiting on
+/// the render thread, presenting).
+fn report_frame_marks(mut m: ResMut<FrameMarks>) {
+    let now = std::time::Instant::now();
+    let marks = std::mem::take(&mut m.marks);
+    if let (Some(start), Some(first)) = (m.last_end, marks.first())
+        && now - start > HITCH_BUDGET
+    {
+        let mut parts = vec![format!("outside {:.1}", ms(first.1 - start))];
+        for w in marks.windows(2) {
+            parts.push(format!("{} {:.1}", w[0].0, ms(w[1].1 - w[0].1)));
+        }
+        if let Some(last) = marks.last() {
+            parts.push(format!("{}..Last {:.1}", last.0, ms(now - last.1)));
+        }
+        warn!(
+            "hitch frame {:.1} ms: {} (ms)",
+            ms(now - start),
+            parts.join(", ")
+        );
+    }
+    m.last_end = Some(now);
+}
+
+/// The render world's frame (run on the render thread): logs its segments when it took
+/// more than 30 ms from extraction to cleanup.
+fn report_render_marks(mut m: ResMut<FrameMarks>) {
+    let now = std::time::Instant::now();
+    let marks = std::mem::take(&mut m.marks);
+    let Some(first) = marks.first() else { return };
+    if now - first.1 > Duration::from_millis(30) {
+        let mut parts: Vec<String> = marks
+            .windows(2)
+            .map(|w| format!("{} {:.1}", w[0].0, ms(w[1].1 - w[0].1)))
+            .collect();
+        if let Some(last) = marks.last() {
+            parts.push(format!("{}..Cleanup {:.1}", last.0, ms(now - last.1)));
+        }
+        warn!(
+            "slow render frame {:.1} ms: {} (ms)",
+            ms(now - first.1),
+            parts.join(", ")
+        );
+    }
+}
+
+/// Logs a frame that added many mesh entities (each is specialised by the renderer when new;
+/// task 4b.6), with how many are skinned.
+fn count_new_meshes(
+    added: Query<Has<bevy::mesh::skinning::SkinnedMesh>, Added<Mesh3d>>,
+    names: Query<&Name, Added<Name>>,
+) {
+    let (n, skinned) = added
+        .iter()
+        .fold((0, 0), |(n, s), skin| (n + 1, s + usize::from(skin)));
+    if n >= 50 {
+        let mut kinds: HashMap<&str, usize> = HashMap::new();
+        for name in &names {
+            *kinds.entry(name.as_str()).or_default() += 1;
+        }
+        let mut kinds: Vec<_> = kinds.into_iter().collect();
+        kinds.sort_by_key(|a| std::cmp::Reverse(a.1));
+        kinds.truncate(4);
+        warn!("{n} new mesh entities ({skinned} skinned); most named: {kinds:?}");
+    }
 }

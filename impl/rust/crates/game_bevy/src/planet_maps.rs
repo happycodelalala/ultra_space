@@ -115,7 +115,7 @@ pub fn f16_bits(x: f32) -> u16 {
     sign | rounded.min(0x7c00) as u16
 }
 
-fn start_baking(mut commands: Commands, universe: Res<Universe>) {
+fn start_baking(mut commands: Commands, universe: Res<Universe>, sim: Res<crate::sim::Sim>) {
     let system = &universe.0;
     let pool = crate::workers::workers();
     let tasks = system
@@ -124,7 +124,7 @@ fn start_baking(mut commands: Commands, universe: Res<Universe>) {
         .enumerate()
         .filter_map(|(i, body)| {
             let terrain = Terrain::of(body)?;
-            let climate = Climate::of(body);
+            let climate = crate::settlements::climate_of(&sim.0, i, body);
             let season = subsolar_latitude(system, i, 0.0);
             Some(pool.spawn(async move {
                 let start = std::time::Instant::now();

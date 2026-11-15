@@ -1,0 +1,534 @@
+{
+  "id": "industrial_town",
+  "source": "kenney-city-industrial",
+  "licence": "assets/third_party/kenney-city-industrial/License.txt",
+  "buildings": [
+    {
+      "id": "house_d",
+      "uses": [
+        "home"
+      ],
+      "model": "house_d.glb",
+      "min_m": [
+        -6.586,
+        0.0,
+        -3.855
+      ],
+      "max_m": [
+        6.586,
+        9.281,
+        3.855
+      ]
+    },
+    {
+      "id": "house_e",
+      "uses": [
+        "home"
+      ],
+      "model": "house_e.glb",
+      "min_m": [
+        -4.875,
+        0.0,
+        -3.855
+      ],
+      "max_m": [
+        4.875,
+        8.531,
+        3.855
+      ]
+    },
+    {
+      "id": "house_f",
+      "uses": [
+        "home"
+      ],
+      "model": "house_f.glb",
+      "min_m": [
+        -5.355,
+        0.0,
+        -5.272
+      ],
+      "max_m": [
+        5.355,
+        8.531,
+        5.272
+      ]
+    },
+    {
+      "id": "house_n",
+      "uses": [
+        "home"
+      ],
+      "model": "house_n.glb",
+      "min_m": [
+        -6.691,
+        0.0,
+        -5.167
+      ],
+      "max_m": [
+        6.691,
+        8.531,
+        5.167
+      ]
+    },
+    {
+      "id": "house_u",
+      "uses": [
+        "home"
+      ],
+      "model": "house_u.glb",
+      "min_m": [
+        -5.355,
+        0.0,
+        -4.076
+      ],
+      "max_m": [
+        5.355,
+        8.531,
+        4.076
+      ]
+    },
+    {
+      "id": "tenement_f",
+      "uses": [
+        "home"
+      ],
+      "model": "tenement_f.glb",
+      "min_m": [
+        -3.78,
+        0.0,
+        -4.635
+      ],
+      "max_m": [
+        3.78,
+        15.237,
+        4.635
+      ]
+    },
+    {
+      "id": "tenement_g",
+      "uses": [
+        "home"
+      ],
+      "model": "tenement_g.glb",
+      "min_m": [
+        -4.365,
+        0.0,
+        -4.149
+      ],
+      "max_m": [
+        4.365,
+        15.237,
+        4.149
+      ]
+    },
+    {
+      "id": "tenement_h",
+      "uses": [
+        "home"
+      ],
+      "model": "tenement_h.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.536
+      ],
+      "max_m": [
+        3.976,
+        11.637,
+        4.536
+      ]
+    },
+    {
+      "id": "shop_a",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_a.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.23
+      ],
+      "max_m": [
+        3.976,
+        11.637,
+        4.23
+      ]
+    },
+    {
+      "id": "shop_b",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_b.glb",
+      "min_m": [
+        -4.365,
+        0.0,
+        -4.23
+      ],
+      "max_m": [
+        4.365,
+        11.637,
+        4.23
+      ]
+    },
+    {
+      "id": "shop_c",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_c.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.905
+      ],
+      "max_m": [
+        3.976,
+        8.037,
+        4.905
+      ]
+    },
+    {
+      "id": "shop_j",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_j.glb",
+      "min_m": [
+        -9.376,
+        0.0,
+        -6.03
+      ],
+      "max_m": [
+        9.376,
+        15.237,
+        6.03
+      ]
+    },
+    {
+      "id": "shop_k",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_k.glb",
+      "min_m": [
+        -9.376,
+        0.0,
+        -4.239
+      ],
+      "max_m": [
+        9.376,
+        13.23,
+        4.239
+      ]
+    },
+    {
+      "id": "factory_a",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_a.glb",
+      "min_m": [
+        -12.493,
+        0.0,
+        -7.452
+      ],
+      "max_m": [
+        12.51,
+        17.64,
+        7.452
+      ]
+    },
+    {
+      "id": "factory_b",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_b.glb",
+      "min_m": [
+        -12.493,
+        -0.0,
+        -7.668
+      ],
+      "max_m": [
+        12.51,
+        17.64,
+        7.476
+      ]
+    },
+    {
+      "id": "factory_c",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_c.glb",
+      "min_m": [
+        -10.102,
+        -0.0,
+        -10.932
+      ],
+      "max_m": [
+        12.41,
+        15.0,
+        14.364
+      ]
+    },
+    {
+      "id": "factory_e",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_e.glb",
+      "min_m": [
+        -10.102,
+        0.0,
+        -4.752
+      ],
+      "max_m": [
+        10.102,
+        19.8,
+        10.728
+      ]
+    },
+    {
+      "id": "factory_f",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_f.glb",
+      "min_m": [
+        -16.178,
+        -0.0,
+        -4.632
+      ],
+      "max_m": [
+        5.302,
+        23.1,
+        10.728
+      ]
+    },
+    {
+      "id": "factory_g",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_g.glb",
+      "min_m": [
+        -10.069,
+        -0.0,
+        -7.702
+      ],
+      "max_m": [
+        10.069,
+        15.36,
+        7.702
+      ]
+    },
+    {
+      "id": "factory_q",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_q.glb",
+      "min_m": [
+        -15.578,
+        0.0,
+        -10.487
+      ],
+      "max_m": [
+        10.102,
+        10.56,
+        10.752
+      ]
+    },
+    {
+      "id": "factory_chimney",
+      "uses": [
+        "workshop"
+      ],
+      "model": "factory_chimney.glb",
+      "min_m": [
+        -14.902,
+        0.0,
+        -10.48
+      ],
+      "max_m": [
+        14.902,
+        20.4,
+        7.632
+      ]
+    },
+    {
+      "id": "power_station",
+      "uses": [
+        "power"
+      ],
+      "model": "power_station.glb",
+      "min_m": [
+        -17.563,
+        -0.0,
+        -13.56
+      ],
+      "max_m": [
+        17.56,
+        23.8,
+        13.908
+      ]
+    },
+    {
+      "id": "water_tower",
+      "uses": [
+        "power"
+      ],
+      "model": "water_tower.glb",
+      "min_m": [
+        -5.113,
+        -0.0,
+        -4.991
+      ],
+      "max_m": [
+        5.113,
+        25.7,
+        4.991
+      ]
+    },
+    {
+      "id": "town_hall",
+      "uses": [
+        "hall"
+      ],
+      "model": "town_hall.glb",
+      "min_m": [
+        -10.44,
+        0.0,
+        -8.19
+      ],
+      "max_m": [
+        10.44,
+        22.32,
+        8.19
+      ]
+    },
+    {
+      "id": "hospital",
+      "uses": [
+        "clinic"
+      ],
+      "model": "hospital.glb",
+      "min_m": [
+        -5.58,
+        0.0,
+        -5.859
+      ],
+      "max_m": [
+        5.58,
+        15.12,
+        5.859
+      ]
+    },
+    {
+      "id": "farmhouse",
+      "uses": [
+        "farm"
+      ],
+      "model": "farmhouse.glb",
+      "min_m": [
+        -5.438,
+        0.0,
+        -4.418
+      ],
+      "max_m": [
+        5.438,
+        5.762,
+        4.418
+      ]
+    },
+    {
+      "id": "fountain",
+      "uses": [
+        "square"
+      ],
+      "model": "fountain.glb",
+      "min_m": [
+        -3.0,
+        -0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        1.366,
+        3.0
+      ]
+    },
+    {
+      "id": "containers",
+      "uses": [
+        "prop"
+      ],
+      "model": "containers.glb",
+      "min_m": [
+        -1.118,
+        0.0,
+        -2.468
+      ],
+      "max_m": [
+        10.118,
+        2.088,
+        2.468
+      ]
+    },
+    {
+      "id": "tanks",
+      "uses": [
+        "prop"
+      ],
+      "model": "tanks.glb",
+      "min_m": [
+        -6.034,
+        -0.0,
+        -7.154
+      ],
+      "max_m": [
+        6.034,
+        7.693,
+        6.034
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -1.263,
+        0.0,
+        -1.458
+      ],
+      "max_m": [
+        1.263,
+        9.204,
+        1.458
+      ]
+    },
+    {
+      "id": "tree_small",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree_small.glb",
+      "min_m": [
+        -1.263,
+        0.0,
+        -1.458
+      ],
+      "max_m": [
+        1.263,
+        6.804,
+        1.458
+      ]
+    }
+  ]
+}

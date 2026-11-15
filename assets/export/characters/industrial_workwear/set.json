@@ -1,0 +1,79 @@
+{
+  "id": "industrial_workwear",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "worker",
+      "model": "worker.glb",
+      "roles": [
+        "worker",
+        "engineer",
+        "farmer"
+      ],
+      "height_m": 1.772
+    },
+    {
+      "id": "worker_brown",
+      "model": "worker_brown.glb",
+      "roles": [
+        "worker",
+        "farmer",
+        "merchant"
+      ],
+      "height_m": 1.798
+    },
+    {
+      "id": "clerk",
+      "model": "clerk.glb",
+      "roles": [
+        "clerk",
+        "official",
+        "merchant",
+        "teacher",
+        "engineer"
+      ],
+      "height_m": 1.798
+    },
+    {
+      "id": "doctor",
+      "model": "doctor.glb",
+      "roles": [
+        "doctor",
+        "teacher",
+        "clerk"
+      ],
+      "height_m": 1.736
+    },
+    {
+      "id": "soldier",
+      "model": "soldier.glb",
+      "roles": [
+        "soldier"
+      ],
+      "height_m": 1.772
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "worker",
+        "clerk",
+        "merchant",
+        "teacher",
+        "official",
+        "farmer"
+      ],
+      "height_m": 1.734
+    }
+  ]
+}

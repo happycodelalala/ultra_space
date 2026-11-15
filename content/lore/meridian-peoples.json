@@ -1,0 +1,1400 @@
+{
+  "description": "Recorded content-director responses for Meridian's other peoples (task 4b.3): the Tayu (Stone Age), the Velani (Ancient), the Corvantines (Early Modern), the Aldmarkers (Industrial) and the Kesh (a ruined Modern nation), written the way the LLM would answer. Keys follow meridian-cultures, -factions and -settlements.",
+  "responses": [
+    {
+      "request": {
+        "kind": "culture_profile",
+        "key": "culture/tayu"
+      },
+      "response": {
+        "id": "tayu",
+        "name": "the Tayu",
+        "adjective": "Tayu",
+        "tech_tier": "stone_age",
+        "polity": "chiefdom",
+        "settlement_words": {
+          "dwelling": "shelter",
+          "hamlet": "camp",
+          "village": "village",
+          "town": "gathering place",
+          "seat": "chief's hill"
+        },
+        "government": "Chiefdoms: each clan follows a chief chosen by its elders from the line of the clan's founder; the chiefs meet at the great gatherings when the rains end, and settle feuds by gifts, marriages or, failing those, by spears.",
+        "values": [
+          "the clan before the self",
+          "generosity at the gatherings",
+          "knowing the forest's names",
+          "honouring the dead in the river"
+        ],
+        "taboos": [
+          "eating the heron, the clans' mother",
+          "cutting the great trees by the falls",
+          "speaking a dead person's name before the next rains",
+          "going east of the red rocks without a spirit-talker"
+        ],
+        "religion": "The river-mothers and forest-spirits are everywhere; every tree, rock and pool has its spirit, and the dead go down the rivers to the sea of ancestors. Spirit-talkers dream for the clans and read the flights of birds. Lately they speak of lights crossing the sky that are not stars.",
+        "attitude": "wary",
+        "history": "The Tayu have lived in the southern forests of the eastern land for as long as their songs remember: hunting the river-deer, gathering the fruit of the rains, and moving their camps with the seasons. Their clans trace themselves to the Heron who stepped out of the first river.\n\nIn their grandparents' time strangers came down from the sky in the north, with shining shelters and machines that roar. The Tayu watch them from the forest edge. Some clans trade feathers and fruit for metal knives; others say the sky-people poison the land, and the chiefs argue about it at every gathering.",
+        "naming": {
+          "onsets": [
+            "t",
+            "k",
+            "m",
+            "n",
+            "p",
+            "h",
+            "w",
+            "l",
+            ""
+          ],
+          "nuclei": [
+            "a",
+            "a",
+            "e",
+            "i",
+            "o",
+            "u",
+            "ai",
+            "au"
+          ],
+          "codas": [
+            "",
+            "",
+            "",
+            "n"
+          ],
+          "syllables": [
+            2,
+            3
+          ],
+          "place_endings": [
+            "",
+            ""
+          ],
+          "place_patterns": [
+            "{name}",
+            "{name}",
+            "{name} Falls",
+            "{name} Rock",
+            "{name}'s Pool"
+          ],
+          "faction_patterns": [
+            "The {name} Clan",
+            "The People of {name}",
+            "The {name} Heron Clan"
+          ]
+        },
+        "building_kit": "stone_age_camp",
+        "clothing": "stone_age_hides",
+        "palette": [
+          [
+            0.45,
+            0.32,
+            0.2
+          ],
+          [
+            0.62,
+            0.5,
+            0.32
+          ],
+          [
+            0.3,
+            0.38,
+            0.22
+          ],
+          [
+            0.7,
+            0.35,
+            0.18
+          ]
+        ],
+        "roles": [
+          {
+            "id": "hunter",
+            "name": "hunter",
+            "share": 0.32
+          },
+          {
+            "id": "gatherer",
+            "name": "gatherer",
+            "share": 0.35
+          },
+          {
+            "id": "crafter",
+            "name": "maker",
+            "share": 0.13
+          },
+          {
+            "id": "elder",
+            "name": "elder",
+            "share": 0.05
+          },
+          {
+            "id": "healer",
+            "name": "spirit-talker",
+            "share": 0.03
+          },
+          {
+            "id": "warrior",
+            "name": "spear",
+            "share": 0.12
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "kind": "culture_profile",
+        "key": "culture/velani"
+      },
+      "response": {
+        "id": "velani",
+        "name": "the Velani",
+        "adjective": "Velan",
+        "tech_tier": "ancient",
+        "polity": "city_state",
+        "settlement_words": {
+          "city": "polis",
+          "town": "town",
+          "village": "village",
+          "hamlet": "farmstead",
+          "dwelling": "farm"
+        },
+        "government": "City-states: each polis governs itself by an assembly of its free citizens and a council of elders, chooses two magistrates a year, and keeps its own walls, laws and coin; the cities share a tongue, a sanctuary and old quarrels.",
+        "values": [
+          "the polis and its laws",
+          "eloquence in the assembly",
+          "hospitality to strangers",
+          "glory that outlives the body"
+        ],
+        "taboos": [
+          "shedding blood inside the sanctuary",
+          "leaving the dead unburied",
+          "breaking a sworn truce at the games",
+          "a citizen selling himself into debt-bondage"
+        ],
+        "religion": "The Twelve: gods of sky, sea, harvest, craft and war, with temples in every polis and a common sanctuary by the bay where the cities hold their games and consult the oracle. Each city honours one of the Twelve above the others.",
+        "attitude": "curious",
+        "history": "The Velani tell that their first cities were founded by the sons of the sea-god on the warm southern coast of the western land. Bronze came first, then iron; the cities grew rich on olive, wine and the sea trade, and fought each other as often as they traded.\n\nToday four great cities lead the Velani: proud, quarrelsome, and united only at the games and against outsiders. Their philosophers argue about the nature of the stars; their sailors have seen strange lights over the eastern sea and say they were not stars at all.",
+        "naming": {
+          "onsets": [
+            "v",
+            "l",
+            "s",
+            "t",
+            "m",
+            "n",
+            "r",
+            "c",
+            "d",
+            "ph",
+            "th",
+            "al"
+          ],
+          "nuclei": [
+            "a",
+            "e",
+            "i",
+            "o",
+            "ae",
+            "ia"
+          ],
+          "codas": [
+            "",
+            "",
+            "s",
+            "n",
+            "r",
+            "l"
+          ],
+          "syllables": [
+            2,
+            3
+          ],
+          "place_endings": [
+            "ion",
+            "ara",
+            "essa",
+            "os",
+            "ium",
+            "ene",
+            "ira"
+          ],
+          "place_patterns": [
+            "{name}{ending}",
+            "{name}{ending}",
+            "{name}{ending}",
+            "Port {name}"
+          ],
+          "faction_patterns": [
+            "The Polity of {name}",
+            "The City of {name}",
+            "The {name} League"
+          ]
+        },
+        "building_kit": "ancient_city",
+        "clothing": "ancient_tunics",
+        "palette": [
+          [
+            0.85,
+            0.8,
+            0.68
+          ],
+          [
+            0.62,
+            0.25,
+            0.18
+          ],
+          [
+            0.25,
+            0.38,
+            0.55
+          ],
+          [
+            0.55,
+            0.5,
+            0.3
+          ]
+        ],
+        "roles": [
+          {
+            "id": "farmer",
+            "name": "farmer",
+            "share": 0.45
+          },
+          {
+            "id": "herder",
+            "name": "shepherd",
+            "share": 0.1
+          },
+          {
+            "id": "fisher",
+            "name": "fisher",
+            "share": 0.08
+          },
+          {
+            "id": "laborer",
+            "name": "labourer",
+            "share": 0.1
+          },
+          {
+            "id": "smith",
+            "name": "bronzesmith",
+            "share": 0.04
+          },
+          {
+            "id": "potter",
+            "name": "potter",
+            "share": 0.04
+          },
+          {
+            "id": "merchant",
+            "name": "trader",
+            "share": 0.06
+          },
+          {
+            "id": "soldier",
+            "name": "hoplite",
+            "share": 0.06
+          },
+          {
+            "id": "priest",
+            "name": "priest",
+            "share": 0.03
+          },
+          {
+            "id": "scribe",
+            "name": "scribe",
+            "share": 0.02
+          },
+          {
+            "id": "noble",
+            "name": "magistrate",
+            "share": 0.02
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "kind": "culture_profile",
+        "key": "culture/corvantine"
+      },
+      "response": {
+        "id": "corvantine",
+        "name": "the Corvantines",
+        "adjective": "Corvantine",
+        "tech_tier": "early_modern",
+        "polity": "realm",
+        "settlement_words": {
+          "capital": "crown city",
+          "port": "port",
+          "town": "villa",
+          "village": "village",
+          "hamlet": "hamlet",
+          "dwelling": "farm"
+        },
+        "government": "A crowned kingdom: the Monarch rules with a council of grandees and a parliament of towns that grants the taxes; the great trading companies hold charters for the sea routes and, in practice, half the kingdom's purse.",
+        "values": [
+          "honour and its display",
+          "the faith",
+          "the sea and its fortune",
+          "learning and the printed word"
+        ],
+        "taboos": [
+          "a gentleman's word broken",
+          "blasphemy before the altar",
+          "striking a priest",
+          "selling charts to foreigners"
+        ],
+        "religion": "The Church of the Lantern teaches that one God lit the stars as lanterns for souls crossing the dark; its cathedrals face the sea, and every ship carries a lantern blessed before it sails. Its scholars have lately quarrelled over whether the moving lights in the sky are new lanterns or something worse.",
+        "attitude": "curious",
+        "history": "The Corvantines rose on the north coast of the southern land, where good harbours face the sea. Their kings united the coastal cities two centuries ago with gunpowder and marriages, and their navigators have charted half of Meridian's seas since.\n\nNow the Crown and the great trading companies vie for the kingdom's future. Printing presses spread pamphlets in every port; star-forts guard the harbours; and the Company captains bring home tales of strange peoples across the ocean, from forest folk with stone spears to marble cities in the west.",
+        "naming": {
+          "onsets": [
+            "c",
+            "v",
+            "s",
+            "m",
+            "r",
+            "l",
+            "t",
+            "d",
+            "b",
+            "g",
+            "qu"
+          ],
+          "nuclei": [
+            "a",
+            "e",
+            "i",
+            "o",
+            "ue",
+            "ia"
+          ],
+          "codas": [
+            "",
+            "",
+            "s",
+            "n",
+            "r",
+            "l",
+            "z"
+          ],
+          "syllables": [
+            2,
+            3
+          ],
+          "place_endings": [
+            "ada",
+            "ero",
+            "illa",
+            "ona",
+            "anza",
+            "ales"
+          ],
+          "place_patterns": [
+            "{name}{ending}",
+            "{name}{ending}",
+            "San {name}",
+            "Port {name}",
+            "{name}"
+          ],
+          "faction_patterns": [
+            "The Crown of {name}",
+            "The {name} Company",
+            "The House of {name}"
+          ]
+        },
+        "building_kit": "early_modern_town",
+        "clothing": "early_modern_dress",
+        "palette": [
+          [
+            0.6,
+            0.15,
+            0.15
+          ],
+          [
+            0.85,
+            0.7,
+            0.3
+          ],
+          [
+            0.2,
+            0.22,
+            0.35
+          ],
+          [
+            0.9,
+            0.88,
+            0.82
+          ]
+        ],
+        "roles": [
+          {
+            "id": "farmer",
+            "name": "farmer",
+            "share": 0.35
+          },
+          {
+            "id": "herder",
+            "name": "herder",
+            "share": 0.06
+          },
+          {
+            "id": "fisher",
+            "name": "fisher",
+            "share": 0.1
+          },
+          {
+            "id": "laborer",
+            "name": "labourer",
+            "share": 0.12
+          },
+          {
+            "id": "smith",
+            "name": "smith",
+            "share": 0.04
+          },
+          {
+            "id": "carpenter",
+            "name": "shipwright",
+            "share": 0.05
+          },
+          {
+            "id": "merchant",
+            "name": "merchant",
+            "share": 0.08
+          },
+          {
+            "id": "sailor",
+            "name": "sailor",
+            "share": 0.08
+          },
+          {
+            "id": "soldier",
+            "name": "soldier",
+            "share": 0.06
+          },
+          {
+            "id": "priest",
+            "name": "priest",
+            "share": 0.03
+          },
+          {
+            "id": "scholar",
+            "name": "scholar",
+            "share": 0.02
+          },
+          {
+            "id": "noble",
+            "name": "grandee",
+            "share": 0.01
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "kind": "culture_profile",
+        "key": "culture/aldmark"
+      },
+      "response": {
+        "id": "aldmark",
+        "name": "the Aldmarkers",
+        "adjective": "Aldmark",
+        "tech_tier": "industrial",
+        "polity": "republic",
+        "settlement_words": {
+          "capital": "capital",
+          "metropolis": "metropolis",
+          "city": "city",
+          "town": "town",
+          "village": "village",
+          "dwelling": "farm",
+          "seat": "provincial capital"
+        },
+        "government": "A federal republic: three provinces each with its own parliament, a federal assembly elected by every adult citizen, and a president chosen by the assembly for six years; the railway, the mint and the army are federal, everything else the provinces'.",
+        "values": [
+          "progress",
+          "work and thrift",
+          "the vote",
+          "the nation's honour"
+        ],
+        "taboos": [
+          "strike-breaking in the mill towns",
+          "insulting the flag",
+          "a deal broken after a handshake",
+          "speaking of the war of the provinces at table"
+        ],
+        "religion": "Most Aldmarkers attend the Hall of the Maker on feast days and little else: a plain, practical faith of hymns and good works. Free-thinkers' societies are many in the cities, and the newspapers carry both sermons and science.",
+        "attitude": "wary",
+        "history": "The Aldmarkers farmed the cold north-eastern land for centuries before coal was found under the hills. In three generations the steam engine, the railway and the factory remade them: villages became mill towns, towns became cities, and the old provinces fought one bitter war before they joined in the Republic.\n\nNow Aldmark's railways cross the land, its factories smoke day and night, and its ironclads patrol the coast. Its observatories have tracked the moving lights in the sky for years; the government says nothing, and the newspapers say everything.",
+        "naming": {
+          "onsets": [
+            "b",
+            "br",
+            "d",
+            "f",
+            "g",
+            "h",
+            "k",
+            "kr",
+            "l",
+            "m",
+            "n",
+            "r",
+            "s",
+            "st",
+            "t",
+            "v",
+            "w"
+          ],
+          "nuclei": [
+            "a",
+            "e",
+            "i",
+            "o",
+            "u",
+            "ei",
+            "au"
+          ],
+          "codas": [
+            "n",
+            "rt",
+            "lt",
+            "ck",
+            "rg",
+            "nk",
+            "ld",
+            "ss",
+            "",
+            "m"
+          ],
+          "syllables": [
+            1,
+            2
+          ],
+          "place_endings": [
+            "burg",
+            "heim",
+            "dorf",
+            "wald",
+            "feld",
+            "hafen",
+            "brück",
+            "stein"
+          ],
+          "place_patterns": [
+            "{name}{ending}",
+            "{name}{ending}",
+            "{name}{ending}",
+            "New {name}{ending}"
+          ],
+          "faction_patterns": [
+            "The Province of {name}",
+            "{name} Province",
+            "The {name} Union"
+          ]
+        },
+        "building_kit": "industrial_town",
+        "clothing": "industrial_workwear",
+        "palette": [
+          [
+            0.3,
+            0.3,
+            0.33
+          ],
+          [
+            0.55,
+            0.2,
+            0.15
+          ],
+          [
+            0.18,
+            0.25,
+            0.42
+          ],
+          [
+            0.75,
+            0.7,
+            0.6
+          ]
+        ],
+        "roles": [
+          {
+            "id": "farmer",
+            "name": "farmer",
+            "share": 0.12
+          },
+          {
+            "id": "worker",
+            "name": "worker",
+            "share": 0.38
+          },
+          {
+            "id": "engineer",
+            "name": "engineer",
+            "share": 0.08
+          },
+          {
+            "id": "merchant",
+            "name": "merchant",
+            "share": 0.08
+          },
+          {
+            "id": "clerk",
+            "name": "clerk",
+            "share": 0.1
+          },
+          {
+            "id": "soldier",
+            "name": "soldier",
+            "share": 0.06
+          },
+          {
+            "id": "doctor",
+            "name": "doctor",
+            "share": 0.03
+          },
+          {
+            "id": "teacher",
+            "name": "teacher",
+            "share": 0.05
+          },
+          {
+            "id": "official",
+            "name": "official",
+            "share": 0.1
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "kind": "culture_profile",
+        "key": "culture/kesh"
+      },
+      "response": {
+        "id": "kesh",
+        "name": "the Kesh",
+        "adjective": "Keshan",
+        "tech_tier": "modern",
+        "polity": "nation",
+        "settlement_words": {
+          "capital": "first enclave",
+          "enclave": "enclave",
+          "outpost": "scavenger camp",
+          "hamlet": "camp",
+          "city": "enclave"
+        },
+        "government": "What remains of the Keshan state: each enclave is governed by its Authority, a council of engineers and officers that rations food, water and filtered air, and keeps the gates; the two enclaves recognise each other, trade by armoured convoy and agree on little else.",
+        "values": [
+          "the gate and the filter",
+          "rations shared fairly",
+          "knowledge kept from the old world",
+          "never again"
+        ],
+        "taboos": [
+          "opening a gate in a dust storm",
+          "wasting clean water",
+          "leaving the sick outside",
+          "speaking for the war"
+        ],
+        "religion": "Few Kesh keep the old faiths; many keep the Remembrance, a vigil for the dead of the war held at the enclave memorials each year, and some scavengers worship the old machines they dig up.",
+        "attitude": "hostile",
+        "history": "Eighty years ago the Kesh were the most advanced nation on Meridian: cities of millions, aircraft, computers, and weapons enough to end the world. They used them on each other. In one week of civil war the cities burned; the fallout and the poisons that followed turned the south-eastern land into a waste.\n\nThe survivors sealed themselves into two enclaves built around old shelters, behind walls and filters, and have kept them running since on salvage and stubbornness. Scavenger camps live in the ruins between. The Kesh distrust everyone: they know better than anyone what people do with power.",
+        "naming": {
+          "onsets": [
+            "k",
+            "kh",
+            "s",
+            "sh",
+            "t",
+            "z",
+            "r",
+            "m",
+            "n",
+            "d",
+            "b",
+            "y"
+          ],
+          "nuclei": [
+            "a",
+            "e",
+            "i",
+            "o",
+            "u",
+            "aa"
+          ],
+          "codas": [
+            "",
+            "n",
+            "r",
+            "sh",
+            "z",
+            "k",
+            "m"
+          ],
+          "syllables": [
+            1,
+            2
+          ],
+          "place_endings": [
+            "ar",
+            "esh",
+            "un",
+            "at",
+            "ir"
+          ],
+          "place_patterns": [
+            "{name}{ending}",
+            "{name}{ending}",
+            "Camp {name}",
+            "{name}"
+          ],
+          "faction_patterns": [
+            "The {name} Authority",
+            "The {name} Shelter",
+            "The {name} Enclave"
+          ]
+        },
+        "building_kit": "wasteland_enclave",
+        "clothing": "wasteland_gear",
+        "palette": [
+          [
+            0.42,
+            0.4,
+            0.33
+          ],
+          [
+            0.62,
+            0.5,
+            0.2
+          ],
+          [
+            0.25,
+            0.28,
+            0.3
+          ],
+          [
+            0.55,
+            0.2,
+            0.12
+          ]
+        ],
+        "roles": [
+          {
+            "id": "farmer",
+            "name": "grower",
+            "share": 0.12
+          },
+          {
+            "id": "worker",
+            "name": "worker",
+            "share": 0.25
+          },
+          {
+            "id": "engineer",
+            "name": "engineer",
+            "share": 0.1
+          },
+          {
+            "id": "merchant",
+            "name": "trader",
+            "share": 0.05
+          },
+          {
+            "id": "clerk",
+            "name": "rationer",
+            "share": 0.05
+          },
+          {
+            "id": "soldier",
+            "name": "gate guard",
+            "share": 0.2
+          },
+          {
+            "id": "doctor",
+            "name": "medic",
+            "share": 0.05
+          },
+          {
+            "id": "teacher",
+            "name": "teacher",
+            "share": 0.05
+          },
+          {
+            "id": "official",
+            "name": "officer",
+            "share": 0.05
+          },
+          {
+            "id": "scientist",
+            "name": "archivist",
+            "share": 0.05
+          },
+          {
+            "id": "pilot",
+            "name": "convoy driver",
+            "share": 0.03
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "kind": "codex",
+        "key": "codex/culture/tayu"
+      },
+      "response": {
+        "title": "The Tayu",
+        "body": "The Tayu are Stone Age clans of the southern forests of Meridian's eastern land: hunters and gatherers in villages of huts and seasonal camps, led by chiefs who meet at the great gatherings. Their nearest neighbours are the Compact's colonists, whom they call the sky-people and watch from the forest edge."
+      }
+    },
+    {
+      "request": {
+        "kind": "codex",
+        "key": "codex/culture/velani"
+      },
+      "response": {
+        "title": "The Velani",
+        "body": "The Velani are a people of bronze and iron on the warm south coast of Meridian's western land: four quarrelsome city-states of marble temples, assemblies and olive groves, united by a tongue, a sanctuary and their games."
+      }
+    },
+    {
+      "request": {
+        "kind": "codex",
+        "key": "codex/culture/corvantine"
+      },
+      "response": {
+        "title": "The Corvantines",
+        "body": "The Corvantines are a seafaring kingdom on the north coast of Meridian's southern land: port cities, star-forts and printing presses, a Crown and its chartered companies whose ships have charted half of Meridian's seas."
+      }
+    },
+    {
+      "request": {
+        "kind": "codex",
+        "key": "codex/culture/aldmark"
+      },
+      "response": {
+        "title": "The Aldmark Republic",
+        "body": "The Aldmarkers are an industrial republic in Meridian's north-east: coal, railways and mill towns, three provinces in an uneasy federation, about two and a half million people, and observatories that have been watching the lights in the sky for years."
+      }
+    },
+    {
+      "request": {
+        "kind": "codex",
+        "key": "codex/culture/kesh"
+      },
+      "response": {
+        "title": "The Kesh",
+        "body": "The Kesh were Meridian's most advanced nation until they destroyed themselves in a week of civil war eighty years ago. Their south-eastern land is a poisoned waste of ruined cities; the survivors live in two walled enclaves and in scavenger camps between, and trust no one."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/tayu/*"
+      },
+      "response": {
+        "motto": "The river remembers.",
+        "description": "{faction} hunts the lowland rivers and keeps the oldest of the {culture} gathering places, where the chiefs meet when the rains end.",
+        "history": "Its chiefs claim descent from the Heron's first daughter, and no gathering begins until they arrive."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/tayu/*"
+      },
+      "response": {
+        "motto": "Spear and song.",
+        "description": "{faction} lives in the hills along the forest's northern edge, nearest the sky-people; its hunters trade with them, and its elders quarrel about it.",
+        "history": "{faction} has fought every clan around it at some time and married into all of them since."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/tayu/*"
+      },
+      "response": {
+        "motto": "We walk with the deer.",
+        "description": "{faction} follows the herds through the deep forest, moving its camps with the seasons, and comes to the gatherings last.",
+        "history": "Its spirit-talkers are said to be the best dreamers of {people}; the other clans send their sick to them."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/velani/*"
+      },
+      "response": {
+        "motto": "Law before kings.",
+        "description": "{faction} is the oldest and richest of the {culture} cities: its assembly is the loudest, its temples the tallest, its fleet the largest.",
+        "history": "It claims to have founded the common sanctuary and has never let the other cities forget it."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/velani/*"
+      },
+      "response": {
+        "motto": "Iron and olives.",
+        "description": "{faction} holds the inland plains and their iron mines; its hoplites are the best of {people}, its poets the dullest.",
+        "history": "Its citizens remember every war they won and none they started."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/velani/*"
+      },
+      "response": {
+        "motto": "The sea is our field.",
+        "description": "{faction} is a city of sailors and traders on the bay, open to every ship and every idea.",
+        "history": "It was the first city to mint coin, and the first to be plundered for it."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/velani/*"
+      },
+      "response": {
+        "motto": "Wisdom outlasts walls.",
+        "description": "{faction} is the smallest of the cities and the proudest of its philosophers and its oracle.",
+        "history": "Twice conquered, twice free again: it says its schools outlived both its conquerors."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/corvantine/*"
+      },
+      "response": {
+        "motto": "For God and the Crown.",
+        "description": "{faction} rules from the crown city: the Monarch, the court, the grandees and the cathedral of the Lantern.",
+        "history": "Its kings united the coast with cannon and marriages, and have kept it united with the second more than the first."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/corvantine/*"
+      },
+      "response": {
+        "motto": "Profit in every wind.",
+        "description": "{faction} is the great chartered trading company: its ships, warehouses and counting houses fill every Corvantine port, and its debts hold up the Crown.",
+        "history": "Founded by a dozen merchants and one bankrupt prince, it now commands more ships than the Navy."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/aldmark/*"
+      },
+      "response": {
+        "motto": "Forward together.",
+        "description": "{faction} is the capital province: the federal assembly, the great banks and the biggest factories of {people}.",
+        "history": "It won the war of the provinces and wrote the Republic's constitution; the other provinces have never quite forgiven either."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/aldmark/*"
+      },
+      "response": {
+        "motto": "Coal and conscience.",
+        "description": "{faction} is the mining province of the northern hills, red with coal and union banners.",
+        "history": "Its miners struck for a year before the war, and its deputies have argued for them in the assembly ever since."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/aldmark/*"
+      },
+      "response": {
+        "motto": "Wheat feeds the nation.",
+        "description": "{faction} is the farming province of the southern plains, quieter, poorer and more devout than the others.",
+        "history": "It joined the Republic last and on the hardest terms, and still votes against the capital out of habit."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/kesh/*"
+      },
+      "response": {
+        "motto": "The gate holds.",
+        "description": "{faction} keeps the first enclave in the old capital's deep shelters: the largest, best armed and most strictly rationed of what is left of {people}.",
+        "history": "Its Authority traces itself to the shelter's commander on the last day of the war, and governs as if the war might start again tomorrow."
+      }
+    },
+    {
+      "request": {
+        "kind": "faction_lore",
+        "key": "faction/kesh/*"
+      },
+      "response": {
+        "motto": "Clean water, clean hands.",
+        "description": "{faction} keeps the second enclave in the southern hills, around a spring the poisons never reached.",
+        "history": "It took in refugees the first enclave turned away, and has never let it forget."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/town/*"
+      },
+      "response": {
+        "description": "{settlement} is the chief's hill of {faction}: an earthwork ring above the river where the clan gathers, trades and holds its feasts when the rains end.",
+        "landmark": "The ring of carved posts on the hilltop, one for each chief since the first."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a gathering place of {faction}: a great clearing by the falls with longhouses for the feasts and a sacred grove behind.",
+        "landmark": "The great tree by the falls, which no one may cut."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a village of {people}: a few dozen huts of poles and palm thatch around a fire pit, smoke-racks for the catch and gardens in the clearing.",
+        "landmark": "The spirit-post at the village edge, hung with feathers and offerings."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a river village of {faction}, its huts on stilts against the floods, its canoes drawn up below.",
+        "landmark": "The fish weir across the river, rebuilt every dry season."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a hunting camp of {people}: a few lean-tos and a fire, used when the herds pass through.",
+        "landmark": "A rock painted with deer and hunters, older than anyone's memory."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/tayu/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a gatherers' camp at the forest edge, lived in while the fruit is ripe.",
+        "landmark": "A hollow tree where the camp keeps its seed and its secrets."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a polis of {people} and the seat of {faction}: marble temples on its acropolis, an agora full of talk and trade, walls and a harbour below.",
+        "landmark": "The temple of its patron god on the acropolis, visible from the sea."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a walled polis of {faction}, its assembly meeting on the hill, its theatre cut into the slope.",
+        "landmark": "The theatre, where the whole city can hear a whisper from the stage."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a market town of {faction} with a small temple, a fountain-house and a wall of fitted stone.",
+        "landmark": "The fountain-house, its spring sacred to the water nymphs."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a town of potters and smiths on the road to the coast, owing its tribute to {faction}.",
+        "landmark": "The kilns on the hillside, smoking day and night."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a farming village of {people}: olive groves, vineyards and a threshing floor shared by all.",
+        "landmark": "The old olive tree, said to be planted by the goddess herself."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a hill village of shepherds and goatherds, its houses of whitewashed stone.",
+        "landmark": "A shrine to the god of flocks in a cave above the village."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/velani/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a farmstead of a few families among the olive terraces.",
+        "landmark": "A boundary stone carved with the names of the first owners."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/capital/*"
+      },
+      "response": {
+        "description": "{settlement} is the crown city of {people}: palace and cathedral above the harbour, printing houses and counting houses below, star-forts guarding the bay.",
+        "landmark": "The Cathedral of the Lantern, its great lamp lit every night for sailors."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/port/*"
+      },
+      "response": {
+        "description": "{settlement} is a port city of {people}: quays crowded with Company ships, warehouses of spice and timber, a star-fort on the headland.",
+        "landmark": "The star-fort on the headland, its cannon covering the harbour mouth."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/port/*"
+      },
+      "response": {
+        "description": "{settlement} is a busy port of {faction}, where the Company's ships fit out for the long voyages.",
+        "landmark": "The shipyard, where the next great galleon is always half built."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/city/*"
+      },
+      "response": {
+        "description": "{settlement} is an inland city of {people}: a cathedral and a university, wool and wine markets, and the grandees' town houses behind a ring of new bastions.",
+        "landmark": "The university's library, its chained books older than the Crown."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a market city of {faction} on the royal road, where the river barges meet the mule trains from the hills.",
+        "landmark": "The great covered market, built on the ruins of the old castle."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a villa of {people}: a market square, a church with a bell tower, a town hall with the Crown's arms over the door.",
+        "landmark": "The bell tower, rung for Mass and for fire alike."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a villa on the coast road with a printing press, two taverns and a long memory of the last plague.",
+        "landmark": "The plague column in the square, raised in thanks when the sickness passed."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a village of {people}: whitewashed houses, a chapel, vineyards and wheat fields owing rent to a grandee.",
+        "landmark": "The chapel's painted ceiling, the work of a famous master who stopped here one winter."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a fishing village on the coast, its boats painted in the colours of their families.",
+        "landmark": "The lantern shrine on the jetty, lit for every boat still at sea."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/hamlet/*"
+      },
+      "response": {
+        "description": "{settlement} is a hamlet of a few farms around a well and a wayside cross.",
+        "landmark": "The wayside cross, where travellers leave a coin for luck."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/capital/*"
+      },
+      "response": {
+        "description": "{settlement} is the capital of {people}: the federal assembly's dome, great banks and stations, factories ringing the city and a haze of coal smoke over all.",
+        "landmark": "The Assembly dome, lit by electric lamps since last year."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/metropolis/*"
+      },
+      "response": {
+        "description": "{settlement} is a provincial capital of {faction}: a city of foundries, tenements and boulevards, its stations the busiest outside the capital.",
+        "landmark": "The great railway station, its iron roof the widest in the province."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a mill city of {people}: rows of brick terraces under the chimneys, a canal and a railway junction.",
+        "landmark": "The tallest chimney in the province, built to carry the smoke above the town."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a port and shipbuilding city of {faction}, its docks loud with rivet guns day and night.",
+        "landmark": "The dry dock, big enough for an ironclad."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a market town of {people} with a railway station, a newspaper, a brewery and a grammar school.",
+        "landmark": "The station clock, set by telegraph from the capital every morning."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/town/*"
+      },
+      "response": {
+        "description": "{settlement} is a mining town of {faction}, its pithead winding gear turning above the terraces.",
+        "landmark": "The pithead, and the memorial to the men lost in the great fire below it."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a farming village of {people}: a few big farms with steam threshers, a chapel of the Maker and a halt on the branch line.",
+        "landmark": "The village halt, where the milk train stops at dawn."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/aldmark/village/*"
+      },
+      "response": {
+        "description": "{settlement} is a village of {faction} whose young people have mostly left for the mill towns.",
+        "landmark": "The old windmill, kept for show since the steam mill opened."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/kesh/capital/*"
+      },
+      "response": {
+        "description": "{settlement} is the first enclave of {people}: a city of the old world sealed behind walls and filters around the deep shelters, its towers half ruined, its gates heavily guarded.",
+        "landmark": "The great gate, its blast doors still scarred from the war."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/kesh/enclave/*"
+      },
+      "response": {
+        "description": "{settlement} is an enclave of {faction}: a walled town around a clean spring and greenhouses, its people rationed, armed and watchful.",
+        "landmark": "The greenhouses under their dust screens, the enclave's life."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/kesh/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is a scavenger camp in the ruins: tents and shacks of salvage, a water still and a lookout on a broken tower.",
+        "landmark": "The salvage pile, sorted by what still works."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/kesh/outpost/*"
+      },
+      "response": {
+        "description": "{settlement} is a camp of scavengers who dig in the dead cities for the enclaves, trading old parts for food and filters.",
+        "landmark": "An old billboard, its faded faces watching over the camp."
+      }
+    }
+  ]
+}

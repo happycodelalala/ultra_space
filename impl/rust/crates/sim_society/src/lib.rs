@@ -15,20 +15,32 @@
 //! Engine-independent: no rendering or engine dependencies.
 
 pub mod aggregate;
+pub mod dwellings;
+pub mod history;
 pub mod layout;
 pub mod lore;
 pub mod names;
+pub mod patterns;
 pub mod people;
 pub mod rng;
+pub mod roads;
 pub mod settlements;
 pub mod society;
 
 pub use aggregate::{RegionSociety, SettlementState};
-pub use layout::{Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout};
+pub use dwellings::{DWELLING_IDS, dwellings_near};
+pub use history::{Condition, HazardKind, History, HistoryEvent, Ruin, hazard_at};
+pub use layout::{
+    Edge, Field, Kit, KitBuilding, Kits, Layout, Placed, RegionLayouts, generate_layout,
+};
 pub use lore::{
     Attitude, CodexEntry, CultureProfile, FactionLore, NamingRules, Polity, Role, SettlementLore,
     TechTier,
 };
+pub use patterns::{SettlementPattern, SettlementPatterns};
 pub use people::{Activity, Crowd, Person};
-pub use settlements::{Settlement, SettlementKind, generate_settlements};
+pub use roads::roads;
+pub use settlements::{
+    Settlement, SettlementRole, SizeClass, default_word, generate_settlements, settlement_word,
+};
 pub use society::{Culture, Faction, Society, generate};

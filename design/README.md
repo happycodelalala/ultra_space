@@ -11,6 +11,7 @@ which engine API does it. Engine-specific notes belong in `impl/<implementation>
 | [ships-stations-interiors.md](ships-stations-interiors.md) | Ship and station design: fine parts, section kits, capital hulls with slots, station modules, style families; buying, capturing and building ships; interiors from a few rooms to station cities; design compilation; art and performance |
 | [planet-surface.md](planet-surface.md) | Batch 2 planet surfaces: CPU terrain and climate function, cube-sphere quadtree, orbit view from baked maps, looks, landing, walking, deltas and streaming |
 | [vehicle-builder.md](vehicle-builder.md) | Batch 3: rigid-body physics with rapier (per-region worlds, terrain collision, wheels, walker), data format additions, design compilation, the builder, saving |
+| [ground-cover.md](ground-cover.md) | Batch 4c: vegetation, rocks and scattered things from the terrain's biomes, instanced by tile, levels of detail, collision near the player |
 | [living-planet.md](living-planet.md) | Batch 4: two cultures on Meridian, factions, settlements, aggregate population, people with schedules, lore through the content director |
 | [design-track.md](design-track.md) | The design track (vehicles, mechs, ships, buildings, objects designed in the viewer and imported at milestones): principles, viewer plan, the Bastion v2 review and plan |
 | [bastion.md](bastion.md) | The Bastion titan's functional layout: crew spaces, routes, lights, heat, markings (what each visible detail is for) |

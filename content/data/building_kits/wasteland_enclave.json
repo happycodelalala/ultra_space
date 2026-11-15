@@ -1,0 +1,606 @@
+{
+ "id": "wasteland_enclave",
+ "name": "Wasteland enclave (placeholder)",
+ "description": "The Kesh survivors' enclaves: apartment and office blocks from Kenney's City Kit Commercial, workshops and tanks from City Kit Industrial, solar fields and shipping-container barricades (CC0), until the design track's own kit. Units of 1 m; each piece scaled to size. Fronts face +Z.",
+ "source": "kenney-city-commercial",
+ "unit_m": 1.0,
+ "buildings": [
+  {
+   "id": "block_a",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "low-detail-building-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "block_b",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "low-detail-building-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "block_c",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "low-detail-building-c",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "block_wide_a",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "low-detail-building-wide-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "block_wide_b",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "low-detail-building-wide-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "apartments_f",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-f",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "apartments_g",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-g",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "apartments_h",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-h",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_a",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_b",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_c",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-c",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "tower",
+   "uses": [
+    "hall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-skyscraper-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 8.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "clinic",
+   "uses": [
+    "clinic"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-i",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "workshop_h",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-h",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "workshop_i",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-i",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "workshop_j",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-j",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "workshop_p",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-p",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "workshop_s",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-s",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "solar_field",
+   "uses": [
+    "power"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "solar-panel-landscape-group",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 10
+     },
+     {
+      "piece": "solar-panel-landscape-group",
+      "at": [
+       0,
+       0,
+       11
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 10
+     },
+     {
+      "piece": "solar-panel-landscape-group",
+      "at": [
+       17,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 10
+     },
+     {
+      "piece": "solar-panel-landscape-group",
+      "at": [
+       17,
+       0,
+       11
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 10
+     }
+    ]
+   }
+  },
+  {
+   "id": "water_tower",
+   "uses": [
+    "power"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "water-tower",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "greenhouse",
+   "uses": [
+    "farm"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-k",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "plaza",
+   "uses": [
+    "square"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "detail-parasol-a",
+      "at": [
+       -4,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 8
+     },
+     {
+      "piece": "detail-parasol-b",
+      "at": [
+       4,
+       0,
+       2
+      ],
+      "rot": 0,
+      "scale": 8
+     }
+    ]
+   }
+  },
+  {
+   "id": "barricade",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "shipping-container-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     },
+     {
+      "piece": "shipping-container-c",
+      "at": [
+       9,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     }
+    ]
+   }
+  },
+  {
+   "id": "tanks",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "detail-tank-large",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-industrial",
+      "scale": 8
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-small",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "barrier",
+   "uses": [
+    "wall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "shipping-container-a",
+      "at": [
+       -4.6,
+       0,
+       0
+      ],
+      "rot": 90,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     },
+     {
+      "piece": "shipping-container-c",
+      "at": [
+       4.6,
+       0,
+       0
+      ],
+      "rot": 90,
+      "source": "kenney-city-industrial",
+      "scale": 6
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -26,7 +26,7 @@
         "trader",
         "laborer"
       ],
-      "height_m": 1.778
+      "height_m": 1.772
     },
     {
       "id": "woman",
@@ -42,7 +42,7 @@
         "trader",
         "laborer"
       ],
-      "height_m": 1.742
+      "height_m": 1.736
     },
     {
       "id": "warden",
@@ -50,7 +50,7 @@
       "roles": [
         "security"
       ],
-      "height_m": 1.778
+      "height_m": 1.772
     }
   ]
 }

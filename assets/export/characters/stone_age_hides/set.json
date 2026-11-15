@@ -1,0 +1,60 @@
+{
+  "id": "stone_age_hides",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "hunter",
+      "model": "hunter.glb",
+      "roles": [
+        "hunter",
+        "warrior",
+        "crafter",
+        "elder"
+      ],
+      "height_m": 1.769
+    },
+    {
+      "id": "man",
+      "model": "man.glb",
+      "roles": [
+        "gatherer",
+        "crafter",
+        "healer",
+        "elder",
+        "hunter"
+      ],
+      "height_m": 1.83
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "gatherer",
+        "healer",
+        "crafter",
+        "elder"
+      ],
+      "height_m": 1.734
+    },
+    {
+      "id": "woman_buns",
+      "model": "woman_buns.glb",
+      "roles": [
+        "gatherer",
+        "hunter",
+        "warrior"
+      ],
+      "height_m": 1.754
+    }
+  ]
+}

@@ -23,6 +23,12 @@ use sim_core::time::GAME_TIME_SCALE;
 use sim_core::{Simulation, StarSystem};
 
 use crate::lore::TechTier;
+use ai_gateway::{ContentRequest, Source};
+use glam::DVec3;
+use sim_planet::{Climate, Terrain};
+
+use crate::history::{Condition, History, Ruin, hazard_at};
+use crate::patterns::SettlementPatterns;
 use crate::rng::Rng;
 use crate::settlements::{Settlement, generate_settlements};
 use crate::society::{Society, generate};
@@ -43,6 +49,7 @@ fn goods_per_day(role: &str) -> f64 {
     match role {
         "smith" | "carpenter" | "crafter" | "potter" | "engineer" => 3.0,
         "technician" | "worker" => 2.0,
+        "sailor" => 1.0,
         "laborer" => 0.5,
         _ => 0.0,
     }
@@ -97,6 +104,10 @@ impl SettlementState {
 #[derive(Resource, Clone, Debug)]
 pub struct RegionSociety {
     pub society: Society,
+    /// The body's history (the director's), and the conditions and ruins it left.
+    pub history: History,
+    pub conditions: Vec<Condition>,
+    pub ruins: Vec<Ruin>,
     pub settlements: Vec<Settlement>,
     pub states: Vec<SettlementState>,
     /// Relations between factions (−100 … 100), simulated; `society.relations` holds them
@@ -108,13 +119,47 @@ pub struct RegionSociety {
     soil: Vec<f64>,
     /// Game days simulated so far.
     pub days: f64,
+    /// Days each slice of the settlements is behind (see [`RegionSociety::step_slice`]).
+    behind: [f64; SLICES],
+    /// The slice stepped next.
+    next_slice: usize,
 }
+
+/// The settlements are stepped in this many slices, one per tick (each about every second at
+/// 30 Hz), so thousands of settlements cost a tick what a few hundred would.
+const SLICES: usize = 32;
+
+/// How settlements are generated; a save from another generation starts its societies fresh
+/// (its ids would name other places). 2: settlement patterns (Batch 4b). 3: ports only on a
+/// coast (task 4b.7).
+pub const GENERATION: u32 = 3;
 
 impl RegionSociety {
     /// The society of body `body` with its settlements, at their starting state.
-    pub fn generate(system: &StarSystem, body: usize, director: &ContentDirector) -> Self {
+    pub fn generate(
+        system: &StarSystem,
+        body: usize,
+        director: &ContentDirector,
+        patterns: &SettlementPatterns,
+    ) -> Self {
         let mut society = generate(system, body, director);
-        let settlements = generate_settlements(system, &mut society, director);
+        let b = &system.bodies[body];
+        let request = ContentRequest::new(
+            "history",
+            format!("history/{}", b.id),
+            serde_json::json!({"body": b.id}),
+        );
+        let answer = director.request(&request, History::default);
+        if let Source::Fallback(why) = &answer.source {
+            society.fallbacks.push(why.clone());
+        }
+        let history = answer.value;
+        let (conditions, ruins) = match (Terrain::of(b), Climate::of(b)) {
+            (Some(t), Some(c)) => crate::history::apply(&history, &society, &t, &c, patterns),
+            _ => (Vec::new(), Vec::new()),
+        };
+        let hazard = |d: DVec3| hazard_at(&conditions, d, b.radius).0;
+        let settlements = generate_settlements(system, &mut society, director, patterns, &hazard);
         let radius = system.bodies[body].radius;
         let seat = |f: usize| settlements.iter().find(|s| s.faction == f && s.seat);
         let n = society.factions.len();
@@ -139,9 +184,14 @@ impl RegionSociety {
         }
         let soil = settlements
             .iter()
-            .map(|s| match society.cultures[s.culture].profile.tech_tier {
-                TechTier::Spacefaring => 1.0,
-                _ => 0.5 + 0.8 * s.site_score,
+            .map(|s| {
+                // Poisoned land yields less.
+                (1.0 - 0.8 * hazard(s.direction))
+                    * match society.cultures[s.culture].profile.tech_tier {
+                        // Domes and hydroponics, and foragers living off the wild land.
+                        TechTier::Spacefaring | TechTier::StoneAge => 1.0,
+                        _ => 0.5 + 0.8 * s.site_score,
+                    }
             })
             .collect();
         let states = settlements.iter().map(SettlementState::start).collect();
@@ -152,12 +202,17 @@ impl RegionSociety {
             .collect();
         Self {
             society,
+            history,
+            conditions,
+            ruins,
             settlements,
             states,
             relations,
             targets,
             soil,
             days: 0.0,
+            behind: [0.0; SLICES],
+            next_slice: 0,
         }
     }
 
@@ -174,6 +229,31 @@ impl RegionSociety {
             let culture = &self.society.cultures[s.culture].profile;
             step_settlement(&mut self.states[i], s, culture, self.soil[i], days);
         }
+        self.behind = [0.0; SLICES];
+        self.step_relations(days);
+    }
+
+    /// Advances by `days` game days, stepping one slice of the settlements (by the days it
+    /// is behind) and the relations; over [`SLICES`] calls every settlement catches up.
+    pub fn step_slice(&mut self, days: f64) {
+        if days <= 0.0 {
+            return;
+        }
+        for b in &mut self.behind {
+            *b += days;
+        }
+        let slice = self.next_slice;
+        self.next_slice = (slice + 1) % SLICES;
+        let behind = std::mem::take(&mut self.behind[slice]);
+        for i in (slice..self.settlements.len()).step_by(SLICES) {
+            let s = &self.settlements[i];
+            let culture = &self.society.cultures[s.culture].profile;
+            step_settlement(&mut self.states[i], s, culture, self.soil[i], behind);
+        }
+        self.step_relations(days);
+    }
+
+    fn step_relations(&mut self, days: f64) {
         // Relations: toward the target, which swings a little month to month.
         let month = (self.days / 30.0).floor() as u64;
         let pull = 1.0 - (-days / RELATION_DAYS).exp();
@@ -206,9 +286,10 @@ fn step_settlement(
     let n = state.population().max(1.0);
     // Production and use.
     let (mut food, mut goods) = (0.0, 0.0);
+    let output = culture.tech_tier.productivity();
     for (k, (role, _)) in s.roles.iter().enumerate() {
-        food += food_per_day(role) * soil * state.people[k];
-        goods += goods_per_day(role) * state.people[k];
+        food += food_per_day(role) * soil * output * state.people[k];
+        goods += goods_per_day(role) * output * state.people[k];
     }
     state.food += (food - n) * days;
     state.goods += (goods - n * GOODS_USE) * days;
@@ -265,7 +346,7 @@ fn step_settlement(
 pub fn society_system(clock: Res<SimClock>, society: Option<ResMut<RegionSociety>>) {
     if let Some(mut s) = society {
         let days = clock.dt * GAME_TIME_SCALE as f64 / 86_400.0;
-        s.step(days);
+        s.step_slice(days);
     }
 }
 
@@ -276,7 +357,11 @@ pub fn add_society_systems(schedule: &mut Schedule) {
 
 /// Generates the society of every body with peoples and puts it in the body's region. Returns
 /// the bodies' societies (index, people, settlements) for logs.
-pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(usize, u32, usize)> {
+pub fn install(
+    sim: &mut Simulation,
+    director: &Arc<ContentDirector>,
+    patterns: &SettlementPatterns,
+) -> Vec<(usize, u32, usize)> {
     let Some(system) = sim.star_system().cloned() else {
         return Vec::new();
     };
@@ -285,7 +370,7 @@ pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(us
         if body.peoples.is_empty() {
             continue;
         }
-        let rs = RegionSociety::generate(&system, i, director);
+        let rs = RegionSociety::generate(&system, i, director, patterns);
         out.push((i, rs.population().round() as u32, rs.settlements.len()));
         if let Some(region) = sim.regions.get_mut(i) {
             region.world.insert_resource(rs);
@@ -298,9 +383,16 @@ pub fn install(sim: &mut Simulation, director: &Arc<ContentDirector>) -> Vec<(us
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SavedSociety {
     pub body: String,
+    /// How the settlements were generated ([`GENERATION`]); saves from before it have 1.
+    #[serde(default = "first_generation")]
+    pub generation: u32,
     pub days: f64,
     pub settlements: Vec<(String, SettlementState)>,
     pub relations: Vec<(String, String, f64)>,
+}
+
+fn first_generation() -> u32 {
+    1
 }
 
 /// Every body's society state, for a save.
@@ -323,6 +415,7 @@ pub fn capture(sim: &Simulation, system: &StarSystem) -> Vec<SavedSociety> {
         }
         out.push(SavedSociety {
             body: body.id.clone(),
+            generation: GENERATION,
             days: rs.days,
             settlements: rs
                 .settlements
@@ -341,6 +434,13 @@ pub fn capture(sim: &Simulation, system: &StarSystem) -> Vec<SavedSociety> {
 pub fn restore(sim: &mut Simulation, system: &StarSystem, saved: &[SavedSociety]) -> Vec<String> {
     let mut problems = Vec::new();
     for s in saved {
+        if s.generation != GENERATION {
+            problems.push(format!(
+                "society of {} saved by an older generation of settlements: it starts fresh",
+                s.body
+            ));
+            continue;
+        }
         let Some(i) = system.bodies.iter().position(|b| b.id == s.body) else {
             problems.push(format!("society of unknown body {:?} dropped", s.body));
             continue;

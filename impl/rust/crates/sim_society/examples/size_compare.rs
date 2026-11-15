@@ -54,7 +54,16 @@ fn main() {
             .unwrap();
         let b = &system.bodies[i];
         let r = b.radius;
-        let rs = RegionSociety::generate(&system, i, &director);
+        let rs = RegionSociety::generate(
+            &system,
+            i,
+            &director,
+            &sim_society::SettlementPatterns::load_dir(
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../../content/data/settlement_patterns"),
+            )
+            .unwrap(),
+        );
         // Mean distance to the nearest settlement of the same culture.
         let nn = |culture: usize| {
             let own: Vec<_> = rs

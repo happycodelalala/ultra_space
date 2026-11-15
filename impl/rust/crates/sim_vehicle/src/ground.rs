@@ -22,6 +22,29 @@ use rapier3d_f64::prelude::{
 use sim_planet::quadtree::level_for_spacing;
 use sim_planet::{Terrain, TileKey, collision_patch, locate};
 
+/// Sites in one foundations and not the other (by id): their centres and angular reach.
+fn changed_sites(
+    old: Option<&Arc<sim_planet::Foundations>>,
+    new: Option<&Arc<sim_planet::Foundations>>,
+) -> Vec<(DVec3, f64)> {
+    let ids = |f: Option<&Arc<sim_planet::Foundations>>| -> HashSet<u32> {
+        f.map(|f| f.sites().iter().map(|s| s.id()).collect())
+            .unwrap_or_default()
+    };
+    let (a, b) = (ids(old), ids(new));
+    let mut out = Vec::new();
+    for (f, other) in [(old, &b), (new, &a)] {
+        if let Some(f) = f {
+            for s in f.sites() {
+                if !other.contains(&s.id()) {
+                    out.push((s.center(), s.reach()));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Collision group of ground patches (resting bodies leave it out of their filter).
 pub(crate) const GROUND_GROUP: Group = Group::GROUP_1;
 
@@ -122,20 +145,38 @@ impl Ground {
         &self.terrain
     }
 
-    /// Switches to `terrain`, the same planet with more deltas (pads) added: only the patches the
-    /// new deltas touch are rebuilt, and each old patch stays until its replacement is ready, so
-    /// bodies standing on it don't notice. Returns `false` (nothing changed) when `terrain` isn't
-    /// an extension of the current one.
+    /// Switches to `terrain`, the same planet with more deltas (pads) added or with settlements'
+    /// foundations come or gone: only the patches the changes touch are rebuilt, and each old
+    /// patch stays until its replacement is ready, so bodies standing on it don't notice; the
+    /// buildings of sites gone lose their colliders. Returns `false` (nothing changed) when
+    /// `terrain` isn't such a change of the current one.
     pub(crate) fn extend_terrain(&mut self, terrain: Arc<Terrain>) -> bool {
         let old = self.terrain.pads();
         let new = terrain.pads();
         if terrain.radius != self.terrain.radius
-            || new.len() <= old.len()
+            || new.len() < old.len()
             || new[..old.len()] != *old
         {
             return false;
         }
         let added: Vec<_> = new[old.len()..].to_vec();
+        let changed = changed_sites(self.terrain.foundations(), terrain.foundations());
+        if added.is_empty()
+            && changed.is_empty()
+            && self.terrain.foundations().is_none() == terrain.foundations().is_none()
+        {
+            self.terrain = terrain;
+            return true;
+        }
+        let kept: HashSet<u32> = terrain
+            .foundations()
+            .map(|f| f.sites().iter().map(|s| s.id()).collect())
+            .unwrap_or_default();
+        for (&(site, _), b) in self.boxes.iter_mut() {
+            if !kept.contains(&site) {
+                b.wanted_at = f64::NEG_INFINITY;
+            }
+        }
         self.terrain = terrain;
         self.generation += 1;
         self.pending.clear();
@@ -144,9 +185,11 @@ impl Ground {
             .patches
             .keys()
             .filter(|k| {
-                added
-                    .iter()
-                    .any(|p| self.terrain.pad_touches(p, k.center(), spread))
+                let c = k.center();
+                added.iter().any(|p| self.terrain.pad_touches(p, c, spread))
+                    || changed
+                        .iter()
+                        .any(|&(centre, reach)| c.angle_between(centre) <= spread + reach)
             })
             .copied()
             .collect();
@@ -290,15 +333,11 @@ impl Ground {
         }
         // Buildings wanted for the first time get their colliders; unwanted ones go.
         if let Some(f) = self.terrain.foundations().cloned() {
-            let sites = f.sites();
             for (&(site, k), b) in self.boxes.iter_mut() {
                 if b.collider != ColliderHandle::invalid() {
                     continue;
                 }
-                let Some(s) = sites
-                    .get(site as usize)
-                    .and_then(|s| s.structures().get(k as usize))
-                else {
+                let Some(s) = f.structure(site, k) else {
                     continue;
                 };
                 let builder = ColliderBuilder::cuboid(s.half.x, s.half.y, s.half.z)

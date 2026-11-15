@@ -1,0 +1,279 @@
+{
+  "id": "stone_age_camp",
+  "source": "kenney-survival-kit",
+  "licence": "assets/third_party/kenney-survival-kit/License.txt",
+  "buildings": [
+    {
+      "id": "tent",
+      "uses": [
+        "home"
+      ],
+      "model": "tent.glb",
+      "min_m": [
+        -1.682,
+        -0.0,
+        -1.65
+      ],
+      "max_m": [
+        1.682,
+        2.948,
+        1.716
+      ]
+    },
+    {
+      "id": "tent_hide",
+      "uses": [
+        "home"
+      ],
+      "model": "tent_hide.glb",
+      "min_m": [
+        -1.682,
+        -0.0,
+        -1.65
+      ],
+      "max_m": [
+        1.682,
+        2.948,
+        1.716
+      ]
+    },
+    {
+      "id": "tent_open",
+      "uses": [
+        "home"
+      ],
+      "model": "tent_open.glb",
+      "min_m": [
+        -1.682,
+        -0.0,
+        -1.65
+      ],
+      "max_m": [
+        1.682,
+        2.948,
+        1.716
+      ]
+    },
+    {
+      "id": "lean_to",
+      "uses": [
+        "home"
+      ],
+      "model": "lean_to.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.0,
+        1.5
+      ]
+    },
+    {
+      "id": "chief_tent",
+      "uses": [
+        "hall"
+      ],
+      "model": "chief_tent.glb",
+      "min_m": [
+        -3.365,
+        -0.0,
+        -3.3
+      ],
+      "max_m": [
+        3.365,
+        5.896,
+        3.432
+      ]
+    },
+    {
+      "id": "fire",
+      "uses": [
+        "square"
+      ],
+      "model": "fire.glb",
+      "min_m": [
+        -5.248,
+        0.0,
+        -5.248
+      ],
+      "max_m": [
+        5.248,
+        1.663,
+        5.248
+      ]
+    },
+    {
+      "id": "stone_circle",
+      "uses": [
+        "shrine"
+      ],
+      "model": "stone_circle.glb",
+      "min_m": [
+        -9.02,
+        -0.0,
+        -8.249
+      ],
+      "max_m": [
+        8.131,
+        3.06,
+        8.828
+      ]
+    },
+    {
+      "id": "craft",
+      "uses": [
+        "smithy"
+      ],
+      "model": "craft.glb",
+      "min_m": [
+        -3.444,
+        0.0,
+        -1.33
+      ],
+      "max_m": [
+        3.848,
+        2.579,
+        1.54
+      ]
+    },
+    {
+      "id": "rack",
+      "uses": [
+        "prop"
+      ],
+      "model": "rack.glb",
+      "min_m": [
+        -1.845,
+        0.0,
+        -0.56
+      ],
+      "max_m": [
+        1.845,
+        2.529,
+        0.56
+      ]
+    },
+    {
+      "id": "bedrolls",
+      "uses": [
+        "prop"
+      ],
+      "model": "bedrolls.glb",
+      "min_m": [
+        -0.817,
+        0.0,
+        -1.823
+      ],
+      "max_m": [
+        2.917,
+        0.886,
+        1.823
+      ]
+    },
+    {
+      "id": "stores",
+      "uses": [
+        "prop"
+      ],
+      "model": "stores.glb",
+      "min_m": [
+        -0.709,
+        0.0,
+        -1.64
+      ],
+      "max_m": [
+        3.592,
+        2.064,
+        1.64
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -2.7,
+        0.0,
+        -2.526
+      ],
+      "max_m": [
+        2.607,
+        13.545,
+        2.526
+      ]
+    },
+    {
+      "id": "tree_tall",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree_tall.glb",
+      "min_m": [
+        -2.7,
+        0.0,
+        -2.526
+      ],
+      "max_m": [
+        2.607,
+        16.425,
+        2.526
+      ]
+    },
+    {
+      "id": "tree_autumn",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree_autumn.glb",
+      "min_m": [
+        -2.7,
+        0.0,
+        -2.526
+      ],
+      "max_m": [
+        2.607,
+        13.545,
+        2.526
+      ]
+    },
+    {
+      "id": "palisade",
+      "uses": [
+        "wall"
+      ],
+      "model": "palisade.glb",
+      "min_m": [
+        -4.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        4.5,
+        3.105,
+        -1.182
+      ]
+    },
+    {
+      "id": "palisade_gate",
+      "uses": [
+        "gate"
+      ],
+      "model": "palisade_gate.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.516
+      ],
+      "max_m": [
+        1.5,
+        3.105,
+        -1.227
+      ]
+    }
+  ]
+}

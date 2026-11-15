@@ -213,6 +213,10 @@ def build(c):
         parts = [o for o in outfit if o.type == "MESH" and not o.name.startswith("Icosphere")]
         bind(parts, arm)
         drop([o for o in outfit if o not in parts])
+        # Dyed: the outfit's colours multiplied (a darker or coloured cloth).
+        if c.get("outfit_colour"):
+            for p in parts:
+                tint(base_colour_images(p), c["outfit_colour"])
     if c.get("suit"):
         dress(body, c["suit"])
     for h in c.get("hair", []):

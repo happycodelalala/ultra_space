@@ -1,0 +1,13 @@
+{
+  "id": "medieval",
+  "description": "A medieval realm (living-planet.md §8b): each faction's seat a walled city, market towns every 20–30 km, villages every 4–5 km on the good land, steadings filling the gaps, farmsteads between them.",
+  "tiers": ["medieval"],
+  "settled_share": 0.5,
+  "seat": {"size": "city", "people": [8000, 20000], "roles": ["seat", "market", "fort"]},
+  "classes": [
+    {"size": "town", "spacing_km": 25, "people": [1000, 4000], "roles": ["market"]},
+    {"size": "village", "spacing_km": 4.5, "people": [150, 400], "roles": []},
+    {"size": "hamlet", "spacing_km": 3.6, "people": [30, 100], "roles": []}
+  ],
+  "dwelling_spacing_km": 1.25
+}

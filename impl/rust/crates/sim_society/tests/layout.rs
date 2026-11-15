@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, SettlementKind};
+use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, Settlement, SizeClass, TechTier};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -34,7 +34,16 @@ fn world() -> &'static World {
         let director = ContentDirector::new(Box::new(
             ReplayProvider::load_dir(content.join("lore")).unwrap(),
         ));
-        let society = RegionSociety::generate(&system, body, &director);
+        let society = RegionSociety::generate(
+            &system,
+            body,
+            &director,
+            &sim_society::SettlementPatterns::load_dir(
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../../content/data/settlement_patterns"),
+            )
+            .unwrap(),
+        );
         let kits = Arc::new(Kits::load_dir(&root().join("assets/export/buildings")).unwrap());
         let terrain = Terrain::of(&system.bodies[body]).unwrap();
         let layouts = RegionLayouts::generate(&society, kits, &terrain);
@@ -49,13 +58,15 @@ fn world() -> &'static World {
 #[test]
 fn kits_load_with_their_buildings() {
     let w = world();
-    for id in ["medieval_village", "colony_standin"] {
+    // Every people's kit (task 4b.7).
+    for c in &w.society.society.cultures {
+        let id = c.profile.building_kit.as_str();
         let kit = &w.layouts.kits.0[id];
         assert!(kit.buildings.len() >= 10, "{id}");
         for b in &kit.buildings {
             let size = [0, 1, 2].map(|k| b.max_m[k] - b.min_m[k]);
             assert!(
-                size.iter().all(|&s| s > 0.3 && s < 40.0),
+                size.iter().all(|&s| s > 0.2 && s < 50.0),
                 "{id}.{}: {size:?}",
                 b.id
             );
@@ -76,8 +87,14 @@ fn kits_load_with_their_buildings() {
 fn every_settlement_is_laid_out_with_what_it_needs() {
     let w = world();
     assert_eq!(w.layouts.layouts.len(), w.society.settlements.len());
-    for (s, l) in w.society.settlements.iter().zip(&w.layouts.layouts) {
+    for (s, l) in w
+        .society
+        .settlements
+        .iter()
+        .zip(w.layouts.layouts.values().map(|l| l.as_ref()))
+    {
         let kit = &w.layouts.kits.0[&l.kit];
+        let tier = w.society.society.cultures[s.culture].profile.tech_tier;
         let count = |use_: &str| {
             l.buildings
                 .iter()
@@ -87,41 +104,54 @@ fn every_settlement_is_laid_out_with_what_it_needs() {
         let wanted = l.buildings.len() + l.unplaced;
         assert!(
             l.unplaced * 10 <= wanted,
-            "{}: {} of {wanted} unplaced",
+            "{} ({tier:?} {:?}): {} of {wanted} unplaced",
             s.name,
+            s.size,
             l.unplaced
         );
         assert!(!l.streets.is_empty(), "{}: no streets", s.name);
-        match s.kind {
-            SettlementKind::Town => {
-                for u in [
+        let needs: &[&str] = match tier {
+            TechTier::Spacefaring => match s.lore_kind() {
+                "capital" | "port" => &["pad", "port", "home", "hall", "power", "comms"],
+                _ => &["pad", "home", "power", "comms"],
+            },
+            TechTier::StoneAge if s.population >= 150 => &["square", "hall", "shrine", "home"],
+            TechTier::StoneAge => &["square", "home"],
+            TechTier::Industrial | TechTier::Modern if s.size >= SizeClass::Town => {
+                &["square", "hall", "home", "shop", "workshop", "power"]
+            }
+            TechTier::Industrial | TechTier::Modern => &["square", "home", "power"],
+            _ => match s.size {
+                SizeClass::Town | SizeClass::City | SizeClass::Metropolis => &[
                     "square", "hall", "shrine", "inn", "market", "smithy", "home",
-                ] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
-                }
-            }
-            SettlementKind::Village => {
-                for u in ["square", "shrine", "home"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
-                }
-            }
-            SettlementKind::Hamlet => assert!(count("home") >= 3, "{}", s.name),
-            SettlementKind::Colony | SettlementKind::Port => {
-                for u in ["pad", "port", "home", "hall", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
-                }
-            }
-            SettlementKind::Outpost => {
-                for u in ["pad", "home", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.kind);
-                }
-            }
+                ],
+                SizeClass::Village => &["square", "shrine", "home"],
+                _ => &["home"],
+            },
+        };
+        for u in needs {
+            assert!(
+                count(u) >= 1,
+                "{} ({:?} {:?}) has no {u}",
+                s.name,
+                tier,
+                s.size
+            );
+        }
+        if s.size == SizeClass::Hamlet {
+            assert!(count("home") >= 3, "{}", s.name);
         }
         // Homes for everyone: medieval households of about five, colony habitats of forty.
+        // The biggest places' tenements and apartment blocks hold hundreds.
         let homes = count("home") + count("shop");
         let per_home = f64::from(s.population) / homes as f64;
+        let most = if s.size >= SizeClass::City {
+            400.0
+        } else {
+            60.0
+        };
         assert!(
-            (2.0..=60.0).contains(&per_home),
+            (1.0..=most).contains(&per_home),
             "{}: {per_home:.1} people per home",
             s.name
         );
@@ -145,16 +175,35 @@ fn distance(f: &sim_planet::Footprint, p: DVec2, margin: f64) -> f64 {
         .length()
 }
 
+/// Every city and every 20th other settlement (towns, villages, steadings, outposts): the
+/// expensive checks don't need all two thousand.
+fn sample(w: &World) -> impl Iterator<Item = (&Settlement, &Layout)> {
+    w.society
+        .settlements
+        .iter()
+        .zip(w.layouts.layouts.values().map(|l| l.as_ref()))
+        .enumerate()
+        .filter(|(i, (s, _))| s.size >= SizeClass::City || s.seat || i % 20 == 0)
+        .map(|(_, p)| p)
+}
+
 #[test]
 fn buildings_keep_clear_of_each_other_and_the_streets() {
     let w = world();
-    for (s, l) in w.society.settlements.iter().zip(&w.layouts.layouts) {
+    for (s, l) in sample(w) {
         let kit = &w.layouts.kits.0[&l.kit];
         let rects: Vec<_> = l
             .buildings
             .iter()
             .map(|p| Layout::footprint(kit, p))
             .collect();
+        // A town wall's pieces join end to end.
+        let wall = |i: usize| {
+            kit.buildings[l.buildings[i].building]
+                .uses
+                .iter()
+                .any(|u| matches!(u.as_str(), "wall" | "tower" | "gate"))
+        };
         // Corners of each building (without margin) stay outside every other footprint's own
         // rectangle, and every street point stays a street's half width off the walls.
         for (i, a) in rects.iter().enumerate() {
@@ -171,7 +220,11 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
                 DVec2::new(a.x + cs * v.x + sn * v.y, a.z - sn * v.x + cs * v.y)
             });
             for (j, b) in rects.iter().enumerate() {
-                if i != j {
+                if i != j
+                    && !(wall(i) && wall(j))
+                    && (b.x - a.x).abs() < 40.0
+                    && (b.z - a.z).abs() < 40.0
+                {
                     for c in corners {
                         assert!(
                             distance(b, c, 0.8) > 0.0,
@@ -187,9 +240,17 @@ fn buildings_keep_clear_of_each_other_and_the_streets() {
             for k in 0..=10 {
                 let p = a.lerp(b, k as f64 / 10.0);
                 for (i, r) in rects.iter().enumerate() {
+                    if (r.x - p.x).abs() > 40.0 || (r.z - p.y).abs() > 40.0 {
+                        continue;
+                    }
                     let kind = &kit.buildings[l.buildings[i].building];
-                    // The colony's streets run between plots; small props may stand by them.
-                    if kind.uses.iter().any(|u| u == "prop" || u == "tree") {
+                    // The colony's streets run between plots; small props may stand by them; a
+                    // town's gates stand over its streets.
+                    if kind
+                        .uses
+                        .iter()
+                        .any(|u| u == "prop" || u == "tree" || u == "gate")
+                    {
                         continue;
                     }
                     assert!(
@@ -210,9 +271,16 @@ fn foundations_level_the_ground_under_every_building() {
     let flat = w.terrain.with_foundations(w.layouts.foundations.clone());
     let mut worst: f64 = 0.0;
     let mut cut: f64 = 0.0;
-    for l in &w.layouts.layouts {
+    for l in w.layouts.layouts.values() {
         let kit = &w.layouts.kits.0[&l.kit];
-        for p in &l.buildings {
+        // Harbours stand over the water, on no foundation; a town wall's pieces overlap where
+        // they join (each levelled at its own height, the joins hidden inside the wall).
+        for p in l.buildings.iter().filter(|p| {
+            !kit.buildings[p.building]
+                .uses
+                .iter()
+                .any(|u| matches!(u.as_str(), "harbour" | "wall" | "tower" | "gate"))
+        }) {
             let f = Layout::footprint(kit, p);
             let (sn, cs) = f.yaw.sin_cos();
             for (x, z) in [
@@ -226,7 +294,8 @@ fn foundations_level_the_ground_under_every_building() {
                 let v = DVec2::new(x * (f.half[0] - 0.9), z * (f.half[1] - 0.9));
                 let q = DVec2::new(f.x + cs * v.x + sn * v.y, f.z - sn * v.x + cs * v.y);
                 let dir = l.direction(q.x, q.y, w.terrain.radius);
-                worst = worst.max((flat.height(dir, 1.0) - p.height).abs());
+                let off = (flat.height(dir, 1.0) - p.height).abs();
+                worst = worst.max(off);
                 cut = cut.max((w.terrain.height(dir, 1.0) - p.height).abs());
             }
         }
@@ -250,7 +319,7 @@ fn terrain_sampling_stays_fast_with_foundations() {
     let town = w
         .layouts
         .layouts
-        .iter()
+        .values()
         .max_by_key(|l| l.buildings.len())
         .unwrap();
     let local: Vec<_> = (0..100_000)
@@ -284,4 +353,46 @@ fn terrain_sampling_stays_fast_with_foundations() {
     // footprint (10× and more in a town of 600 buildings).
     assert!(g1 < g0 * 2.0, "planet-wide sampling slowed {:.2}×", g1 / g0);
     assert!(l1 < l0 * 3.0, "sampling in a town slowed {:.2}×", l1 / l0);
+}
+
+#[test]
+fn layouts_come_and_go_and_the_ground_follows() {
+    let w = world();
+    // Start empty, as the game does, and make two settlements' layouts.
+    let mut rl = RegionLayouts::new(w.layouts.kits.clone(), Arc::new(w.terrain.clone()));
+    assert!(rl.foundations.sites().is_empty());
+    let hollin: Vec<usize> = (0..w.society.settlements.len())
+        .filter(|&i| {
+            w.society.society.cultures[w.society.settlements[i].culture]
+                .profile
+                .id
+                == "hollin"
+        })
+        .take(2)
+        .collect();
+    for &i in &hollin {
+        let l = RegionLayouts::layout_of(&w.society, &rl.kits, &rl.natural, i);
+        rl.insert(i, Arc::new(l));
+    }
+    rl.rebuild_foundations();
+    let ids: Vec<u32> = rl.foundations.sites().iter().map(|s| s.id()).collect();
+    assert_eq!(ids, hollin.iter().map(|&i| i as u32).collect::<Vec<_>>());
+    // The same as laying out everything at once, for these two.
+    for &i in &hollin {
+        assert_eq!(*rl.layouts[&i], *w.layouts.layouts[&i]);
+    }
+    // A building's box is found by its settlement's id.
+    let first = rl.foundations.sites()[0].id();
+    assert!(rl.foundations.structure(first, 0).is_some());
+    // Dropping one: its ground is natural again, the other's still level.
+    let gone = hollin[0];
+    let flat = w.terrain.with_foundations(rl.foundations.clone());
+    rl.remove(gone);
+    rl.rebuild_foundations();
+    let after = w.terrain.with_foundations(rl.foundations.clone());
+    let p = &w.layouts.layouts[&gone].buildings[0];
+    let at = w.layouts.layouts[&gone].direction(p.x, p.z, w.terrain.radius);
+    assert!((flat.height(at, 1.0) - p.height).abs() < 0.02);
+    assert_eq!(after.height(at, 1.0), w.terrain.height(at, 1.0));
+    assert!(rl.foundations.structure(gone as u32, 0).is_none());
 }

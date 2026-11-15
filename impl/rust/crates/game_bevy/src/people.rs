@@ -86,6 +86,9 @@ pub(crate) struct PersonLabel(pub String);
 struct Shown {
     crowd: Crowd,
     entities: Vec<Entity>,
+    /// The next of its people to spawn (a few a frame: each is a skinned scene of dozens of
+    /// entities, and a crowd at once made hitches).
+    next: usize,
 }
 
 fn load_characters(mut commands: Commands, assets: Res<AssetServer>) {
@@ -155,9 +158,12 @@ fn load_characters(mut commands: Commands, assets: Res<AssetServer>) {
 
 /// Builds each loaded character's animation graph.
 fn prepare_characters(
+    mut commands: Commands,
     characters: Option<ResMut<Characters>>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    warm: Option<Res<crate::warmup::WarmupDone>>,
+    cameras: Query<Entity, With<crate::space_render::MainCamera>>,
 ) {
     let Some(mut characters) = characters else {
         return;
@@ -188,6 +194,14 @@ fn prepare_characters(
                 warn!("character {}: missing animations", kind.id);
             }
             let (graph, indices) = AnimationGraph::from_clips(named.iter().map(|n| n.1.clone()));
+            // Its pipelines (skinned meshes, its textures) compiled during the warm-up.
+            if warm.is_none() {
+                crate::warmup::spawn_primer(
+                    &mut commands,
+                    cameras.iter().next(),
+                    WorldAssetRoot(scene.clone()),
+                );
+            }
             kind.ready = Some(Ready {
                 scene,
                 graph: graphs.add(graph),
@@ -214,9 +228,11 @@ fn animation(activity: Activity, role: &str) -> &'static str {
     match activity {
         Activity::Walking => "walk",
         Activity::Working => match role {
-            "smith" | "carpenter" | "technician" | "engineer" => "use",
-            "laborer" | "fisher" => "carry",
-            "merchant" | "trader" | "guard" | "security" | "pilot" => "talk",
+            "smith" | "carpenter" | "technician" | "engineer" | "crafter" | "potter" | "worker"
+            | "doctor" | "scientist" => "use",
+            "laborer" | "fisher" | "sailor" => "carry",
+            "merchant" | "trader" | "guard" | "security" | "pilot" | "soldier" | "warrior"
+            | "clerk" | "official" | "teacher" | "scribe" | "scholar" | "elder" => "talk",
             _ => "work",
         },
         Activity::Talking => "talk",
@@ -227,7 +243,7 @@ fn animation(activity: Activity, role: &str) -> &'static str {
 /// Local solar time at a settlement (fraction of its day, 0 midnight) at universe time `t`.
 fn local_day(universe: &Universe, site: &crate::settlements::Site, t: f64) -> f64 {
     let system = &universe.0;
-    let c = site.layout.center;
+    let c = site.settlement.direction;
     local_solar_fraction(
         &system.frames,
         system.bodies[site.body].surface_frame,
@@ -245,6 +261,7 @@ fn stream_people(
     universe: Res<Universe>,
     render: Res<RenderTime>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("stream_people");
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
     };
@@ -258,59 +275,33 @@ fn stream_people(
                 if set.kinds.iter().any(|k| k.ready.is_none()) {
                     continue; // still loading
                 }
-                let Some(kit) = draw.kits.0.get(&site.layout.kit) else {
+                let Some(layout) = site.layout.clone() else {
+                    continue;
+                };
+                let Some(kit) = draw.kits.0.get(&layout.kit) else {
                     continue;
                 };
                 let mut crowd = Crowd::promote(
                     &site.settlement,
-                    &site.layout,
+                    &layout,
                     kit,
                     &site.naming,
-                    promoted(site.settlement.population),
+                    // A dwelling's people, all of them.
+                    if site.settlement.size == sim_society::SizeClass::Dwelling {
+                        site.settlement.population as usize
+                    } else {
+                        promoted(site.settlement.population)
+                    },
                 );
                 crowd.settle(local_day(&universe, site, render.0));
-                let mut entities = Vec::with_capacity(crowd.people.len());
-                for (k, person) in crowd.people.iter().enumerate() {
-                    let h = mix(site.seed ^ (k as u64 + 1).wrapping_mul(0x9e37_79b9));
-                    // A character who takes the role (any, if none does).
-                    let fit: Vec<&Kind> = set
-                        .kinds
-                        .iter()
-                        .filter(|c| c.roles.contains(&person.role))
-                        .collect();
-                    let kind = if fit.is_empty() {
-                        &set.kinds[(h >> 8) as usize % set.kinds.len()]
-                    } else {
-                        fit[(h >> 8) as usize % fit.len()]
-                    };
-                    let Some(ready) = &kind.ready else { continue };
-                    let e = commands
-                        .spawn((
-                            Name::new(format!("{} ({})", person.name, person.role)),
-                            PersonLabel(format!(
-                                "{}, {} ({})",
-                                person.name,
-                                site.role_names.get(&person.role).unwrap_or(&person.role),
-                                site.culture.1
-                            )),
-                            WorldAssetRoot(ready.scene.clone()),
-                            Transform::default(),
-                            Visibility::Hidden,
-                            Resident {
-                                index: k,
-                                graph: ready.graph.clone(),
-                                nodes: ready.nodes.clone(),
-                                playing: None,
-                                player: None,
-                                offset: ((h >> 40) % 1000) as f32 / 1000.0 * 2.0,
-                            },
-                            ChildOf(site.root),
-                        ))
-                        .observe(found_animator)
-                        .id();
-                    entities.push(e);
-                }
-                characters.shown.insert(i, Shown { crowd, entities });
+                characters.shown.insert(
+                    i,
+                    Shown {
+                        crowd,
+                        entities: Vec::new(),
+                        next: 0,
+                    },
+                );
             }
             (false, true) => {
                 if let Some(shown) = characters.shown.remove(&i) {
@@ -322,7 +313,64 @@ fn stream_people(
             _ => {}
         }
     }
+    // Spawn the next few people.
+    let mut budget = PEOPLE_PER_FRAME;
+    for (&i, shown) in characters.shown.iter_mut() {
+        let site = &draw.sites[i];
+        let Some(set) = characters.sets.get(&site.clothing) else {
+            continue;
+        };
+        while shown.next < shown.crowd.people.len() && budget > 0 {
+            budget -= 1;
+            let k = shown.next;
+            shown.next += 1;
+            let person = &shown.crowd.people[k];
+            {
+                let h = mix(site.seed ^ (k as u64 + 1).wrapping_mul(0x9e37_79b9));
+                // A character who takes the role (any, if none does).
+                let fit: Vec<&Kind> = set
+                    .kinds
+                    .iter()
+                    .filter(|c| c.roles.contains(&person.role))
+                    .collect();
+                let kind = if fit.is_empty() {
+                    &set.kinds[(h >> 8) as usize % set.kinds.len()]
+                } else {
+                    fit[(h >> 8) as usize % fit.len()]
+                };
+                let Some(ready) = &kind.ready else { continue };
+                let e = commands
+                    .spawn((
+                        Name::new(format!("{} ({})", person.name, person.role)),
+                        PersonLabel(format!(
+                            "{}, {} ({})",
+                            person.name,
+                            site.role_names.get(&person.role).unwrap_or(&person.role),
+                            site.culture.1
+                        )),
+                        WorldAssetRoot(ready.scene.clone()),
+                        Transform::default(),
+                        Visibility::Hidden,
+                        Resident {
+                            index: k,
+                            graph: ready.graph.clone(),
+                            nodes: ready.nodes.clone(),
+                            playing: None,
+                            player: None,
+                            offset: ((h >> 40) % 1000) as f32 / 1000.0 * 2.0,
+                        },
+                        ChildOf(site.root),
+                    ))
+                    .observe(found_animator)
+                    .id();
+                shown.entities.push(e);
+            }
+        }
+    }
 }
+
+/// Most people spawned per frame, all settlements together.
+const PEOPLE_PER_FRAME: usize = 4;
 
 /// Steps every promoted crowd by the settlement's local time and moves its people: on the
 /// ground, facing where they go, hidden indoors, animated for what they do.
@@ -338,13 +386,18 @@ fn update_people(
     mut residents: Query<(&mut Resident, &mut Transform, &mut Visibility)>,
     mut players: Query<&mut AnimationPlayer>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("update_people");
     let (Some(mut characters), Some(draw)) = (characters, draw) else {
         return;
     };
     let dt = f64::from(time.delta_secs()).min(0.25);
     for (i, shown) in characters.shown.iter_mut() {
         let site = &draw.sites[*i];
-        let r = site.terrain.radius;
+        let (Some(layout), Some(terrain)) = (site.layout.clone(), draw.terrain(site.body).cloned())
+        else {
+            continue;
+        };
+        let r = terrain.radius;
         let day = local_day(&universe, site, render.0);
         // The player: the camera, on the settlement's plane, if within a few hundred metres.
         let cam = crate::settlements::camera_on(&universe, &camera, site.body, render.0);
@@ -370,8 +423,8 @@ fn update_people(
                 continue;
             }
             let p = person.position;
-            let up = site.layout.direction(p.x, p.y, r);
-            let ground = site.terrain.surface_height(up, 1.0);
+            let up = layout.direction(p.x, p.y, r);
+            let ground = terrain.surface_height(up, 1.0);
             transform.translation =
                 (site.basis.inverse() * (up * (r + ground) - site.origin)).as_vec3();
             transform.rotation = Quat::from_rotation_y(person.heading as f32);

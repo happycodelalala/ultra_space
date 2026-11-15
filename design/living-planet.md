@@ -597,9 +597,124 @@ what is simulated, level of detail) and never show on screen:
   or a relay post by who lives there). Every 1–1.5 km in settled land, with roads joining the
   settlements and travellers on the roads near the player, they keep the land between
   settlements from feeling empty.
-- As built (4.3), `SettlementKind` mixes size and purpose (a colony is a town that is a
-  capital and a port; an outpost is a hamlet with the outpost role); the density task replaces
-  it with size class and roles.
+- **As built (task 4b.1):** `sim_society::SizeClass` and `SettlementRole` replace the old
+  settlement kind (the Compact's colony is a town that is seat, capital and port; an outpost a
+  hamlet with the outpost role); culture profiles carry `settlement_words` (the Hollin: a town
+  is a "hold", a hamlet a "steading", a dwelling a "croft"; the Compact: the capital is the
+  "landing", ports and outposts), the tiers' defaults (`default_word`) filling the rest; lore
+  pools stay keyed by kind (`Settlement::lore_kind`). Settlement patterns are data
+  (`content/data/settlement_patterns/`, schema `settlement_pattern.schema.json`): the
+  medieval pattern (seats as cities of 8–20k, towns every 25 km, villages every 4.5 km,
+  hamlets every 3 km, half the good land settled, dwellings every 1.25 km) and the young
+  colony (chosen by the charter colony polity at any tier: a capital of 2,500–5,000, port
+  seats, outposts every 40 km). Patterns for other tiers come with them.
+- **As built (task 4b.2):** `generate_settlements` places each people by its pattern: a hex
+  lattice of candidate sites a third of the smallest spacing apart over the home region,
+  scored in parallel by the land for its tier; the best `settled_share` of usable sites is
+  settled wherever it lies; seats first (the capital the best site toward the middle, the
+  others the best far from them), then each class by spacing (0.8–1.2 times its own) from
+  everything placed before; territories go to the nearest seat, distances shrunk by the
+  faction's strength (0.5–1.5, so the stronger hold more land). Meridian now has 2,286 Hollish
+  settlements (3 cities, 80 holds, 1,403 villages, 800 steadings; ~750,000 people) and 17 of
+  the Compact (the landing, a port, 15 outposts; ~10,500), generated in about 0.5 s. The
+  aggregate steps one of 32 slices of the settlements per tick (each catches up about once a
+  second): 0.05 ms per tick for all 2,303. Saves carry the generation of their settlements
+  and one from before starts its societies fresh. Foundations are indexed by cube-sphere tile
+  so terrain sampling checks only the sites near it. Until 4b.5, every layout is still made
+  while loading (295,000 buildings, about 4 s).
+- **As built (task 4b.3): the peoples of Meridian.** Meridian is the test bed for every stage
+  (developer, 2026-11-14): seven peoples, each settled by its tier's pattern
+  (`content/data/settlement_patterns/`) and written as recorded responses
+  (`content/lore/meridian-peoples.json`):
+
+| People | Tier, polity | Home | Settlements | People |
+|---|---|---|---|---|
+| The Hollin | Medieval realm | central continent | 2,286 | ~750,000 |
+| The Compact | Spacefaring charter colony | eastern continent | 17 | ~10,500 |
+| The Tayu | Stone Age chiefdoms (3 clans) | the eastern continent's southern jungle, by the Compact | 346 | ~35,000 |
+| The Velani | Ancient city-states (4 poleis) | the western continent's south coast | 700 | ~240,000 |
+| The Corvantines | Early Modern kingdom and its trading company | the southern continent's north | 1,444 | ~940,000 |
+| The Aldmarkers | Industrial republic (3 provinces) | the north-eastern continent | 1,147 | ~3.2 million |
+| The Kesh | A Modern nation that destroyed itself: 2 enclaves and scavenger camps | the south-east island | 10 | ~44,000 |
+
+  About 5,950 settlements and 5.2 million people; the aggregate costs 0.15 ms per tick.
+  Workers produce by their tier (`TechTier::productivity`: industrial ×4, modern ×10), so an
+  industrial nation with 12% farmers feeds itself; foragers, like colonies, don't depend on
+  soil. A people can name its pattern in the star system data (the Kesh: `wasteland_enclaves`).
+  Lore pools are keyed by `capital`, `port`, `outpost`, `enclave`, else size. The new peoples'
+  kits and clothing (`stone_age_camp`, `ancient_city`, `early_modern_town`, `industrial_town`,
+  `wasteland_enclave`; their clothing sets) come with task 4b.7; until then they are generated
+  and simulated but not drawn.
+- **As built (task 4b.4): a wasteland from history.** `sim_society::history`: the content
+  director writes a body's history (`history/<body>`, `content/lore/meridian-history.json`:
+  the Tayu's migration 12,000 years ago, the first Velan cities, the Fall, the Corvantine
+  crowning, the Aldmark war of the provinces, the Kesh's Week 80 years ago, the Landing), as
+  dated events validated like all lore. A catastrophe's condition (hazard kind, severity as it
+  is now, the people's old pattern) is applied by generation: the old pattern (`modern`) laid
+  out over the people's home region gives the ruins (towns and bigger: 197 for the Kesh) and
+  the hazard zones (fallout over the whole region at a quarter of the severity; hot zones of
+  30 km on old metropolises, 12 km on old cities and 4 km on some towns); the survivors'
+  pattern (`wasteland_enclaves`) then avoids land of hazard 0.35 or more, and hazard cuts what
+  land yields (×(1 − 0.8 × hazard)). Not saved: the same seeds give the same history. The game
+  warns the player in a hazard near the ground ("RADIATION: HIGH", logged), the inspector shows
+  the level, and the debug start can target ruins (`ULTRA_SPACE_START_NEAR=ruin,...`). Ruins
+  and the blighted look of the land are drawn with task 4b.6.
+- **As built (task 4b.5): layouts on approach.** Loading no longer lays out any settlement
+  (from about 5 s to about 0.6 s with 5,953 settlements). `RegionLayouts` starts empty with
+  the natural terrain; the game makes a settlement's layout on the worker threads when the
+  camera comes within 4 km of its edge (six at a time) and drops it beyond 7 km. Whenever the
+  made set changes, the foundations are rebuilt (each site keyed by its settlement's index, so
+  building colliders keep their keys) and the region's terrain gets them: physics rebuilds only
+  the patches near sites that came or went and drops the colliders of buildings gone; the drawn
+  terrain rebuilds only the tiles near them. Sites are made from settlement records at start,
+  with a size-based extent until their layout arrives. The debug start lays out its target at
+  once, so the ship never lands where a house will appear, and accepts `<people>:<kind>`
+  (`hollin:city`).
+- **As built (task 4b.6): the land from afar.** `game_bevy::distant`: every settlement of the
+  camera's body is drawn from its record, batched per chunk (cube-sphere tiles of level 3,
+  about 120 km on Meridian), built on the worker threads when the camera comes within 250 km:
+  a muted disc of its built-up area in its culture's colours (what reads from a height), and a
+  cluster of boxes by size and tier (6 for a hamlet to 300 for a metropolis; huts for the Stone
+  Age, blocks and towers for industrial cities); ruins as low broken grey forms on a rubble
+  disc. Settlements whose own layout is drawn are left out and their chunk rebuilt. At night, a
+  glow disc per settlement (fading to its rim, bright by tier and population: camp fires dim,
+  industrial cities bright), unlit and added, shown from 1.5 km up and lit by the sun's height
+  at its chunk: the Aldmark republic is thousands of lights to the horizon. Hazard zones blight
+  the land: the climate's moisture falls by their strength (`Climate::with_blight`), so drawn
+  tiles and the maps seen from orbit show the Kesh land dry and dead around its old cities.
+  *Streaming without hitches* (found with per-schedule frame marks and a Chrome trace, see
+  AGENTS.md): chunks are level 4 tiles (smaller rebuilds); layouts and all their meshes are
+  made on workers; near, a settlement is drawn by 200 m cells, each its buildings' boxes merged
+  into one mesh, and only cells within ~500 m of the camera get model entities (200 a frame):
+  a city's thousands of building entities, all moved every frame by the camera-relative
+  placement, cost the renderer 10–25 ms a frame, and merging the models themselves made
+  meshes of millions of vertices (a 600 ms upload). People spawn 4 a frame (a crowd of
+  skinned scenes at once took 70 ms to spawn and 90 ms of transform propagation). Materials
+  that first appear in flight (settlements, glow, lanterns, characters) are compiled behind
+  the loading overlay by primers. The fly-in at 300 m/s from 30 km went from 17 frames over
+  50 ms (worst 340 ms) to 2–3 (worst 60–95 ms), the average frame from ~17 ms to 6–11 ms when
+  the machine is quiet.
+- **As built (task 4b.7): every people looks like its stage.** Stand-in kits from Kenney's CC0
+  packs (`content/data/building_kits/`, built by `tools/build-kits.sh`; pieces may come from
+  several packs at their own scale): the Tayu's tents, lean-tos, fires and stone circles
+  (Survival Kit); the Velani's stone houses, colonnaded temples and palace (Fantasy Town); the
+  Corvantines' tall houses, churches, windmills and harbours with ships (Fantasy Town, Pirate
+  Kit); the Aldmark's houses, tenements, shops, factories with chimneys and power stations
+  (City Kits Suburban, Commercial, Industrial); the Kesh enclaves' apartment blocks, admin
+  tower, workshops, solar fields and container barricades. Characters are the Quaternius base
+  bodies in the fantasy outfits dyed (`outfit_colour`: hides and furs, red-clad soldiers, navy
+  sailors, olive guards) or painted work suits (overalls, white coats, hazmat yellow). Three
+  layout styles serve the seven peoples: the **village** (organic lanes round a square; ports
+  get a harbour on the nearest shore with a street down to it), the **camp** (huts in rings
+  round fires, trails between, the stone circle apart, trees in groves) and the **grid** (blocks
+  of 3 × 3 plots with streets round the blocks; a factory or a pad takes a whole block; the
+  colony, industrial and modern towns). Big places have bigger buildings, not more of them (at
+  most 4,500 a layout: tenements, apartment blocks), and their streets branch more rather than
+  running for kilometres. A people's ports are placed on its coast (lattice points next to the
+  sea), and a port inland loses the role. Known for later: big cities sprawl like suburbs
+  (walls and denser cores come with the surroundings, §8d); the Kenney pieces' cartoon palette
+  (teal flat roofs, pink stone); industrial and modern people in painted suits read as
+  skin-tight.
 
 **A medieval world in numbers.** On a 600 km planet (1.36 million km² of land), 10–15 realms of
 the medieval pattern settle about 11–17% of the land; the rest is wilderness, frontier, ruins,
@@ -720,6 +835,65 @@ version.
 **Scope.** Batch 4 writes lore once (recorded responses). The chronicle and versioned lore
 come with the first systems that make events: faction conflict and trade (Batches 7, 9), with
 the generated planetary history (wasteland and ruins) when a planet first needs one.
+
+## 8d. Settlement surroundings: what makes a place more than its houses
+
+Decided 2026-11-15 (developer: settlements read as dull even with buildings). A layout of
+buildings and streets on bare ground looks like a model village. A real place is mostly what
+is around and between the houses: the land it works, the things it keeps, the marks of its
+people. Surroundings are part of the layout, generated with it on approach (§8b, task 4b.5) by
+the same rules for every tier, with the culture's kit and pattern choosing what.
+
+| Element | What | By tier |
+|---|---|---|
+| **Fields** | Patches of worked land around villages and towns, out to a distance from the population (the land that feeds it): strips, plots or big rectangles by tier, crops in rows by season | Stone Age: small gardens and cleared patches. Ancient to Early Modern: strip and plot fields, pasture with hedges or walls. Industrial: big fields, orchards. Modern: huge machine farms, greenhouses |
+| **Boundaries** | Fences, hedges, dry-stone walls, ditches between fields and round yards | Wattle and palisades; stone walls and hedges; wire fences; none or chain-link |
+| **Defences** | A town or city's wall and gates (where the pattern and polity call for them), a hill fort's earthworks, a star fort's bastions; enclaves' barriers | Palisade and ditch; stone walls and towers; bastions; barriers, checkpoints |
+| **Landmarks** | One or two buildings that stand out from far: temple, keep, church, town hall, factory chimneys, a comms mast; the seat of a faction most | Each kit names its landmarks; the layout puts them on the square or high ground |
+| **Yards and props** | Gardens, wells, woodpiles, carts, stalls on market days, crates, barrels, benches, washing lines, animals in pens | From the kit's props, scattered by building use (a smithy has an anvil and coal, a farm a cart) |
+| **Signs of life** | Chimney smoke, cooking fires, lights at night (done), dust on roads, boats at the shore | Smoke and fires for the early tiers; steam and smokestacks for industrial |
+| **Wear** | Paths worn from doors to the street and to the fields, trodden squares, the ground darker round houses | The terrain's look under the layout (a field the shader reads, as the blight is) |
+
+**How it is drawn.** Fields, worn paths and trodden ground are not objects: they are a layer the
+terrain shader reads (as the blight and the street meshes are), costing no entities. Fences,
+walls, props and crops are instanced like ground cover (ground-cover.md), one draw per kind per
+cell, made on workers with the layout. Only walls and big props get colliders.
+
+**Order.** Fields, boundaries, defences and landmarks with task 4b.8 (roads and dwellings: the
+land between settlements is fields first). Props and signs of life when the kits for every
+tier exist (task 4b.7) and with the ground cover's instancing (Batch 4c). People in the fields
+and on the roads come with their work routines (§6.3).
+
+**As built (task 4b.8).**
+- **Walls:** the walled stages' towns, cities and forts get a ring of the kit's wall sections
+  (Castle Kit stone walls, square towers every sixth section, gates between two towers), placed
+  before the houses round a core sized for the buildings (`core_radius`), so houses fill it from
+  the square out and the rest grows outside as suburbs; a gate stands where a street crosses,
+  sections that meet a building or rough ground leave gaps. Stone Age hill forts get a palisade
+  round the huts, Kesh enclaves a barricade of containers with one opening. Gates are passable
+  (no collision box), wall pieces overlap where they join.
+- **Fields** (`Layout::fields`): rings of fields beyond the buildings, out to 60 m + 4 m × √people,
+  clear of buildings, streets and water, some fallow; drawn with the streets as a height grid
+  following the ground, striped by crop, with their bounds as thin boxes (Ancient stone walls,
+  medieval and Early Modern hedges, industrial fences). Stone Age camps of 60 people and more
+  have garden plots; modern enclaves and the colony none.
+- **Dwellings** (`sim_society::dwellings_near`): a lattice over latitude and longitude at each
+  people's `dwelling_spacing_km`, jittered, three in four places lived in, only in settled land
+  (within 0.9 of the people's smallest settlement spacing of one of its settlements, outside
+  every settlement), dry and out of hazards; each a `Settlement` of size Dwelling with an id in
+  its own range, laid out as a farmstead (home, barn, a prop, trees, a track and its own
+  fields), a Stone Age hunting camp or a colony relay post. The game keeps those within 4 km
+  as sites (reused when freed), so they are levelled, collidable, drawn and peopled like
+  settlements; no banner.
+- **Roads** (`sim_society::roads`): every settlement to the nearest of its people's at least
+  its size, towns and cities to their two nearest peers, within 40 km (4,890 roads for Meridian's
+  5,962 settlements). The game draws those within 8 km of the camera (below 12 km up) as one
+  ribbon mesh made on a worker every 1.5 km, following the ground, stopping at settlements and
+  water: trails, dirt roads, asphalt by stage.
+- Known for later: big cities still sprawl beyond their walls (no density gradient); hedges
+  read as dark slabs from the ground; landmarks are the kits' biggest buildings by the square
+  (no skyline rule yet); props and signs of life (smoke, fires) wait for the instancing of
+  Batch 4c; roads are straight between settlements (no routing round hills or bridges).
 
 ## 9. Open questions
 

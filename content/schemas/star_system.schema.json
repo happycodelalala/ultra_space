@@ -245,12 +245,12 @@
           }
         },
         "peoples": {
-          "description": "Peoples living on the body (living-planet.md): a culture (its profile comes from the content director as culture/<culture>), its home region, and how many factions and settlements it has. Needs terrain.",
+          "description": "Peoples living on the body (living-planet.md): a culture (its profile comes from the content director as culture/<culture>), its home region, and how many factions it has (its settlements follow from its settlement pattern and the land). Needs terrain.",
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["culture", "home", "factions", "settlements"],
+            "required": ["culture", "home", "factions"],
             "properties": {
               "culture": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
               "home": {
@@ -264,7 +264,7 @@
                 }
               },
               "factions": {"type": "integer", "minimum": 1},
-              "settlements": {"type": "integer", "minimum": 1}
+              "pattern": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Its settlement pattern by id, when not its tier's and polity's (a ruined nation: wasteland_enclaves)."}
             }
           }
         },

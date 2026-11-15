@@ -1,0 +1,69 @@
+{
+  "description": "Recorded content-director response for Meridian's history (task 4b.4): dated events, oldest first, written the way the LLM would answer. A catastrophe's condition is applied by generation (living-planet.md §8b conditions, §8c the chronicle).",
+  "responses": [
+    {
+      "request": {
+        "kind": "history",
+        "key": "history/meridian"
+      },
+      "response": {
+        "events": [
+          {
+            "years_ago": 12000,
+            "kind": "migration",
+            "people": "tayu",
+            "title": "The Heron's children",
+            "text": "The first Tayu clans follow the rivers into the southern forests of the eastern land. Their songs say the Heron stepped out of the first river and the people followed her."
+          },
+          {
+            "years_ago": 3000,
+            "kind": "founding",
+            "people": "velani",
+            "title": "The first cities",
+            "text": "Bronze-working towns on the warm southern coast of the western land grow into the first Velan cities; the common sanctuary by the bay is founded."
+          },
+          {
+            "years_ago": 900,
+            "kind": "fall",
+            "people": "hollin",
+            "title": "The Fall",
+            "text": "A ship comes down burning over the western hills of the central land. Its survivors are the ancestors of the Hollin; its wreck, the Keel, becomes their holy place."
+          },
+          {
+            "years_ago": 200,
+            "kind": "founding",
+            "people": "corvantine",
+            "title": "The crowning",
+            "text": "The coastal cities of the southern land are united under one Crown by cannon and marriages; the Corvantine kingdom is born."
+          },
+          {
+            "years_ago": 110,
+            "kind": "war",
+            "people": "aldmark",
+            "title": "The war of the provinces",
+            "text": "The industrial provinces of the north-east fight a bitter war over the railways and the coal; the peace founds the Aldmark Republic."
+          },
+          {
+            "years_ago": 80,
+            "kind": "catastrophe",
+            "people": "kesh",
+            "title": "The Week",
+            "text": "Civil war breaks out among the Kesh, then the most advanced nation on Meridian. In seven days their weapons burn every city; fallout and poisons turn the south-eastern land to waste. The survivors seal themselves in the old shelters.",
+            "condition": {
+              "hazard": "radiation",
+              "severity": 0.85,
+              "old_pattern": "modern"
+            }
+          },
+          {
+            "years_ago": 62,
+            "kind": "landing",
+            "people": "compact",
+            "title": "The Landing",
+            "text": "The survey ship Meridian Venture reaches Meridian; its colonists land on the eastern plains and found the Compact under the Meridian Survey Charter."
+          }
+        ]
+      }
+    }
+  ]
+}

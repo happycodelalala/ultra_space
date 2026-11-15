@@ -1,0 +1,76 @@
+{
+  "id": "ancient_tunics",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "farmer",
+      "model": "farmer.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "potter",
+        "smith"
+      ],
+      "height_m": 1.778
+    },
+    {
+      "id": "citizen",
+      "model": "citizen.glb",
+      "roles": [
+        "merchant",
+        "scribe",
+        "priest",
+        "noble",
+        "potter",
+        "smith"
+      ],
+      "height_m": 1.798
+    },
+    {
+      "id": "soldier",
+      "model": "soldier.glb",
+      "roles": [
+        "soldier",
+        "noble"
+      ],
+      "height_m": 1.83
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "merchant",
+        "priest",
+        "noble",
+        "potter",
+        "laborer"
+      ],
+      "height_m": 1.736
+    },
+    {
+      "id": "woman_field",
+      "model": "woman_field.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer"
+      ],
+      "height_m": 1.734
+    }
+  ]
+}

@@ -31,7 +31,16 @@ fn meridian() -> RegionSociety {
         .iter()
         .position(|b| b.id == "meridian")
         .unwrap();
-    RegionSociety::generate(&system, body, &director())
+    RegionSociety::generate(
+        &system,
+        body,
+        &director(),
+        &sim_society::SettlementPatterns::load_dir(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/settlement_patterns"),
+        )
+        .unwrap(),
+    )
 }
 
 fn per_culture(rs: &RegionSociety, tier: TechTier) -> f64 {
@@ -46,19 +55,22 @@ fn per_culture(rs: &RegionSociety, tier: TechTier) -> f64 {
 #[test]
 fn well_fed_peoples_grow_slowly_over_years() {
     let mut rs = meridian();
-    let (h0, c0) = (
-        per_culture(&rs, TechTier::Medieval),
-        per_culture(&rs, TechTier::Spacefaring),
-    );
+    let tiers: Vec<TechTier> = rs
+        .society
+        .cultures
+        .iter()
+        .map(|c| c.profile.tech_tier)
+        .collect();
+    let before: Vec<f64> = tiers.iter().map(|&t| per_culture(&rs, t)).collect();
     for _ in 0..(10 * 365) {
         rs.step(1.0);
     }
-    let (h1, c1) = (
-        per_culture(&rs, TechTier::Medieval),
-        per_culture(&rs, TechTier::Spacefaring),
-    );
-    println!("10 years: Hollin {h0:.0} -> {h1:.0}, Compact {c0:.0} -> {c1:.0}");
-    for (grown, start) in [(h1, h0), (c1, c0)] {
+    let after: Vec<f64> = tiers.iter().map(|&t| per_culture(&rs, t)).collect();
+    for (c, (b, a)) in rs.society.cultures.iter().zip(before.iter().zip(&after)) {
+        println!("10 years: {} {b:.0} -> {a:.0}", c.profile.name);
+    }
+    // Every people holds its own (the wasteland's included: rationed, not starving).
+    for (grown, start) in after.into_iter().zip(before) {
         let yearly = (grown / start).powf(0.1) - 1.0;
         assert!(
             (0.002..0.03).contains(&yearly),
@@ -155,7 +167,15 @@ fn society_state_survives_a_save() {
         let mut sim = sim_core::Simulation::for_star_system(system.clone(), |_, s| {
             sim_society::aggregate::add_society_systems(s)
         });
-        sim_society::aggregate::install(&mut sim, &Arc::new(director()));
+        sim_society::aggregate::install(
+            &mut sim,
+            &Arc::new(director()),
+            &sim_society::SettlementPatterns::load_dir(
+                &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../../content/data/settlement_patterns"),
+            )
+            .unwrap(),
+        );
         sim
     };
     let mut sim = make();
@@ -184,16 +204,23 @@ fn society_state_survives_a_save() {
 }
 
 #[test]
-fn a_step_of_every_settlement_costs_well_under_a_millisecond() {
+fn a_tick_of_the_aggregate_costs_well_under_a_millisecond() {
     let mut rs = meridian();
+    // A tick steps one slice of the settlements (each catches up about once a second).
     let start = Instant::now();
     for _ in 0..1000 {
+        rs.step_slice(0.0002);
+    }
+    let per_tick = start.elapsed().as_secs_f64() * 1e3 / 1000.0;
+    // Every settlement at once, for comparison.
+    let start = Instant::now();
+    for _ in 0..100 {
         rs.step(0.02);
     }
-    let per_step = start.elapsed().as_secs_f64() * 1e3 / 1000.0;
+    let per_step = start.elapsed().as_secs_f64() * 1e3 / 100.0;
     println!(
-        "{} settlements: {per_step:.4} ms per step",
+        "{} settlements: {per_tick:.4} ms per tick, {per_step:.3} ms for all at once",
         rs.settlements.len()
     );
-    assert!(per_step < 1.0, "{per_step} ms");
+    assert!(per_tick < 0.5, "{per_tick} ms per tick");
 }

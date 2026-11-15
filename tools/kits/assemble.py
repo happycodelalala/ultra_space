@@ -6,8 +6,11 @@ the layouts. Run through tools/build-kits.sh:
     blender -b --factory-startup --python tools/kits/assemble.py -- [kit ids...] [--preview DIR]
 
 Recipes: `house` (cells of `unit_m`: width across X, depth along Z, storeys, walls wood|stone|mixed,
-roof high|low, chimney, banners, lanterns, tower N storeys at the back) and/or `pieces` (a piece
-at a position in kit units with a turn about the vertical, degrees). Fronts (doors) face +Z.
+roof high|low|flat, chimney, banners, lanterns, tower N storeys at the back), `temple` (a
+colonnade of pillars round width × depth cells, `height` units tall, a tiled roof, and a walled
+inner room when there is space), and/or `pieces` (a piece at a position in kit units with a turn
+about the vertical, degrees; optionally from another `source` folder and at a `scale`, for packs
+of other units). Fronts (doors) face +Z.
 Coordinates here are the game's (glTF: Y up); Blender's are converted on the way in and out.
 """
 
@@ -35,9 +38,9 @@ def clear():
 _piece_cache = {}
 
 
-def place(source, name, x, y, z, rot_deg):
+def place(source, name, x, y, z, rot_deg, scale=1.0):
     """Imports piece `name` and places it at game coordinates (x, y up, z) turned `rot_deg`
-    about the vertical (counter-clockwise seen from above)."""
+    about the vertical (counter-clockwise seen from above), scaled by `scale`."""
     folder = THIRD / source
     path = folder / f"{name}.glb"
     if not path.exists():
@@ -48,11 +51,39 @@ def place(source, name, x, y, z, rot_deg):
     bpy.ops.import_scene.gltf(filepath=str(path))
     new = [o for o in bpy.data.objects if o not in before]
     # Game (x, y, z) is Blender (x, -z, y); a turn about game +Y is a turn about Blender +Z.
-    m = Matrix.Translation((x, -z, y)) @ Matrix.Rotation(math.radians(rot_deg), 4, "Z")
+    m = (Matrix.Translation((x, -z, y)) @ Matrix.Rotation(math.radians(rot_deg), 4, "Z")
+         @ Matrix.Scale(scale, 4))
     for o in new:
         if o.parent is None:
             o.matrix_world = m @ o.matrix_world
     return new
+
+
+def roof_over(source, w, d, top, roof):
+    """A roof over w × d cells at height `top`: hipped (slopes on the long sides, corner pieces
+    at the ends; a pyramid over one cell), high or low; flat; or none."""
+    cx = lambda i: i - (w - 1) / 2
+    cz = lambda j: j - (d - 1) / 2
+    slope, corner = ("roof-high", "roof-high-corner") if roof == "high" else ("roof", "roof-corner")
+    if roof == "none":
+        pass
+    elif roof == "flat":
+        for i in range(w):
+            for j in range(d):
+                place(source, "roof-flat", cx(i), top, cz(j), 0)
+    elif w == 1 and d == 1:
+        place(source, "roof-high-point" if roof == "high" else "roof-point", 0, top, 0, 0)
+    else:
+        for i in range(w):
+            for j in range(d):
+                x, z = cx(i), cz(j)
+                west = i == 0
+                if 0 < j < d - 1:
+                    place(source, slope, x, top, z, 0 if west else 180)
+                else:
+                    front = j == d - 1
+                    rot = {(True, True): 0, (False, True): 90, (False, False): 180, (True, False): -90}[(west, front)]
+                    place(source, corner, x, top, z, rot)
 
 
 def house(source, h):
@@ -85,23 +116,8 @@ def house(source, h):
                     place(source, wall(front, s), x, s, z, -90)
                 if j == 0:
                     place(source, wall("window" if s else "plain", s), x, s, z, 90)
-    # Hipped roof: slopes on the long sides, corner pieces at the ends (one cell deep houses
-    # get a pyramid).
     top = storeys
-    slope, corner = ("roof-high", "roof-high-corner") if roof == "high" else ("roof", "roof-corner")
-    if w == 1 and d == 1:
-        place(source, "roof-high-point" if roof == "high" else "roof-point", 0, top, 0, 0)
-    else:
-        for i in range(w):
-            for j in range(d):
-                x, z = cx(i), cz(j)
-                west = i == 0
-                if 0 < j < d - 1:
-                    place(source, slope, x, top, z, 0 if west else 180)
-                else:
-                    front = j == d - 1
-                    rot = {(True, True): 0, (False, True): 90, (False, False): 180, (True, False): -90}[(west, front)]
-                    place(source, corner, x, top, z, rot)
+    roof_over(source, w, d, top, roof)
     if h.get("chimney"):
         place(source, "chimney", cx(w - 1), top, cz(max(0, d // 2 - 1)), 0)
     if h.get("banners"):
@@ -119,14 +135,33 @@ def house(source, h):
         place(source, "roof-high-point", 0, tower, tz, 0)
 
 
+def temple(source, t):
+    """Pillars round the edge of width × depth cells (at every cell corner), `height` units
+    tall, a flat roof over all of it, and a walled inner room one cell in when there is room."""
+    w, d, height = t["width"], t["depth"], t.get("height", 2)
+    for i in range(w + 1):
+        for j in range(d + 1):
+            if 0 < i < w and 0 < j < d:
+                continue
+            x, z = i - w / 2, j - d / 2
+            for s in range(height):
+                place(source, "pillar-stone", x, s, z, 0)
+    roof_over(source, w, d, height, t.get("roof", "high"))
+    if w >= 3 and d >= 3:
+        house(source, {"width": w - 2, "depth": d - 2, "storeys": height, "walls": "stone",
+                       "roof": "none"})
+
+
 def build(kit, b):
     clear()
     r = b["recipe"]
     if "house" in r:
         house(kit["source"], r["house"])
+    if "temple" in r:
+        temple(kit["source"], r["temple"])
     for p in r.get("pieces", []):
         x, y, z = p["at"]
-        place(kit["source"], p["piece"], x, y, z, p.get("rot", 0))
+        place(p.get("source", kit["source"]), p["piece"], x, y, z, p.get("rot", 0), p.get("scale", 1.0))
     # Apply the kit's scale; free every mesh from its import hierarchy (keeping where it is),
     # then join them into one object.
     for o in bpy.data.objects:

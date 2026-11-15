@@ -1,0 +1,678 @@
+{
+ "id": "industrial_town",
+ "name": "Industrial town (placeholder)",
+ "description": "The Aldmark's buildings: factories and chimneys from Kenney's City Kit Industrial, houses from City Kit Suburban, shops and offices from City Kit Commercial (CC0), until the design track's own kit. Units of 1 m; each piece scaled to size. Fronts face +Z.",
+ "source": "kenney-city-industrial",
+ "unit_m": 1.0,
+ "buildings": [
+  {
+   "id": "house_d",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-d",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "house_e",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-e",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "house_f",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-f",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "house_n",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-n",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "house_u",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-u",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "tenement_f",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-f",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "tenement_g",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-g",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "tenement_h",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-h",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_a",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_b",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_c",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-c",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_j",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-j",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "shop_k",
+   "uses": [
+    "shop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-k",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_a",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_b",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-b",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_c",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-c",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_e",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-e",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_f",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-f",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_g",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-g",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_q",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-q",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "factory_chimney",
+   "uses": [
+    "workshop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-r",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     },
+     {
+      "piece": "chimney-large",
+      "at": [
+       -8,
+       0,
+       -4
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "power_station",
+   "uses": [
+    "power"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-l",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     },
+     {
+      "piece": "chimney-large",
+      "at": [
+       10,
+       0,
+       -6
+      ],
+      "rot": 0,
+      "scale": 14
+     }
+    ]
+   }
+  },
+  {
+   "id": "water_tower",
+   "uses": [
+    "power"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "water-tower",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "town_hall",
+   "uses": [
+    "hall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-n",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "hospital",
+   "uses": [
+    "clinic"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-i",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-commercial",
+      "scale": 9
+     }
+    ]
+   }
+  },
+  {
+   "id": "farmhouse",
+   "uses": [
+    "farm"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "building-type-g",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 7.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "fountain",
+   "uses": [
+    "square"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "fountain-square",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-fantasy-town",
+      "scale": 3
+     }
+    ]
+   }
+  },
+  {
+   "id": "containers",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "shipping-container-a",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 6
+     },
+     {
+      "piece": "shipping-container-b",
+      "at": [
+       9,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 6
+     }
+    ]
+   }
+  },
+  {
+   "id": "tanks",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "detail-tank-large",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 8
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-large",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree_small",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-small",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-city-suburban",
+      "scale": 12
+     }
+    ]
+   }
+  }
+ ]
+}

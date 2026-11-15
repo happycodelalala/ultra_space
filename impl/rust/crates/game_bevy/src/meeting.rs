@@ -39,7 +39,7 @@ impl Plugin for MeetingPlugin {
             .add_systems(Startup, spawn_labels)
             .add_systems(
                 Update,
-                (entering, inspect, look_at)
+                (entering, inspect, look_at, hazard_warning)
                     .after(SettlementSet)
                     .in_set(InGame),
             );
@@ -64,7 +64,29 @@ struct Banner;
 #[derive(Component)]
 struct LookLabel;
 
+/// The hazard warning (task 4b.4).
+#[derive(Component)]
+struct HazardLabel;
+
 fn spawn_labels(mut commands: Commands) {
+    commands.spawn((
+        HazardLabel,
+        Text::new(""),
+        TextFont {
+            font_size: FontSize::Px(20.0),
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.35, 0.2)),
+        TextLayout::justify(Justify::Center),
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(170),
+            width: percent(100),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        Visibility::Hidden,
+    ));
     commands.spawn((
         Banner,
         Text::new(""),
@@ -139,9 +161,12 @@ fn entering(
 ) {
     let Some(draw) = draw else { return };
     let near = distances(&draw, &universe, &camera, render.0);
+    // Settlements only: a dwelling has no banner.
     let inside = near
         .iter()
-        .filter(|(_, d)| *d < 0.0)
+        .filter(|(i, d)| {
+            *d < 0.0 && draw.sites[*i].settlement.size != sim_society::SizeClass::Dwelling
+        })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|n| n.0);
     // Leaving needs a margin, so the edge doesn't flicker the banner.
@@ -157,7 +182,7 @@ fn entering(
                 "{}\n{} {} of {}{seat}\n{} people",
                 st.name.to_uppercase(),
                 article(&s.culture.1),
-                st.kind.name(),
+                st.word,
                 // "of the Gostkod March" mid-sentence.
                 s.faction
                     .strip_prefix("The ")
@@ -169,10 +194,7 @@ fn entering(
         meeting.banner_left = BANNER_TIME;
         info!(
             "entered {} ({} {}, {})",
-            st.name,
-            s.culture.1,
-            st.kind.name(),
-            s.faction
+            st.name, s.culture.1, st.word, s.faction
         );
     } else if inside.is_none() && !still {
         meeting.inside = None;
@@ -240,7 +262,7 @@ fn inspect(
         out,
         "  {} {}, {}{}, {} people, founded {} years ago",
         site.culture.1,
-        s.kind.name(),
+        s.word,
         site.faction,
         if s.seat { " (seat)" } else { "" },
         s.population,
@@ -272,6 +294,10 @@ fn inspect(
             .map(|((r, _), n)| format!("{} {:.0}", site.role_names.get(r).unwrap_or(r), n))
             .collect();
         let _ = writeln!(out, "  {}", roles.join(", "));
+    }
+    let (level, kind) = hazard_here(&sim, &universe, &camera, render.0);
+    if let Some(k) = kind {
+        let _ = writeln!(out, "  Hazard here: {} {level:.2}", k.name());
     }
     let _ = writeln!(out, "  {}", s.lore.description);
     let _ = writeln!(out, "  Landmark: {}", s.lore.landmark);
@@ -324,6 +350,7 @@ fn look_at(
     people: Query<(&GlobalTransform, &InheritedVisibility, &PersonLabel)>,
     mut label: Query<(&mut Text, &mut Visibility), With<LookLabel>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("look_at");
     let Ok(cam) = cameras.single() else { return };
     // Render space (camera-relative, anchor axes) to the camera body's surface frame.
     let system = &universe.0;
@@ -340,8 +367,8 @@ fn look_at(
         |v: Vec3| surface.rotation.inverse() * (v.as_dvec3() + camera.offset - surface.position);
     let foundations = draw
         .as_ref()
-        .and_then(|d| d.sites.first())
-        .and_then(|s| s.terrain.foundations().cloned());
+        .and_then(|d| d.terrain(body))
+        .and_then(|t| t.foundations().cloned());
     let (origin, forward) = (cam.translation(), cam.forward().as_vec3());
     let mut best: Option<(f32, &str)> = None;
     for (t, visible, l) in &people {
@@ -381,6 +408,82 @@ fn look_at(
                 }
             }
         }
+    }
+}
+
+/// How strong the hazard is where the camera is, on the body it is at (0–1), and of what kind.
+fn hazard_here(
+    sim: &Sim,
+    universe: &Universe,
+    camera: &SpaceCamera,
+    t: f64,
+) -> (f64, Option<sim_society::HazardKind>) {
+    let body = camera.anchor;
+    let Some(rs) = sim
+        .0
+        .regions
+        .get(body)
+        .and_then(|r| r.world.get_resource::<RegionSociety>())
+    else {
+        return (0.0, None);
+    };
+    if rs.conditions.is_empty() {
+        return (0.0, None);
+    }
+    let at = camera_on(universe, camera, body, t);
+    let b = &universe.0.bodies[body];
+    // Only near the ground (the air is clean a few km up).
+    if at.length() - b.radius > 3_000.0 {
+        return (0.0, None);
+    }
+    sim_society::hazard_at(&rs.conditions, at.normalize(), b.radius)
+}
+
+/// Warns the player in a hazard: its kind and how strong ("RADIATION: HIGH").
+fn hazard_warning(
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut label: Query<(&mut Text, &mut Visibility), With<HazardLabel>>,
+    mut was: Local<&'static str>,
+) {
+    let (level, kind) = hazard_here(&sim, &universe, &camera, render.0);
+    let Ok((mut text, mut v)) = label.single_mut() else {
+        return;
+    };
+    let band = match level {
+        l if l < 0.03 => "",
+        l if l < 0.15 => "LOW",
+        l if l < 0.35 => "MODERATE",
+        l if l < 0.6 => "HIGH",
+        _ => "LETHAL",
+    };
+    if band != *was {
+        if band.is_empty() {
+            info!("left the hazard");
+        } else {
+            info!(
+                "hazard: {} {band} ({level:.2})",
+                kind.map_or("", |k| k.name())
+            );
+        }
+        *was = band;
+    }
+    let want = if band.is_empty() {
+        Visibility::Hidden
+    } else {
+        let line = format!(
+            "{}: {band}",
+            kind.map_or("HAZARD", |k| k.name()).to_uppercase()
+        );
+        if text.0 != line {
+            text.0 = line;
+        }
+        Visibility::Visible
+    };
+    if *v != want {
+        *v = want;
     }
 }
 

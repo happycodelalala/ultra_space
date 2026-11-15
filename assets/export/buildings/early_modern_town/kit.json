@@ -1,0 +1,384 @@
+{
+  "id": "early_modern_town",
+  "source": "kenney-fantasy-town",
+  "licence": "assets/third_party/kenney-fantasy-town/License.txt",
+  "buildings": [
+    {
+      "id": "cottage",
+      "uses": [
+        "home"
+      ],
+      "model": "cottage.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -3.212
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        3.212
+      ]
+    },
+    {
+      "id": "house",
+      "uses": [
+        "home"
+      ],
+      "model": "house.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -4.712
+      ],
+      "max_m": [
+        3.212,
+        9.422,
+        4.712
+      ]
+    },
+    {
+      "id": "house_tall",
+      "uses": [
+        "home",
+        "shop"
+      ],
+      "model": "house_tall.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -4.712
+      ],
+      "max_m": [
+        3.212,
+        12.422,
+        4.712
+      ]
+    },
+    {
+      "id": "merchant_house",
+      "uses": [
+        "home",
+        "shop"
+      ],
+      "model": "merchant_house.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -6.212
+      ],
+      "max_m": [
+        3.212,
+        12.422,
+        6.212
+      ]
+    },
+    {
+      "id": "hall",
+      "uses": [
+        "hall"
+      ],
+      "model": "hall.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -12.15
+      ],
+      "max_m": [
+        3.212,
+        15.0,
+        9.212
+      ]
+    },
+    {
+      "id": "church",
+      "uses": [
+        "shrine"
+      ],
+      "model": "church.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -10.65
+      ],
+      "max_m": [
+        3.212,
+        18.0,
+        7.712
+      ]
+    },
+    {
+      "id": "inn",
+      "uses": [
+        "inn"
+      ],
+      "model": "inn.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -6.212
+      ],
+      "max_m": [
+        3.212,
+        12.422,
+        6.636
+      ]
+    },
+    {
+      "id": "smithy",
+      "uses": [
+        "smithy"
+      ],
+      "model": "smithy.glb",
+      "min_m": [
+        -3.212,
+        0.0,
+        -3.212
+      ],
+      "max_m": [
+        3.212,
+        6.422,
+        3.212
+      ]
+    },
+    {
+      "id": "barn",
+      "uses": [
+        "farm"
+      ],
+      "model": "barn.glb",
+      "min_m": [
+        -3.201,
+        0.0,
+        -6.201
+      ],
+      "max_m": [
+        3.201,
+        4.878,
+        6.201
+      ]
+    },
+    {
+      "id": "windmill",
+      "uses": [
+        "mill"
+      ],
+      "model": "windmill.glb",
+      "min_m": [
+        -4.67,
+        0.0,
+        -1.65
+      ],
+      "max_m": [
+        4.67,
+        12.47,
+        2.957
+      ]
+    },
+    {
+      "id": "fountain",
+      "uses": [
+        "square"
+      ],
+      "model": "fountain.glb",
+      "min_m": [
+        -3.0,
+        -0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        1.44,
+        3.0
+      ]
+    },
+    {
+      "id": "stall_red",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_red.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "stall_green",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_green.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "harbour",
+      "uses": [
+        "port",
+        "harbour"
+      ],
+      "model": "harbour.glb",
+      "min_m": [
+        -3.0,
+        -1.2,
+        -0.015
+      ],
+      "max_m": [
+        12.996,
+        19.126,
+        24.015
+      ]
+    },
+    {
+      "id": "watchtower",
+      "uses": [
+        "prop"
+      ],
+      "model": "watchtower.glb",
+      "min_m": [
+        -4.116,
+        0.0,
+        -4.116
+      ],
+      "max_m": [
+        4.116,
+        7.519,
+        4.116
+      ]
+    },
+    {
+      "id": "cargo",
+      "uses": [
+        "prop"
+      ],
+      "model": "cargo.glb",
+      "min_m": [
+        -0.728,
+        0.0,
+        -0.884
+      ],
+      "max_m": [
+        2.201,
+        1.291,
+        1.001
+      ]
+    },
+    {
+      "id": "cart",
+      "uses": [
+        "prop"
+      ],
+      "model": "cart.glb",
+      "min_m": [
+        -1.34,
+        -0.0,
+        -1.935
+      ],
+      "max_m": [
+        1.34,
+        1.607,
+        2.085
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -1.535,
+        0.0,
+        -1.535
+      ],
+      "max_m": [
+        1.535,
+        8.918,
+        1.535
+      ]
+    },
+    {
+      "id": "tree_round",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree_round.glb",
+      "min_m": [
+        -1.528,
+        0.0,
+        -1.528
+      ],
+      "max_m": [
+        1.528,
+        8.252,
+        1.528
+      ]
+    },
+    {
+      "id": "town_wall",
+      "uses": [
+        "wall"
+      ],
+      "model": "town_wall.glb",
+      "min_m": [
+        -6.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        6.0,
+        7.86,
+        3.0
+      ]
+    },
+    {
+      "id": "wall_tower",
+      "uses": [
+        "tower"
+      ],
+      "model": "wall_tower.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        18.12,
+        3.0
+      ]
+    },
+    {
+      "id": "town_gate",
+      "uses": [
+        "gate"
+      ],
+      "model": "town_gate.glb",
+      "min_m": [
+        -7.2,
+        0.0,
+        -2.4
+      ],
+      "max_m": [
+        7.2,
+        6.3,
+        2.4
+      ]
+    }
+  ]
+}

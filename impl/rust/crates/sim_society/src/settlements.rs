@@ -4,37 +4,128 @@
 //! a name and lore. The same body, society and director answers give the same settlements.
 
 use ai_gateway::{ContentDirector, ContentRequest, Source};
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use serde_json::json;
 use sim_core::StarSystem;
 use sim_planet::map::direction;
-use sim_planet::{Biome, Climate, Terrain, fibonacci_directions};
+use sim_planet::{Biome, Climate, Terrain};
 
 use crate::lore::{SettlementLore, TechTier};
 use crate::names;
+use crate::patterns::{SettlementPattern, SettlementPatterns};
 use crate::rng::Rng;
 use crate::society::Society;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum SettlementKind {
+/// How big a settlement is, the same for every culture and tier (living-planet.md §8b, the
+/// settlement hierarchy). Drives spacing, layout scale and level of detail; never shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SizeClass {
+    /// 1–3 households (decoration, not simulated).
+    Dwelling,
+    /// Up to ~100 people.
     Hamlet,
+    /// 100–500.
     Village,
+    /// 500–5,000.
     Town,
-    Outpost,
-    Port,
-    Colony,
+    /// 5,000–100,000.
+    City,
+    /// Over 100,000.
+    Metropolis,
+    /// Millions.
+    Megalopolis,
 }
 
-impl SettlementKind {
+impl SizeClass {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Dwelling => "dwelling",
             Self::Hamlet => "hamlet",
             Self::Village => "village",
             Self::Town => "town",
-            Self::Outpost => "outpost",
-            Self::Port => "port",
-            Self::Colony => "colony",
+            Self::City => "city",
+            Self::Metropolis => "metropolis",
+            Self::Megalopolis => "megalopolis",
         }
+    }
+}
+
+/// What a settlement is for, on top of its size (any number of them).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SettlementRole {
+    /// A faction's seat.
+    Seat,
+    /// The people's capital (the first faction's seat).
+    Capital,
+    /// A port, by sea or for spacecraft.
+    Port,
+    Fort,
+    Market,
+    Mine,
+    Farm,
+    Temple,
+    Research,
+    /// A post without settled families.
+    Outpost,
+    /// A protected city in a wasteland.
+    Enclave,
+    Arcology,
+    /// A settlement whose place is an orbit.
+    Station,
+}
+
+impl SettlementRole {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Seat => "seat",
+            Self::Capital => "capital",
+            Self::Port => "port",
+            Self::Fort => "fort",
+            Self::Market => "market",
+            Self::Mine => "mine",
+            Self::Farm => "farm",
+            Self::Temple => "temple",
+            Self::Research => "research",
+            Self::Outpost => "outpost",
+            Self::Enclave => "enclave",
+            Self::Arcology => "arcology",
+            Self::Station => "station",
+        }
+    }
+
+    /// Roles whose word names a settlement before its size's (the first a settlement has).
+    const NAMING: [SettlementRole; 6] = [
+        Self::Capital,
+        Self::Seat,
+        Self::Port,
+        Self::Outpost,
+        Self::Enclave,
+        Self::Arcology,
+    ];
+}
+
+/// The default word for a settlement of `size` at `tier`, when its culture's lore has none
+/// (living-planet.md §8b, the hierarchy table).
+pub fn default_word(tier: TechTier, size: SizeClass) -> &'static str {
+    use SizeClass::*;
+    use TechTier::*;
+    match (tier, size) {
+        (_, Dwelling) => match tier {
+            StoneAge => "camp",
+            Ancient | Medieval => "farmstead",
+            EarlyModern | Industrial | Modern => "farm",
+            Spacefaring | Interstellar => "hab",
+        },
+        (StoneAge, Hamlet) => "camp",
+        (StoneAge, Town) => "hill fort",
+        (Spacefaring | Interstellar, Hamlet) => "outpost",
+        (Spacefaring | Interstellar, Village) => "settlement",
+        (Spacefaring | Interstellar, Town) => "colony town",
+        (Spacefaring | Interstellar, Metropolis | Megalopolis) => "arcology",
+        _ => size.name(),
     }
 }
 
@@ -51,7 +142,11 @@ pub struct Settlement {
     pub faction: usize,
     /// The faction's seat.
     pub seat: bool,
-    pub kind: SettlementKind,
+    pub size: SizeClass,
+    /// What it is for (seat, port, outpost...): its roles in the settlement hierarchy.
+    pub settlement_roles: Vec<SettlementRole>,
+    /// What its people call a place like it ("hold", "outpost", "the Landing").
+    pub word: String,
     /// Centre (unit direction in the body's surface frame).
     pub direction: DVec3,
     /// Ground height at the centre (m above the reference radius).
@@ -67,12 +162,43 @@ pub struct Settlement {
     pub site_score: f64,
 }
 
+impl Settlement {
+    pub fn has(&self, role: SettlementRole) -> bool {
+        self.settlement_roles.contains(&role)
+    }
+
+    /// The key of its kind of lore (`settlement/<culture>/<kind>/*` in content/lore): its
+    /// first of "capital", "port", "outpost", "enclave", else its size.
+    pub fn lore_kind(&self) -> &'static str {
+        use SettlementRole::*;
+        [Capital, Port, Outpost, Enclave]
+            .into_iter()
+            .find(|r| self.has(*r))
+            .map_or(self.size.name(), SettlementRole::name)
+    }
+}
+
+/// The word a culture uses for a settlement: its lore's word for the first naming role it has
+/// (capital, seat, port, outpost, ...), else for its size, else the tier's default.
+pub fn settlement_word(
+    words: &std::collections::BTreeMap<String, String>,
+    tier: TechTier,
+    size: SizeClass,
+    roles: &[SettlementRole],
+) -> String {
+    SettlementRole::NAMING
+        .iter()
+        .filter(|r| roles.contains(r))
+        .find_map(|r| words.get(r.name()))
+        .or_else(|| words.get(size.name()))
+        .cloned()
+        .unwrap_or_else(|| default_word(tier, size).to_string())
+}
+
 /// Sites closer than this to the sea (m above sea level) are too low.
 const MIN_HEIGHT: f64 = 5.0;
 /// Steepest ground a settlement takes (radians).
 const MAX_SLOPE: f64 = 0.14;
-/// Candidate sites: this many directions over the whole sphere (those inside a home region).
-const CANDIDATES: usize = 200_000;
 
 /// Scores a site for a people of `tier` (0 unusable … 1 ideal) and returns its height.
 fn score_site(
@@ -123,11 +249,27 @@ fn score_site(
     Some((score.clamp(0.0, 1.0), s.height))
 }
 
-/// The settlements of every people on body `body`, in the society's culture order.
+/// The settlements of every people on body `body`, in the society's culture order, each
+/// people settling its home region by its settlement pattern (living-planet.md §8b):
+///
+/// 1. **Candidates** on a lattice over the home region (a third of the smallest spacing apart),
+///    scored by the land for the people's tier; the best `settled_share` of the usable land is
+///    settled, wherever in the region it lies.
+/// 2. **Seats**, one per faction: the first the best site near the middle (the people's
+///    capital), the others the best sites far from the seats before.
+/// 3. **Classes**, biggest first: the settled land's best sites (with a little chance), each
+///    keeping its class's spacing (0.8–1.2 times) from every settlement placed before.
+/// 4. **Territories:** each settlement belongs to the faction whose seat is nearest, distances
+///    shrunk by the faction's strength, so stronger factions hold more land.
+///
+/// Peoples without a pattern get no settlements (noted as a fallback). The same body,
+/// society, patterns and director answers give the same settlements.
 pub fn generate_settlements(
     system: &StarSystem,
     society: &mut Society,
     director: &ContentDirector,
+    patterns: &SettlementPatterns,
+    hazard: &(dyn Fn(DVec3) -> f64 + Sync),
 ) -> Vec<Settlement> {
     let body = &system.bodies[society.body];
     let (Some(terrain), Some(climate)) = (Terrain::of(body), Climate::of(body)) else {
@@ -136,164 +278,143 @@ pub fn generate_settlements(
     let mut out = Vec::new();
     for ci in 0..society.cultures.len() {
         let culture = society.cultures[ci].clone();
-        let tier = culture.profile.tech_tier;
-        let home = culture.people.home;
-        let centre = direction(
-            home.latitude_deg.to_radians(),
-            home.longitude_deg.to_radians(),
-        );
-        let reach = home.radius_deg.to_radians();
-        let count = culture.people.settlements as usize;
-
-        // Candidate sites with their scores (the home region's edge counts less).
-        let sites: Vec<(f64, DVec3, f64)> = fibonacci_directions(CANDIDATES)
-            .filter(|d| d.angle_between(centre) < reach)
-            .filter_map(|d| {
-                let (score, height) = score_site(&terrain, &climate, tier, d)?;
-                let edge = d.angle_between(centre) / reach;
-                Some((score * (1.0 - 0.5 * edge * edge), d, height))
-            })
-            .collect();
-        // Best sites first (with a little chance, so the pattern isn't a lattice), each keeping
-        // its own distance (between 0.6 and 1.4 times the spacing) from those before it;
-        // closer spacing if the region is too small.
-        let mut pick = Rng::derive(society.seed, &format!("sites/{}", culture.profile.id));
-        let mut ranked: Vec<(f64, usize, f64)> = sites
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.0 + 0.15 * pick.unit(), i, 0.6 + 0.8 * pick.unit()))
-            .collect();
-        ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let mut spacing = reach * 1.6 / (count as f64).sqrt();
-        let chosen = loop {
-            let mut chosen: Vec<(f64, DVec3, f64)> = Vec::new();
-            for &(_, i, own) in &ranked {
-                if chosen.len() == count {
-                    break;
-                }
-                let s = sites[i];
-                if chosen
-                    .iter()
-                    .all(|c| c.1.angle_between(s.1) >= spacing * own)
-                {
-                    chosen.push(s);
-                }
-            }
-            if chosen.len() == count || spacing < reach * 0.05 {
-                break chosen;
-            }
-            spacing *= 0.8;
+        let profile = &culture.profile;
+        let tier = profile.tech_tier;
+        let chosen = match &culture.people.pattern {
+            Some(id) => patterns.by_id(id),
+            None => patterns.for_people(tier, profile.polity),
         };
-
-        // Faction territories: wedges around the people's centre, in bearing order, sized to
-        // each faction's share (always contiguous, always the right size); the first faction's
-        // wedge holds the best site. Each faction's seat is the best site near the middle of
-        // its wedge.
+        let Some(pattern) = chosen.cloned() else {
+            society.fallbacks.push(format!(
+                "{}: no settlement pattern for a {:?} {:?}",
+                profile.id, tier, profile.polity
+            ));
+            continue;
+        };
+        let home = culture.people.home;
         let factions: Vec<usize> = (0..society.factions.len())
             .filter(|&f| society.factions[f].culture == ci)
             .collect();
-        let middle = chosen.iter().map(|c| c.1).sum::<DVec3>().normalize();
-        let east = DVec3::Y
-            .cross(middle)
-            .normalize_or(middle.any_orthonormal_vector());
-        let north = middle.cross(east);
-        let bearing = |d: DVec3| d.dot(north).atan2(d.dot(east));
-        let mut around: Vec<usize> = (0..chosen.len()).collect();
-        around.sort_by(|&x, &y| bearing(chosen[x].1).total_cmp(&bearing(chosen[y].1)));
-        let best = (0..chosen.len())
-            .max_by(|&x, &y| chosen[x].0.total_cmp(&chosen[y].0))
-            .unwrap_or(0);
-        let at = around.iter().position(|&i| i == best).unwrap_or(0);
-        let first = factions
-            .first()
-            .map_or(0, |&f| society.factions[f].settlements as usize);
-        around.rotate_left((at + chosen.len() - first / 2) % chosen.len().max(1));
-        let mut owner: Vec<usize> = vec![0; chosen.len()];
-        let mut seats: Vec<usize> = Vec::new();
-        let mut next = 0;
-        for (k, &f) in factions.iter().enumerate() {
-            let take = (society.factions[f].settlements as usize).min(chosen.len() - next);
-            let wedge = &around[next..next + take];
-            next += take;
-            for &i in wedge {
-                owner[i] = k;
-            }
-            let mid = wedge
-                .iter()
-                .map(|&i| chosen[i].1)
-                .sum::<DVec3>()
-                .normalize_or(middle);
-            let spread = wedge
-                .iter()
-                .map(|&i| chosen[i].1.angle_between(mid))
-                .fold(1e-6, f64::max);
-            let seat = wedge.iter().copied().max_by(|&x, &y| {
-                let worth =
-                    |i: usize| chosen[i].0 * (1.0 - 0.5 * chosen[i].1.angle_between(mid) / spread);
-                worth(x).total_cmp(&worth(y))
-            });
-            if let Some(i) = seat {
-                seats.push(i);
-            }
+        let strengths: Vec<f64> = factions
+            .iter()
+            .map(|&f| society.factions[f].strength)
+            .collect();
+        let placed = place(
+            &terrain,
+            &climate,
+            tier,
+            &pattern,
+            home,
+            &strengths,
+            society.seed,
+            &profile.id,
+            hazard,
+        );
+        if placed.is_empty() {
+            society
+                .fallbacks
+                .push(format!("{}: no land to settle", profile.id));
+            continue;
         }
-        let owner: Vec<Option<usize>> = owner.into_iter().map(Some).collect();
 
-        // Kinds, populations, names and lore.
-        let mut rng = Rng::derive(society.seed, &format!("settlements/{}", culture.profile.id));
-        let mut used: Vec<String> = Vec::new();
-        for (i, &(score, dir, height)) in chosen.iter().enumerate() {
-            let k = owner[i].unwrap_or(0);
+        // Sizes, populations, names and lore.
+        let mut rng = Rng::derive(society.seed, &format!("settlements/{}", profile.id));
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (n, site) in placed.iter().enumerate() {
+            let (site_score, height, dir, class) = (site.score, site.height, site.dir, site.class);
+            let k = site.owner;
             let faction = factions.get(k).copied().unwrap_or(0);
-            let seat = seats.get(k) == Some(&i);
-            let (kind, population) = match tier {
-                TechTier::Spacefaring => match (seat, k) {
-                    (true, 0) => (SettlementKind::Colony, 2500 + (2500.0 * score) as u32),
-                    (true, _) => (SettlementKind::Port, 900 + (900.0 * score) as u32),
-                    _ => (
-                        SettlementKind::Outpost,
-                        80 + (400.0 * score * rng.unit()) as u32,
-                    ),
-                },
-                _ => {
-                    if seat {
-                        (
-                            SettlementKind::Town,
-                            900 + (1600.0 * score * (0.6 + 0.4 * rng.unit())) as u32,
-                        )
-                    } else if score * (0.6 + 0.8 * rng.unit()) > 0.55 {
-                        (
-                            SettlementKind::Village,
-                            150 + (350.0 * score * rng.unit()) as u32,
-                        )
+            let seat = class.is_none();
+            let capital = seat && k == 0;
+            let (size, settlement_roles, range) = match class {
+                None => {
+                    let s = &pattern.seat;
+                    let mut roles = s.roles.clone();
+                    let mut range = s.people;
+                    if capital {
+                        roles.extend(s.capital_roles.iter().copied());
+                        range = s.capital_people.unwrap_or(range);
+                    }
+                    (s.size, roles, range)
+                }
+                Some(c) => {
+                    let c = &pattern.classes[c];
+                    (c.size, c.roles.clone(), c.people)
+                }
+            };
+            // A port by sea needs the sea within reach of its harbour, else it isn't one (a seat
+            // inland). Spacecraft ports need none.
+            let mut settlement_roles = settlement_roles;
+            if profile.tech_tier != TechTier::Spacefaring
+                && settlement_roles.contains(&SettlementRole::Port)
+                && !coastal(&terrain, dir, SHORE_REACH)
+            {
+                settlement_roles.retain(|r| *r != SettlementRole::Port);
+            }
+            let spread = f64::from(range[1].saturating_sub(range[0]));
+            let population =
+                range[0] + (spread * (0.5 * site_score + 0.5 * rng.unit())).round() as u32;
+            let name = {
+                let mut name = String::new();
+                for _ in 0..50 {
+                    name = names::place_for(
+                        &profile.naming,
+                        kind_word(size, &settlement_roles),
+                        &mut rng,
+                    );
+                    if !used.contains(&name) {
+                        break;
+                    }
+                }
+                used.insert(name.clone());
+                name
+            };
+            let roles = role_counts(&profile.roles, population);
+            let founded_years_ago = match tier {
+                TechTier::Spacefaring | TechTier::Interstellar => {
+                    if settlement_roles.contains(&SettlementRole::Capital) {
+                        62
                     } else {
-                        (SettlementKind::Hamlet, 25 + (90.0 * rng.unit()) as u32)
+                        5 + (50.0 * rng.unit()) as u32
+                    }
+                }
+                _ => {
+                    if size >= SizeClass::Town {
+                        600 + (280.0 * rng.unit()) as u32
+                    } else {
+                        60 + (700.0 * rng.unit()) as u32
                     }
                 }
             };
-            let name = loop {
-                let n = names::place_for(&culture.profile.naming, kind_word(kind), &mut rng);
-                if !used.contains(&n) {
-                    used.push(n.clone());
-                    break n;
-                }
-            };
-            let roles = role_counts(&culture.profile.roles, population);
-            let founded_years_ago = match tier {
-                TechTier::Spacefaring => match kind {
-                    SettlementKind::Colony => 62,
-                    _ => 5 + (50.0 * rng.unit()) as u32,
-                },
-                _ => match kind {
-                    SettlementKind::Town => 600 + (280.0 * rng.unit()) as u32,
-                    _ => 60 + (700.0 * rng.unit()) as u32,
-                },
-            };
-            let id = format!("{}/{}", culture.profile.id, i);
+            let id = format!("{}/{}", profile.id, n);
             let faction_name = society.factions[faction].name.clone();
+            let word = settlement_word(&profile.settlement_words, tier, size, &settlement_roles);
+            let mut settlement = Settlement {
+                id,
+                name: name.clone(),
+                culture: ci,
+                faction,
+                seat,
+                size,
+                settlement_roles,
+                word: word.clone(),
+                direction: dir,
+                height,
+                population,
+                roles,
+                founded_years_ago,
+                layout_seed: 0,
+                lore: SettlementLore {
+                    description: String::new(),
+                    landmark: String::new(),
+                },
+                site_score,
+            };
+            let lore_kind = settlement.lore_kind();
             let request = ContentRequest::new(
                 "settlement_lore",
-                format!("settlement/{}/{}/{i}", culture.profile.id, kind.name()),
-                json!({"name": name, "faction": faction_name, "kind": kind.name(), "population": population}),
+                format!("settlement/{}/{lore_kind}/{n}", profile.id),
+                json!({"name": name, "faction": faction_name, "kind": lore_kind, "word": word, "population": population}),
             );
             let answer = director.request(&request, || SettlementLore {
                 description: "{settlement} is a {kind} of {people}.".into(),
@@ -305,48 +426,283 @@ pub fn generate_settlements(
             let fill = |t: &str| {
                 t.replace("{settlement}", &name)
                     .replace("{faction}", &faction_name)
-                    .replace("{people}", &culture.profile.name)
-                    .replace("{culture}", &culture.profile.adjective)
-                    .replace("{kind}", kind.name())
+                    .replace("{people}", &profile.name)
+                    .replace("{culture}", &profile.adjective)
+                    .replace("{kind}", &word)
             };
-            out.push(Settlement {
-                id,
-                name: name.clone(),
-                culture: ci,
-                faction,
-                seat,
-                kind,
-                direction: dir,
-                height,
-                population,
-                roles,
-                founded_years_ago,
-                layout_seed: rng.next_u64(),
-                lore: SettlementLore {
-                    description: fill(&answer.value.description),
-                    landmark: fill(&answer.value.landmark),
-                },
-                site_score: score,
-            });
+            settlement.layout_seed = rng.next_u64();
+            settlement.lore = SettlementLore {
+                description: fill(&answer.value.description),
+                landmark: fill(&answer.value.landmark),
+            };
+            society.factions[faction].settlements += 1;
+            out.push(settlement);
         }
     }
     out
 }
 
-/// The word a place pattern uses for this kind of settlement ("Port {name}" only for ports).
-fn kind_word(kind: SettlementKind) -> &'static str {
-    match kind {
-        SettlementKind::Port => "Port",
-        SettlementKind::Outpost => "Outpost",
-        SettlementKind::Colony => "Station",
-        SettlementKind::Town => "Town",
-        SettlementKind::Village => "Village",
-        SettlementKind::Hamlet => "Hamlet",
+/// A site chosen by [`place`]: where, how good its land, its ground height (m), its class in
+/// the pattern (`None`: a seat) and which of the people's factions holds it.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PlacedSite {
+    pub dir: DVec3,
+    pub score: f64,
+    pub height: f64,
+    pub class: Option<usize>,
+    pub owner: usize,
+}
+
+/// Places a people's settlements by `pattern` over its `home` region (steps 1–4 of
+/// [`generate_settlements`]): one seat per faction (`strengths`), then the classes by spacing,
+/// avoiding land where `hazard` (0–1) is 0.35 or more. `label` names its random choices.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn place(
+    terrain: &Terrain,
+    climate: &Climate,
+    tier: TechTier,
+    pattern: &SettlementPattern,
+    home: sim_core::system::HomeRegion,
+    strengths: &[f64],
+    seed: u64,
+    label: &str,
+    hazard: &(dyn Fn(DVec3) -> f64 + Sync),
+) -> Vec<PlacedSite> {
+    let r = terrain.radius;
+    let centre = direction(
+        home.latitude_deg.to_radians(),
+        home.longitude_deg.to_radians(),
+    );
+    let reach = home.radius_deg.to_radians();
+    let (east, north) = {
+        let (e, south) = sim_planet::tangent_frame(centre);
+        (e, -south)
+    };
+
+    // 1. Candidates: a hex lattice on the region's tangent plane (km), scored in parallel.
+    let smallest = pattern
+        .classes
+        .iter()
+        .map(|c| c.spacing_km)
+        .fold(f64::MAX, f64::min)
+        .min(20.0);
+    let step = (smallest / 3.0).max(0.8);
+    let extent = reach * r / 1000.0;
+    let rows = (extent / (step * 0.866)).ceil() as i64;
+    let cols = (extent / step).ceil() as i64;
+    let mut lattice: Vec<(DVec2, DVec3)> = Vec::new();
+    let mut at: std::collections::HashMap<(i64, i64), usize> = std::collections::HashMap::new();
+    for j in -rows..=rows {
+        for i in -cols..=cols {
+            let x = (i as f64 + if j % 2 == 0 { 0.0 } else { 0.5 }) * step;
+            let y = j as f64 * step * 0.866;
+            let d = (centre * r + (east * x + north * y) * 1000.0).normalize();
+            if d.angle_between(centre) < reach {
+                at.insert((i, j), lattice.len());
+                lattice.push((DVec2::new(x, y), d));
+            }
+        }
+    }
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(16);
+    let chunk = lattice.len().div_ceil(threads).max(1);
+    // Each point's score and height, and whether it is under the sea (a site next to one is on
+    // the coast: ports go there).
+    let scored: Vec<(Option<(f64, f64)>, bool)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = lattice
+            .chunks(chunk)
+            .map(|part| {
+                let (terrain, climate) = (terrain, climate);
+                scope.spawn(move || {
+                    part.iter()
+                        .map(|&(_, d)| {
+                            // The land alone decides where people settle (away from
+                            // hazards); only the capital prefers the middle.
+                            let site = score_site(terrain, climate, tier, d).and_then(
+                                |(score, height)| {
+                                    let z = hazard(d);
+                                    (z < 0.35).then_some((score * (1.0 - z).powi(2), height))
+                                },
+                            );
+                            let wet = site.is_none() && terrain.height(d, 200.0) < 0.0;
+                            (site, wet)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("scoring thread"))
+            .collect()
+    });
+    let wet: Vec<bool> = scored.iter().map(|s| s.1).collect();
+    let scored: Vec<Option<(f64, f64)>> = scored.into_iter().map(|s| s.0).collect();
+    let mut coastal = vec![false; lattice.len()];
+    for (&(i, j), &k) in &at {
+        let odd = j.rem_euclid(2);
+        let near = [
+            (i - 1, j),
+            (i + 1, j),
+            (i - 1 + odd, j - 1),
+            (i + odd, j - 1),
+            (i - 1 + odd, j + 1),
+            (i + odd, j + 1),
+        ];
+        coastal[k] = near.iter().any(|n| at.get(n).is_some_and(|&m| wet[m]));
+    }
+    // The settled land: the best share of the usable sites.
+    let mut usable: Vec<usize> = (0..lattice.len())
+        .filter(|&i| scored[i].is_some())
+        .collect();
+    usable.sort_by(|&a, &b| {
+        let s = |i: usize| scored[i].map_or(0.0, |x| x.0);
+        s(b).total_cmp(&s(a))
+    });
+    let settled: Vec<usize> = usable
+        .iter()
+        .copied()
+        .take(((usable.len() as f64) * pattern.settled_share).ceil() as usize)
+        .collect();
+    if settled.is_empty() {
+        return Vec::new();
+    }
+    let score = |i: usize| scored[i].map_or(0.0, |x| x.0);
+    let plane = |i: usize| lattice[i].0;
+
+    // 2. Seats.
+    let mut seats: Vec<usize> = Vec::new();
+    for k in 0..strengths.len() {
+        let best = settled.iter().copied().max_by(|&a, &b| {
+            let worth = |i: usize| {
+                if seats.is_empty() {
+                    let edge = plane(i).length() / extent;
+                    score(i) * (1.0 - 0.6 * edge)
+                } else {
+                    let far = seats
+                        .iter()
+                        .map(|&q| plane(q).distance(plane(i)))
+                        .fold(f64::MAX, f64::min);
+                    score(i) * (far / extent).min(1.0)
+                }
+            };
+            worth(a).total_cmp(&worth(b))
+        });
+        if let Some(i) = best
+            && !seats.contains(&i)
+        {
+            seats.push(i);
+        } else {
+            let _ = k;
+            break;
+        }
+    }
+
+    // 3. Classes by spacing, on a grid of what's placed so far.
+    let mut pick = Rng::derive(seed, &format!("sites/{label}"));
+    let mut placed: Vec<(usize, Option<usize>)> = seats.iter().map(|&i| (i, None)).collect();
+    for (c, class) in pattern.classes.iter().enumerate() {
+        let port = class.roles.contains(&SettlementRole::Port);
+        let cell = class.spacing_km * 1.2;
+        let key = |p: DVec2| ((p.x / cell).floor() as i64, (p.y / cell).floor() as i64);
+        let mut grid: std::collections::HashMap<(i64, i64), Vec<DVec2>> =
+            std::collections::HashMap::new();
+        for &(i, _) in &placed {
+            grid.entry(key(plane(i))).or_default().push(plane(i));
+        }
+        let mut order: Vec<(f64, usize, f64)> = settled
+            .iter()
+            .map(|&i| (score(i) + 0.15 * pick.unit(), i, 0.8 + 0.4 * pick.unit()))
+            .collect();
+        order.sort_by(|a, b| b.0.total_cmp(&a.0));
+        for (_, i, own) in order {
+            if port && !coastal[i] {
+                continue;
+            }
+            let p = plane(i);
+            let need = class.spacing_km * own;
+            let (kx, ky) = key(p);
+            let clear = (-1..=1).all(|dy| {
+                (-1..=1).all(|dx| {
+                    grid.get(&(kx + dx, ky + dy))
+                        .is_none_or(|v| v.iter().all(|q| q.distance(p) >= need))
+                })
+            });
+            if clear {
+                grid.entry((kx, ky)).or_default().push(p);
+                placed.push((i, Some(c)));
+            }
+        }
+    }
+
+    // 4. Territories by strength-weighted distance to the seats.
+    let strengths: Vec<f64> = strengths.iter().map(|s| s.sqrt()).collect();
+    let owner = |i: usize| -> usize {
+        if let Some(k) = seats.iter().position(|&q| q == i) {
+            return k;
+        }
+        (0..seats.len())
+            .min_by(|&a, &b| {
+                let d = |k: usize| plane(seats[k]).distance(plane(i)) / strengths[k];
+                d(a).total_cmp(&d(b))
+            })
+            .unwrap_or(0)
+    };
+
+    placed
+        .iter()
+        .map(|&(i, class)| {
+            let (score, height) = scored[i].unwrap_or((0.0, 0.0));
+            PlacedSite {
+                dir: lattice[i].1,
+                score,
+                height,
+                class,
+                owner: owner(i),
+            }
+        })
+        .collect()
+}
+
+/// How far from a port's centre its harbour may be (m): the layout looks this far for the shore.
+pub const SHORE_REACH: f64 = 1_800.0;
+
+/// Whether the sea is within `reach` m of unit direction `dir` (sampled round it).
+fn coastal(terrain: &Terrain, dir: DVec3, reach: f64) -> bool {
+    let (east, south) = sim_planet::tangent_frame(dir);
+    let r = terrain.radius;
+    (1..=3).any(|ring| {
+        let d = reach * f64::from(ring) / 3.0;
+        (0..16).any(|k| {
+            let a = std::f64::consts::TAU * f64::from(k) / 16.0;
+            let p = (dir * r + (east * a.cos() + south * a.sin()) * d).normalize();
+            terrain.height(p, 50.0) < 0.0
+        })
+    })
+}
+
+/// The word a place-name pattern uses for this kind of settlement ("Port {name}" only for
+/// ports, "{name} Station" for a capital).
+fn kind_word(size: SizeClass, roles: &[SettlementRole]) -> &'static str {
+    use SettlementRole::*;
+    if roles.contains(&Capital) && roles.contains(&Port) {
+        "Station"
+    } else if roles.contains(&Port) {
+        "Port"
+    } else if roles.contains(&Outpost) {
+        "Outpost"
+    } else {
+        match size {
+            SizeClass::Hamlet | SizeClass::Dwelling => "Hamlet",
+            SizeClass::Village => "Village",
+            _ => "Town",
+        }
     }
 }
 
 /// People by role: the culture's shares of `population`, rounded so they add up.
-fn role_counts(roles: &[crate::lore::Role], population: u32) -> Vec<(String, u32)> {
+pub(crate) fn role_counts(roles: &[crate::lore::Role], population: u32) -> Vec<(String, u32)> {
     let mut counts: Vec<(String, u32, f64)> = roles
         .iter()
         .map(|r| {

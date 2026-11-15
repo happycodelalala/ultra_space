@@ -7,6 +7,7 @@ mod builder;
 mod camera;
 mod capture;
 mod debug_overlay;
+mod distant;
 mod hud;
 mod inspector;
 mod meeting;
@@ -86,6 +87,7 @@ fn main() {
             settlements::SettlementsPlugin,
             people::PeoplePlugin,
             meeting::MeetingPlugin,
+            distant::DistantPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

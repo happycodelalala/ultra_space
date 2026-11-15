@@ -29,7 +29,10 @@ impl Plugin for WarmupPlugin {
         app.insert_resource(backlog.clone())
             .init_resource::<Warmup>()
             .add_systems(Startup, spawn_overlay)
-            .add_systems(Update, settle.run_if(in_state(GameState::Running)));
+            .add_systems(
+                Update,
+                (settle, remove_primers).run_if(in_state(GameState::Running)),
+            );
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .insert_resource(backlog)
@@ -45,6 +48,36 @@ struct PipelineBacklog(Arc<AtomicUsize>);
 /// Exists once the world is shown (see the module docs).
 #[derive(Resource)]
 pub struct WarmupDone;
+
+/// A primer: something drawn during the warm-up only so the pipelines of what appears later
+/// (settlement materials, night glow, lanterns, people) are compiled behind the overlay
+/// rather than in play. Spawned as a tiny child of the main camera; removed once the world is
+/// shown.
+#[derive(Component)]
+pub struct Primer;
+
+/// Puts `bundle` as a primer just in front of the main camera (when there is one).
+pub fn spawn_primer(commands: &mut Commands, camera: Option<Entity>, bundle: impl Bundle) {
+    let Some(camera) = camera else { return };
+    commands.spawn((
+        Primer,
+        bundle,
+        Transform::from_xyz(0.0, 0.0, -2.0).with_scale(Vec3::splat(0.002)),
+        ChildOf(camera),
+    ));
+}
+
+fn remove_primers(
+    mut commands: Commands,
+    done: Option<Res<WarmupDone>>,
+    primers: Query<Entity, With<Primer>>,
+) {
+    if done.is_some() {
+        for e in &primers {
+            commands.entity(e).despawn();
+        }
+    }
+}
 
 #[derive(Resource, Default)]
 struct Warmup {
