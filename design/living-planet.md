@@ -864,6 +864,37 @@ land between settlements is fields first). Props and signs of life when the kits
 tier exist (task 4b.7) and with the ground cover's instancing (Batch 4c). People in the fields
 and on the roads come with their work routines (§6.3).
 
+**As built (task 4b.8).**
+- **Walls:** the walled stages' towns, cities and forts get a ring of the kit's wall sections
+  (Castle Kit stone walls, square towers every sixth section, gates between two towers), placed
+  before the houses round a core sized for the buildings (`core_radius`), so houses fill it from
+  the square out and the rest grows outside as suburbs; a gate stands where a street crosses,
+  sections that meet a building or rough ground leave gaps. Stone Age hill forts get a palisade
+  round the huts, Kesh enclaves a barricade of containers with one opening. Gates are passable
+  (no collision box), wall pieces overlap where they join.
+- **Fields** (`Layout::fields`): rings of fields beyond the buildings, out to 60 m + 4 m × √people,
+  clear of buildings, streets and water, some fallow; drawn with the streets as a height grid
+  following the ground, striped by crop, with their bounds as thin boxes (Ancient stone walls,
+  medieval and Early Modern hedges, industrial fences). Stone Age camps of 60 people and more
+  have garden plots; modern enclaves and the colony none.
+- **Dwellings** (`sim_society::dwellings_near`): a lattice over latitude and longitude at each
+  people's `dwelling_spacing_km`, jittered, three in four places lived in, only in settled land
+  (within 0.9 of the people's smallest settlement spacing of one of its settlements, outside
+  every settlement), dry and out of hazards; each a `Settlement` of size Dwelling with an id in
+  its own range, laid out as a farmstead (home, barn, a prop, trees, a track and its own
+  fields), a Stone Age hunting camp or a colony relay post. The game keeps those within 4 km
+  as sites (reused when freed), so they are levelled, collidable, drawn and peopled like
+  settlements; no banner.
+- **Roads** (`sim_society::roads`): every settlement to the nearest of its people's at least
+  its size, towns and cities to their two nearest peers, within 40 km (4,890 roads for Meridian's
+  5,962 settlements). The game draws those within 8 km of the camera (below 12 km up) as one
+  ribbon mesh made on a worker every 1.5 km, following the ground, stopping at settlements and
+  water: trails, dirt roads, asphalt by stage.
+- Known for later: big cities still sprawl beyond their walls (no density gradient); hedges
+  read as dark slabs from the ground; landmarks are the kits' biggest buildings by the square
+  (no skyline rule yet); props and signs of life (smoke, fires) wait for the instancing of
+  Batch 4c; roads are straight between settlements (no routing round hills or bridges).
+
 ## 9. Open questions
 
 - Planet size: decided (§8a); sizes vary per planet.

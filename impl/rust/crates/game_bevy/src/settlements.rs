@@ -503,6 +503,7 @@ fn setup_settlements(
     let mut models = HashMap::new();
     let mut sites = Vec::new();
     let mut terrains = HashMap::new();
+    let mut roads = HashMap::new();
     for (body, region) in sim.0.regions.iter().enumerate() {
         let (Some(layouts), Some(society)) = (
             region.world.get_resource::<RegionLayouts>(),
@@ -546,6 +547,11 @@ fn setup_settlements(
             terrains.insert(body, t);
         }
         let radius = system.bodies[body].radius;
+        // The road network, made once while loading (the whole body's takes ~0.1 s).
+        roads.insert(
+            body,
+            std::sync::Arc::new(sim_society::roads(society, radius)),
+        );
         for (index, settlement) in society.settlements.iter().enumerate() {
             sites.push(new_site(
                 &mut commands,
@@ -582,7 +588,7 @@ fn setup_settlements(
         dwellings: HashMap::new(),
         free: Vec::new(),
         dwellings_at: None,
-        roads: HashMap::new(),
+        roads,
         road: None,
         road_task: None,
         roads_at: None,
@@ -761,6 +767,10 @@ fn stream_roads(
         if let Some((old, _, _)) = draw.road.take() {
             commands.entity(old).despawn();
         }
+        // No road near: nothing to draw.
+        if mesh.count_vertices() == 0 {
+            return;
+        }
         let e = commands
             .spawn((
                 Name::new("roads"),
@@ -798,11 +808,9 @@ fn stream_roads(
         return;
     };
     draw.roads_at = Some((body, cam));
-    let all = draw
-        .roads
-        .entry(body)
-        .or_insert_with(|| std::sync::Arc::new(sim_society::roads(rs, radius)))
-        .clone();
+    let Some(all) = draw.roads.get(&body).cloned() else {
+        return;
+    };
     // Each settlement's reach: its layout's when made, else its size's.
     let mut extent: Vec<f64> = rs
         .settlements
