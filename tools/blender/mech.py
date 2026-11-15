@@ -96,7 +96,9 @@ class Model:
 
     # Pieces -----------------------------------------------------------------------------
 
-    def _object(self, bm, mat, matrix, bevel=0.0, segments=2, angle=40.0, cutter=False):
+    def _object(self, bm, mat, matrix, bevel=0.0, segments=2, angle=40.0, cutter=False, hard_facets=None):
+        """`hard_facets` (an area, in the mesh's units): shade with facet-weighted normals
+        (`facet_normals`), facets that large stay flat and hard-edged."""
         me = bpy.data.meshes.new(self.name)
         sharp_by_angle(bm, angle)
         bm.to_mesh(me)
@@ -107,6 +109,8 @@ class Model:
         if not cutter:
             me.materials.append(material(mat))
             ob["bevel"] = (bevel, segments, angle)
+            if hard_facets:
+                ob["hard_facets"] = float(hard_facets)
         return ob
 
     def box(self, size, at=(0, 0, 0), mat="armor", place=None, bevel=0.03, segments=2,
@@ -177,7 +181,7 @@ class Model:
         return self._object(bm, mat, place, bevel, segments, cutter=cutter)
 
     def hull(self, points, mat="armor", place=None, bevel=0.008, segments=1, angle=30.0,
-             cutter=False):
+             cutter=False, hard_facets=None):
         """The convex hull of `points` (in the placement's axes): faceted solids, wedges and
         blades. Coplanar triangles are merged into flat facets."""
         bm = bmesh.new()
@@ -190,7 +194,7 @@ class Model:
         bmesh.ops.dissolve_limit(bm, angle_limit=math.radians(0.5), verts=bm.verts[:], edges=bm.edges[:])
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         return self._object(bm, mat, place if place is not None else frame(), bevel, segments, angle,
-                            cutter=cutter)
+                            cutter=cutter, hard_facets=hard_facets)
 
     def plate(self, outline, thickness, place, mat="armor", chamfer=None, bevel=0.006,
               cutter=False):
@@ -606,6 +610,12 @@ def freeze(model):
         fo = bpy.data.objects.new(ob.name, me)
         fo.matrix_world = ob.matrix_world.copy()
         fo["angle"] = float(ob.get("bevel", (0.0, 1, 30.0))[2])
+        if ob.get("hard_facets"):
+            # The same corner normals the export writes, so studio renders shade alike.
+            fo["hard_facets"] = ob["hard_facets"]
+            for p in me.polygons:
+                p.use_smooth = True
+            me.normals_split_custom_set(facet_normals(me, min(35.0, fo["angle"]), fo["hard_facets"]))
         frozen.objects.link(fo)
         out.append(fo)
     model.pieces.hide_render = True
@@ -661,7 +671,10 @@ def write_glb(objects, path, colours, scale=1.0):
         nm = o.matrix_world.to_3x3().inverted().transposed()
         m = Matrix.Scale(scale, 4) @ o.matrix_world
         ao = me.color_attributes.get("ao")
-        normals = smooth_normals(me, min(35.0, o.get("angle", 35.0)))
+        if o.get("hard_facets"):
+            normals = facet_normals(me, min(35.0, o.get("angle", 35.0)), o["hard_facets"])
+        else:
+            normals = smooth_normals(me, min(35.0, o.get("angle", 35.0)))
         name = me.materials[0].name if me.materials else "armor"
         verts, nrms, cols, uvs, idx, seen = prims.setdefault(name, ([], [], [], [], [], {}))
         seed = sum(ord(c) * (i + 1) for i, c in enumerate(o.name)) % 997
@@ -726,6 +739,55 @@ def smooth_normals(me, degrees=35.0):
                 n, area = faces[j]
                 if n.dot(fn) >= limit:
                     acc += n * max(area, 1e-9)
+            out[li] = acc.normalized() if acc.length > 1e-12 else fn
+    return out
+
+
+def facet_normals(me, degrees, big):
+    """Corner normals weighted by flat facet (hard armour): coplanar faces form a facet; a
+    corner averages, by facet area, the facets round its vertex within `degrees` of its own
+    face, so a large facet (area >= `big`) stays flat right up to its edge and bends the
+    small bevel faces next to it; two large facets never blend (their edge stays hard)."""
+    limit = math.cos(math.radians(degrees))
+    coplanar = math.cos(math.radians(1.0))
+    normals = [p.normal.copy() for p in me.polygons]
+    by_edge = {}
+    for i, p in enumerate(me.polygons):
+        for k in p.edge_keys:
+            by_edge.setdefault(k, []).append(i)
+    region = [-1] * len(me.polygons)
+    areas = []
+    for i in range(len(me.polygons)):
+        if region[i] >= 0:
+            continue
+        r = len(areas)
+        region[i], stack, area = r, [i], 0.0
+        while stack:
+            f = stack.pop()
+            area += me.polygons[f].area
+            for k in me.polygons[f].edge_keys:
+                for j in by_edge[k]:
+                    if region[j] < 0 and normals[j].dot(normals[f]) >= coplanar:
+                        region[j] = r
+                        stack.append(j)
+        areas.append(area)
+    around = [[] for _ in me.vertices]
+    for i, p in enumerate(me.polygons):
+        for v in p.vertices:
+            around[v].append(i)
+    out = [None] * len(me.loops)
+    for i, p in enumerate(me.polygons):
+        fn, ri = normals[i], region[i]
+        for li in p.loop_indices:
+            acc, seen = Vector((0.0, 0.0, 0.0)), set()
+            for j in around[me.loops[li].vertex_index]:
+                rj = region[j]
+                if rj in seen or normals[j].dot(fn) < limit:
+                    continue
+                if rj != ri and areas[ri] >= big and areas[rj] >= big:
+                    continue
+                seen.add(rj)
+                acc += normals[j] * areas[rj]
             out[li] = acc.normalized() if acc.length > 1e-12 else fn
     return out
 

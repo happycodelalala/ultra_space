@@ -401,7 +401,7 @@
           }
         ]
       },
-      "description": "The armoured torso and cockpit: the chest plates part along the keel as the crew hatch, with vision slits; heat vents in the flanks, the reactor on the back; the shoulders, neck and waist mount to it.",
+      "description": "The armoured torso: the pilot's capsule and control core behind the central chest shield, with rooms for a few more crew; the large chest boarding door in the shield, set in a dark door frame with the lintel light in its lintel and the yellow release on its right jamb (it opens down into a landing that the mech's own hand meets), the flank plates carried on the frame by an armoured lip and a gusset under each edge at their foot, a reactor-bay service hatch in each (no dedicated airlock: the docking port or any hatch works as one, an airlock chamber behind it), the docking port, the standby radiator panel and the coolant service hatches on the back, the comms deck (optical terminals and a phased array) on the top back ledge; the frame's longerons carry the loads into the waist; the shoulders, neck and waist bolt rigidly to it.",
       "form": {
         "model": "bastion.torso",
         "material_slots": [

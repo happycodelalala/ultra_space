@@ -117,35 +117,35 @@
     },
     "beacon": {
       "color": [
-        1.0,
-        0.08,
-        0.05
+        0.2,
+        0.0,
+        0.0
       ],
       "metallic": 0.0,
-      "roughness": 0.5,
+      "roughness": 0.9,
       "emissive": [
         1.0,
-        0.08,
-        0.05
+        0.03,
+        0.02
       ],
-      "emissive_strength": 8.0,
-      "about": "red: warning beacons and port (left) navigation lights"
+      "emissive_strength": 1.3,
+      "about": "red: warning beacons and port (left) navigation lights (strength kept low: brighter, the tone mapping turns it orange)"
     },
     "nav_green": {
       "color": [
-        0.1,
-        1.0,
-        0.3
+        0.0,
+        0.12,
+        0.16
       ],
       "metallic": 0.0,
-      "roughness": 0.5,
+      "roughness": 0.9,
       "emissive": [
-        0.1,
-        1.0,
-        0.3
+        0.0,
+        0.8,
+        1.0
       ],
-      "emissive_strength": 8.0,
-      "about": "green: starboard (right) navigation lights"
+      "emissive_strength": 1.5,
+      "about": "cyan: starboard (right) navigation lights (cyan, not green, so they don't merge with the green armour; the slot keeps its old name; strength kept low: brighter, the tone mapping turns it white)"
     },
     "strobe": {
       "color": [
@@ -161,7 +161,7 @@
         1.0
       ],
       "emissive_strength": 10.0,
-      "about": "white: anti-collision strobes and stern lights"
+      "about": "white: anti-collision strobes, stern lights, and the torso's floods and work lights"
     }
   }
 }

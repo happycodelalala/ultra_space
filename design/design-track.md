@@ -26,8 +26,8 @@ imported into the game at milestones (AGENTS.md, "Two tracks"). This is its plan
 
 ## Bastion v2
 
-A strict review of the Bastion as a near-future interplanetary exploration and combat titan
-(about 100 m) found, in order of weight:
+A strict review of the Bastion as an exploration and combat titan (about 100 m;
+interstellar-capable, plausible advanced technology) found, in order of weight:
 
 1. **No clear concept or silhouette.** The four shells are as big as the body; the humanoid
    reads as a small figure inside pods; the poses read as a beetle, a parachute, a jellyfish.
