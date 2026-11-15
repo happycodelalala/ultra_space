@@ -86,6 +86,7 @@ fn advance_simulation(
     mut sim: ResMut<Sim>,
     mut last_warning: Local<Option<Duration>>,
 ) {
+    let _slow = crate::debug_overlay::SlowSystem::new("advance_simulation");
     let ticks = sim.0.advance(time.delta());
     if ticks == 0 {
         return;

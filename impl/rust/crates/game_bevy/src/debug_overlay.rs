@@ -32,6 +32,13 @@ impl Plugin for DebugOverlayPlugin {
         .init_resource::<Hitches>()
         .add_systems(Startup, spawn_overlay)
         .add_systems(Update, watch_hitches)
+        .init_resource::<FrameMarks>()
+        .add_systems(First, mark("First"))
+        .add_systems(PreUpdate, mark("PreUpdate"))
+        .add_systems(RunFixedMainLoop, mark("RunFixedMainLoop"))
+        .add_systems(Update, mark("Update"))
+        .add_systems(PostUpdate, mark("PostUpdate"))
+        .add_systems(Last, report_frame_marks)
         .add_systems(
             Update,
             (record_frame, toggle_overlay, update_overlay)
@@ -290,4 +297,41 @@ impl Drop for SlowSystem {
             warn!("slow system: {} took {ms:.1} ms", self.0);
         }
     }
+}
+
+/// Timestamps taken once in each main schedule this frame (task 4b.6: where a hitch frame's
+/// time went). Unordered within its schedule, so each mark is "some time during" it.
+#[derive(Resource, Default)]
+struct FrameMarks {
+    last_end: Option<std::time::Instant>,
+    marks: Vec<(&'static str, std::time::Instant)>,
+}
+
+fn mark(name: &'static str) -> impl FnMut(ResMut<FrameMarks>) {
+    move |mut m: ResMut<FrameMarks>| m.marks.push((name, std::time::Instant::now()))
+}
+
+/// On a frame over the budget, logs how long it spent between the marks: "outside" is the
+/// time between the last frame's end and this one's First (render extraction, waiting on
+/// the render thread, presenting).
+fn report_frame_marks(mut m: ResMut<FrameMarks>) {
+    let now = std::time::Instant::now();
+    let marks = std::mem::take(&mut m.marks);
+    if let (Some(start), Some(first)) = (m.last_end, marks.first())
+        && now - start > HITCH_BUDGET
+    {
+        let mut parts = vec![format!("outside {:.1}", ms(first.1 - start))];
+        for w in marks.windows(2) {
+            parts.push(format!("{} {:.1}", w[0].0, ms(w[1].1 - w[0].1)));
+        }
+        if let Some(last) = marks.last() {
+            parts.push(format!("{}..Last {:.1}", last.0, ms(now - last.1)));
+        }
+        warn!(
+            "hitch frame {:.1} ms: {} (ms)",
+            ms(now - start),
+            parts.join(", ")
+        );
+    }
+    m.last_end = Some(now);
 }
