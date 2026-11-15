@@ -10,6 +10,7 @@ use bevy::shader::ShaderRef;
 
 const TERRAIN_SHADER: &str = "embedded://ultra_space/shaders/terrain.wesl";
 const WATER_SHADER: &str = "embedded://ultra_space/shaders/water.wesl";
+const TERRAIN_PREPASS_SHADER: &str = "embedded://ultra_space/shaders/terrain_prepass.wesl";
 
 pub struct TerrainMaterialPlugin;
 
@@ -17,6 +18,7 @@ impl Plugin for TerrainMaterialPlugin {
     fn build(&self, app: &mut App) {
         bevy::asset::embedded_asset!(app, "shaders/terrain.wesl");
         bevy::asset::embedded_asset!(app, "shaders/water.wesl");
+        bevy::asset::embedded_asset!(app, "shaders/terrain_prepass.wesl");
         app.add_plugins((
             MaterialPlugin::<TerrainMaterial>::default(),
             MaterialPlugin::<WaterMaterial>::default(),
@@ -66,6 +68,16 @@ impl Material for TerrainMaterial {
 
     fn fragment_shader() -> ShaderRef {
         TERRAIN_SHADER.into()
+    }
+
+    // Tiles over the block ground are discarded, in the depth prepass too (a mask, so the prepass
+    // runs this fragment shader).
+    fn prepass_fragment_shader() -> ShaderRef {
+        TERRAIN_PREPASS_SHADER.into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Mask(0.5)
     }
 }
 

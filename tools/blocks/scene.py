@@ -320,7 +320,7 @@ if EXPORT_DIR:
     village = {"name": "demo_village", "frame": "x east, y north, z up; metres from the village centre",
                "ground": ground, "placements": placements, "lights": lights,
                "ship": {"pos": [-11.0, -12.5, Z(-11.0, -12.5)], "rot": 35.0},
-               "start": {"pos": [-7.5, -9.3, Z(-7.5, -9.3)], "facing": 60.0}}
+               "start": {"pos": [-7.5, -9.3, Z(-7.5, -9.3)], "facing": 141.0}}
     (out_dir / "village.json").write_text(json.dumps(village, separators=(",", ":")) + "\n")
     print(f"EXPORTED {len(used)} models, {len(placements)} placements to {out_dir}")
 elif os.environ.get("NORENDER"):

@@ -1,14 +1,13 @@
-# On foot in the demo village (task 5.6): the default start beside the landed ship.
+# On foot in the demo village (task 5.6): the default start beside the landed ship, facing the
+# house. Walk the path to the yard on the block ground (not sinking or floating), run on to the
+# fence, look round.
 1   log start on foot
 2   shot walk-start.png
-3   mouse 6 0 1
-4.5 hold W 6
-11  shot walk-path.png
-12  mouse -8 0 1
-13.5 hold W 4
-18  shot walk-yard.png
-19  mouse 10 0 1
-20.5 hold Shift 4
-20.5 hold W 4
-25  shot walk-pit.png
-26  quit
+3   hold W 4
+8   shot walk-path.png
+9   hold W 3
+9   hold Shift 3
+13  shot walk-yard.png
+14  mouse 4 0 0.5
+16  shot walk-look.png
+17  quit

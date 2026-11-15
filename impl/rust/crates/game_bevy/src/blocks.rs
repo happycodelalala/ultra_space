@@ -394,6 +394,7 @@ struct BlockDraw {
     chunks: HashMap<(i32, i32), Option<Entity>>,
     pending: HashMap<(i32, i32), Task<Option<MeshData>>>,
     solid: Handle<StandardMaterial>,
+    chunk_material: Handle<StandardMaterial>,
     glow: Handle<StandardMaterial>,
     windows: Handle<StandardMaterial>,
     lights: Vec<Entity>,
@@ -455,6 +456,16 @@ fn setup_blocks(
         reflectance: 0.2,
         ..default()
     });
+    // Debug: chunks drawn flat magenta (where the block ground is).
+    let chunk_material = if std::env::var_os("ULTRA_SPACE_DEBUG_BLOCKS").is_some() {
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 0.0, 1.0),
+            unlit: true,
+            ..default()
+        })
+    } else {
+        solid.clone()
+    };
     let glow = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.6,
@@ -552,6 +563,7 @@ fn setup_blocks(
         chunks: HashMap::new(),
         pending: HashMap::new(),
         solid,
+        chunk_material,
         glow,
         windows,
         lights,
@@ -632,7 +644,7 @@ fn stream_chunks(
                 .spawn((
                     ChunkMesh,
                     Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(draw.solid.clone()),
+                    MeshMaterial3d(draw.chunk_material.clone()),
                     Transform::default(),
                     ChildOf(draw.root),
                 ))
@@ -648,7 +660,11 @@ fn stream_chunks(
         .map(|k| dist(k) - half_diagonal)
         .fold(HIDE_TILES, f64::min)
         .max(0.0);
-    coverage.0 = if height < DRAW_REACH { ready } else { 0.0 };
+    coverage.0 = if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_HIDE").is_none() {
+        ready
+    } else {
+        0.0
+    };
     if draw.chunks.len() != *last_count {
         *last_count = draw.chunks.len();
         debug!(

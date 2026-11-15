@@ -243,7 +243,12 @@ fn spawn_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             far: 1.0e14,
             ..default()
         }),
-        Tonemapping::TonyMcMapface,
+        // `ULTRA_SPACE_TONEMAP=agx` tries AgX (the style renders' tonemapper).
+        if std::env::var("ULTRA_SPACE_TONEMAP").is_ok_and(|v| v.eq_ignore_ascii_case("agx")) {
+            Tonemapping::AgX
+        } else {
+            Tonemapping::TonyMcMapface
+        },
         Bloom::NATURAL,
         // Scene depth for the atmosphere: haze only covers the air in front of surfaces.
         bevy::core_pipeline::prepass::DepthPrepass,

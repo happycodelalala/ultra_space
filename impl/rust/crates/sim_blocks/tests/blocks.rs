@@ -170,3 +170,53 @@ fn dirs_parse() {
     assert_eq!(Dir::parse("-x"), Some(Dir::NX));
     assert_eq!(Dir::parse("z"), None);
 }
+
+#[test]
+fn slopes_sit_on_their_cells() {
+    // The same step as above: the edge cells at x = 2, z = 1 slope down toward +x. Their slope
+    // must span x 2..3 and z 1..2 (in blocks), facing up and toward +x.
+    let mut list = vec![];
+    for x in 0..6 {
+        for y in 0..3 {
+            list.push((x, y, 0));
+            if x < 3 {
+                list.push((x, y, 1));
+            }
+        }
+    }
+    let c = cells(&list);
+    let (lo, hi) = bounds(&c);
+    let m = mesh(&c, lo, hi, &[Dir::PZ], 1.0);
+    let mut found = 0;
+    for t in m.indices.chunks(3) {
+        let n = m.normals[t[0] as usize];
+        if n[0] > 0.3 && n[2] > 0.3 {
+            found += 1;
+            for &i in t {
+                let p = m.positions[i as usize];
+                assert!(
+                    (2.0..=3.0).contains(&p[0]) && (1.0..=2.0).contains(&p[2]),
+                    "slope vertex {p:?}"
+                );
+            }
+            // Wound counter-clockwise seen from outside (front faces face along the normal).
+            let a = glam::Vec3::from(m.positions[t[0] as usize]);
+            let b = glam::Vec3::from(m.positions[t[1] as usize]);
+            let d = glam::Vec3::from(m.positions[t[2] as usize]);
+            assert!(
+                (b - a).cross(d - a).dot(glam::Vec3::from(n)) > 0.0,
+                "wound backwards"
+            );
+        }
+    }
+    assert!(found >= 2, "slope drawn");
+    // Every face of the mesh is wound to match its normal.
+    for t in m.indices.chunks(3) {
+        let p = |i: u32| glam::Vec3::from(m.positions[i as usize]);
+        let n = glam::Vec3::from(m.normals[t[0] as usize]);
+        assert!(
+            (p(t[1]) - p(t[0])).cross(p(t[2]) - p(t[0])).dot(n) > 0.0,
+            "a face wound backwards"
+        );
+    }
+}
