@@ -130,8 +130,9 @@ pub struct RegionSociety {
 const SLICES: usize = 32;
 
 /// How settlements are generated; a save from another generation starts its societies fresh
-/// (its ids would name other places). 2: settlement patterns (Batch 4b).
-pub const GENERATION: u32 = 2;
+/// (its ids would name other places). 2: settlement patterns (Batch 4b). 3: ports only on a
+/// coast (task 4b.7).
+pub const GENERATION: u32 = 3;
 
 impl RegionSociety {
     /// The society of body `body` with its settlements, at their starting state.

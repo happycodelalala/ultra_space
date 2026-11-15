@@ -1,0 +1,437 @@
+{
+ "id": "stone_age_camp",
+ "name": "Stone Age camp (placeholder)",
+ "description": "The Tayu's camps: tents, lean-tos, fires and stone circles from Kenney's Survival Kit (CC0) at 6 m a unit, until the design track's own kit. Fronts face +Z.",
+ "source": "kenney-survival-kit",
+ "unit_m": 6.0,
+ "buildings": [
+  {
+   "id": "tent",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tent",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "tent_hide",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tent-canvas",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "tent_open",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tent-canvas-half",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "lean_to",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "structure-canvas",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "chief_tent",
+   "uses": [
+    "hall"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tent",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 2.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "fire",
+   "uses": [
+    "square"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "campfire-pit",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 2.0
+     },
+     {
+      "piece": "tree-log-small",
+      "at": [
+       0.75,
+       0,
+       0.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "tree-log-small",
+      "at": [
+       -0.75,
+       0,
+       0.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "tree-log-small",
+      "at": [
+       0.0,
+       0,
+       0.75
+      ],
+      "rot": 90
+     },
+     {
+      "piece": "tree-log-small",
+      "at": [
+       0.0,
+       0,
+       -0.75
+      ],
+      "rot": 90
+     }
+    ]
+   }
+  },
+  {
+   "id": "stone_circle",
+   "uses": [
+    "shrine"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "rock-a",
+      "at": [
+       1.1,
+       0,
+       0.0
+      ],
+      "rot": 0,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-b",
+      "at": [
+       0.8426477331187303,
+       0,
+       0.7070677463085593
+      ],
+      "rot": 47,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-c",
+      "at": [
+       0.19100945841842704,
+       0,
+       1.0832891519786854
+      ],
+      "rot": 94,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-a",
+      "at": [
+       -0.550004665590505,
+       0,
+       0.9526252504677151
+      ],
+      "rot": 141,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-b",
+      "at": [
+       -1.033664339626726,
+       0,
+       0.3762154076909196
+      ],
+      "rot": 188,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-c",
+      "at": [
+       -1.033658811849731,
+       0,
+       -0.37623059509482043
+      ],
+      "rot": 235,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-a",
+      "at": [
+       -0.5499906687794123,
+       0,
+       -0.9526333314846667
+      ],
+      "rot": 282,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-b",
+      "at": [
+       0.19102537497077485,
+       0,
+       -1.083286345394086
+      ],
+      "rot": 329,
+      "scale": 1.0
+     },
+     {
+      "piece": "rock-c",
+      "at": [
+       0.8426581218471914,
+       0,
+       -0.7070553653604252
+      ],
+      "rot": 16,
+      "scale": 1.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "craft",
+   "uses": [
+    "smithy"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "workbench",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 1.5
+     },
+     {
+      "piece": "resource-wood",
+      "at": [
+       0.5,
+       0,
+       0.1
+      ],
+      "rot": 30,
+      "scale": 1.5
+     },
+     {
+      "piece": "resource-stone",
+      "at": [
+       -0.45,
+       0,
+       0.15
+      ],
+      "rot": 0,
+      "scale": 1.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "rack",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "campfire-stand",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 1.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "bedrolls",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "bedroll-frame",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "bedroll-frame",
+      "at": [
+       0.35,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "stores",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "barrel",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "box-large",
+      "at": [
+       0.4,
+       0,
+       0
+      ],
+      "rot": 20
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 1.6
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree_tall",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-tall",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 1.6
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree_autumn",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-autumn",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "scale": 1.6
+     }
+    ]
+   }
+  }
+ ]
+}

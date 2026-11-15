@@ -1,0 +1,280 @@
+{
+  "id": "ancient_city",
+  "source": "kenney-fantasy-town",
+  "licence": "assets/third_party/kenney-fantasy-town/License.txt",
+  "buildings": [
+    {
+      "id": "house_small",
+      "uses": [
+        "home"
+      ],
+      "model": "house_small.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        3.378,
+        3.0
+      ]
+    },
+    {
+      "id": "house",
+      "uses": [
+        "home"
+      ],
+      "model": "house.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -4.5
+      ],
+      "max_m": [
+        3.0,
+        3.378,
+        4.5
+      ]
+    },
+    {
+      "id": "house_court",
+      "uses": [
+        "home"
+      ],
+      "model": "house_court.glb",
+      "min_m": [
+        -4.5,
+        0.0,
+        -4.5
+      ],
+      "max_m": [
+        4.5,
+        3.378,
+        4.5
+      ]
+    },
+    {
+      "id": "townhouse",
+      "uses": [
+        "home",
+        "shop"
+      ],
+      "model": "townhouse.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -4.5
+      ],
+      "max_m": [
+        3.0,
+        6.378,
+        4.5
+      ]
+    },
+    {
+      "id": "palace",
+      "uses": [
+        "hall"
+      ],
+      "model": "palace.glb",
+      "min_m": [
+        -4.74,
+        0.0,
+        -7.5
+      ],
+      "max_m": [
+        4.74,
+        6.378,
+        9.24
+      ]
+    },
+    {
+      "id": "temple",
+      "uses": [
+        "shrine"
+      ],
+      "model": "temple.glb",
+      "min_m": [
+        -6.24,
+        -0.0,
+        -9.24
+      ],
+      "max_m": [
+        6.24,
+        6.378,
+        9.24
+      ]
+    },
+    {
+      "id": "shrine_small",
+      "uses": [
+        "shrine"
+      ],
+      "model": "shrine_small.glb",
+      "min_m": [
+        -3.24,
+        -0.0,
+        -4.74
+      ],
+      "max_m": [
+        3.24,
+        6.378,
+        4.74
+      ]
+    },
+    {
+      "id": "inn",
+      "uses": [
+        "inn"
+      ],
+      "model": "inn.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -6.0
+      ],
+      "max_m": [
+        3.025,
+        6.378,
+        6.636
+      ]
+    },
+    {
+      "id": "smithy",
+      "uses": [
+        "smithy"
+      ],
+      "model": "smithy.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        6.0,
+        3.0
+      ]
+    },
+    {
+      "id": "barn",
+      "uses": [
+        "farm"
+      ],
+      "model": "barn.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -6.0
+      ],
+      "max_m": [
+        3.0,
+        3.378,
+        6.0
+      ]
+    },
+    {
+      "id": "well",
+      "uses": [
+        "square"
+      ],
+      "model": "well.glb",
+      "min_m": [
+        -3.0,
+        -0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        1.366,
+        3.0
+      ]
+    },
+    {
+      "id": "stall_red",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_red.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "stall_green",
+      "uses": [
+        "market"
+      ],
+      "model": "stall_green.glb",
+      "min_m": [
+        -1.5,
+        0.0,
+        -1.5
+      ],
+      "max_m": [
+        1.5,
+        3.711,
+        1.5
+      ]
+    },
+    {
+      "id": "cypress",
+      "uses": [
+        "tree"
+      ],
+      "model": "cypress.glb",
+      "min_m": [
+        -1.528,
+        0.0,
+        -1.528
+      ],
+      "max_m": [
+        1.528,
+        8.252,
+        1.528
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -1.535,
+        0.0,
+        -1.535
+      ],
+      "max_m": [
+        1.535,
+        8.918,
+        1.535
+      ]
+    },
+    {
+      "id": "cart",
+      "uses": [
+        "prop"
+      ],
+      "model": "cart.glb",
+      "min_m": [
+        -1.34,
+        -0.0,
+        -1.935
+      ],
+      "max_m": [
+        1.34,
+        1.607,
+        2.085
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "id": "early_modern_dress",
+  "licence": "assets/third_party/quaternius/License.txt",
+  "animations": [
+    "idle",
+    "walk",
+    "run",
+    "work",
+    "use",
+    "carry",
+    "sit",
+    "talk"
+  ],
+  "characters": [
+    {
+      "id": "man",
+      "model": "man.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter"
+      ],
+      "height_m": 1.798
+    },
+    {
+      "id": "sailor",
+      "model": "sailor.glb",
+      "roles": [
+        "sailor",
+        "fisher",
+        "laborer",
+        "soldier"
+      ],
+      "height_m": 1.83
+    },
+    {
+      "id": "merchant",
+      "model": "merchant.glb",
+      "roles": [
+        "merchant",
+        "scholar",
+        "priest",
+        "noble"
+      ],
+      "height_m": 1.83
+    },
+    {
+      "id": "woman",
+      "model": "woman.glb",
+      "roles": [
+        "farmer",
+        "herder",
+        "merchant",
+        "laborer",
+        "priest"
+      ],
+      "height_m": 1.736
+    },
+    {
+      "id": "woman_coat",
+      "model": "woman_coat.glb",
+      "roles": [
+        "merchant",
+        "scholar",
+        "noble",
+        "sailor"
+      ],
+      "height_m": 1.754
+    }
+  ]
+}

@@ -4,29 +4,78 @@
   "title": "Building kit",
   "description": "A culture's buildings, assembled offline (tools/build-kits.sh) from third-party pieces in assets/third_party/<source>/ into assets/export/buildings/<id>/ (a .glb per building and a generated kit.json with footprints). Coordinates are the game's (Y up), fronts face +Z; recipe positions are in kit units of unit_m metres.",
   "type": "object",
-  "required": ["id", "source", "unit_m", "buildings"],
+  "required": [
+    "id",
+    "source",
+    "unit_m",
+    "buildings"
+  ],
   "additionalProperties": false,
   "properties": {
-    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
-    "name": {"type": "string"},
-    "description": {"type": "string"},
-    "source": {"type": "string", "description": "Folder under assets/third_party/ holding the pieces and their licence."},
-    "unit_m": {"type": "number", "exclusiveMinimum": 0, "description": "Metres per kit unit (one wall cell, one storey)."},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "description": "Folder under assets/third_party/ holding the pieces and their licence."
+    },
+    "unit_m": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Metres per kit unit (one wall cell, one storey)."
+    },
     "buildings": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "uses", "recipe"],
+        "required": [
+          "id",
+          "uses",
+          "recipe"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
           "uses": {
             "type": "array",
             "minItems": 1,
             "description": "What a layout may place it as: homes, workplaces of the culture's roles, the settlement's centre (square, market) and props.",
-            "items": {"enum": ["home", "farm", "shop", "hall", "inn", "smithy", "shrine", "mill", "square", "market", "tree", "prop",
-                               "clinic", "hangar", "workshop", "lab", "pad", "port", "comms", "power"]}
+            "items": {
+              "enum": [
+                "home",
+                "farm",
+                "shop",
+                "hall",
+                "inn",
+                "smithy",
+                "shrine",
+                "mill",
+                "square",
+                "market",
+                "tree",
+                "prop",
+                "clinic",
+                "hangar",
+                "workshop",
+                "lab",
+                "pad",
+                "port",
+                "comms",
+                "power",
+                "harbour"
+              ]
+            }
           },
           "recipe": {
             "type": "object",
@@ -35,30 +84,109 @@
             "properties": {
               "house": {
                 "type": "object",
-                "required": ["width", "depth"],
+                "required": [
+                  "width",
+                  "depth"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "width": {"type": "integer", "minimum": 1},
-                  "depth": {"type": "integer", "minimum": 1},
-                  "storeys": {"type": "integer", "minimum": 1},
-                  "walls": {"enum": ["wood", "stone", "mixed"]},
-                  "roof": {"enum": ["high", "low"]},
-                  "chimney": {"type": "boolean"},
-                  "banners": {"type": "boolean"},
-                  "lanterns": {"type": "boolean"},
-                  "tower": {"type": "integer", "minimum": 0}
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "depth": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "storeys": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "walls": {
+                    "enum": [
+                      "wood",
+                      "stone",
+                      "mixed"
+                    ]
+                  },
+                  "roof": {
+                    "enum": [
+                      "high",
+                      "low",
+                      "flat",
+                      "none"
+                    ]
+                  },
+                  "chimney": {
+                    "type": "boolean"
+                  },
+                  "banners": {
+                    "type": "boolean"
+                  },
+                  "lanterns": {
+                    "type": "boolean"
+                  },
+                  "tower": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
                 }
               },
               "pieces": {
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["piece", "at"],
+                  "required": [
+                    "piece",
+                    "at"
+                  ],
                   "additionalProperties": false,
                   "properties": {
-                    "piece": {"type": "string"},
-                    "at": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
-                    "rot": {"type": "number"}
+                    "piece": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "rot": {
+                      "type": "number"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "Another folder under assets/third_party/ for this piece (default: the kit's source)."
+                    },
+                    "scale": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "description": "Scale of this piece before the kit's unit (for packs of other units)."
+                    }
+                  }
+                }
+              },
+              "temple": {
+                "type": "object",
+                "required": [
+                  "width",
+                  "depth"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "depth": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 }
               }

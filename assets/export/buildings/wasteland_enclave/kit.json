@@ -1,0 +1,432 @@
+{
+  "id": "wasteland_enclave",
+  "source": "kenney-city-commercial",
+  "licence": "assets/third_party/kenney-city-commercial/License.txt",
+  "buildings": [
+    {
+      "id": "block_a",
+      "uses": [
+        "home"
+      ],
+      "model": "block_a.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        24.0,
+        3.0
+      ]
+    },
+    {
+      "id": "block_b",
+      "uses": [
+        "home"
+      ],
+      "model": "block_b.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        26.7,
+        3.0
+      ]
+    },
+    {
+      "id": "block_c",
+      "uses": [
+        "home"
+      ],
+      "model": "block_c.glb",
+      "min_m": [
+        -3.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        3.0,
+        27.0,
+        3.0
+      ]
+    },
+    {
+      "id": "block_wide_a",
+      "uses": [
+        "home"
+      ],
+      "model": "block_wide_a.glb",
+      "min_m": [
+        -6.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        6.0,
+        13.2,
+        3.0
+      ]
+    },
+    {
+      "id": "block_wide_b",
+      "uses": [
+        "home"
+      ],
+      "model": "block_wide_b.glb",
+      "min_m": [
+        -6.0,
+        0.0,
+        -3.0
+      ],
+      "max_m": [
+        6.0,
+        13.8,
+        3.0
+      ]
+    },
+    {
+      "id": "apartments_f",
+      "uses": [
+        "home"
+      ],
+      "model": "apartments_f.glb",
+      "min_m": [
+        -3.78,
+        0.0,
+        -4.635
+      ],
+      "max_m": [
+        3.78,
+        15.237,
+        4.635
+      ]
+    },
+    {
+      "id": "apartments_g",
+      "uses": [
+        "home"
+      ],
+      "model": "apartments_g.glb",
+      "min_m": [
+        -4.365,
+        0.0,
+        -4.149
+      ],
+      "max_m": [
+        4.365,
+        15.237,
+        4.149
+      ]
+    },
+    {
+      "id": "apartments_h",
+      "uses": [
+        "home"
+      ],
+      "model": "apartments_h.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.536
+      ],
+      "max_m": [
+        3.976,
+        11.637,
+        4.536
+      ]
+    },
+    {
+      "id": "shop_a",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_a.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.23
+      ],
+      "max_m": [
+        3.976,
+        11.637,
+        4.23
+      ]
+    },
+    {
+      "id": "shop_b",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_b.glb",
+      "min_m": [
+        -4.365,
+        0.0,
+        -4.23
+      ],
+      "max_m": [
+        4.365,
+        11.637,
+        4.23
+      ]
+    },
+    {
+      "id": "shop_c",
+      "uses": [
+        "shop"
+      ],
+      "model": "shop_c.glb",
+      "min_m": [
+        -3.976,
+        0.0,
+        -4.905
+      ],
+      "max_m": [
+        3.976,
+        8.037,
+        4.905
+      ]
+    },
+    {
+      "id": "tower",
+      "uses": [
+        "hall"
+      ],
+      "model": "tower.glb",
+      "min_m": [
+        -5.78,
+        0.0,
+        -5.78
+      ],
+      "max_m": [
+        5.78,
+        38.08,
+        5.78
+      ]
+    },
+    {
+      "id": "clinic",
+      "uses": [
+        "clinic"
+      ],
+      "model": "clinic.glb",
+      "min_m": [
+        -5.58,
+        0.0,
+        -5.859
+      ],
+      "max_m": [
+        5.58,
+        15.12,
+        5.859
+      ]
+    },
+    {
+      "id": "workshop_h",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop_h.glb",
+      "min_m": [
+        -14.902,
+        -0.0,
+        -4.512
+      ],
+      "max_m": [
+        0.959,
+        8.802,
+        11.208
+      ]
+    },
+    {
+      "id": "workshop_i",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop_i.glb",
+      "min_m": [
+        -11.378,
+        0.0,
+        -4.512
+      ],
+      "max_m": [
+        0.959,
+        8.802,
+        11.088
+      ]
+    },
+    {
+      "id": "workshop_j",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop_j.glb",
+      "min_m": [
+        -11.378,
+        0.0,
+        -4.512
+      ],
+      "max_m": [
+        0.941,
+        10.334,
+        11.088
+      ]
+    },
+    {
+      "id": "workshop_p",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop_p.glb",
+      "min_m": [
+        -10.102,
+        0.0,
+        -5.952
+      ],
+      "max_m": [
+        10.102,
+        8.575,
+        5.952
+      ]
+    },
+    {
+      "id": "workshop_s",
+      "uses": [
+        "workshop"
+      ],
+      "model": "workshop_s.glb",
+      "min_m": [
+        -12.84,
+        0.0,
+        -5.498
+      ],
+      "max_m": [
+        12.6,
+        10.041,
+        5.498
+      ]
+    },
+    {
+      "id": "solar_field",
+      "uses": [
+        "power"
+      ],
+      "model": "solar_field.glb",
+      "min_m": [
+        -7.567,
+        -0.0,
+        -4.475
+      ],
+      "max_m": [
+        24.567,
+        2.624,
+        15.475
+      ]
+    },
+    {
+      "id": "water_tower",
+      "uses": [
+        "power"
+      ],
+      "model": "water_tower.glb",
+      "min_m": [
+        -5.113,
+        -0.0,
+        -4.991
+      ],
+      "max_m": [
+        5.113,
+        25.7,
+        4.991
+      ]
+    },
+    {
+      "id": "greenhouse",
+      "uses": [
+        "farm"
+      ],
+      "model": "greenhouse.glb",
+      "min_m": [
+        -7.817,
+        0.0,
+        -5.563
+      ],
+      "max_m": [
+        7.817,
+        9.273,
+        5.4
+      ]
+    },
+    {
+      "id": "plaza",
+      "uses": [
+        "square"
+      ],
+      "model": "plaza.glb",
+      "min_m": [
+        -5.386,
+        0.0,
+        -1.6
+      ],
+      "max_m": [
+        5.386,
+        3.6,
+        3.6
+      ]
+    },
+    {
+      "id": "barricade",
+      "uses": [
+        "prop"
+      ],
+      "model": "barricade.glb",
+      "min_m": [
+        -1.118,
+        0.0,
+        -2.468
+      ],
+      "max_m": [
+        10.118,
+        2.088,
+        2.468
+      ]
+    },
+    {
+      "id": "tanks",
+      "uses": [
+        "prop"
+      ],
+      "model": "tanks.glb",
+      "min_m": [
+        -6.034,
+        -0.0,
+        -7.154
+      ],
+      "max_m": [
+        6.034,
+        7.693,
+        6.034
+      ]
+    },
+    {
+      "id": "tree",
+      "uses": [
+        "tree"
+      ],
+      "model": "tree.glb",
+      "min_m": [
+        -1.263,
+        0.0,
+        -1.458
+      ],
+      "max_m": [
+        1.263,
+        6.804,
+        1.458
+      ]
+    }
+  ]
+}

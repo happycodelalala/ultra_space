@@ -27,7 +27,7 @@
         "priest",
         "noble"
       ],
-      "height_m": 1.802
+      "height_m": 1.798
     },
     {
       "id": "man_bearded",
@@ -42,7 +42,7 @@
         "merchant",
         "priest"
       ],
-      "height_m": 1.778
+      "height_m": 1.772
     },
     {
       "id": "woman",
@@ -57,7 +57,7 @@
         "priest",
         "noble"
       ],
-      "height_m": 1.74
+      "height_m": 1.734
     },
     {
       "id": "woman_buns",
@@ -70,7 +70,7 @@
         "merchant",
         "healer"
       ],
-      "height_m": 1.742
+      "height_m": 1.736
     },
     {
       "id": "guard",
@@ -78,7 +78,7 @@
       "roles": [
         "guard"
       ],
-      "height_m": 1.837
+      "height_m": 1.83
     },
     {
       "id": "guard_woman",
@@ -86,7 +86,7 @@
       "roles": [
         "guard"
       ],
-      "height_m": 1.761
+      "height_m": 1.754
     }
   ]
 }

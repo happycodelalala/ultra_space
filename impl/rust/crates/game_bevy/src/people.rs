@@ -228,9 +228,11 @@ fn animation(activity: Activity, role: &str) -> &'static str {
     match activity {
         Activity::Walking => "walk",
         Activity::Working => match role {
-            "smith" | "carpenter" | "technician" | "engineer" => "use",
-            "laborer" | "fisher" => "carry",
-            "merchant" | "trader" | "guard" | "security" | "pilot" => "talk",
+            "smith" | "carpenter" | "technician" | "engineer" | "crafter" | "potter" | "worker"
+            | "doctor" | "scientist" => "use",
+            "laborer" | "fisher" | "sailor" => "carry",
+            "merchant" | "trader" | "guard" | "security" | "pilot" | "soldier" | "warrior"
+            | "clerk" | "official" | "teacher" | "scribe" | "scholar" | "elder" => "talk",
             _ => "work",
         },
         Activity::Talking => "talk",

@@ -718,7 +718,7 @@ fn stream_layouts(
                 let colony = kit
                     .buildings
                     .iter()
-                    .any(|b| b.uses.iter().any(|u| u == "pad"));
+                    .any(|b| b.uses.iter().any(|u| u == "pad" || u == "power"));
                 (layout, Some((far, lights, streets, colony)))
             });
             draw.pending.insert(k, task);
@@ -801,7 +801,7 @@ fn stream_layouts(
                     let colony = kit
                         .buildings
                         .iter()
-                        .any(|b| b.uses.iter().any(|u| u == "pad"));
+                        .any(|b| b.uses.iter().any(|u| u == "pad" || u == "power"));
                     (far, lights, streets, colony)
                 });
                 let far = commands
@@ -911,7 +911,7 @@ fn distant_meshes(
     let colony = kit
         .buildings
         .iter()
-        .any(|b| b.uses.iter().any(|u| u == "pad"));
+        .any(|b| b.uses.iter().any(|u| u == "pad" || u == "power"));
     for (i, placed) in layout.buildings.iter().enumerate() {
         let b = &kit.buildings[placed.building];
         let (origin, rotation) = site.building_pose(layout, i, radius);
@@ -927,7 +927,7 @@ fn distant_meshes(
         let lit = b.uses.iter().any(|u| {
             !matches!(
                 u.as_str(),
-                "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms"
+                "tree" | "prop" | "square" | "market" | "pad" | "power" | "comms" | "harbour"
             )
         });
         if lit {
@@ -969,12 +969,13 @@ fn distant_meshes(
 }
 
 /// Street surfaces: a ribbon along every street following the ground (dirt lanes and a paved
-/// square for the medieval style, concrete for the colony), a little above it.
+/// square for the older styles, concrete for towns with power: the colony, industrial and
+/// modern), a little above it.
 fn street_mesh(site: Frame, layout: &Layout, kit: &Kit, terrain: &sim_planet::Terrain) -> Mesh {
     let colony = kit
         .buildings
         .iter()
-        .any(|b| b.uses.iter().any(|u| u == "pad"));
+        .any(|b| b.uses.iter().any(|u| u == "pad" || u == "power"));
     let (width, colour) = if colony {
         (6.0, [0.32, 0.32, 0.31])
     } else {

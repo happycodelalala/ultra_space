@@ -1209,6 +1209,26 @@
     {
       "request": {
         "kind": "settlement_lore",
+        "key": "settlement/corvantine/city/*"
+      },
+      "response": {
+        "description": "{settlement} is an inland city of {people}: a cathedral and a university, wool and wine markets, and the grandees' town houses behind a ring of new bastions.",
+        "landmark": "The university's library, its chained books older than the Crown."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
+        "key": "settlement/corvantine/city/*"
+      },
+      "response": {
+        "description": "{settlement} is a market city of {faction} on the royal road, where the river barges meet the mule trains from the hills.",
+        "landmark": "The great covered market, built on the ruins of the old castle."
+      }
+    },
+    {
+      "request": {
+        "kind": "settlement_lore",
         "key": "settlement/corvantine/town/*"
       },
       "response": {

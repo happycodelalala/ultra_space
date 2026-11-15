@@ -8,7 +8,7 @@ use ai_gateway::{ContentDirector, ReplayProvider};
 use glam::DVec2;
 use sim_core::StarSystem;
 use sim_planet::Terrain;
-use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, Settlement, SizeClass};
+use sim_society::{Kits, Layout, RegionLayouts, RegionSociety, Settlement, SizeClass, TechTier};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
@@ -58,13 +58,15 @@ fn world() -> &'static World {
 #[test]
 fn kits_load_with_their_buildings() {
     let w = world();
-    for id in ["medieval_village", "colony_standin"] {
+    // Every people's kit (task 4b.7).
+    for c in &w.society.society.cultures {
+        let id = c.profile.building_kit.as_str();
         let kit = &w.layouts.kits.0[id];
         assert!(kit.buildings.len() >= 10, "{id}");
         for b in &kit.buildings {
             let size = [0, 1, 2].map(|k| b.max_m[k] - b.min_m[k]);
             assert!(
-                size.iter().all(|&s| s > 0.3 && s < 40.0),
+                size.iter().all(|&s| s > 0.3 && s < 50.0),
                 "{id}.{}: {size:?}",
                 b.id
             );
@@ -91,9 +93,8 @@ fn every_settlement_is_laid_out_with_what_it_needs() {
         .iter()
         .zip(w.layouts.layouts.values().map(|l| l.as_ref()))
     {
-        let Some(kit) = w.layouts.kits.0.get(&l.kit) else {
-            continue; // a people without a kit yet (task 4b.7)
-        };
+        let kit = &w.layouts.kits.0[&l.kit];
+        let tier = w.society.society.cultures[s.culture].profile.tech_tier;
         let count = |use_: &str| {
             l.buildings
                 .iter()
@@ -103,41 +104,54 @@ fn every_settlement_is_laid_out_with_what_it_needs() {
         let wanted = l.buildings.len() + l.unplaced;
         assert!(
             l.unplaced * 10 <= wanted,
-            "{}: {} of {wanted} unplaced",
+            "{} ({tier:?} {:?}): {} of {wanted} unplaced",
             s.name,
+            s.size,
             l.unplaced
         );
         assert!(!l.streets.is_empty(), "{}: no streets", s.name);
-        match s.lore_kind() {
-            "town" | "city" => {
-                for u in [
+        let needs: &[&str] = match tier {
+            TechTier::Spacefaring => match s.lore_kind() {
+                "capital" | "port" => &["pad", "port", "home", "hall", "power", "comms"],
+                _ => &["pad", "home", "power", "comms"],
+            },
+            TechTier::StoneAge if s.population >= 150 => &["square", "hall", "shrine", "home"],
+            TechTier::StoneAge => &["square", "home"],
+            TechTier::Industrial | TechTier::Modern if s.size >= SizeClass::Town => {
+                &["square", "hall", "home", "shop", "workshop", "power"]
+            }
+            TechTier::Industrial | TechTier::Modern => &["square", "home", "power"],
+            _ => match s.size {
+                SizeClass::Town | SizeClass::City | SizeClass::Metropolis => &[
                     "square", "hall", "shrine", "inn", "market", "smithy", "home",
-                ] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
-                }
-            }
-            "village" => {
-                for u in ["square", "shrine", "home"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
-                }
-            }
-            "hamlet" => assert!(count("home") >= 3, "{}", s.name),
-            "capital" | "port" => {
-                for u in ["pad", "port", "home", "hall", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
-                }
-            }
-            _ => {
-                for u in ["pad", "home", "power", "comms"] {
-                    assert!(count(u) >= 1, "{} ({:?}) has no {u}", s.name, s.lore_kind());
-                }
-            }
+                ],
+                SizeClass::Village => &["square", "shrine", "home"],
+                _ => &["home"],
+            },
+        };
+        for u in needs {
+            assert!(
+                count(u) >= 1,
+                "{} ({:?} {:?}) has no {u}",
+                s.name,
+                tier,
+                s.size
+            );
+        }
+        if s.size == SizeClass::Hamlet {
+            assert!(count("home") >= 3, "{}", s.name);
         }
         // Homes for everyone: medieval households of about five, colony habitats of forty.
+        // The biggest places' tenements and apartment blocks hold hundreds.
         let homes = count("home") + count("shop");
         let per_home = f64::from(s.population) / homes as f64;
+        let most = if s.size >= SizeClass::City {
+            400.0
+        } else {
+            60.0
+        };
         assert!(
-            (2.0..=60.0).contains(&per_home),
+            (1.0..=most).contains(&per_home),
             "{}: {per_home:.1} people per home",
             s.name
         );
@@ -177,9 +191,7 @@ fn sample(w: &World) -> impl Iterator<Item = (&Settlement, &Layout)> {
 fn buildings_keep_clear_of_each_other_and_the_streets() {
     let w = world();
     for (s, l) in sample(w) {
-        let Some(kit) = w.layouts.kits.0.get(&l.kit) else {
-            continue; // a people without a kit yet (task 4b.7)
-        };
+        let kit = &w.layouts.kits.0[&l.kit];
         let rects: Vec<_> = l
             .buildings
             .iter()
@@ -244,10 +256,14 @@ fn foundations_level_the_ground_under_every_building() {
     let mut worst: f64 = 0.0;
     let mut cut: f64 = 0.0;
     for l in w.layouts.layouts.values() {
-        let Some(kit) = w.layouts.kits.0.get(&l.kit) else {
-            continue; // a people without a kit yet (task 4b.7)
-        };
-        for p in &l.buildings {
+        let kit = &w.layouts.kits.0[&l.kit];
+        // Harbours stand over the water, on no foundation.
+        for p in l.buildings.iter().filter(|p| {
+            !kit.buildings[p.building]
+                .uses
+                .iter()
+                .any(|u| u == "harbour")
+        }) {
             let f = Layout::footprint(kit, p);
             let (sn, cs) = f.yaw.sin_cos();
             for (x, z) in [
@@ -261,7 +277,8 @@ fn foundations_level_the_ground_under_every_building() {
                 let v = DVec2::new(x * (f.half[0] - 0.9), z * (f.half[1] - 0.9));
                 let q = DVec2::new(f.x + cs * v.x + sn * v.y, f.z - sn * v.x + cs * v.y);
                 let dir = l.direction(q.x, q.y, w.terrain.radius);
-                worst = worst.max((flat.height(dir, 1.0) - p.height).abs());
+                let off = (flat.height(dir, 1.0) - p.height).abs();
+                worst = worst.max(off);
                 cut = cut.max((w.terrain.height(dir, 1.0) - p.height).abs());
             }
         }

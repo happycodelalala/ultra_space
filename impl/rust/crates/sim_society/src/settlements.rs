@@ -342,6 +342,15 @@ pub fn generate_settlements(
                     (c.size, c.roles.clone(), c.people)
                 }
             };
+            // A port by sea needs the sea: within reach of its harbour (the layout looks 900 m
+            // out), else it is a port in name only and isn't one. Spacecraft ports need none.
+            let mut settlement_roles = settlement_roles;
+            if profile.tech_tier != TechTier::Spacefaring
+                && settlement_roles.contains(&SettlementRole::Port)
+                && !coastal(&terrain, dir, 900.0)
+            {
+                settlement_roles.retain(|r| *r != SettlementRole::Port);
+            }
             let spread = f64::from(range[1].saturating_sub(range[0]));
             let population =
                 range[0] + (spread * (0.5 * site_score + 0.5 * rng.unit())).round() as u32;
@@ -626,6 +635,20 @@ pub(crate) fn place(
             }
         })
         .collect()
+}
+
+/// Whether the sea is within `reach` m of unit direction `dir` (sampled round it).
+fn coastal(terrain: &Terrain, dir: DVec3, reach: f64) -> bool {
+    let (east, south) = sim_planet::tangent_frame(dir);
+    let r = terrain.radius;
+    (1..=3).any(|ring| {
+        let d = reach * f64::from(ring) / 3.0;
+        (0..16).any(|k| {
+            let a = std::f64::consts::TAU * f64::from(k) / 16.0;
+            let p = (dir * r + (east * a.cos() + south * a.sin()) * d).normalize();
+            terrain.height(p, 50.0) < 0.0
+        })
+    })
 }
 
 /// The word a place-name pattern uses for this kind of settlement ("Port {name}" only for

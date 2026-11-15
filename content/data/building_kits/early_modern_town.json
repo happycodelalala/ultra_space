@@ -1,0 +1,404 @@
+{
+ "id": "early_modern_town",
+ "name": "Early Modern town (placeholder)",
+ "description": "The Corvantine's buildings: tall houses, churches and halls from Kenney's Fantasy Town Kit and harbours with ships from the Pirate Kit (CC0), until the design track's own kit. Fronts face +Z; a harbour's dock and ship reach out in front.",
+ "source": "kenney-fantasy-town",
+ "unit_m": 3.0,
+ "buildings": [
+  {
+   "id": "cottage",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 2,
+     "walls": "wood"
+    }
+   }
+  },
+  {
+   "id": "house",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 3,
+     "storeys": 2,
+     "walls": "mixed",
+     "chimney": true
+    }
+   }
+  },
+  {
+   "id": "house_tall",
+   "uses": [
+    "home",
+    "shop"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 3,
+     "storeys": 3,
+     "walls": "mixed",
+     "chimney": true
+    }
+   }
+  },
+  {
+   "id": "merchant_house",
+   "uses": [
+    "home",
+    "shop"
+   ],
+   "recipe": {
+    "house": {
+     "width": 3,
+     "depth": 3,
+     "storeys": 3,
+     "walls": "stone",
+     "chimney": true
+    }
+   }
+  },
+  {
+   "id": "hall",
+   "uses": [
+    "hall"
+   ],
+   "recipe": {
+    "house": {
+     "width": 3,
+     "depth": 6,
+     "storeys": 3,
+     "walls": "stone",
+     "chimney": true,
+     "banners": true,
+     "tower": 4
+    }
+   }
+  },
+  {
+   "id": "church",
+   "uses": [
+    "shrine"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 5,
+     "storeys": 2,
+     "walls": "stone",
+     "tower": 5
+    }
+   }
+  },
+  {
+   "id": "inn",
+   "uses": [
+    "inn"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 4,
+     "storeys": 3,
+     "walls": "mixed",
+     "chimney": true,
+     "lanterns": true
+    }
+   }
+  },
+  {
+   "id": "smithy",
+   "uses": [
+    "smithy"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 2,
+     "walls": "stone",
+     "chimney": true
+    }
+   }
+  },
+  {
+   "id": "barn",
+   "uses": [
+    "farm"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 4,
+     "walls": "wood",
+     "roof": "low"
+    }
+   }
+  },
+  {
+   "id": "windmill",
+   "uses": [
+    "mill"
+   ],
+   "recipe": {
+    "house": {
+     "width": 1,
+     "depth": 1,
+     "storeys": 3,
+     "walls": "stone",
+     "tower": 0
+    },
+    "pieces": [
+     {
+      "piece": "windmill",
+      "at": [
+       0,
+       2.6,
+       0.75
+      ],
+      "rot": 90
+     }
+    ]
+   }
+  },
+  {
+   "id": "fountain",
+   "uses": [
+    "square"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "fountain-round-detail",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "stall_red",
+   "uses": [
+    "market"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "stall-red",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "stall_green",
+   "uses": [
+    "market"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "stall-green",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "harbour",
+   "uses": [
+    "port",
+    "harbour"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "structure-platform-dock",
+      "at": [
+       0,
+       -0.1,
+       1.0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.8
+     },
+     {
+      "piece": "structure-platform-dock",
+      "at": [
+       0,
+       -0.1,
+       3.0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.8
+     },
+     {
+      "piece": "structure-platform-dock",
+      "at": [
+       0,
+       -0.1,
+       5.0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.8
+     },
+     {
+      "piece": "structure-platform-dock",
+      "at": [
+       0,
+       -0.1,
+       7.0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.8
+     },
+     {
+      "piece": "ship-medium",
+      "at": [
+       2.7,
+       -0.4,
+       4.0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.68
+     }
+    ]
+   }
+  },
+  {
+   "id": "watchtower",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tower-watch",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.9
+     }
+    ]
+   }
+  },
+  {
+   "id": "cargo",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "crate",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.45
+     },
+     {
+      "piece": "barrel",
+      "at": [
+       0.5,
+       0,
+       0.1
+      ],
+      "rot": 0,
+      "source": "kenney-pirate-kit",
+      "scale": 0.35
+     }
+    ]
+   }
+  },
+  {
+   "id": "cart",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "cart",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-high",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree_round",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-high-round",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  }
+ ]
+}

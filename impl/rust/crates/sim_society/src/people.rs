@@ -201,6 +201,16 @@ fn workplace(role: &str) -> (&'static [&'static str], bool) {
         "scientist" => (&["lab"], true),
         "pilot" => (&["pad", "hangar"], false),
         "security" => (&["comms", "hall", "pad"], false),
+        // The other peoples' roles (task 4b.7).
+        "hunter" | "warrior" | "gatherer" => (&["square", "prop"], false),
+        "crafter" | "potter" => (&["smithy", "square"], false),
+        "elder" => (&["hall", "square"], false),
+        "soldier" => (&["hall", "square", "port"], false),
+        "sailor" => (&["port", "market"], false),
+        "scribe" | "scholar" | "clerk" | "official" => (&["hall", "shop"], true),
+        "worker" => (&["workshop", "power", "farm"], false),
+        "doctor" => (&["clinic", "hall"], true),
+        "teacher" => (&["hall", "shrine"], true),
         _ => (&["square"], false),
     }
 }

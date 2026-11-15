@@ -1,0 +1,342 @@
+{
+ "id": "ancient_city",
+ "name": "Ancient city (placeholder)",
+ "description": "The Velani's buildings: flat-roofed stone houses and colonnaded temples assembled from Kenney's Fantasy Town Kit (CC0), until the design track's own kit. Fronts face +Z.",
+ "source": "kenney-fantasy-town",
+ "unit_m": 3.0,
+ "buildings": [
+  {
+   "id": "house_small",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 2,
+     "walls": "stone",
+     "roof": "flat"
+    }
+   }
+  },
+  {
+   "id": "house",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 3,
+     "walls": "stone",
+     "roof": "flat"
+    }
+   }
+  },
+  {
+   "id": "house_court",
+   "uses": [
+    "home"
+   ],
+   "recipe": {
+    "house": {
+     "width": 3,
+     "depth": 3,
+     "walls": "stone",
+     "roof": "flat"
+    }
+   }
+  },
+  {
+   "id": "townhouse",
+   "uses": [
+    "home",
+    "shop"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 3,
+     "storeys": 2,
+     "walls": "stone",
+     "roof": "flat"
+    }
+   }
+  },
+  {
+   "id": "palace",
+   "uses": [
+    "hall"
+   ],
+   "recipe": {
+    "house": {
+     "width": 3,
+     "depth": 5,
+     "storeys": 2,
+     "walls": "stone",
+     "roof": "flat",
+     "banners": true
+    },
+    "pieces": [
+     {
+      "piece": "pillar-stone",
+      "at": [
+       -1.5,
+       0,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       -1.5,
+       1,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       -0.5,
+       0,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       -0.5,
+       1,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       0.5,
+       0,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       0.5,
+       1,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       1.5,
+       0,
+       3.0
+      ],
+      "rot": 0
+     },
+     {
+      "piece": "pillar-stone",
+      "at": [
+       1.5,
+       1,
+       3.0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "temple",
+   "uses": [
+    "shrine"
+   ],
+   "recipe": {
+    "temple": {
+     "width": 4,
+     "depth": 6,
+     "height": 2
+    }
+   }
+  },
+  {
+   "id": "shrine_small",
+   "uses": [
+    "shrine"
+   ],
+   "recipe": {
+    "temple": {
+     "width": 2,
+     "depth": 3,
+     "height": 2
+    }
+   }
+  },
+  {
+   "id": "inn",
+   "uses": [
+    "inn"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 4,
+     "storeys": 2,
+     "walls": "stone",
+     "roof": "flat",
+     "lanterns": true
+    }
+   }
+  },
+  {
+   "id": "smithy",
+   "uses": [
+    "smithy"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 2,
+     "walls": "stone",
+     "roof": "flat",
+     "chimney": true
+    }
+   }
+  },
+  {
+   "id": "barn",
+   "uses": [
+    "farm"
+   ],
+   "recipe": {
+    "house": {
+     "width": 2,
+     "depth": 4,
+     "walls": "stone",
+     "roof": "flat"
+    }
+   }
+  },
+  {
+   "id": "well",
+   "uses": [
+    "square"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "fountain-square",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "stall_red",
+   "uses": [
+    "market"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "stall-red",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "stall_green",
+   "uses": [
+    "market"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "stall-green",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "cypress",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-high-round",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "tree",
+   "uses": [
+    "tree"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "tree-high",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "cart",
+   "uses": [
+    "prop"
+   ],
+   "recipe": {
+    "pieces": [
+     {
+      "piece": "cart",
+      "at": [
+       0,
+       0,
+       0
+      ],
+      "rot": 0
+     }
+    ]
+   }
+  }
+ ]
+}

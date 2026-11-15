@@ -1,0 +1,121 @@
+{
+  "id": "early_modern_dress",
+  "name": "Early Modern dress (placeholder)",
+  "description": "The Corvantine: Quaternius base characters (CC0) in the fantasy pack's peasant and ranger outfits, dyed (navy for sailors and soldiers, dark coats for merchants), with the shared animations. Placeholders until the design track's own characters.",
+  "characters": [
+    {
+      "id": "man",
+      "body": "male",
+      "outfit": "Male_Peasant",
+      "hair": [
+        "Hair_SimpleParted"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "fisher",
+        "laborer",
+        "smith",
+        "carpenter"
+      ],
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "sailor",
+      "body": "male",
+      "outfit": "Male_Ranger",
+      "outfit_colour": [
+        0.45,
+        0.55,
+        0.9
+      ],
+      "hair": [
+        "Hair_Buzzed",
+        "Hair_Beard"
+      ],
+      "roles": [
+        "sailor",
+        "fisher",
+        "laborer",
+        "soldier"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ]
+    },
+    {
+      "id": "merchant",
+      "body": "male",
+      "outfit": "Male_Ranger",
+      "outfit_colour": [
+        0.6,
+        0.35,
+        0.3
+      ],
+      "hair": [
+        "Hair_SimpleParted"
+      ],
+      "roles": [
+        "merchant",
+        "scholar",
+        "priest",
+        "noble"
+      ],
+      "hair_colour": [
+        0.45,
+        0.45,
+        0.45
+      ]
+    },
+    {
+      "id": "woman",
+      "body": "female",
+      "outfit": "Female_Peasant",
+      "hair": [
+        "Hair_Buns"
+      ],
+      "roles": [
+        "farmer",
+        "herder",
+        "merchant",
+        "laborer",
+        "priest"
+      ],
+      "hair_colour": [
+        0.3,
+        0.2,
+        0.12
+      ]
+    },
+    {
+      "id": "woman_coat",
+      "body": "female",
+      "outfit": "Female_Ranger",
+      "outfit_colour": [
+        0.55,
+        0.5,
+        0.75
+      ],
+      "hair": [
+        "Hair_Long"
+      ],
+      "roles": [
+        "merchant",
+        "scholar",
+        "noble",
+        "sailor"
+      ],
+      "hair_colour": [
+        0.08,
+        0.06,
+        0.05
+      ]
+    }
+  ]
+}
