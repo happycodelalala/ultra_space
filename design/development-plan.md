@@ -597,6 +597,39 @@ views of the village; anything off outside them is a known issue, not a new task
 | 5.7 | **Digging and placing:** a mining tool removing blocks under the crosshair (a brush, timed by hardness), big blocks split into children first, drops to a small inventory (stacks by material, a simple panel, saved with the player), placing blocks from it on the grid; edits kept per chunk and saved; re-meshing and colliders updated within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
 | 5.8 | **Batch review** | The views judged against the renders by the developer, from screenshots |
 
+**Progress (2026-11-15):** 5.1–5.6 done, for the developer's review play-through before 5.7.
+
+- **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
+  also needs a neighbour along its edge), a mesher merging flat faces and slope planes and
+  hiding faces a neighbour covers, chunked storage, block models. Every exported model meshes
+  to the same area per colour as the scripts' own mesher (`tests/models.rs`).
+- **5.2** `tools/blocks/` (the style scene, now the authoring tool) exports 134 models, the
+  palette and the village to `assets/export/blocks/` (`tools/build-blocks.sh`; schemas
+  `block_model` and `block_village`; CI checks the export is current and valid).
+- **5.3** `sim_planet::BlockGround`: columns of 25 cm blocks in a 1.5 km disc round the village,
+  in the village's tangent grid mapped onto the sphere per vertex (the planet-wide cube-sphere
+  grid is later); the village's exported ground eases into the natural ground over 5 m. The
+  terrain reads its surface (landing, walking, placing); collision patches sink 0.75 m below it
+  and chunk meshes near bodies carry contact; the village's buildings, props and trunks are
+  boxes walkers bump into. Chunks within 90 m of the camera are meshed on workers; tiles are
+  hidden only where the blocks are ready (in the depth prepass too).
+- **5.4** The village on Meridian (temperate grassland near the medieval peoples, away from face
+  seams, settlements and dwellings): 655 placed models, villagers and chickens standing; a new
+  game starts on foot beside the landed ship in the morning (`ULTRA_SPACE_START=orbit` and the
+  debug starts keep the old start; `ULTRA_SPACE_START_TIME`, `ULTRA_SPACE_VILLAGE_VIEW`).
+- **5.5** AgX tonemapping; lanterns and windows lit from dusk with point lights; weather
+  (`ULTRA_SPACE_WEATHER=clear|rain|fog`, `;` cycles): overcast sun and sky, distance fog and a
+  fog dome, rain streaks, wet blocks.
+- **5.6** Review round: `village`, `-dusk`, `-night`, `-rain`, `-fog`, `-walk`, `-perf` in
+  `tools/test-scripts/tests.txt`. Village views about 140 fps; no frame over 50 ms in play
+  except screenshot frames.
+
+Known issues (not tasks): the far tiles are not stepped (beyond 90 m the land is the faceted
+tiles); the block disc is one tangent grid round the village; the player's ship is the
+Kestrel's part model on the block ship's pad; villagers don't move yet; walls are boxes (a
+building's eaves are part of its box); frame times on the test machine vary between runs (40 to
+140 fps on the same views, the same with the blocks switched off).
+
 **Exit criteria:** a new game starts in the demo village; it reads as the style renders by day,
 dusk, night, in rain and fog; the player can walk, dig and place blocks, and edits persist; no
 frame over 50 ms landing at or flying low over the village at default quality; loading no slower
