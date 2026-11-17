@@ -63,6 +63,8 @@ pub struct Region {
 #[derive(Clone, Debug)]
 pub struct PlainWorld {
     pub plains: Plains,
+    /// The land (planet-geography.md).
+    pub geo: crate::geography::Geography,
     pub types: Vec<RegionType>,
     /// One per plain, in the plains' order.
     pub regions: Vec<Region>,
@@ -199,7 +201,9 @@ impl PlainWorld {
             })
             .collect();
         let seeds = std::array::from_fn(|i| mix64(seed ^ (0xA11CE + i as u64)));
+        let geo = crate::geography::Geography::new(&plains, seed, Default::default());
         Self {
+            geo,
             plains,
             types,
             regions,

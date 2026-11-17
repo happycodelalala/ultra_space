@@ -7,6 +7,7 @@
 pub mod blocks;
 pub mod climate;
 pub mod foundations;
+pub mod geography;
 pub mod map;
 pub mod mesh;
 pub mod noise;

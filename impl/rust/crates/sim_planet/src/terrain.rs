@@ -226,19 +226,9 @@ impl Terrain {
                     .iter()
                     .map(|p| p.distance)
                     .fold(f64::MAX, f64::min);
-                let deepest = w
-                    .types
-                    .iter()
-                    .map(|t| t.base_m - t.hills_m - t.valleys_m)
-                    .fold(0.0, f64::min);
-                let highest = w
-                    .types
-                    .iter()
-                    .map(|t| t.base_m + t.hills_m + t.mountains_m)
-                    .fold(0.0, f64::max);
                 (
-                    nearest - self.radius + deepest,
-                    w.plains.corner_radius() - self.radius + highest,
+                    nearest - self.radius + w.geo.lowest(),
+                    w.plains.corner_radius() - self.radius + w.geo.highest(),
                 )
             }
             None => {
@@ -283,7 +273,8 @@ impl Terrain {
                 a + w.plains.plains[i].normal * wt
             })
             .normalize_or(dir);
-        let above = position.length() - w.plains.hit(dir, 0.0).radius;
+        // Height above the ground (coarse: only far above it does "up" turn).
+        let above = position.length() - self.radius - self.surface_height(dir, 500.0);
         let t = smoothstep(UP_RADIAL.0, UP_RADIAL.1, above);
         n.lerp(dir, t).normalize_or(dir)
     }
@@ -403,14 +394,8 @@ impl Terrain {
     fn sample_plains(&self, w: &PlainWorld, dir: DVec3, min_wavelength: f64) -> Sample {
         let dir = dir.normalize();
         let shortest = min_wavelength.max(FINEST_WAVELENGTH);
-        let base = w.plains.hit(dir, 0.0);
-        let point = dir * base.radius;
-        let mut weights = Vec::with_capacity(4);
-        w.plains.weights(dir, BLEND_BAND, &mut weights);
-        let elevation: f64 = weights
-            .iter()
-            .map(|&(i, wt)| wt * w.region_elevation(i, point, shortest))
-            .sum();
+
+        let elevation = w.geo.elevation(&w.plains, dir, shortest);
         let ground = w.plains.hit(dir, elevation);
         let mut height = ground.radius - self.radius;
         // Foundations and pads work on radial heights; carry their change into the elevation.
@@ -574,28 +559,24 @@ mod tests {
     fn plains_sea_is_flat_and_land_is_level_with_its_plain() {
         let t = football();
         let w = t.world().unwrap().clone();
-        let sea = (0..w.plains.plains.len())
-            .find(|&i| w.kind(i).id == "sea")
-            .expect("a sea");
-        let p = &w.plains.plains[sea];
-        for (x, y) in [(0.0, 0.0), (5_000.0, -3_000.0), (-8_000.0, 6_000.0)] {
-            let point = p.from_local(DVec3::new(x, y, 0.0));
-            let d = point.normalize();
+        let mut seas = 0;
+        let mut lands = 0;
+        for d in fibonacci_directions(400) {
+            let (_, p) = t.plain_at(d).unwrap();
             let s = t.sample(d, 1.0);
-            assert!(s.elevation < 0.0, "the sea plain is under water");
-            // The sea surface lies exactly on the plain's plane.
             let surface = d * (t.radius + t.surface_height(d, 1.0));
-            assert!(p.to_local(surface).z.abs() < 1e-3);
+            if s.elevation < 0.0 && w.geo.open_sea(&w.plains, d) {
+                // The sea surface lies exactly on the plain's plane.
+                assert!(p.to_local(surface).z.abs() < 1e-3);
+                seas += 1;
+            } else if s.elevation > 0.0 && p.edge_distance(d * t.radius) > 3_000.0 {
+                // Elevation is measured along the plain's normal.
+                let ground = d * (t.radius + s.height);
+                assert!((p.to_local(ground).z - s.elevation).abs() < 1e-3);
+                lands += 1;
+            }
         }
-        // Elevation is measured along the plain's normal.
-        let land = (0..w.plains.plains.len())
-            .find(|&i| w.kind(i).id == "grassland")
-            .expect("grassland");
-        let p = &w.plains.plains[land];
-        let d = p.from_local(DVec3::new(2_000.0, 1_000.0, 0.0)).normalize();
-        let s = t.sample(d, 1.0);
-        let ground = d * (t.radius + s.height);
-        assert!((p.to_local(ground).z - s.elevation).abs() < 1e-3);
+        assert!(seas > 50 && lands > 50, "{seas} sea, {lands} land samples");
     }
 
     #[test]
@@ -610,7 +591,7 @@ mod tests {
         let pos = d * (t.radius + t.surface_height(d, 1.0) + 2.0);
         assert!(t.up(pos).angle_between(p.normal) < 1e-6);
         // Far above, the true direction from the centre.
-        let high = d * (t.radius + 20_000.0);
+        let high = d * (t.radius + 45_000.0);
         assert!(t.up(high).angle_between(d) < 1e-6);
     }
 
