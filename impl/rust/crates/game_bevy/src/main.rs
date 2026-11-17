@@ -7,6 +7,7 @@ mod blocks;
 mod builder;
 mod camera;
 mod capture;
+mod clouds;
 mod debug_overlay;
 mod distant;
 mod hud;
@@ -92,6 +93,7 @@ fn main() {
             distant::DistantPlugin,
             blocks::BlocksPlugin,
             weather::WeatherPlugin,
+            clouds::CloudsPlugin,
         ))
         .add_systems(Startup, log_startup)
         .run();

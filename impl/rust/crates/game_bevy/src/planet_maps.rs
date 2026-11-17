@@ -197,7 +197,10 @@ fn attach_maps(
                 && let Some(mut m) = atmospheres.get_mut(&handle.0)
             {
                 m.field_map = Some(fields.clone());
-                m.data.clouds.y = 1.0;
+                // A body of plains has cotton clouds (clouds.rs), not the round deck.
+                if m.data.deck.x < 0.5 {
+                    m.data.clouds.y = 1.0;
+                }
             }
         }
     }
