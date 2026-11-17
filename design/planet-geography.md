@@ -27,6 +27,21 @@ ground and sky are like on that geometry.
 | Mountains were noise, not ranges | No chains, passes or foothills |
 | Small things | Flat pentagon ice domes, dull grassland, rock judged against the wrong "up", one flat cloud deck |
 
+## 1a. On a round planet (2026-11-17)
+
+Tessera goes back to round (block-world.md §5.0). The layers below carry over; what changes:
+
+- **Plates are hidden geology, with curved borders.** About 30 plates are cells on the sphere
+  (seeds spread evenly and jittered), their borders warped by noise so they curve; a point's plate
+  is the nearest seed to its warped direction. Each **plate boundary** gets a character from the
+  two plates' drift as before (§3.1), and features are shaped by the distance to the boundary
+  (half the angle between the two nearest seeds, times the radius), so ranges curve and branch.
+  Mountain belts and volcanoes sit inside plates.
+- **Sea level is a sphere;** heights are radial; gravity toward the centre; clouds have flat bases
+  at a height above sea level in the local tangent frame.
+- **Climate on a latitude–longitude grid** (1°), computed at load on all cores.
+- **Regions are natural areas grown from the land** (§3.6 below, replacing plain-shaped regions).
+
 ## 2. Principles
 
 - **Plains are geometry and identity, not geography.** A plain is a flat piece of ground with a
@@ -107,11 +122,23 @@ lined up with the creases.
 
 ### 3.6 Regions
 
-- A plain's **region type** is read from what is on it: mostly sea → a sea or bay; a range along
-  it → highlands or peaks; dry → wastes; cold → barrens or icefield; wet warm lowland → forest
-  vales; and so on. Its **name** combines an adjective with the type's noun, as now.
-- Region climate is no longer stored per plain; the HUD's welcome message and the inspector read
-  the type.
+On a round planet regions are **natural areas**, not geometry:
+
+1. **Cells:** about 600 small cells evenly over the sphere (about 13 km across on Tessera), each
+   with its character: sea or land, height, steepness, biome, wetness.
+2. **Growing:** neighbouring cells merge into regions by similarity (cheapest first); merging
+   across a **range crest** or a **coastline** costs a lot, so those become borders, as do sharp
+   changes of climate. Regions stop growing at a size cap; ones left too small join their
+   cheapest neighbour. Target about 2,000–5,000 km² each, about 30–40 regions on Tessera.
+3. **Seas** are regions too: oceans, bays and straits, split where coasts pinch them.
+4. **Names** are read from what a region holds (its dominant ground and climate: sea, isles,
+   coast, peaks, highlands, icefield, barrens, wastes, steppe, meres, wilds, vale, downs,
+   plains), with an adjective: "Ashen Steppe", "Silver Bay".
+5. **In play:** a point's region is its nearest cell's; "Entering …" fires when crossing a region
+   border — cresting a pass, reaching a coast, leaving the desert.
+
+Regions are gameplay (identity, welcome messages, later quests and ownership); plates are only
+the geology that shaped the land.
 
 ### 3.7 Cotton clouds
 

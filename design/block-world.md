@@ -24,7 +24,7 @@ set in visual-style.md; this document is the system.
 | Dig depth | **Tens of metres** below the surface near the player; caves and deep layers designed now, generated later |
 | Mining | **Drops resources:** mined blocks become items in the player's inventory; placing a block uses one |
 | Grids | **Every object has its own grid:** the planet's ground, each building, ship, vehicle and station (§5) |
-| Round bodies | **Flat plains, about 40 km a side:** 12 pentagons and as many hexagons as the body's size needs (a Goldberg layout); each plain is a flat, exact square grid and one region of the world; plains meet at creases of generated, shared **seam blocks**, shown as fault rock (§5.1; decided 2026-11-16) |
+| Round bodies | **Round, with a bent ground grid; built things exact** (§5.0, 2026-11-17; supersedes the plains: **flat plains, about 40 km a side:** 12 pentagons and as many hexagons as the body's size needs (a Goldberg layout); each plain is a flat, exact square grid and one region of the world; plains meet at creases of generated, shared **seam blocks**, shown as fault rock (§5.1; decided 2026-11-16) |
 | Block size | **Exactly the same everywhere:** a 25 cm block is 25 cm on every plain, at every depth, on every body (the reason for the plains: a single bent grid varies block widths by up to 1.41 times) |
 | Small bodies | Below about 25–50 km across: **one 3D square grid**, "up" from the surface (§5.2) |
 
@@ -112,7 +112,25 @@ sizes in one view is what makes "Lego with non-standard parts".
 - **Moving parts** (doors, turrets, legs and arms of a mech) are separate block groups on joints,
   each with its own grid, posed by the joint data.
 
-### 5.1 Round bodies: a polyhedron of flat plains
+### 5.0 Round bodies (decided 2026-11-17): a round planet, built things exact
+
+After seeing Tessera built of flat plains in the game (faceted outline, flat horizons, sharp folds
+at creases), the developer reversed the plains decision: **round bodies are round**. The ground
+uses the **bent cube-sphere grid** (one grid per cube face, columns toward the centre, the
+demo village's mapping planet-wide), so **ground blocks vary slowly in size** (up to about
+1.41 times across a planet with the equal-angle mapping, sized to average 25 cm: about
+21–30 cm; about 0.1 % per km, invisible locally; worst near the 8 cube corners, which world
+generation keeps under seas or ice). **Everything built stays exact:** buildings, player builds,
+trees, rocks and vehicles are block models or structures on their own exact grids, and blocks a
+player places join a structure grid, never the ground grid; only digging and filling use the
+ground grid. Foundation skirts cover the small mismatch where a building meets the ground.
+Gravity is toward the centre, seas are spheres, cloud bases a height above sea level. Regions are
+natural areas grown from the land (planet-geography.md §3.6), not plains.
+
+The plains design below stays as a reference and as an option for deliberately faceted small
+bodies (toy moons); the engine keeps its plains mode (`terrain.plains`).
+
+### 5.1 Round bodies: a polyhedron of flat plains (superseded by §5.0 for planets)
 
 **Why.** Identical square blocks cannot cover a sphere: each row of blocks nearer a pole is
 shorter than the last (at 45 degrees latitude on Meridian, by about 1.1 m a row), so a
