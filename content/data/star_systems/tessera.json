@@ -21,7 +21,7 @@
       "name": "Tessera",
       "kind": "rocky",
       "parent": "lumen",
-      "radius_km": 91.6,
+      "radius_km": 90.6,
       "surface_gravity_ms2": 9.81,
       "orbit": {
         "semi_major_axis_km": 14000000,

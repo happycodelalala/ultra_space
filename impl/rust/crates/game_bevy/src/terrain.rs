@@ -611,7 +611,8 @@ fn update_terrain(
         // Hand over from the distant shader sphere when the tiles cover the body.
         for (visual, mut v) in &mut spheres {
             if visual.body == bt.body && visual.layer == Layer::Surface {
-                let want = if bt.covered {
+                // A body of plains never shows the round stand-in.
+                let want = if bt.covered || bt.terrain.world().is_some() {
                     Visibility::Hidden
                 } else {
                     Visibility::Inherited
