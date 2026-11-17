@@ -1,7 +1,7 @@
 {
   "id": "lumen",
   "name": "Lumen",
-  "description": "The test world of plains (block-world.md section 5.1): one small planet whose ground is 32 flat plains, each a region of its own, round a yellow-white star.",
+  "description": "The test world (planet-geography.md): one small round planet round a yellow-white star.",
   "bodies": [
     {
       "id": "lumen",
@@ -21,7 +21,7 @@
       "name": "Tessera",
       "kind": "rocky",
       "parent": "lumen",
-      "radius_km": 90.2,
+      "radius_km": 92,
       "surface_gravity_ms2": 9.81,
       "orbit": {
         "semi_major_axis_km": 14000000,
@@ -41,10 +41,10 @@
       "terrain": {
         "seed": 11,
         "relief_km": 2.5,
-        "plains": { "layout": "truncated_icosahedron", "edge_km": 40 }
+        "geography": { "plates": 32 }
       },
       "climate": { "equator_temperature_c": 22, "pole_temperature_c": -25, "moisture": 0.5 },
-      "description": "A football of plains 40 km a side: 12 pentagons and 20 hexagons, each a region with its own climate and land (ice caps on the spin axis, two seas, steppes, downs, vales, meres, peaks, wastes and barrens). Home of the demo block village."
+      "description": "A small round world of 32 drifting plates: ranges and rifts along their curved borders, continents and seas, a climate of wind belts and rain shadows, and natural regions grown from the land. Home of the demo block village."
     }
   ]
 }

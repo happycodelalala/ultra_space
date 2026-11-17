@@ -9,6 +9,7 @@ pub mod climate;
 pub mod clouds;
 pub mod foundations;
 pub mod geography;
+pub mod globe;
 pub mod map;
 pub mod mesh;
 pub mod noise;

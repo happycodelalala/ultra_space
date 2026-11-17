@@ -5,13 +5,13 @@
 //! and a slow variation. Clouds are then placed by that cloudiness **squared** (so they clump
 //! into systems), helped by wetness, until about the requested share of the surface is under
 //! cloud. Inside a system clouds are big clusters of many puffs; outside it small fair-weather
-//! ones. Every cloud has a flat base at the condensation height above the ground below it, in
-//! its plain's frame, so cloud bases are flat over each plain.
+//! ones. Every cloud has a flat base at the condensation height above sea level (or the ground
+//! below it), in its local frame (east, north, up).
 
 use glam::DVec3;
 
+use crate::globe::GlobeWorld;
 use crate::noise::{fbm, mix64, unit};
-use crate::regions::PlainWorld;
 
 /// One puff: its centre and half sizes in the cloud's frame (x east, y north, z up; m).
 #[derive(Clone, Copy, Debug)]
@@ -20,12 +20,15 @@ pub struct Puff {
     pub radius: DVec3,
 }
 
-/// One cloud: its base centre (surface frame, m), on plain `plain`, and its puffs (in that
-/// plain's east, north and normal).
+/// One cloud: its base centre (surface frame, m), the area it is drawn with (`chunk`: the
+/// plate it is over), its frame and its puffs (in that frame).
 #[derive(Clone, Debug)]
 pub struct Cloud {
-    pub plain: usize,
+    pub chunk: usize,
     pub base: DVec3,
+    pub east: DVec3,
+    pub north: DVec3,
+    pub up: DVec3,
     /// Footprint radius (m).
     pub size: f64,
     pub puffs: Vec<Puff>,
@@ -92,10 +95,9 @@ fn cloudiness(dir: DVec3, storms: &[Storm], seed: u64) -> f64 {
 }
 
 /// The clouds of `world`, covering about `cover` of the surface.
-pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
+pub fn clouds(world: &GlobeWorld, seed: u64, cover: f64) -> Vec<Cloud> {
     let storms = storms(seed);
-    let plains = &world.plains;
-    let radius = plains.mean_distance();
+    let radius = world.radius;
     let area = 4.0 * std::f64::consts::PI * radius * radius;
     // Candidates about 2 km apart, with how likely and how big a cloud there is.
     struct Candidate {
@@ -111,7 +113,7 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
     };
     let candidates: Vec<Candidate> = crate::terrain::fibonacci_directions(30_000)
         .filter_map(|dir| {
-            let e = world.geo.elevation(plains, dir, 2_000.0);
+            let e = world.elevation(dir, 2_000.0);
             if e.max(0.0) + GROUND_GAP > HIGHEST_BASE {
                 return None;
             }
@@ -153,11 +155,11 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
         if next() >= (c.p * scale).min(1.0) {
             continue;
         }
-        let hit = plains.hit(c.dir, 0.0);
-        let plain = &plains.plains[hit.plain];
-        let ground = world.geo.elevation(plains, c.dir, 2_000.0).max(0.0);
+        let ground = world.elevation(c.dir, 2_000.0).max(0.0);
         let base_height = BASE.max(ground + GROUND_GAP);
-        let base = c.dir * hit.radius + plain.normal * base_height;
+        let base = c.dir * (radius + base_height);
+        let east = DVec3::Y.cross(c.dir).normalize_or(DVec3::X);
+        let north = c.dir.cross(east);
         let tower = c.size * (0.5 + 0.5 * next()) * (0.6 + 1.2 * c.weather);
         // Few, large puffs: enough to read as cotton, cheap to draw.
         let count = (5.0 + 4.0 * next() + 6.0 * c.weather) as usize;
@@ -175,8 +177,11 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
             })
             .collect();
         out.push(Cloud {
-            plain: hit.plain,
+            chunk: world.plate_at(c.dir),
             base,
+            east,
+            north,
+            up: c.dir,
             size: c.size,
             puffs,
         });
@@ -187,16 +192,15 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plains::Plains;
 
     #[test]
     fn clouds_cover_about_a_third_and_clump() {
-        let world = PlainWorld::new(Plains::truncated_icosahedron(40_000.0), 11);
+        let world = GlobeWorld::new(92_000.0, 32, 11);
         let clouds = clouds(&world, 11, 1.0 / 3.0);
         assert!(clouds.len() > 300, "{} clouds", clouds.len());
         let puffs: usize = clouds.iter().map(|c| c.puffs.len()).sum();
         assert!(puffs < 30_000, "{puffs} puffs: too many to draw");
-        let radius = world.plains.mean_distance();
+        let radius = world.radius;
         let area = 4.0 * std::f64::consts::PI * radius * radius;
         let covered: f64 = clouds
             .iter()
@@ -209,14 +213,13 @@ mod tests {
         );
         // Bases are above the ground and below the high ranges' crests.
         for c in &clouds {
-            let p = &world.plains.plains[c.plain];
-            let h = p.to_local(c.base).z;
+            let h = c.base.length() - radius;
             assert!((2_000.0..8_000.0).contains(&h), "base at {h} m");
         }
         // Clumped: many plains with many clouds, some with few.
         let mut per: Vec<usize> = vec![0; 32];
         for c in &clouds {
-            per[c.plain] += 1;
+            per[c.chunk] += 1;
         }
         per.sort_unstable();
         assert!(

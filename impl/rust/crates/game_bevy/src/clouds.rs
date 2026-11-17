@@ -1,7 +1,7 @@
 //! Cotton clouds on a body of plains (planet-geography.md §3.7).
 //!
 //! The clouds come from `sim_planet::clouds` (placed by the weather and climate); here they are
-//! built into one mesh per plain on the worker threads (each puff a low sphere, flat at the
+//! built into one mesh per plate on the worker threads (each puff a low sphere, flat at the
 //! cloud's base, with its height in the cloud in the UVs for shading), drawn with a soft cotton
 //! shader and placed each frame relative to the camera, drifting slowly about the planet's axis.
 
@@ -70,14 +70,14 @@ impl Plugin for CloudsPlugin {
     }
 }
 
-/// One plain's cloud mesh, in the plain's frame: the body, the mesh's origin (surface frame).
+/// One area's cloud mesh: the body, the mesh's origin (surface frame).
 #[derive(Component)]
 struct CloudChunk {
     body: usize,
     origin: DVec3,
 }
 
-/// One body's cloud meshes: (origin, mesh) per plain.
+/// One body's cloud meshes: (origin, mesh) per plate.
 type CloudMeshes = Vec<(DVec3, Mesh)>;
 
 /// Cloud meshes being built: (body, task) per body of plains.
@@ -94,7 +94,7 @@ fn start_clouds(mut commands: Commands, universe: Res<Universe>, jobs: Option<Re
     }
     let mut tasks = Vec::new();
     for (i, body) in universe.0.bodies.iter().enumerate() {
-        if body.terrain.as_ref().and_then(|t| t.plains).is_none() {
+        if body.terrain.as_ref().and_then(|t| t.geography).is_none() {
             continue;
         }
         let Some(terrain) = sim_planet::Terrain::of(body) else {
@@ -114,9 +114,9 @@ fn start_clouds(mut commands: Commands, universe: Res<Universe>, jobs: Option<Re
     });
 }
 
-/// Every cloud of a body, as one mesh per plain (origin at the plain's centre).
+/// Every cloud of a body, as one mesh per plate (origin over its seed).
 fn build(terrain: &sim_planet::Terrain, seed: u64) -> CloudMeshes {
-    let Some(world) = terrain.world() else {
+    let Some(world) = terrain.globe() else {
         return Vec::new();
     };
     let clouds = sim_planet::clouds::clouds(world, seed, COVER);
@@ -131,14 +131,15 @@ fn build(terrain: &sim_planet::Terrain, seed: u64) -> CloudMeshes {
         None => Vec::new(),
     };
     let mut out = Vec::new();
-    for (k, plain) in world.plains.plains.iter().enumerate() {
-        let origin = plain.origin();
-        let (e, n, u) = (plain.east, plain.north, plain.normal);
+    let chunks = clouds.iter().map(|c| c.chunk + 1).max().unwrap_or(0);
+    for k in 0..chunks {
+        let origin = world.plate_seed(k) * world.radius;
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut normals: Vec<[f32; 3]> = Vec::new();
         let mut uvs: Vec<[f32; 2]> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
-        for c in clouds.iter().filter(|c| c.plain == k) {
+        for c in clouds.iter().filter(|c| c.chunk == k) {
+            let (e, n, u) = (c.east, c.north, c.up);
             let top = c
                 .puffs
                 .iter()
@@ -212,7 +213,7 @@ fn finish_clouds(
                 })
             })
             .clone();
-        info!("clouds: {} plain meshes for body {body}", chunks.len());
+        info!("clouds: {} meshes for body {body}", chunks.len());
         for (origin, mesh) in chunks {
             commands.spawn((
                 CloudChunk { body, origin },

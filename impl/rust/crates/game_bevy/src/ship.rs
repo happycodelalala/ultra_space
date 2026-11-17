@@ -288,10 +288,31 @@ fn spawn_player_ship(
         s.position = s.position.normalize() * r;
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
-    // Debug: `ULTRA_SPACE_START_REGION=<region type>` starts over the middle of the first plain
-    // of that kind (a body of plains), at `ULTRA_SPACE_START_ALTITUDE` above it (default 3 km),
-    // still over the ground and level, heading along the plain.
+    // Debug: `ULTRA_SPACE_START_REGION=<region kind>` starts over the middle of the first region
+    // of that kind, at `ULTRA_SPACE_START_ALTITUDE` above sea level (default 3 km), still and
+    // level, heading east (a round body with geography; on a body of plains, along the plain).
     if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
+        && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
+        && let Some(globe) = terrain.globe()
+        && let Some(r) = (0..globe.regions.len()).find(|&r| globe.kind(r).id == kind)
+    {
+        let body = &system.bodies[index];
+        let dir = globe.regions[r].centre;
+        let above = std::env::var("ULTRA_SPACE_START_ALTITUDE")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(3_000.0)
+            .max(terrain.surface_height(dir, 100.0) + 200.0);
+        let frame = system
+            .frames
+            .state_in(body.inertial_frame, body.surface_frame, 0.0);
+        let east = DVec3::Y.cross(dir).normalize_or(DVec3::X);
+        let s = &mut state.state;
+        s.position = frame.rotation * (dir * (body.radius + above));
+        s.velocity = frame.angular_velocity.cross(s.position);
+        s.angular_velocity = frame.angular_velocity;
+        s.rotation = crate::camera::look_rotation(frame.rotation * east, frame.rotation * dir);
+    } else if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
         && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
         && let Some(world) = terrain.world()
         && let Some(i) = (0..world.regions.len()).find(|&i| world.kind(i).id == kind)

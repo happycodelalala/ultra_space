@@ -76,6 +76,14 @@ struct TerrainFile {
     craters: f64,
     #[serde(default)]
     plains: Option<PlainsFile>,
+    #[serde(default)]
+    geography: Option<GeographyFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeographyFile {
+    plates: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -219,6 +227,15 @@ pub struct TerrainData {
     /// The body's ground as flat plains with regions (block-world.md §5.1); `None` for a
     /// spherical body (the heights above are then used).
     pub plains: Option<PlainsData>,
+    /// A round body whose land comes from plates, climate and regions (planet-geography.md):
+    /// the number of plates; `None` uses the heights above.
+    pub geography: Option<GeographyData>,
+}
+
+/// A round body's geography.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GeographyData {
+    pub plates: u32,
 }
 
 /// Layouts of flat plains.
@@ -698,6 +715,10 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                     layout: p.layout,
                     edge: p.edge_km * KM,
                 }),
+                geography: t
+                    .geography
+                    .as_ref()
+                    .map(|g| GeographyData { plates: g.plates }),
             }),
             climate: b.climate.as_ref().map(|c| ClimateData {
                 equator_temperature_c: c.equator_temperature_c,

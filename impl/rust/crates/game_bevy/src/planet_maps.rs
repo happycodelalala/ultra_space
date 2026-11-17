@@ -160,6 +160,7 @@ fn cube_image(bytes: Vec<u8>, format: TextureFormat) -> Image {
     image
 }
 
+#[allow(clippy::too_many_arguments)]
 fn attach_maps(
     mut handles: ResMut<BakedMapHandles>,
     mut tasks: Option<ResMut<BakeTasks>>,
@@ -168,6 +169,7 @@ fn attach_maps(
     mut atmospheres: ResMut<Assets<AtmosphereMaterial>>,
     visuals: Query<(&BodyVisual, &MeshMaterial3d<PlanetMaterial>)>,
     atmosphere_visuals: Query<(&BodyVisual, &MeshMaterial3d<AtmosphereMaterial>)>,
+    universe: Res<crate::universe::Universe>,
 ) {
     let Some(tasks) = tasks.as_mut() else { return };
     let mut i = 0;
@@ -197,8 +199,12 @@ fn attach_maps(
                 && let Some(mut m) = atmospheres.get_mut(&handle.0)
             {
                 m.field_map = Some(fields.clone());
-                // A body of plains has cotton clouds (clouds.rs), not the round deck.
-                if m.data.deck.x < 0.5 {
+                // Bodies with geography have cotton clouds (clouds.rs), not the round deck.
+                let cotton = universe.0.bodies[maps.body]
+                    .terrain
+                    .as_ref()
+                    .is_some_and(|t| t.geography.is_some() || t.plains.is_some());
+                if !cotton {
                     m.data.clouds.y = 1.0;
                 }
             }

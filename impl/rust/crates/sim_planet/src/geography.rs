@@ -61,7 +61,7 @@ impl Default for GeoParams {
             continent_relief: 2_600.0,
             continent_wavelength: 30_000.0,
             range_height: 8_000.0,
-            range_width: 11_000.0,
+            range_width: 8_000.0,
             coastal_range_height: 4_500.0,
             trench_depth: 5_500.0,
             island_height: 3_000.0,

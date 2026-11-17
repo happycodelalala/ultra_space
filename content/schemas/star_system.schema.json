@@ -217,6 +217,15 @@
               "maximum": 1,
               "description": "Crater density (airless bodies)."
             },
+            "geography": {
+              "description": "A round body whose land comes from drifting plates, a computed climate and natural regions (planet-geography.md).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["plates"],
+              "properties": {
+                "plates": { "description": "Number of tectonic plates.", "type": "integer", "minimum": 4, "maximum": 200 }
+              }
+            },
             "plains": {
               "description": "The ground as flat plains (block-world.md section 5.1), each plain a region whose land comes from content/data/region_types; spherical bodies leave it out.",
               "type": "object",

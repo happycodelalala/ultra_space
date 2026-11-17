@@ -72,6 +72,8 @@ pub struct Terrain {
     blocks: Option<Arc<BlockGround>>,
     /// The body's plains and regions, when it is built of plains (block-world.md §5.1).
     world: Option<Arc<PlainWorld>>,
+    /// A round body's plates, climate and regions (planet-geography.md).
+    globe: Option<Arc<crate::globe::GlobeWorld>>,
 }
 
 /// Height of a dry basin's floor above sea level (m).
@@ -143,7 +145,16 @@ impl Terrain {
             foundations: None,
             blocks: None,
             world: None,
+            globe: None,
         };
+        if let Some(g) = terrain.params.geography {
+            terrain.globe = Some(Arc::new(crate::globe::GlobeWorld::new(
+                radius,
+                g.plates as usize,
+                terrain.params.seed,
+            )));
+            return terrain;
+        }
         if let Some(plains) = terrain.params.plains {
             let layout = match plains.layout {
                 sim_core::PlainsLayout::TruncatedIcosahedron => {
@@ -215,11 +226,19 @@ impl Terrain {
 
     /// Whether the body has an ocean (sea level at elevation 0).
     pub fn has_ocean(&self) -> bool {
-        self.world.is_some() || self.params.ocean_coverage > 0.0
+        self.world.is_some() || self.globe.is_some() || self.params.ocean_coverage > 0.0
+    }
+
+    /// A round body's plates, climate and regions.
+    pub fn globe(&self) -> Option<&Arc<crate::globe::GlobeWorld>> {
+        self.globe.as_ref()
     }
 
     /// The lowest and highest the ground can be (m above the reference radius).
     pub fn height_range(&self) -> (f64, f64) {
+        if let Some(g) = &self.globe {
+            return g.range();
+        }
         match &self.world {
             Some(w) => {
                 let nearest = w
@@ -283,6 +302,9 @@ impl Terrain {
 
     /// Sea-level temperature (°C) and wetness (0–1) at `dir`, on a body of plains.
     pub fn region_climate(&self, dir: DVec3) -> Option<(f64, f64)> {
+        if let Some(g) = &self.globe {
+            return Some((g.sea_level_temperature(dir), g.wetness(dir)));
+        }
         let w = self.world.as_ref()?;
         Some((w.sea_level_temperature(dir), w.wetness(dir)))
     }
@@ -330,6 +352,9 @@ impl Terrain {
     pub fn sample(&self, dir: DVec3, min_wavelength: f64) -> Sample {
         if let Some(w) = &self.world {
             return self.sample_plains(w, dir, min_wavelength);
+        }
+        if let Some(g) = &self.globe {
+            return self.sample_globe(g, dir, min_wavelength);
         }
         let p = &self.params;
         let r = self.radius;
@@ -382,6 +407,37 @@ impl Terrain {
         Sample {
             height,
             land,
+            elevation: height,
+        }
+    }
+
+    /// `sample` on a round body with geography: radial heights above sea level.
+    fn sample_globe(
+        &self,
+        g: &crate::globe::GlobeWorld,
+        dir: DVec3,
+        min_wavelength: f64,
+    ) -> Sample {
+        let dir = dir.normalize();
+        let shortest = min_wavelength.max(FINEST_WAVELENGTH);
+        let mut height = g.elevation(dir, shortest);
+        if height < DRY_FLOOR && !g.open_sea(dir) {
+            // A basin below sea level away from the open sea: a lake where wet, dry where dry.
+            let dry = 1.0 - smoothstep(0.35, 0.5, g.wetness(dir));
+            height += (DRY_FLOOR - height) * dry;
+        }
+        if let Some(f) = &self.foundations {
+            height = f.apply(dir, self.radius, height);
+        }
+        for pad in &self.pads {
+            let w = pad.weight(dir, self.radius);
+            if w > 0.0 {
+                height += (pad.height - height) * w;
+            }
+        }
+        Sample {
+            height,
+            land: height / 1_000.0,
             elevation: height,
         }
     }
@@ -527,6 +583,7 @@ mod tests {
                 mountains: 0.0,
                 roughness: 0.0,
                 craters: 0.0,
+                geography: None,
                 plains: Some(sim_core::PlainsData {
                     layout: sim_core::PlainsLayout::TruncatedIcosahedron,
                     edge: 40_000.0,

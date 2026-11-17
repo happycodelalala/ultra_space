@@ -175,19 +175,23 @@ fn region_notice(
     let Some(terrain) = region_terrain(sim, region) else {
         return;
     };
-    let Some(world) = terrain.world() else { return };
     let turn = system
         .frames
         .state_in(body.inertial_frame, body.surface_frame, t)
         .rotation;
     let dir = turn.inverse() * local.position.normalize_or(DVec3::Y);
-    let plain = world.plains.locate(dir);
-    if *last != Some((region, plain)) {
-        *last = Some((region, plain));
-        notice.show(
-            format!("Entering {}", world.regions[plain].name),
-            real.elapsed_secs_f64(),
-        );
+    let (area, name) = if let Some(g) = terrain.globe() {
+        let r = g.region_at(dir);
+        (r, g.regions[r].name.clone())
+    } else if let Some(world) = terrain.world() {
+        let plain = world.plains.locate(dir);
+        (plain, world.regions[plain].name.clone())
+    } else {
+        return;
+    };
+    if *last != Some((region, area)) {
+        *last = Some((region, area));
+        notice.show(format!("Entering {name}"), real.elapsed_secs_f64());
     }
 }
 

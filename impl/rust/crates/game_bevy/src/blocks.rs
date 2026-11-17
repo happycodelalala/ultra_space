@@ -308,6 +308,9 @@ fn choose_site(
             return Some(DVec3::new(v[0], v[1], v[2]).normalize());
         }
     }
+    if let Some(globe) = terrain.globe() {
+        return choose_globe_site(terrain, globe);
+    }
     if let Some(plains) = terrain.world() {
         return choose_plain_site(terrain, plains);
     }
@@ -380,6 +383,57 @@ fn choose_site(
             if rough < 0.8 || n > 300_000 {
                 break;
             }
+        }
+    }
+    best.map(|b| b.1)
+}
+
+/// The village's site on a round body with geography: the flattest temperate, moderately wet
+/// lowland, away from the cube's face seams (where the ground grid will skew).
+fn choose_globe_site(
+    terrain: &sim_planet::Terrain,
+    globe: &sim_planet::globe::GlobeWorld,
+) -> Option<DVec3> {
+    let r = terrain.radius;
+    let mut best: Option<(f64, DVec3)> = None;
+    for dir in sim_planet::fibonacci_directions(40_000) {
+        let centre = terrain.sample(dir, 1.0).elevation;
+        if !(20.0..800.0).contains(&centre) {
+            continue;
+        }
+        let t = globe.temperature(dir, centre);
+        let m = globe.wetness(dir);
+        if !(8.0..=22.0).contains(&t) || !(0.35..=0.75).contains(&m) {
+            continue;
+        }
+        let key = sim_planet::locate(dir, 12);
+        let n_cells = f64::from(1u32 << 12);
+        let (u, v) = (f64::from(key.x) / n_cells, f64::from(key.y) / n_cells);
+        if !(0.1..0.9).contains(&u) || !(0.1..0.9).contains(&v) {
+            continue;
+        }
+        let (east, south) = sim_planet::tangent_frame(dir);
+        let mut lo = f64::MAX;
+        let mut hi = f64::MIN;
+        for (x, z) in [
+            (-60.0, -60.0),
+            (60.0, -60.0),
+            (-60.0, 60.0),
+            (60.0, 60.0),
+            (0.0, 0.0),
+            (-30.0, 0.0),
+            (30.0, 0.0),
+            (0.0, 30.0),
+            (0.0, -30.0),
+        ] {
+            let d = (dir * r + east * x + south * z).normalize();
+            let g = terrain.height(d, 1.0);
+            lo = lo.min(g);
+            hi = hi.max(g);
+        }
+        let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs();
+        if best.is_none_or(|b| score < b.0) {
+            best = Some((score, dir));
         }
     }
     best.map(|b| b.1)

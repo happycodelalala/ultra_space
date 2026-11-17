@@ -1,24 +1,27 @@
 {
   "kinds": [
-    { "id": "sea", "noun": "Sea" },
-    { "id": "isles", "noun": "Isles" },
-    { "id": "coast", "noun": "Coast" },
-    { "id": "peaks", "noun": "Peaks" },
-    { "id": "highlands", "noun": "Highlands" },
-    { "id": "icefield", "noun": "Icefield" },
-    { "id": "barrens", "noun": "Barrens" },
-    { "id": "wastes", "noun": "Wastes" },
-    { "id": "steppe", "noun": "Steppe" },
-    { "id": "meres", "noun": "Meres" },
-    { "id": "wilds", "noun": "Wilds" },
-    { "id": "vale", "noun": "Vale" },
-    { "id": "downs", "noun": "Downs" },
-    { "id": "plains", "noun": "Plains" }
+    {"id": "sea", "noun": "Sea"},
+    {"id": "bay", "noun": "Bay"},
+    {"id": "isles", "noun": "Isles"},
+    {"id": "coast", "noun": "Coast"},
+    {"id": "peaks", "noun": "Peaks"},
+    {"id": "highlands", "noun": "Highlands"},
+    {"id": "icefield", "noun": "Icefield"},
+    {"id": "barrens", "noun": "Barrens"},
+    {"id": "wastes", "noun": "Wastes"},
+    {"id": "steppe", "noun": "Steppe"},
+    {"id": "meres", "noun": "Meres"},
+    {"id": "wilds", "noun": "Wilds"},
+    {"id": "vale", "noun": "Vale"},
+    {"id": "downs", "noun": "Downs"},
+    {"id": "plains", "noun": "Plains"}
   ],
   "adjectives": [
     "Ashen", "Amber", "Silver", "Windward", "Leeward", "Quiet", "Green", "Iron", "Copper", "Cinder",
     "Hollow", "High", "Low", "Bright", "Grey", "Golden", "Morrow", "Thistle", "Raven", "Salt",
     "Frost", "Ember", "Willow", "Stone", "Mist", "Dawn", "Dusk", "Lantern", "Bramble", "Heron",
-    "Sable", "Tallow", "Hearth", "Pale", "Wild", "Old"
+    "Sable", "Tallow", "Hearth", "Pale", "Wild", "Old", "Long", "Far", "Deep", "Still",
+    "Sun", "Moon", "Cloud", "Thorn", "Fern", "Wolf", "Hare", "Owl", "Briar", "Clay",
+    "Flint", "Moss", "Rook", "Wren", "Glen", "Ivy", "Rime", "Cedar", "Larch", "Oak"
   ]
 }
