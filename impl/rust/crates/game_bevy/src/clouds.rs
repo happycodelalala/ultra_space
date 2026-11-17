@@ -77,11 +77,14 @@ struct CloudChunk {
     origin: DVec3,
 }
 
+/// One body's cloud meshes: (origin, mesh) per plain.
+type CloudMeshes = Vec<(DVec3, Mesh)>;
+
 /// Cloud meshes being built: (body, task) per body of plains.
 #[derive(Resource, Default)]
 struct CloudJobs {
     started: bool,
-    tasks: Vec<(usize, Task<Vec<(DVec3, Mesh)>>)>,
+    tasks: Vec<(usize, Task<CloudMeshes>)>,
     material: Option<Handle<CloudMaterial>>,
 }
 
@@ -112,7 +115,7 @@ fn start_clouds(mut commands: Commands, universe: Res<Universe>, jobs: Option<Re
 }
 
 /// Every cloud of a body, as one mesh per plain (origin at the plain's centre).
-fn build(terrain: &sim_planet::Terrain, seed: u64) -> Vec<(DVec3, Mesh)> {
+fn build(terrain: &sim_planet::Terrain, seed: u64) -> CloudMeshes {
     let Some(world) = terrain.world() else {
         return Vec::new();
     };
