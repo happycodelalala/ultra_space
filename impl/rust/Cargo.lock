@@ -5171,6 +5171,7 @@ name = "sim_planet"
 version = "0.1.0"
 dependencies = [
  "glam 0.33.12",
+ "serde",
  "serde_json",
  "sim_blocks",
  "sim_core",

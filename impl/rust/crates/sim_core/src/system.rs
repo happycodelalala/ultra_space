@@ -74,6 +74,15 @@ struct TerrainFile {
     roughness: f64,
     #[serde(default)]
     craters: f64,
+    #[serde(default)]
+    plains: Option<PlainsFile>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlainsFile {
+    layout: PlainsLayout,
+    edge_km: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,6 +216,25 @@ pub struct TerrainData {
     pub roughness: f64,
     /// Crater density, 0–1 (airless bodies).
     pub craters: f64,
+    /// The body's ground as flat plains with regions (block-world.md §5.1); `None` for a
+    /// spherical body (the heights above are then used).
+    pub plains: Option<PlainsData>,
+}
+
+/// Layouts of flat plains.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlainsLayout {
+    /// 12 pentagons and 20 hexagons (the "football").
+    TruncatedIcosahedron,
+}
+
+/// A body built of flat plains.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlainsData {
+    pub layout: PlainsLayout,
+    /// Length of every plain's edge (m).
+    pub edge: f64,
 }
 
 /// Climate parameters; rules in `sim_planet` compute temperature and moisture from them.
@@ -666,6 +694,10 @@ fn build(file: SystemFile) -> Result<StarSystem, SystemError> {
                 mountains: t.mountains,
                 roughness: t.roughness,
                 craters: t.craters,
+                plains: t.plains.as_ref().map(|p| PlainsData {
+                    layout: p.layout,
+                    edge: p.edge_km * KM,
+                }),
             }),
             climate: b.climate.as_ref().map(|c| ClimateData {
                 equator_temperature_c: c.equator_temperature_c,

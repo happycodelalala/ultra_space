@@ -216,6 +216,23 @@
               "minimum": 0,
               "maximum": 1,
               "description": "Crater density (airless bodies)."
+            },
+            "plains": {
+              "description": "The ground as flat plains (block-world.md section 5.1), each plain a region whose land comes from content/data/region_types; spherical bodies leave it out.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["layout", "edge_km"],
+              "properties": {
+                "layout": {
+                  "description": "Layout of the plains: truncated_icosahedron is 12 pentagons and 20 hexagons.",
+                  "enum": ["truncated_icosahedron"]
+                },
+                "edge_km": {
+                  "description": "Length of every plain's edge.",
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
             }
           }
         },

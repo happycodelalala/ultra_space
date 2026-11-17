@@ -22,5 +22,7 @@ pub use orbit::{KeplerOrbit, OrbitError};
 pub use region::{Region, RegionSet};
 pub use simulation::Simulation;
 pub use stats::RollingStats;
-pub use system::{Body, BodyKind, ClimateData, StarSystem, SystemError, TerrainData};
+pub use system::{
+    Body, BodyKind, ClimateData, PlainsData, PlainsLayout, StarSystem, SystemError, TerrainData,
+};
 pub use time::{GAME_TIME_SCALE, GameDateTime, UniverseTime};

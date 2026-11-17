@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "region_type.schema.json",
+  "title": "Region types",
+  "description": "The kinds of land a plain can be (block-world.md section 5.1): climate and the shape of the ground, plus parts for region names. Heights are metres above the plain (sea level is 0).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["types", "adjectives"],
+  "properties": {
+    "types": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/type" }
+    },
+    "adjectives": {
+      "description": "First words of region names (\"Ashen\" in \"Ashen Steppe\").",
+      "type": "array",
+      "minItems": 32,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "noun", "temperature_c", "moisture", "base_m", "hills_m", "hill_wavelength_m"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z_]+$" },
+        "noun": { "description": "Last word of region names (\"Steppe\").", "type": "string", "minLength": 1 },
+        "temperature_c": { "description": "Mean temperature at sea level.", "type": "number" },
+        "moisture": { "description": "Wetness, 0 (none) to 1 (very wet).", "type": "number", "minimum": 0, "maximum": 1 },
+        "base_m": { "description": "Mean ground level; below 0 is sea floor.", "type": "number" },
+        "hills_m": { "description": "Height of hills above and below the base.", "type": "number", "minimum": 0 },
+        "hill_wavelength_m": { "type": "number", "exclusiveMinimum": 0 },
+        "mountains_m": { "description": "Height of mountain ridges.", "type": "number", "minimum": 0 },
+        "mountain_wavelength_m": { "type": "number", "exclusiveMinimum": 0 },
+        "valleys_m": { "description": "Depth of carved valleys.", "type": "number", "minimum": 0 },
+        "valley_wavelength_m": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

@@ -11,9 +11,9 @@ publish.workspace = true
 glam = { workspace = true }
 sim_core.workspace = true
 sim_blocks.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
 
-[dev-dependencies]
-serde_json = { workspace = true }
