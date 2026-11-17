@@ -75,11 +75,11 @@ pub fn bake(
                 let n = terrain_normal(terrain, d, texel, texel);
                 let (temp, moist) = climate.map_or((NO_CLIMATE_TEMPERATURE, 0.0), |c| {
                     (
-                        c.temperature_at(terrain, d, sample.height, season),
+                        c.temperature_at(terrain, d, sample.elevation, season),
                         c.moisture(terrain, d, &sample),
                     )
                 });
-                for v in [sample.height, temp, moist, sample.land] {
+                for v in [sample.elevation, temp, moist, sample.land] {
                     fields.extend_from_slice(&f16_bits(v as f32).to_le_bytes());
                 }
                 let enc = |c: f64| ((c * 0.5 + 0.5).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;

@@ -97,7 +97,7 @@ pub fn walk_step(
     }
 
     // Stand upright along local gravity, then turn.
-    let up = state.position.normalize();
+    let up = env.up(state.position);
     let forward = state.rotation * DVec3::NEG_Z;
     let turn = DQuat::from_axis_angle(up, control.turn);
     state.rotation = upright(turn * forward, up);
@@ -170,7 +170,7 @@ pub fn walk_step(
     let rising = walker.velocity.dot(up) > 0.0;
     if feet <= 0.0 || (walker.grounded && !rising && feet < STEP_DOWN) {
         state.position = state.position.normalize() * ground;
-        let up = state.position.normalize();
+        let up = env.up(state.position);
         let vertical = walker.velocity.dot(up);
         if vertical < 0.0 || walker.grounded {
             walker.velocity -= up * vertical;

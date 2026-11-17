@@ -897,7 +897,7 @@ pub fn keep_above_ground(
     };
     let body = &system.bodies[region];
     let r = point.length();
-    if r > body.radius + 1.3 * terrain.params.relief + CAMERA_CLEARANCE {
+    if r > body.radius + terrain.height_range().1 + 0.3 * terrain.params.relief + CAMERA_CLEARANCE {
         return point;
     }
     let surface = system
@@ -905,10 +905,7 @@ pub fn keep_above_ground(
         .state_in(body.inertial_frame, body.surface_frame, t)
         .rotation;
     let dir = surface.inverse() * point.normalize();
-    let mut ground = terrain.height(dir, 2.0);
-    if terrain.has_ocean() {
-        ground = ground.max(0.0);
-    }
+    let ground = terrain.surface_height(dir, 2.0);
     let floor = body.radius + ground + CAMERA_CLEARANCE;
     if r < floor {
         point * (floor / r)

@@ -94,8 +94,8 @@ pub fn arcade_step(
     // Level the wings with the horizon near the ground while the pilot isn't rolling.
     if control.rotate.z.abs() < 0.05 {
         let altitude = state.position.length() - env.radius;
-        spin.z += horizon_weight(env, altitude)
-            * level_roll_rate(state.rotation, state.position.normalize());
+        spin.z +=
+            horizon_weight(env, altitude) * level_roll_rate(state.rotation, env.up(state.position));
     }
     state.rotation = (state.rotation * DQuat::from_scaled_axis(spin * dt)).normalize();
     state.angular_velocity = state.rotation * spin;
@@ -120,13 +120,13 @@ pub fn arcade_step(
     let clearance = if hull.is_empty() {
         MIN_ALTITUDE
     } else {
-        hull_depth(hull, state.rotation, state.position.normalize()) + HULL_CLEARANCE
+        hull_depth(hull, state.rotation, env.up(state.position)) + HULL_CLEARANCE
     };
     if env.solid && state.position.length() < env.radius + env.max_ground_height() + clearance {
         let floor = env.radius + env.ground_height(state.position) + clearance;
         if state.position.length() < floor {
             state.position = state.position.normalize() * floor;
-            let up = state.position.normalize();
+            let up = env.up(state.position);
             let climb = (floor - radius_before) / dt;
             relative = relative - up * relative.dot(up) + up * climb;
         }

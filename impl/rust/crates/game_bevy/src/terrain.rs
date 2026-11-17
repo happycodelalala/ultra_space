@@ -154,11 +154,11 @@ fn setup_terrains(
                 .and_then(|r| r.world.get_resource::<sim_vehicle::flight::RegionTerrain>())
                 .and_then(|t| t.0.as_deref().cloned())
                 .or_else(|| Terrain::of(body))?;
-            let p = &terrain.params;
+            let (min_height, max_height) = terrain.height_range();
             let extent = Extent {
                 radius: terrain.radius,
-                min_height: -(p.ocean_depth + p.relief),
-                max_height: 1.25 * p.relief,
+                min_height,
+                max_height,
             };
             let ground = ground_materials.add(TerrainMaterial {
                 data: TerrainUniform {

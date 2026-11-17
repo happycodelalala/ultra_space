@@ -221,7 +221,7 @@ pub fn walk_tick(
     let spin = DQuat::from_scaled_axis(env.spin * dt);
     state.position = spin * state.position;
     state.rotation = (spin * state.rotation).normalize();
-    let up = state.position.normalize();
+    let up = env.up(state.position);
     let (steer, drive) = if walking.stopping {
         (0.0, 0.0)
     } else {
@@ -258,7 +258,7 @@ pub fn walk_tick(
     walking.lift_rate += accel * dt;
     let radius = radius + walking.lift_rate * dt;
     state.position = ground.normalize() * radius;
-    let up = state.position.normalize();
+    let up = env.up(state.position);
     // Straighten up (after a tilted landing) at a limited rate.
     let level = upright(forward_level, up);
     let off = state.rotation.angle_between(level);

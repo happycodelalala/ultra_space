@@ -17,6 +17,8 @@ use sim_core::{Body, TerrainData};
 use crate::blocks::BlockGround;
 use crate::foundations::Foundations;
 use crate::noise::{fbm, hash3, mix64, octaves_between, ridged, unit};
+use crate::plains::{Plain, Plains};
+use crate::regions::{BLEND_BAND, PlainWorld};
 
 /// Continents: about 1.3 cycles across the radius.
 const CONTINENT_FREQUENCY: f64 = 1.3;
@@ -46,6 +48,10 @@ pub struct Sample {
     /// Continent signal: positive on land, negative under the ocean; distance from the coast
     /// in noise units (used for moisture and beaches).
     pub land: f64,
+    /// Height above sea level measured along "up" (m): on a spherical body the same as
+    /// `height`; on a body of plains, the height above the plain (`height` is then radial,
+    /// and includes how far the flat plain stands above the reference radius).
+    pub elevation: f64,
 }
 
 /// A body's terrain: parameters plus values derived once (the coastline threshold).
@@ -64,7 +70,15 @@ pub struct Terrain {
     /// The ground as blocks round the demo village (block-world.md): its surface replaces the
     /// terrain's there.
     blocks: Option<Arc<BlockGround>>,
+    /// The body's plains and regions, when it is built of plains (block-world.md §5.1).
+    world: Option<Arc<PlainWorld>>,
 }
+
+/// Width (m of radial difference) over which "up" turns at a crease: about 30 m of ground.
+const UP_BAND: f64 = 20.0;
+/// Heights (m above the ground) over which "up" turns from the plain's normal to the true
+/// direction from the centre.
+const UP_RADIAL: (f64, f64) = (3_000.0, 12_000.0);
 
 /// A flattened area (task 2.11): inside `radius` the ground is at `height`; over the next
 /// `blend` metres it eases back to the natural terrain.
@@ -126,7 +140,17 @@ impl Terrain {
             pads: Vec::new(),
             foundations: None,
             blocks: None,
+            world: None,
         };
+        if let Some(plains) = terrain.params.plains {
+            let layout = match plains.layout {
+                sim_core::PlainsLayout::TruncatedIcosahedron => {
+                    Plains::truncated_icosahedron(plains.edge)
+                }
+            };
+            terrain.world = Some(Arc::new(PlainWorld::new(layout, terrain.params.seed)));
+            return terrain;
+        }
         terrain.coast = terrain.coast_threshold();
         terrain
     }
@@ -187,9 +211,92 @@ impl Terrain {
         pad.center.angle_between(center) <= spread + pad.reach(self.radius)
     }
 
-    /// Whether the body has an ocean (sea level at height 0).
+    /// Whether the body has an ocean (sea level at elevation 0).
     pub fn has_ocean(&self) -> bool {
-        self.params.ocean_coverage > 0.0
+        self.world.is_some() || self.params.ocean_coverage > 0.0
+    }
+
+    /// The lowest and highest the ground can be (m above the reference radius).
+    pub fn height_range(&self) -> (f64, f64) {
+        match &self.world {
+            Some(w) => {
+                let nearest = w
+                    .plains
+                    .plains
+                    .iter()
+                    .map(|p| p.distance)
+                    .fold(f64::MAX, f64::min);
+                let deepest = w
+                    .types
+                    .iter()
+                    .map(|t| t.base_m - t.hills_m - t.valleys_m)
+                    .fold(0.0, f64::min);
+                let highest = w
+                    .types
+                    .iter()
+                    .map(|t| t.base_m + t.hills_m + t.mountains_m)
+                    .fold(0.0, f64::max);
+                (
+                    nearest - self.radius + deepest,
+                    w.plains.corner_radius() - self.radius + highest,
+                )
+            }
+            None => {
+                let p = &self.params;
+                (-(p.ocean_depth + p.relief), 1.25 * p.relief)
+            }
+        }
+    }
+
+    /// The plains and regions of a body built of plains.
+    pub fn world(&self) -> Option<&Arc<PlainWorld>> {
+        self.world.as_ref()
+    }
+
+    /// The plain under `dir`, on a body of plains.
+    pub fn plain_at(&self, dir: DVec3) -> Option<(usize, &Plain)> {
+        let w = self.world.as_ref()?;
+        let i = w.plains.locate(dir.normalize());
+        Some((i, &w.plains.plains[i]))
+    }
+
+    /// Height of the sea surface (m above the reference radius) at `dir`: 0 on a spherical body,
+    /// the plain itself on a body of plains.
+    pub fn sea_height(&self, dir: DVec3) -> f64 {
+        match &self.world {
+            Some(w) => w.plains.hit(dir.normalize(), 0.0).radius - self.radius,
+            None => 0.0,
+        }
+    }
+
+    /// "Up" at `position` (surface frame, m): away from the centre on a spherical body; on a
+    /// body of plains the plain's normal near the ground, turning over a few tens of metres at
+    /// a crease and toward the true direction from the centre high above the ground.
+    pub fn up(&self, position: DVec3) -> DVec3 {
+        let dir = position.normalize_or(DVec3::Y);
+        let Some(w) = &self.world else { return dir };
+        let mut weights = Vec::with_capacity(4);
+        w.plains.weights(dir, UP_BAND, &mut weights);
+        let n = weights
+            .iter()
+            .fold(DVec3::ZERO, |a, &(i, wt)| {
+                a + w.plains.plains[i].normal * wt
+            })
+            .normalize_or(dir);
+        let above = position.length() - w.plains.hit(dir, 0.0).radius;
+        let t = smoothstep(UP_RADIAL.0, UP_RADIAL.1, above);
+        n.lerp(dir, t).normalize_or(dir)
+    }
+
+    /// Sea-level temperature (°C) and moisture of the regions at `dir`, blended near creases.
+    pub fn region_climate(&self, dir: DVec3) -> Option<(f64, f64)> {
+        let w = self.world.as_ref()?;
+        let mut weights = Vec::with_capacity(4);
+        w.plains.weights(dir.normalize(), BLEND_BAND, &mut weights);
+        Some(weights.iter().fold((0.0, 0.0), |(t, m), &(i, wt)| {
+            let (ti, mi) = w.climate(i);
+            (t + ti * wt, m + mi * wt)
+        }))
     }
 
     /// Height of what vehicles and walkers stand on at `dir` (m): the ground, or the sea surface
@@ -197,6 +304,14 @@ impl Terrain {
     pub fn surface_height(&self, dir: DVec3, min_wavelength: f64) -> f64 {
         if let Some(h) = self.blocks.as_ref().and_then(|b| b.surface(dir)) {
             return h;
+        }
+        if self.world.is_some() {
+            let s = self.sample(dir, min_wavelength);
+            return if s.elevation < 0.0 {
+                self.sea_height(dir)
+            } else {
+                s.height
+            };
         }
         let h = self.height(dir, min_wavelength);
         if self.has_ocean() { h.max(0.0) } else { h }
@@ -225,6 +340,9 @@ impl Terrain {
     /// Height and continent signal at `dir` (unit, surface frame), with detail down to
     /// `min_wavelength` metres.
     pub fn sample(&self, dir: DVec3, min_wavelength: f64) -> Sample {
+        if let Some(w) = &self.world {
+            return self.sample_plains(w, dir, min_wavelength);
+        }
         let p = &self.params;
         let r = self.radius;
         let shortest = min_wavelength.max(FINEST_WAVELENGTH);
@@ -273,7 +391,46 @@ impl Terrain {
                 height += (pad.height - height) * w;
             }
         }
-        Sample { height, land }
+        Sample {
+            height,
+            land,
+            elevation: height,
+        }
+    }
+
+    /// `sample` on a body of plains: the regions' elevations blended near creases, the ground
+    /// on the nearest plane moved out by that elevation.
+    fn sample_plains(&self, w: &PlainWorld, dir: DVec3, min_wavelength: f64) -> Sample {
+        let dir = dir.normalize();
+        let shortest = min_wavelength.max(FINEST_WAVELENGTH);
+        let base = w.plains.hit(dir, 0.0);
+        let point = dir * base.radius;
+        let mut weights = Vec::with_capacity(4);
+        w.plains.weights(dir, BLEND_BAND, &mut weights);
+        let elevation: f64 = weights
+            .iter()
+            .map(|&(i, wt)| wt * w.region_elevation(i, point, shortest))
+            .sum();
+        let ground = w.plains.hit(dir, elevation);
+        let mut height = ground.radius - self.radius;
+        // Foundations and pads work on radial heights; carry their change into the elevation.
+        let raw = height;
+        if let Some(f) = &self.foundations {
+            height = f.apply(dir, self.radius, height);
+        }
+        for pad in &self.pads {
+            let wt = pad.weight(dir, self.radius);
+            if wt > 0.0 {
+                height += (pad.height - height) * wt;
+            }
+        }
+        let cos = dir.dot(w.plains.plains[ground.plain].normal);
+        let elevation = elevation + (height - raw) * cos;
+        Sample {
+            height,
+            land: elevation / 1_000.0,
+            elevation,
+        }
     }
 
     /// Surface height (m above the reference radius) at full detail down to `min_wavelength`.
@@ -340,7 +497,11 @@ impl Terrain {
         let t1 = d.any_orthonormal_vector();
         let t2 = d.cross(t1);
         let angle = step / self.radius;
-        let h = |v: DVec3| self.height(v.normalize(), min_wavelength);
+        let plains = self.world.is_some();
+        let h = |v: DVec3| {
+            let s = self.sample(v.normalize(), min_wavelength);
+            if plains { s.elevation } else { s.height }
+        };
         let h0 = h(d);
         let g1 = (h(d + t1 * angle) - h0) / step;
         let g2 = (h(d + t2 * angle) - h0) / step;
@@ -366,6 +527,96 @@ mod tests {
     use sim_core::StarSystem;
 
     use super::*;
+
+    fn football() -> Terrain {
+        Terrain::new(
+            92_000.0,
+            TerrainData {
+                seed: 3,
+                relief: 2_000.0,
+                ocean_depth: 0.0,
+                ocean_coverage: 0.0,
+                mountains: 0.0,
+                roughness: 0.0,
+                craters: 0.0,
+                plains: Some(sim_core::PlainsData {
+                    layout: sim_core::PlainsLayout::TruncatedIcosahedron,
+                    edge: 40_000.0,
+                }),
+            },
+        )
+    }
+
+    #[test]
+    fn plains_ground_is_continuous_over_every_crease() {
+        let t = football();
+        let w = t.world().unwrap().clone();
+        for p in &w.plains.plains {
+            let n = p.corners.len();
+            for k in 0..n {
+                // Walk across the middle of each edge in 1 m steps.
+                let mid = (p.corners[k] + p.corners[(k + 1) % n]) / 2.0;
+                let inward = p
+                    .normal
+                    .cross(p.corners[(k + 1) % n] - p.corners[k])
+                    .normalize();
+                let mut last = None;
+                for s in -20..=20 {
+                    let d = (mid + inward * f64::from(s)).normalize();
+                    let h = t.surface_height(d, 1.0);
+                    if let Some(l) = last {
+                        let step: f64 = h - l;
+                        assert!(step.abs() < 2.0, "jump of {step} m at a crease");
+                    }
+                    last = Some(h);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn plains_sea_is_flat_and_land_is_level_with_its_plain() {
+        let t = football();
+        let w = t.world().unwrap().clone();
+        let sea = (0..w.plains.plains.len())
+            .find(|&i| w.kind(i).id == "sea")
+            .expect("a sea");
+        let p = &w.plains.plains[sea];
+        for (x, y) in [(0.0, 0.0), (5_000.0, -3_000.0), (-8_000.0, 6_000.0)] {
+            let point = p.from_local(DVec3::new(x, y, 0.0));
+            let d = point.normalize();
+            let s = t.sample(d, 1.0);
+            assert!(s.elevation < 0.0, "the sea plain is under water");
+            // The sea surface lies exactly on the plain's plane.
+            let surface = d * (t.radius + t.surface_height(d, 1.0));
+            assert!(p.to_local(surface).z.abs() < 1e-3);
+        }
+        // Elevation is measured along the plain's normal.
+        let land = (0..w.plains.plains.len())
+            .find(|&i| w.kind(i).id == "grassland")
+            .expect("grassland");
+        let p = &w.plains.plains[land];
+        let d = p.from_local(DVec3::new(2_000.0, 1_000.0, 0.0)).normalize();
+        let s = t.sample(d, 1.0);
+        let ground = d * (t.radius + s.height);
+        assert!((p.to_local(ground).z - s.elevation).abs() < 1e-3);
+    }
+
+    #[test]
+    fn up_is_the_plain_normal_near_the_ground() {
+        let t = football();
+        let w = t.world().unwrap().clone();
+        let p = &w.plains.plains[4];
+        let near_edge = p
+            .from_local(DVec3::new(0.0, 0.0, 0.0))
+            .lerp(p.corners[0], 0.9);
+        let d = near_edge.normalize();
+        let pos = d * (t.radius + t.surface_height(d, 1.0) + 2.0);
+        assert!(t.up(pos).angle_between(p.normal) < 1e-6);
+        // Far above, the true direction from the centre.
+        let high = d * (t.radius + 20_000.0);
+        assert!(t.up(high).angle_between(d) < 1e-6);
+    }
 
     fn halcyon() -> StarSystem {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

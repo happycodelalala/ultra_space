@@ -200,6 +200,30 @@ fn gravity(mu: f64, r: DVec3) -> DVec3 {
 }
 
 impl BodyEnv {
+    /// "Up" at `position` (inertial axes, from the body's centre): away from the centre, or on a
+    /// body of plains the plain's normal near the ground (block-world.md §5.1).
+    pub fn up(&self, position: DVec3) -> DVec3 {
+        match &self.terrain {
+            Some(t) if t.world().is_some() => {
+                self.surface_rotation * t.up(self.surface_rotation.inverse() * position)
+            }
+            _ => position.normalize_or(DVec3::Y),
+        }
+    }
+
+    /// Gravity's acceleration at `position`: toward the centre, or on a body of plains along
+    /// "down" near the ground (so every plain is level).
+    pub fn gravity(&self, position: DVec3) -> DVec3 {
+        let r = position.length();
+        if r <= 0.0 {
+            return DVec3::ZERO;
+        }
+        match &self.terrain {
+            Some(t) if t.world().is_some() => -self.up(position) * (self.mu / (r * r)),
+            _ => gravity(self.mu, position),
+        }
+    }
+
     /// Height of the ground (m above `radius`) under `position` (inertial frame); the sea
     /// surface where there is water. 0 for a smooth sphere.
     pub fn ground_height(&self, position: DVec3) -> f64 {
@@ -213,12 +237,12 @@ impl BodyEnv {
     /// Ground surface normal under `position` (inertial axes); straight up over water or on a
     /// smooth sphere.
     pub fn ground_normal(&self, position: DVec3) -> DVec3 {
-        let up = position.normalize();
+        let up = self.up(position);
         let Some(terrain) = &self.terrain else {
             return up;
         };
-        let dir = self.surface_rotation.inverse() * up;
-        if terrain.has_ocean() && terrain.height(dir, GROUND_DETAIL) < 0.0 {
+        let dir = self.surface_rotation.inverse() * position.normalize();
+        if terrain.has_ocean() && terrain.sample(dir, GROUND_DETAIL).elevation < 0.0 {
             return up;
         }
         self.surface_rotation * sim_planet::mesh::terrain_normal(terrain, dir, 2.0, GROUND_DETAIL)
@@ -226,7 +250,9 @@ impl BodyEnv {
 
     /// Highest the ground can be (m above `radius`), to skip terrain sampling far above it.
     pub fn max_ground_height(&self) -> f64 {
-        self.terrain.as_ref().map_or(0.0, |t| 1.3 * t.params.relief)
+        self.terrain
+            .as_ref()
+            .map_or(0.0, |t| t.height_range().1 + 0.3 * t.params.relief)
     }
 
     /// Air density (kg/m³) at `position`.
@@ -343,7 +369,7 @@ pub fn assist_request(
                 feed_forward = state.rotation * accel_local;
                 desired += feed_forward * dt;
             }
-            let g = gravity(env.mu, state.position);
+            let g = env.gravity(state.position);
             let frame_accel = match reference {
                 // Coasting is "standing still" in the inertial frame: the desired velocity
                 // falls with gravity, so no thrust is spent fighting it.
@@ -380,7 +406,7 @@ pub fn assist_request(
             // Near the ground, level the wings with the horizon while the pilot isn't rolling.
             if stick.z.abs() < 0.05 {
                 let weight = horizon_weight(env, altitude);
-                desired.z += weight * level_roll_rate(state.rotation, state.position.normalize());
+                desired.z += weight * level_roll_rate(state.rotation, env.up(state.position));
             }
             body.mass.inertia * ((desired - omega_body) / ROTATION_RESPONSE)
         }

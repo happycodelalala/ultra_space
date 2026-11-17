@@ -63,14 +63,14 @@ pub fn biome_map(terrain: &Terrain, climate: &Climate, width: usize) -> Vec<u8> 
         for x in 0..width {
             let d = dir(x as f64 + 0.5, y as f64 + 0.5);
             let s = terrain.sample(d, px);
-            let t = climate.temperature_at(terrain, d, s.height, 0.0);
+            let t = climate.temperature_at(terrain, d, s.elevation, 0.0);
             let m = climate.moisture(terrain, d, &s);
             let slope = terrain.slope(d, px, px);
             let biome = climate.biome(terrain, &s, t, m, slope);
             // Hill shading from height differences to the east and north neighbours.
             let he = terrain.height(dir(x as f64 + 1.5, y as f64 + 0.5), px);
             let hn = terrain.height(dir(x as f64 + 0.5, y as f64 - 0.5), px);
-            let shade = if !terrain.has_ocean() || s.height > 0.0 {
+            let shade = if !terrain.has_ocean() || s.elevation > 0.0 {
                 let n = DVec3::new(-(he - s.height) / px, -(hn - s.height) / px, 1.0).normalize();
                 (0.55 + 0.6 * n.dot(sun)).clamp(0.3, 1.3)
             } else {

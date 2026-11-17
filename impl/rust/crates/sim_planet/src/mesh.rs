@@ -158,6 +158,7 @@ pub fn build_tile(
         water: None,
     };
     let mut grid_dirs = Vec::with_capacity((GRID * GRID) as usize);
+    let mut min_elevation = f64::MAX;
     for j in 0..GRID {
         for i in 0..GRID {
             let d = vertex_direction(key, i, j);
@@ -165,7 +166,7 @@ pub fn build_tile(
             let normal = terrain_normal(terrain, d, spacing, min_wavelength);
             let (t, m) = climate.map_or((NO_CLIMATE_TEMPERATURE, 0.0), |c| {
                 (
-                    c.temperature_at(terrain, d, sample.height, subsolar_latitude),
+                    c.temperature_at(terrain, d, sample.elevation, subsolar_latitude),
                     c.moisture(terrain, d, &sample),
                 )
             });
@@ -173,8 +174,14 @@ pub fn build_tile(
                 let slope = normal.dot(d).clamp(-1.0, 1.0).acos();
                 c.biome(terrain, &sample, t, m, slope)
             });
-            mesh.fields
-                .push([sample.height as f32, t as f32, m as f32, sample.land as f32]);
+            // Shading reads the elevation (height above sea level along "up").
+            mesh.fields.push([
+                sample.elevation as f32,
+                t as f32,
+                m as f32,
+                sample.land as f32,
+            ]);
+            min_elevation = min_elevation.min(sample.elevation);
             let p = d * (r + sample.height) - origin;
             mesh.positions.push(p.as_vec3().to_array());
             mesh.normals.push(normal.as_vec3().to_array());
@@ -200,7 +207,7 @@ pub fn build_tile(
             mesh.fields.push(mesh.fields[v]);
         }
     }
-    if terrain.has_ocean() && mesh.min_height < 0.0 {
+    if terrain.has_ocean() && min_elevation < 0.0 {
         let mut dirs = grid_dirs.clone();
         for side in border_vertices() {
             dirs.extend(side.iter().map(|&v| grid_dirs[v as usize]));
@@ -210,7 +217,8 @@ pub fn build_tile(
             .iter()
             .enumerate()
             .map(|(k, d)| {
-                let r = if k < grid { r } else { r - drop };
+                // The sea surface: the sphere at sea level, or each plain's own plane.
+                let r = r + terrain.sea_height(*d) - if k < grid { 0.0 } else { drop };
                 (*d * r - origin).as_vec3().to_array()
             })
             .collect();

@@ -13,6 +13,8 @@ pub const LAPSE_RATE: f64 = 6.5e-3;
 /// Regional temperature variation (°C, about ± this much), so climate zones have irregular
 /// edges instead of following latitude lines exactly.
 const REGIONAL_VARIATION: f64 = 16.0;
+/// The same within a region of a body of plains (°C).
+const REGION_VARIATION: f64 = 4.0;
 /// How far the warm belt follows the subsolar point (fraction of its latitude).
 const SEASONAL_SHIFT: f64 = 0.5;
 /// Height of the beach band above sea level (m).
@@ -83,6 +85,15 @@ impl Climate {
         height: f64,
         subsolar_latitude: f64,
     ) -> f64 {
+        if let Some((sea_level, _)) = terrain.region_climate(dir) {
+            // A body of plains: each region has its own climate; `height` is the elevation.
+            let air = if self.has_atmosphere {
+                LAPSE_RATE * height.max(0.0)
+            } else {
+                0.0
+            };
+            return sea_level - air + REGION_VARIATION * terrain.climate_noise(dir, 1);
+        }
         self.temperature(dir, height, subsolar_latitude)
             + REGIONAL_VARIATION * terrain.climate_noise(dir, 1)
     }
@@ -105,6 +116,11 @@ impl Climate {
     /// Moisture, 0–1: rain belts at the equator and around 60° latitude, dry belts around 30°
     /// and at the poles, wetter near coasts, plus regional variation.
     pub fn moisture(&self, terrain: &Terrain, dir: DVec3, sample: &Sample) -> f64 {
+        if let Some((_, wet)) = terrain.region_climate(dir) {
+            let coast = 1.0 - smoothstep(0.0, 0.05, sample.land);
+            let variation = terrain.climate_noise(dir, 0);
+            return (wet + 0.15 * coast + 0.2 * variation).clamp(0.0, 1.0);
+        }
         let wetness = self.params.moisture;
         if wetness <= 0.0 {
             return 0.0;
@@ -134,7 +150,7 @@ impl Climate {
         moisture: f64,
         slope: f64,
     ) -> Biome {
-        if terrain.has_ocean() && sample.height < 0.0 {
+        if terrain.has_ocean() && sample.elevation < 0.0 {
             return if temperature < -2.0 {
                 Biome::SeaIce
             } else {
@@ -163,7 +179,7 @@ impl Climate {
         if temperature < 0.0 {
             return Biome::Tundra;
         }
-        if terrain.has_ocean() && sample.height < BEACH_HEIGHT && sample.land < 0.03 {
+        if terrain.has_ocean() && sample.elevation < BEACH_HEIGHT && sample.land < 0.03 {
             return Biome::Beach;
         }
         if temperature < 8.0 {
@@ -227,7 +243,7 @@ mod tests {
         let mut counts = HashMap::new();
         for d in fibonacci_directions(6_000) {
             let s = terrain.sample(d, 500.0);
-            let t = climate.temperature_at(&terrain, d, s.height, 0.0);
+            let t = climate.temperature_at(&terrain, d, s.elevation, 0.0);
             let m = climate.moisture(&terrain, d, &s);
             let slope = terrain.slope(d, 500.0, 500.0);
             *counts

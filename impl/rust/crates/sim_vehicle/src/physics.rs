@@ -279,14 +279,6 @@ pub fn vehicle_radius(body: &VehicleBody) -> f64 {
         .fold(2.0, f64::max)
 }
 
-fn gravity(mu: f64, r: DVec3) -> DVec3 {
-    let d = r.length();
-    if d <= 0.0 {
-        return DVec3::ZERO;
-    }
-    -r * (mu / (d * d * d))
-}
-
 impl PhysicsScene {
     /// A scene whose ground is only the Batch 2 contact model (no collision patches): for
     /// single-vehicle helpers that make a new scene every step.
@@ -540,10 +532,7 @@ impl PhysicsScene {
                 };
                 rb.reset_forces(false);
                 rb.reset_torques(false);
-                rb.add_force(
-                    gravity(env.mu, p) * m + rotation * e.wrench.force + drag,
-                    false,
-                );
+                rb.add_force(env.gravity(p) * m + rotation * e.wrench.force + drag, false);
                 rb.add_torque(rotation * e.wrench.torque, false);
             }
             // Wheels: suspension, drive and tyre forces for this step. Rapier's controller damps
