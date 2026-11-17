@@ -607,8 +607,8 @@ views of the village; anything off outside them is a known issue, not a new task
   palette and the village to `assets/export/blocks/` (`tools/build-blocks.sh`; schemas
   `block_model` and `block_village`; CI checks the export is current and valid).
 - **5.3** `sim_planet::BlockGround`: columns of 25 cm blocks in a 1.5 km disc round the village,
-  in the village's tangent grid mapped onto the sphere per vertex (the planet-wide cube-sphere
-  grid is later); the village's exported ground eases into the natural ground over 5 m. The
+  in the village's tangent grid mapped onto the sphere per vertex (the planet-wide layout of
+  flat 40 km plains, block-world.md §5.1, is later); the village's exported ground eases into the natural ground over 5 m. The
   terrain reads its surface (landing, walking, placing); collision patches sink 0.75 m below it
   and chunk meshes near bodies carry contact; the village's buildings, props and trunks are
   boxes walkers bump into. Chunks within 90 m of the camera are meshed on workers; tiles are
@@ -638,7 +638,8 @@ than Batch 4b; CI passes.
 **After the village (planned at its review, in this batch or the next):** water (depth colour,
 shore foam, low-poly waves), planet-wide ground cover in the block style
 ([ground-cover.md](ground-cover.md)), weather changing over time by climate, effects (engine
-plumes, landing dust, splashes, chimney smoke), the block zone across cube-face seams, and the
+plumes, landing dust, splashes, chimney smoke), the plain layout and the block zone across its
+seams (block-world.md §5.1), and the
 other settlements' kits in blocks (design track).
 
 **Then (planned when it starts):** Batch 6, the first playable loop: the game shell (main menu,

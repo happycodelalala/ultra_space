@@ -24,6 +24,9 @@ set in visual-style.md; this document is the system.
 | Dig depth | **Tens of metres** below the surface near the player; caves and deep layers designed now, generated later |
 | Mining | **Drops resources:** mined blocks become items in the player's inventory; placing a block uses one |
 | Grids | **Every object has its own grid:** the planet's ground, each building, ship, vehicle and station (§5) |
+| Round bodies | **Flat plains, about 40 km a side:** 12 pentagons and as many hexagons as the body's size needs (a Goldberg layout); each plain is a flat, exact square grid and one region of the world; plains meet at creases of generated, shared **seam blocks**, shown as fault rock (§5.1; decided 2026-11-16) |
+| Block size | **Exactly the same everywhere:** a 25 cm block is 25 cm on every plain, at every depth, on every body (the reason for the plains: a single bent grid varies block widths by up to 1.41 times) |
+| Small bodies | Below about 25–50 km across: **one 3D square grid**, "up" from the surface (§5.2) |
 
 ## 2. Why blocks of many sizes
 
@@ -83,6 +86,12 @@ splits into eight children and eight equal children merge into their parent. The
 | 4 – 8 m | Capital ships, stations, megastructures |
 
 Larger things are many of the largest blocks, kept affordable by merging and by distance detail.
+**Above the working range** the same tree goes on, 16 m, 32 m … up to about 2 km, as **giant
+bricks** for storage, collision and distance, never as a size anyone places by hand: uniform
+volume (an asteroid's core, a plain's deep rock, a capital ship's armour belt) is kept as the
+largest aligned brick that fits and split only where something touches it. A big brick's visible
+face may carry a pattern at the size the eye expects (panel lines, stones); breaking it turns the
+pattern into real blocks. Merging back is automatic where a volume is uniform again.
 A model designed at some other size moves to the next **finer** size of the set, never the
 coarser one: rounding up loses whatever was thinner than the new block (fence rails, caps, trim).
 
@@ -94,18 +103,104 @@ sizes in one view is what makes "Lego with non-standard parts".
 
 ## 5. Grids
 
-- **The planet's ground** is a grid on the cube-sphere: six faces, each a grid in face
-  coordinates (the same mapping as the terrain tiles). A block is addressed by face, i, j (across
-  the face) and k (radial steps). Columns point outward, so "down" is always toward the centre;
-  at 600 km a 25 cm block narrows by one part in 2.4 million, which no one can see. The cube's
-  edges are seams where two faces' grids meet at an angle: blocks there belong to one face or the
-  other, meshes are stitched along the seam and edits find their face by direction; settlements
-  and the start avoid them.
+- **A round body's ground** (planets and moons) is a polyhedron of flat plains, each with its own
+  exact square grid (§5.1).
+- **A small body's ground** (asteroids, debris) is one 3D square grid (§5.2).
 - **Every structure has its own grid** in its own frame of the frame tree: a building, a ship, a
   vehicle, a station. Grids don't line up with each other; they meet only where things touch
   (landing, docking, a building on the ground), and the physics handles that contact.
 - **Moving parts** (doors, turrets, legs and arms of a mech) are separate block groups on joints,
   each with its own grid, posed by the joint data.
+
+### 5.1 Round bodies: a polyhedron of flat plains
+
+**Why.** Identical square blocks cannot cover a sphere: each row of blocks nearer a pole is
+shorter than the last (at 45 degrees latitude on Meridian, by about 1.1 m a row), so a
+planet-wide grid must give somewhere. The options compared (renders and measurements, 2026-11-16):
+
+| Option | Where the mismatch goes | Verdict |
+|---|---|---|
+| One bent grid per cube face (the demo village's mapping, planet-wide) | Block widths vary up to 1.41 times (equal-angle mapping), squares skew to 60/120 degrees near the 8 cube corners | Rejected: blocks must be one size |
+| A 3D grid for the whole planet | "Down" meets the grid at up to 55 degrees: staircase plains, tilted walls, diagonal shafts | Rejected for planets (kept for small bodies) |
+| Rings of blocks along the latitudes (igloo) | Rows offset like brickwork everywhere, special polar caps | Rejected |
+| Hexagonal blocks | Fit hexagonal plains, but walls, roofs and hulls lose their flat planes; no exact nesting into bigger bricks | Rejected (village rebuilt in hexagons for the comparison) |
+| Icosahedron (or cube, or rounded cube) planet | Exact everywhere, but the planet is a polyhedron of 6–26 big faces with 35–90 degree turns | Rejected: planets stay round |
+| **Flat plains with generated seam blocks** | **One row of irregular, shared blocks along each crease** | **Chosen** |
+
+**The layout.** Every round body is a Goldberg polyhedron: **12 pentagons plus 10(T - 1)
+hexagons** (T = m² + mn + n²), the only way flat plains of five and six sides close into a ball
+(Euler). The count is chosen per body so the plains are about **40 km a side** (about 69 km across,
+4,200 km²):
+
+| Body radius | Plains | Turn at a crease |
+|---|---|---|
+| 50 km | 12 (a dodecahedron) | about 63 degrees |
+| 100 km | 32 (a football) | about 37–42 degrees |
+| 200 km | 122 | about 20 degrees |
+| 600 km (Meridian, T = 109) | 1,092 | about 6–7 degrees |
+| 1,000 km | 3,012 | about 4 degrees |
+
+Plains are evened out by relaxation (hexagons within about 10–20 % of each other's area; the
+pentagons are 30–40 % smaller). Small moons are strongly faceted toy worlds; large planets read as
+round. Each plain is a flat polygon in its own plane; neighbouring plains meet along a straight
+crease.
+
+**Inside a plain:** an exact square grid of 25 cm blocks, one axis along one of the plain's edges.
+Columns are parallel, along the plain's own "down", so blocks are the same size at every depth.
+A block is addressed by plain, i, j and k. Each plain holds one brick tree (§4): giant bricks fill
+its inside and split to 25 cm only near its seams.
+
+**Seams.** Along each crease one row of **seam blocks** is shared by the two plains: each is the
+whole cell between plain A's grid and plain B's, folded along the crease, its footprint computed
+from the geometry when its chunk is made (never stored: a dug or changed seam block is an edit
+like any other).
+- **Underground** a seam is a wall one block thick, down the plane that bisects the crease. A
+  plain's columns lean against it by half the crease angle, so the seam shifts one block across
+  the grid about every 4 m of depth (Meridian); its blocks change shape slowly with depth.
+- **Where three plains meet**, the three walls meet in a column of three-way corner blocks.
+- **They are fault rock:** their own materials (fault stone, crystal veins, richer ore), a ridge
+  of exposed stone at the surface and a vein to follow below; world generation favours caves,
+  springs and passes along them. Players dig them like any block but cannot place new ones; a dug
+  seam cell can only be refilled with its own generated shape.
+- **Cost:** about 0.5 billion seam blocks per layer on Meridian, about 0.0007 % of its columns and
+  about 1 chunk in 2,500; none exist until their chunk is generated near the player. The real cost
+  is the code (meshing, face hiding, collision, editing and navigation across a seam), roughly
+  1–2k lines with tests.
+
+**Regions.** Each plain is a **region** of the world with its own climate, land type, sea,
+settlements and name; crossing a crease brings a welcome message ("Entering the Ashen Steppe"),
+marked on the ground by the fault ridge, the change of land and the turn. Below the surface each
+plain's column splits into depth layers (soil and caves, deep caverns, the fault zone), each a
+region too. A **mantle** a few km down cannot be dug, so no one reaches the narrow depths where a
+plain's seam walls converge.
+
+**Down.** Near the ground "down" is the plain's normal, so everything on a plain is exactly level
+and seas are flat; at a crease it turns by the crease angle, blended over a few metres so the
+camera never snaps. Well above the ground (a few km) it blends to the true direction to the
+centre; from far away the body is a point mass and orbits are unchanged.
+
+**What creases mean for play** (Meridian, 6–7 degrees):
+- **Sight:** within a plain there is no curvature, so views reach the plain's edge; a crease is a
+  ridge that hides the land beyond it (about 11 m per 100 m past it), so regions are also natural
+  theatres with their borders as crests.
+- **Fast ground vehicles** leave the ground briefly crossing a crest; the collision surface
+  rounds each crease over a few metres.
+- **Long builds:** a structure stays on one plain's grid; it may cross a crease on a foundation
+  that makes up the drop. Roads, rails and walls bend once at each crease.
+
+The demo village's ground (a flat 25 cm grid in the tangent plane, bent onto the sphere at the
+vertices) is the inside of one plain without the bending; it moves to the plain layout when
+planet-wide ground cover is built.
+
+### 5.2 Small bodies: one 3D grid
+
+Bodies below about 25–50 km across (too small for 12 plains of 40 km) are one 3D square grid in
+the body's frame, the same grid as ships and stations. "Up" is the surface under the feet (the
+direction away from the rock's shape), with grip boots and thrusters, since gravity is too weak
+to stand on. A small rock is kinematic and on rails (§9); a piece mined off becomes a new body
+with the velocity the original had at that point. Round small bodies look stepped at the block
+scale, softened by the slope shapes. A building on one stands on its own grid and foundation; on
+a rock a few hundred metres across a big base becomes sections joined by corridors.
 
 ## 6. The ground: what a block is made of
 
@@ -197,8 +292,12 @@ batch.
   arrival, nearest first, behind the far tiles.
 - **Physics:** voxel colliders plus slope pieces only near moving bodies; measured in the
   prototype.
-- **Seams** between cube faces: the riskiest part of the ground grid; the prototype must cross
-  one.
+- **Seams** between plains (§5.1): the riskiest part of the ground grid; the batch that first
+  builds planet-wide ground must cross one (and a three-way corner) before anything else.
+- **Large block bodies in contact** (a capital ship landing on an asteroid): mesh against mesh is
+  slow and unstable in the physics library, so moving bodies collide as merged boxes, big bodies
+  are kinematic, and a landed ship is pinned rather than balanced on contacts; a prototype comes
+  first in the batch that needs it.
 - **25 cm blocks** are 64 times as many as Minecraft's per volume; the zone's radius and depth are
   budgets, set by measurement, not constants.
 
@@ -207,5 +306,5 @@ batch.
 The system is proven on the smallest scope that shows it whole (development plan §7.7): one
 village on Meridian where the player starts, built from block models on block ground, with
 digging and placing; frame times and memory measured on the test machine. The village sits away
-from the cube's face seams; crossing a seam, planet-wide ground cover, large structures, ships
-and stations come in the batches that first need them.
+from where seams would be; the plain layout, crossing a seam, planet-wide ground cover, small
+bodies, large structures, ships and stations come in the batches that first need them.
