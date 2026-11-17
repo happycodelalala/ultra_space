@@ -104,8 +104,14 @@ ground and sky are like on that geometry.
   different sizes, flattened at the base), 0.3–3 km across, with a flat base at the condensation
   height (2–4 km above the ground below) and tops reaching higher where it is wet and warm
   (towering cumulus near the equator and against ranges).
-- **Where:** from the climate — dense over wet land and warm seas, banked up against the windward
-  side of ranges, sparse over deserts and polar ice; none inside mountains.
+- **Where: weather systems first, then clouds inside them.** A large-scale cloudiness field
+  decides where clouds gather: latitude bands (a stormy belt at the equator, clear belts at
+  25–35° over the deserts, storm tracks at mid latitudes), a few drifting **storms** (swirling
+  lows with curved frontal bands and clear gaps), cloud banks against the windward side of
+  ranges, low sheets over cool seas. Clouds are placed by that field **squared**, so they clump
+  into systems; inside a system they are big and merge into clusters and sheets, outside it they
+  are small scattered fair-weather puffs. Placing each cloud independently by local wetness alone
+  (the first mock) gives an even scatter with no systems, which looks wrong.
 - **Look:** bright, slightly warm tops, soft blue-grey undersides, a bright rim against the sun,
   no hard edges (wrap lighting and a soft fresnel); they cast soft shadows on the ground near the
   camera; they drift slowly with the wind.
