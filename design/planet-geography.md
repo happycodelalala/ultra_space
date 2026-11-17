@@ -7,6 +7,16 @@ what emerges** (not hand-assigned types); **cotton clouds as puffy meshes**; a d
 renders before code. Geometry and blocks are in block-world.md §5.1; this document is what the
 ground and sky are like on that geometry.
 
+**Decided after the mock renders (2026-11-17):**
+
+| Question | Decision |
+|---|---|
+| Direction | Plates and creases shape the land and the computed climate decides the rest, **plus ranges and highlands inside plains** (old mountain belts, volcanoes), so not every range follows a crease |
+| Sea | **About 40 %** of the surface: two or three continents with inland seas and island chains |
+| Cloud amount | **About a third** of the surface under cloud: systems stand out, most places clear most of the time |
+| Cloud look | **Soft cotton:** soft, slightly see-through edges, bright sunlit tops, blue-grey bottoms, puffs merging |
+| Highest ranges | **About 8 km** (lesser ranges and highlands 2–5 km); cloud bases ~2.5 km, tops 4–6 km |
+
 ## 1. What was wrong
 
 | Problem | Why it looked wrong |
@@ -35,6 +45,11 @@ ground and sky are like on that geometry.
 ## 3. Layers
 
 ### 3.1 Plates and creases (tectonics)
+
+Ranges also rise **inside plains**: a few seeded old mountain belts (curving ridge lines across
+a plain, 2–5 km) and volcanoes (single cones, some in island chains), so the land isn't only
+lined up with the creases.
+
 
 - **Each plain is a plate**, seeded as **continental** (about 55 %) or **oceanic**, with a drift:
   a random direction and speed in its plane.
@@ -126,8 +141,9 @@ ground and sky are like on that geometry.
   palette hints), not ground shapes; the ground's numbers move to a **planet geography** block in
   the star system data (plate mix, range height and width, trench depth, roughness, wind bands,
   cloud amount), so each planet is a few parameters plus its seed.
-- Arcade defaults for Tessera: ranges 12 km, trenches 6 km, continental base 300 m, oceanic −4 km,
-  cloud base 2.5 km.
+- Arcade defaults for Tessera: ranges 8 km (inner ranges and highlands 2–5 km), trenches 6 km,
+  continental base 300 m, oceanic −4 km, sea about 40 % (plate mix and the continent field tuned
+  to it), cloud cover about a third, cloud base 2.5 km.
 
 ## 5. Implementation (when approved)
 
