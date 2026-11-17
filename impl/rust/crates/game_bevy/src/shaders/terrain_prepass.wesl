@@ -13,6 +13,8 @@ struct TerrainUniform {
     palette: array<vec4<f32>, 12>,
     blocks: vec4<f32>,
     hide: vec4<f32>,
+    planes: array<vec4<f32>, 32>, // a body of plains: each plain's plane (body frame)
+    plain_count: vec4<f32>, // x number of planes (0: a sphere)
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> terrain: TerrainUniform;

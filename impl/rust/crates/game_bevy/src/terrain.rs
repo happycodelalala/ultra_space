@@ -165,6 +165,8 @@ fn setup_terrains(
                     params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, 0.0),
                     surface: surface_flags(body),
                     palette: biome_palette(),
+                    planes: plain_planes(&terrain).0,
+                    plain_count: plain_planes(&terrain).1,
                     ..default()
                 },
                 field_map: None,
@@ -243,6 +245,19 @@ pub fn biome_palette() -> [Vec4; 12] {
 }
 
 /// Biome-rule flags for shaders: x = has ocean, y = has atmosphere.
+/// The planes of a body of plains for the terrain shader (body frame), and their count.
+fn plain_planes(terrain: &Terrain) -> ([Vec4; crate::space_render::MAX_DECK_PLANES], Vec4) {
+    let mut planes = [Vec4::ZERO; crate::space_render::MAX_DECK_PLANES];
+    let Some(w) = terrain.world() else {
+        return (planes, Vec4::ZERO);
+    };
+    for (slot, p) in planes.iter_mut().zip(&w.plains.plains) {
+        *slot = p.normal.as_vec3().extend(p.distance as f32);
+    }
+    let n = w.plains.plains.len().min(planes.len());
+    (planes, Vec4::new(n as f32, 0.0, 0.0, 0.0))
+}
+
 pub fn surface_flags(body: &sim_core::Body) -> Vec4 {
     let ocean = body
         .terrain

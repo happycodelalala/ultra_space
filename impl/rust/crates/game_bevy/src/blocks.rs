@@ -385,20 +385,14 @@ fn choose_site(
     best.map(|b| b.1)
 }
 
-/// The village's site on a body of plains: the flattest spot of open grassland or downs, well
-/// inside its plain (at least 6 km from any crease).
+/// The village's site on a body of plains: the flattest temperate, moderately wet lowland well
+/// inside its plain (at least 6 km from any crease), away from the sea's edge.
 fn choose_plain_site(
     terrain: &sim_planet::Terrain,
     world: &sim_planet::PlainWorld,
 ) -> Option<DVec3> {
     let mut best: Option<(f64, DVec3)> = None;
-    for (i, plain) in world.plains.plains.iter().enumerate() {
-        let kind = world.kind(i);
-        let preference = match kind.id.as_str() {
-            "grassland" => 0.0,
-            "rolling_hills" => 1.5,
-            _ => continue,
-        };
+    for plain in &world.plains.plains {
         // A lattice of candidate spots 2 km apart across the plain.
         for gx in -12..=12 {
             for gy in -12..=12 {
@@ -407,14 +401,20 @@ fn choose_plain_site(
                 if plain.edge_distance(on_plane) < 6_000.0 {
                     continue;
                 }
+                let dir = on_plane.normalize();
+                let centre = terrain.sample(dir, 1.0).elevation;
+                if !(20.0..800.0).contains(&centre) {
+                    continue; // the shore, water or highland
+                }
+                let t = world.temperature(dir, centre);
+                let m = world.wetness(dir);
+                if !(8.0..=22.0).contains(&t) || !(0.35..=0.75).contains(&m) {
+                    continue;
+                }
                 let elevation = |x: f64, y: f64| {
                     let p = plain.from_local(local + DVec3::new(x, y, 0.0));
                     terrain.sample(p.normalize(), 1.0).elevation
                 };
-                let centre = elevation(0.0, 0.0);
-                if centre < 8.0 {
-                    continue; // water or the shore
-                }
                 let mut lo = f64::MAX;
                 let mut hi = f64::MIN;
                 for (x, y) in [
@@ -432,9 +432,10 @@ fn choose_plain_site(
                     lo = lo.min(e);
                     hi = hi.max(e);
                 }
-                let score = hi - lo + preference;
+                // Flattest first; a little preference for mild, middling wetness.
+                let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs();
                 if best.is_none_or(|b| score < b.0) {
-                    best = Some((score, on_plane.normalize()));
+                    best = Some((score, dir));
                 }
             }
         }

@@ -22,5 +22,5 @@ pub use foundations::{Footprint, Foundations, PlacedBox, Site, Structure, tangen
 pub use mesh::{CollisionPatch, TileMesh, build_tile, collision_patch, tile_indices};
 pub use plains::{Plain, PlainKind, Plains};
 pub use quadtree::{Extent, TileKey, View, estimated_heights, locate, select};
-pub use regions::{PlainWorld, Region, RegionType};
+pub use regions::{PlainWorld, Region, RegionKind};
 pub use terrain::{Pad, Sample, Terrain, fibonacci_directions};

@@ -47,6 +47,10 @@ pub struct TerrainUniform {
     /// x = round the camera, tiles within this horizontal distance (m) inside the block ground
     /// are not drawn (the blocks are); 0 = off.
     pub hide: Vec4,
+    /// A body of plains: each plain's plane (body frame: xyz normal, w distance), so slopes are
+    /// judged against the plain's "up"; `plain_count.x` of them (0: a sphere).
+    pub planes: [Vec4; crate::space_render::MAX_DECK_PLANES],
+    pub plain_count: Vec4,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]

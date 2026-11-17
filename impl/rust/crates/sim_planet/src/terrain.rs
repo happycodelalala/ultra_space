@@ -18,7 +18,7 @@ use crate::blocks::BlockGround;
 use crate::foundations::Foundations;
 use crate::noise::{fbm, hash3, mix64, octaves_between, ridged, unit};
 use crate::plains::{Plain, Plains};
-use crate::regions::{BLEND_BAND, PlainWorld};
+use crate::regions::PlainWorld;
 
 /// Continents: about 1.3 cycles across the radius.
 const CONTINENT_FREQUENCY: f64 = 1.3;
@@ -74,6 +74,8 @@ pub struct Terrain {
     world: Option<Arc<PlainWorld>>,
 }
 
+/// Height of a dry basin's floor above sea level (m).
+const DRY_FLOOR: f64 = 2.0;
 /// Width (m of radial difference) over which "up" turns at a crease: about 30 m of ground.
 const UP_BAND: f64 = 20.0;
 /// Heights (m above the ground) over which "up" turns from the plain's normal to the true
@@ -279,15 +281,10 @@ impl Terrain {
         n.lerp(dir, t).normalize_or(dir)
     }
 
-    /// Sea-level temperature (°C) and moisture of the regions at `dir`, blended near creases.
+    /// Sea-level temperature (°C) and wetness (0–1) at `dir`, on a body of plains.
     pub fn region_climate(&self, dir: DVec3) -> Option<(f64, f64)> {
         let w = self.world.as_ref()?;
-        let mut weights = Vec::with_capacity(4);
-        w.plains.weights(dir.normalize(), BLEND_BAND, &mut weights);
-        Some(weights.iter().fold((0.0, 0.0), |(t, m), &(i, wt)| {
-            let (ti, mi) = w.climate(i);
-            (t + ti * wt, m + mi * wt)
-        }))
+        Some((w.sea_level_temperature(dir), w.wetness(dir)))
     }
 
     /// Height of what vehicles and walkers stand on at `dir` (m): the ground, or the sea surface
@@ -395,7 +392,13 @@ impl Terrain {
         let dir = dir.normalize();
         let shortest = min_wavelength.max(FINEST_WAVELENGTH);
 
-        let elevation = w.geo.elevation(&w.plains, dir, shortest);
+        let mut elevation = w.geo.elevation(&w.plains, dir, shortest);
+        if elevation < DRY_FLOOR && !w.geo.open_sea(&w.plains, dir) {
+            // A basin below sea level away from the open sea: a lake where it is wet, a dry
+            // floor (salt flat) where it is dry, eased over the wetness in between.
+            let dry = 1.0 - smoothstep(0.35, 0.5, w.wetness(dir));
+            elevation += (DRY_FLOOR - elevation) * dry;
+        }
         let ground = w.plains.hit(dir, elevation);
         let mut height = ground.radius - self.radius;
         // Foundations and pads work on radial heights; carry their change into the elevation.

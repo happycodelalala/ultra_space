@@ -1,14 +1,19 @@
 {
-  "types": [
-    {"id": "grassland", "noun": "Steppe", "temperature_c": 16, "moisture": 0.35, "base_m": 60, "hills_m": 25, "hill_wavelength_m": 3000, "valleys_m": 20, "valley_wavelength_m": 6000},
-    {"id": "rolling_hills", "noun": "Downs", "temperature_c": 14, "moisture": 0.4, "base_m": 300, "hills_m": 400, "hill_wavelength_m": 4000, "valleys_m": 150, "valley_wavelength_m": 6000},
-    {"id": "forest_valleys", "noun": "Vale", "temperature_c": 12, "moisture": 0.65, "base_m": 800, "hills_m": 500, "hill_wavelength_m": 5000, "valleys_m": 1000, "valley_wavelength_m": 8000},
-    {"id": "lake_district", "noun": "Meres", "temperature_c": 11, "moisture": 0.7, "base_m": 20, "hills_m": 120, "hill_wavelength_m": 2000, "valleys_m": 60, "valley_wavelength_m": 4000},
-    {"id": "mountains", "noun": "Peaks", "temperature_c": 8, "moisture": 0.45, "base_m": 1500, "hills_m": 600, "hill_wavelength_m": 4000, "mountains_m": 12000, "mountain_wavelength_m": 14000, "valleys_m": 1200, "valley_wavelength_m": 9000},
-    {"id": "badlands", "noun": "Wastes", "temperature_c": 26, "moisture": 0.12, "base_m": 600, "hills_m": 300, "hill_wavelength_m": 2500, "mountains_m": 1800, "mountain_wavelength_m": 6000, "valleys_m": 1500, "valley_wavelength_m": 4500},
-    {"id": "tundra", "noun": "Barrens", "temperature_c": -3, "moisture": 0.35, "base_m": 150, "hills_m": 300, "hill_wavelength_m": 4000, "valleys_m": 100, "valley_wavelength_m": 6000},
-    {"id": "polar_ice", "noun": "Icecap", "temperature_c": -28, "moisture": 0.3, "base_m": 1200, "hills_m": 900, "hill_wavelength_m": 9000},
-    {"id": "sea", "noun": "Sea", "temperature_c": 15, "moisture": 0.8, "base_m": -4500, "hills_m": 1500, "hill_wavelength_m": 7000}
+  "kinds": [
+    { "id": "sea", "noun": "Sea" },
+    { "id": "isles", "noun": "Isles" },
+    { "id": "coast", "noun": "Coast" },
+    { "id": "peaks", "noun": "Peaks" },
+    { "id": "highlands", "noun": "Highlands" },
+    { "id": "icefield", "noun": "Icefield" },
+    { "id": "barrens", "noun": "Barrens" },
+    { "id": "wastes", "noun": "Wastes" },
+    { "id": "steppe", "noun": "Steppe" },
+    { "id": "meres", "noun": "Meres" },
+    { "id": "wilds", "noun": "Wilds" },
+    { "id": "vale", "noun": "Vale" },
+    { "id": "downs", "noun": "Downs" },
+    { "id": "plains", "noun": "Plains" }
   ],
   "adjectives": [
     "Ashen", "Amber", "Silver", "Windward", "Leeward", "Quiet", "Green", "Iron", "Copper", "Cinder",
