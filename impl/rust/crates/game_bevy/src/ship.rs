@@ -26,7 +26,15 @@ use crate::sim::{RenderTime, Sim, SimSet};
 use crate::space_render::{MainCamera, STAR_LIGHT};
 use crate::universe::{GameState, InGame, StartingVehicle, Universe};
 
-pub(crate) const START_BODY: &str = "meridian";
+/// The body the game starts on: Meridian in the Halcyon system, otherwise the first body with
+/// terrain (Tessera).
+pub(crate) fn start_body(system: &StarSystem) -> Option<usize> {
+    system
+        .bodies
+        .iter()
+        .position(|b| b.id == "meridian")
+        .or_else(|| system.bodies.iter().position(|b| b.terrain.is_some()))
+}
 
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
@@ -232,11 +240,7 @@ fn spawn_player_ship(
     );
 
     let system = &universe.0;
-    let index = system
-        .bodies
-        .iter()
-        .position(|b| b.id == START_BODY)
-        .unwrap_or(0);
+    let index = start_body(system).unwrap_or(0);
     let mut state = parking_orbit(system, index, 0.0);
     // Debug: `ULTRA_SPACE_START_SUN_ANGLE=<deg>` moves the start along the orbit to that angle
     // from the point under the star (0 noon, 90 the terminator, 180 midnight). The parking

@@ -40,14 +40,12 @@ const MAX_SPEED: f64 = 1.0e10;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CameraSet;
 
-/// Initial camera: looking at `ULTRA_SPACE_VIEW` (a body id; default Meridian).
+/// Initial camera: looking at `ULTRA_SPACE_VIEW` (a body id; default the start body).
 fn init_camera(mut commands: Commands, universe: Res<Universe>) {
-    let start = std::env::var("ULTRA_SPACE_VIEW").unwrap_or_else(|_| "meridian".into());
-    let index = universe
-        .0
-        .bodies
-        .iter()
-        .position(|b| b.id == start)
+    let start = std::env::var("ULTRA_SPACE_VIEW").ok();
+    let index = start
+        .and_then(|id| universe.0.bodies.iter().position(|b| b.id == id))
+        .or_else(|| crate::ship::start_body(&universe.0))
         .unwrap_or(0);
     commands.insert_resource(view_of_body(&universe.0, index, 0.0));
 }

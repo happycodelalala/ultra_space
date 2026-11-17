@@ -353,7 +353,9 @@ fn update_terrain(
         let cam = system
             .frames
             .transform_point(body.surface_frame, anchor, t, camera.offset);
-        let active = cam.length() < ACTIVE_DISTANCE * bt.extent.radius;
+        // A body of plains always draws its tiles: a round stand-in would hide its shape.
+        let active =
+            bt.terrain.world().is_some() || cam.length() < ACTIVE_DISTANCE * bt.extent.radius;
         bt.active = active;
 
         // Collect finished generation tasks.

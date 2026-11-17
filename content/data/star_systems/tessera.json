@@ -1,0 +1,50 @@
+{
+  "id": "lumen",
+  "name": "Lumen",
+  "description": "The test world of plains (block-world.md section 5.1): one small planet whose ground is 32 flat plains, each a region of its own, round a yellow-white star.",
+  "bodies": [
+    {
+      "id": "lumen",
+      "name": "Lumen",
+      "kind": "star",
+      "radius_km": 300000,
+      "surface_gravity_ms2": 16.7,
+      "rotation": { "period_hours": 600, "axial_tilt_deg": 7 },
+      "appearance": {
+        "colors": [[1.0, 0.95, 0.85], [1.0, 0.9, 0.75]],
+        "glow_color": [1.0, 0.92, 0.8]
+      },
+      "description": "Yellow-white main-sequence star; only the light of this system."
+    },
+    {
+      "id": "tessera",
+      "name": "Tessera",
+      "kind": "rocky",
+      "parent": "lumen",
+      "radius_km": 91.6,
+      "surface_gravity_ms2": 9.81,
+      "orbit": {
+        "semi_major_axis_km": 14000000,
+        "eccentricity": 0.01,
+        "inclination_deg": 0,
+        "ascending_node_deg": 0,
+        "arg_periapsis_deg": 0,
+        "mean_anomaly_deg": 40
+      },
+      "rotation": { "period_hours": 1.5, "axial_tilt_deg": 15 },
+      "atmosphere": { "height_km": 30, "surface_pressure_atm": 1.0, "color_rgb": [0.45, 0.65, 1.0] },
+      "appearance": {
+        "colors": [[0.22, 0.38, 0.16], [0.55, 0.5, 0.36]],
+        "ocean_color": [0.03, 0.12, 0.3],
+        "polar_ice": 0.1
+      },
+      "terrain": {
+        "seed": 11,
+        "relief_km": 2.5,
+        "plains": { "layout": "truncated_icosahedron", "edge_km": 40 }
+      },
+      "climate": { "equator_temperature_c": 22, "pole_temperature_c": -25, "moisture": 0.5 },
+      "description": "A football of plains 40 km a side: 12 pentagons and 20 hexagons, each a region with its own climate and land (ice caps on the spin axis, two seas, steppes, downs, vales, meres, peaks, wastes and barrens). Home of the demo block village."
+    }
+  ]
+}

@@ -8,12 +8,13 @@
 //!
 //! H toggles the HUD; O cycles orbit lines: ship path, ship path and body orbits, none. The F3 debug overlay is separate.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use bevy::prelude::*;
 use glam::DVec3;
 use sim_core::time::{local_clock, local_solar_fraction};
-use sim_core::{KeplerOrbit, StarSystem};
+use sim_core::{KeplerOrbit, Simulation, StarSystem};
 use sim_vehicle::Reference;
 
 use crate::camera::{CameraSet, SpaceCamera};
@@ -51,7 +52,11 @@ impl Plugin for HudPlugin {
         .add_systems(Startup, spawn_hud)
         .add_systems(
             Update,
-            ((hud_keys, update_hud).chain(), draw_orbits.after(CameraSet)).in_set(InGame),
+            (
+                (region_notice, hud_keys, update_hud).chain(),
+                draw_orbits.after(CameraSet),
+            )
+                .in_set(InGame),
         );
     }
 }
@@ -99,6 +104,90 @@ impl Notice {
         } else {
             format!("{}\n", self.text.to_uppercase())
         }
+    }
+}
+
+/// The terrain of the body a region belongs to (with its plains, if it has them).
+fn region_terrain(sim: &Simulation, region: usize) -> Option<Arc<sim_planet::Terrain>> {
+    sim.regions
+        .get(region)?
+        .world
+        .get_resource::<sim_vehicle::flight::RegionTerrain>()?
+        .0
+        .clone()
+}
+
+/// Height above sea level of `position` (the body's inertial frame, m): above the plain on a
+/// body of plains, above the reference radius otherwise.
+fn sea_altitude(
+    system: &sim_core::StarSystem,
+    sim: &Simulation,
+    region: usize,
+    position: DVec3,
+    t: f64,
+) -> f64 {
+    let body = &system.bodies[region];
+    let r = position.length();
+    let Some(terrain) = region_terrain(sim, region).filter(|t| t.world().is_some()) else {
+        return r - body.radius;
+    };
+    let turn = system
+        .frames
+        .state_in(body.inertial_frame, body.surface_frame, t)
+        .rotation;
+    let dir = turn.inverse() * position.normalize_or(DVec3::Y);
+    let sea = terrain.radius + terrain.sea_height(dir);
+    // Along the plain's normal, not along the ray from the centre.
+    let cos = terrain
+        .plain_at(dir)
+        .map_or(1.0, |(_, p)| dir.dot(p.normal));
+    (r - sea) * cos
+}
+
+/// "Entering <region>" when the player (on foot or in the ship) comes into another plain of a
+/// body of plains, and at the start.
+fn region_notice(
+    on_foot: Option<Res<OnFoot>>,
+    ship: Option<Res<PlayerShip>>,
+    sim: Res<Sim>,
+    universe: Res<Universe>,
+    real: Res<Time<Real>>,
+    mut notice: ResMut<Notice>,
+    mut last: Local<Option<(usize, usize)>>,
+) {
+    let sim = &sim.0;
+    let system = &universe.0;
+    let t = sim.universe_time().as_secs_f64();
+    let here = on_foot
+        .as_deref()
+        .and_then(|f| walker_status(sim, f.id).map(|(r, s, _)| (r, s)))
+        .or_else(|| {
+            ship.as_deref()
+                .and_then(|s| player_ship_state(sim, s).map(|(r, st, _, _)| (r, st)))
+        });
+    let Some((region, state)) = here else { return };
+    let body = &system.bodies[region];
+    let local = state.in_frame(&system.frames, body.inertial_frame, t).state;
+    // Only near the ground (below 5 km above sea level).
+    if sea_altitude(system, sim, region, local.position, t) > 5_000.0 {
+        return;
+    }
+    let Some(terrain) = region_terrain(sim, region) else {
+        return;
+    };
+    let Some(world) = terrain.world() else { return };
+    let turn = system
+        .frames
+        .state_in(body.inertial_frame, body.surface_frame, t)
+        .rotation;
+    let dir = turn.inverse() * local.position.normalize_or(DVec3::Y);
+    let plain = world.plains.locate(dir);
+    if *last != Some((region, plain)) {
+        *last = Some((region, plain));
+        notice.show(
+            format!("Entering {}", world.regions[plain].name),
+            real.elapsed_secs_f64(),
+        );
     }
 }
 
@@ -346,7 +435,7 @@ fn update_hud(
                  WASD walk | Shift run | Space jump | F board (vehicle ahead, 12 m) | G spawn (Shift+G: which) | H HUD",
                     body.name.to_uppercase(),
                     speed(walker.velocity.length()),
-                    distance(local.position.length() - body.radius),
+                    distance(sea_altitude(system, sim, region, local.position, t)),
                     if walker.grounded {
                         String::new()
                     } else {
@@ -390,7 +479,7 @@ fn update_hud(
                 body.name.to_uppercase(),
                 speed(relative.length()),
                 speed(relative.dot(up)),
-                distance(local.position.length() - body.radius),
+                distance(sea_altitude(system, sim, *region, local.position, t)),
                 if telemetry.ground_altitude < 20_000.0 {
                     format!("   AGL {}", distance(telemetry.ground_altitude))
                 } else {

@@ -308,6 +308,9 @@ fn choose_site(
             return Some(DVec3::new(v[0], v[1], v[2]).normalize());
         }
     }
+    if let Some(plains) = terrain.world() {
+        return choose_plain_site(terrain, plains);
+    }
     let climate = sim_planet::Climate::of(body);
     let society = world.get_resource::<sim_society::RegionSociety>();
     let medieval: Vec<DVec3> = society
@@ -376,6 +379,63 @@ fn choose_site(
             best = Some((rough, dir));
             if rough < 0.8 || n > 300_000 {
                 break;
+            }
+        }
+    }
+    best.map(|b| b.1)
+}
+
+/// The village's site on a body of plains: the flattest spot of open grassland or downs, well
+/// inside its plain (at least 6 km from any crease).
+fn choose_plain_site(
+    terrain: &sim_planet::Terrain,
+    world: &sim_planet::PlainWorld,
+) -> Option<DVec3> {
+    let mut best: Option<(f64, DVec3)> = None;
+    for (i, plain) in world.plains.plains.iter().enumerate() {
+        let kind = world.kind(i);
+        let preference = match kind.id.as_str() {
+            "grassland" => 0.0,
+            "rolling_hills" => 1.5,
+            _ => continue,
+        };
+        // A lattice of candidate spots 2 km apart across the plain.
+        for gx in -12..=12 {
+            for gy in -12..=12 {
+                let local = DVec3::new(f64::from(gx) * 2_000.0, f64::from(gy) * 2_000.0, 0.0);
+                let on_plane = plain.from_local(local);
+                if plain.edge_distance(on_plane) < 6_000.0 {
+                    continue;
+                }
+                let elevation = |x: f64, y: f64| {
+                    let p = plain.from_local(local + DVec3::new(x, y, 0.0));
+                    terrain.sample(p.normalize(), 1.0).elevation
+                };
+                let centre = elevation(0.0, 0.0);
+                if centre < 8.0 {
+                    continue; // water or the shore
+                }
+                let mut lo = f64::MAX;
+                let mut hi = f64::MIN;
+                for (x, y) in [
+                    (-60.0, -60.0),
+                    (60.0, -60.0),
+                    (-60.0, 60.0),
+                    (60.0, 60.0),
+                    (0.0, 0.0),
+                    (-30.0, 0.0),
+                    (30.0, 0.0),
+                    (0.0, 30.0),
+                    (0.0, -30.0),
+                ] {
+                    let e = elevation(x, y);
+                    lo = lo.min(e);
+                    hi = hi.max(e);
+                }
+                let score = hi - lo + preference;
+                if best.is_none_or(|b| score < b.0) {
+                    best = Some((score, on_plane.normalize()));
+                }
             }
         }
     }
@@ -753,10 +813,8 @@ fn night_glow(
         render.0,
         DVec3::ZERO,
     );
-    let up = world.ground.center;
-    let sun = (star - up * world.ground.radius)
-        .normalize_or_zero()
-        .dot(up);
+    let up = world.ground.up_at(world.ground.origin());
+    let sun = (star - world.ground.origin()).normalize_or_zero().dot(up);
     let night = (1.0 - smooth(-0.12, 0.08, sun)) as f32;
     // Wet in the rain.
     let rough = if weather.as_deref() == Some(&crate::weather::Weather::Rain) {
@@ -857,9 +915,10 @@ fn hold_view(
     let g = &world.ground;
     let eye = s.rotation * g.point(view.eye);
     let target = s.rotation * g.point(view.target);
+    let up = s.rotation * g.up_at(g.point(view.eye));
     camera.anchor = world.body;
     camera.offset = eye;
-    camera.rotation = crate::camera::look_rotation(target - eye, eye.normalize());
+    camera.rotation = crate::camera::look_rotation(target - eye, up);
     for mut p in &mut projection {
         if let Projection::Perspective(pp) = p.as_mut() {
             let fov = view.fov.to_radians() as f32;
@@ -892,7 +951,7 @@ pub fn start(
     let pose = |p: [f64; 3], heading_deg: f64, lift: f64| {
         let gp = world.grid_point(p) + DVec3::new(0.0, 0.0, lift);
         let at = g.point(gp);
-        let up = at.normalize();
+        let up = g.up_at(at);
         // Heading: the scene's turn (counter-clockwise from above) from north... the models face
         // south (-y) unturned, so a heading of h faces south turned by h.
         let a = heading_deg.to_radians();

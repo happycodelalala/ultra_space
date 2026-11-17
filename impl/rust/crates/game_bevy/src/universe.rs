@@ -43,7 +43,16 @@ pub struct Lore(pub Arc<ai_gateway::ContentDirector>);
 #[derive(Resource)]
 pub struct Patterns(pub Arc<sim_society::SettlementPatterns>);
 
-const STAR_SYSTEM_FILE: &str = "data/star_systems/halcyon.json";
+/// The earlier test system (8 bodies, Meridian's peoples): kept as test data and with
+/// `ULTRA_SPACE_SYSTEM=halcyon`.
+const HALCYON_FILE: &str = "data/star_systems/halcyon.json";
+
+/// The star system the game loads: `ULTRA_SPACE_SYSTEM` names a file in
+/// content/data/star_systems (default `tessera`, the world of plains, block-world.md §5.1).
+fn star_system_file() -> String {
+    let name = std::env::var("ULTRA_SPACE_SYSTEM").unwrap_or_else(|_| "tessera".into());
+    format!("data/star_systems/{name}.json")
+}
 const START_DESIGN: &str = "kestrel";
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -97,7 +106,7 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     let start = Instant::now();
     let dir = content_dir()
         .ok_or("content folder not found; set ULTRA_SPACE_CONTENT to the repo's content/ folder")?;
-    let path = dir.join(STAR_SYSTEM_FILE);
+    let path = dir.join(star_system_file());
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let text = match std::env::var("ULTRA_SPACE_BODY_RADIUS") {
         Ok(spec) => with_radius_override(&text, &spec)?,
@@ -142,11 +151,7 @@ fn load(build_sim: fn(Arc<StarSystem>) -> Simulation) -> Result<Loaded, String> 
     sim_society::layout::install(&mut sim, Arc::new(kits));
     // The demo village's block ground and models (Batch 5).
     let village = Instant::now();
-    let meridian = system
-        .bodies
-        .iter()
-        .position(|b| b.id == crate::ship::START_BODY);
-    let blocks = match meridian {
+    let blocks = match crate::ship::start_body(&system) {
         Some(body) => crate::blocks::load(&mut sim, &system, body)?,
         None => None,
     };
@@ -320,7 +325,7 @@ pub fn content_dir() -> Option<PathBuf> {
 }
 
 fn is_content_dir(dir: &Path) -> bool {
-    dir.join(STAR_SYSTEM_FILE).is_file()
+    dir.join(HALCYON_FILE).is_file()
 }
 
 #[cfg(test)]
@@ -330,7 +335,7 @@ mod tests {
     #[test]
     fn radius_override_changes_only_that_body() {
         let dir = content_dir().unwrap();
-        let text = std::fs::read_to_string(dir.join(STAR_SYSTEM_FILE)).unwrap();
+        let text = std::fs::read_to_string(dir.join(HALCYON_FILE)).unwrap();
         let changed = with_radius_override(&text, "meridian:300").unwrap();
         let sys = StarSystem::from_json_str(&changed).unwrap();
         let original = StarSystem::from_json_str(&text).unwrap();

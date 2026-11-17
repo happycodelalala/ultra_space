@@ -89,6 +89,10 @@ pub struct BlockGround {
     /// Collision boxes of the village's buildings, props and tree trunks (surface frame).
     pub structures: Vec<crate::foundations::Structure>,
     tops: RwLock<HashMap<(i32, i32), Option<i32>>>,
+    /// On a body of plains: the plain's normal and the grid's origin (surface frame, m). The
+    /// grid then lies exactly in the plain, columns along its normal (block-world.md §5.1);
+    /// otherwise it is the tangent plane bent onto the sphere at the vertices.
+    flat: Option<(DVec3, DVec3)>,
 }
 
 impl std::fmt::Debug for BlockGround {
@@ -112,9 +116,23 @@ impl BlockGround {
         village: Option<VillageGround>,
     ) -> Self {
         let center = center.normalize();
-        let (east, south) = tangent_frame(center);
+        let (mut east, south) = tangent_frame(center);
+        let mut north = -south;
+        let mut flat = None;
         let h = natural.surface_height(center, 1.0);
-        let base = (h / CELL).floor() * CELL;
+        let mut base = (h / CELL).floor() * CELL;
+        if let Some((_, plain)) = natural.plain_at(center) {
+            // Heights along the plain's normal, the grid along its edge.
+            let e = natural.sample(center, 1.0).elevation;
+            base = (e / CELL).floor() * CELL;
+            east = plain.east;
+            north = plain.north;
+            let under = plain.to_local(center * (plain.distance / center.dot(plain.normal)));
+            flat = Some((
+                plain.normal,
+                plain.from_local(DVec3::new(under.x, under.y, base)),
+            ));
+        }
         let carved_near = village
             .as_ref()
             .map(|v| {
@@ -132,7 +150,7 @@ impl BlockGround {
         Self {
             center,
             east,
-            north: -south,
+            north,
             base,
             reach,
             radius: natural.radius,
@@ -142,15 +160,20 @@ impl BlockGround {
             carved_near,
             structures: Vec::new(),
             tops: RwLock::new(HashMap::new()),
+            flat,
         }
     }
 
     /// Adds a collision box: centre (grid point, m), turn about the vertical (radians,
     /// counter-clockwise from above) and half extents (x east, y north, z up before the turn).
     pub fn add_box(&mut self, center: DVec3, yaw: f64, half: DVec3) {
-        let up = self.dir(center.x, center.y);
         let plane = self.basis();
-        let turned = DQuat::from_rotation_arc(self.center, up) * plane;
+        let turned = if self.flat.is_some() {
+            plane
+        } else {
+            let up = self.dir(center.x, center.y);
+            DQuat::from_rotation_arc(self.center, up) * plane
+        };
         self.structures.push(crate::foundations::Structure {
             center: self.point(center),
             rotation: (turned * DQuat::from_rotation_y(yaw)).normalize(),
@@ -172,16 +195,34 @@ impl BlockGround {
 
     /// The village frame's rotation (columns: east, up, south; as a settlement's).
     pub fn basis(&self) -> DQuat {
-        DQuat::from_mat3(&glam::DMat3::from_cols(self.east, self.center, -self.north))
+        let up = self.flat.map_or(self.center, |(n, _)| n);
+        DQuat::from_mat3(&glam::DMat3::from_cols(self.east, up, -self.north))
+    }
+
+    /// "Up" at a point of the grid (surface frame): the plain's normal, or away from the centre.
+    pub fn up_at(&self, point: DVec3) -> DVec3 {
+        self.flat.map_or_else(|| point.normalize(), |(n, _)| n)
     }
 
     /// The village frame's origin (surface frame, m): the centre at the grid's floor.
     pub fn origin(&self) -> DVec3 {
-        self.center * (self.radius + self.base)
+        match self.flat {
+            Some((_, o)) => o,
+            None => self.center * (self.radius + self.base),
+        }
     }
 
     /// Tangent-plane point (x east, y north; m) under unit direction `dir`, if in the disc.
     pub fn plane(&self, dir: DVec3) -> Option<DVec2> {
+        if let Some((n, o)) = self.flat {
+            let c = dir.dot(n);
+            if c <= 0.0 {
+                return None;
+            }
+            let p = dir * (o.dot(n) / c) - o;
+            let q = DVec2::new(p.dot(self.east), p.dot(self.north));
+            return (q.length() <= self.reach).then_some(q);
+        }
         let c = dir.dot(self.center);
         if c <= 0.0 {
             return None;
@@ -193,12 +234,18 @@ impl BlockGround {
 
     /// Unit direction through tangent-plane point (x, y).
     pub fn dir(&self, x: f64, y: f64) -> DVec3 {
-        (self.center * self.radius + self.east * x + self.north * y).normalize()
+        match self.flat {
+            Some((_, o)) => (o + self.east * x + self.north * y).normalize(),
+            None => (self.center * self.radius + self.east * x + self.north * y).normalize(),
+        }
     }
 
     /// Surface-frame position of grid point (x east, y north, z up from the floor; m).
     pub fn point(&self, p: DVec3) -> DVec3 {
-        self.dir(p.x, p.y) * (self.radius + self.base + p.z)
+        match self.flat {
+            Some((n, o)) => o + self.east * p.x + self.north * p.y + n * p.z,
+            None => self.dir(p.x, p.y) * (self.radius + self.base + p.z),
+        }
     }
 
     /// The village frame's coordinates (x east, y up, z south) of grid point `p`.
@@ -209,7 +256,11 @@ impl BlockGround {
     fn natural_top(&self, i: i32, j: i32) -> Option<i32> {
         let d = self.dir((f64::from(i) + 0.5) * CELL, (f64::from(j) + 0.5) * CELL);
         // Detail finer than a few blocks can't show in the steps (and costs octaves).
-        let h = self.natural.height(d, 4.0);
+        let h = if self.flat.is_some() {
+            self.natural.sample(d, 4.0).elevation
+        } else {
+            self.natural.height(d, 4.0)
+        };
         if self.natural.has_ocean() && h < 0.3 {
             return None; // water: no blocks (the sea and its floor stay as they are)
         }
@@ -258,7 +309,12 @@ impl BlockGround {
         let p = self.plane(dir)?;
         let (i, j) = Self::column(p.x, p.y);
         let t = self.top(i, j)?;
-        Some(self.base + f64::from(t + 1) * CELL)
+        let z = f64::from(t + 1) * CELL;
+        match self.flat {
+            // Where the ray meets the plane of the block tops.
+            Some((n, o)) => Some((o.dot(n) + z) / dir.normalize().dot(n) - self.radius),
+            None => Some(self.base + z),
+        }
     }
 
     /// The ground surface height above the floor at plane point (x, y) (m; 0 outside).
