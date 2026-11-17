@@ -42,6 +42,59 @@ Tessera goes back to round (block-world.md §5.0). The layers below carry over; 
 - **Climate on a latitude–longitude grid** (1°), computed at load on all cores.
 - **Regions are natural areas grown from the land** (§3.6 below, replacing plain-shaped regions).
 
+## 1b. Generation as a short simulation (2026-11-17, replaces the noise layers of §3.1–3.6)
+
+The first round planet still stacked hand-made noise layers (plate bumps, ridged noise, ranges
+laid along borders, thresholds patching the results), and its plate count (32) was a leftover of
+the football layout. The developer asked for a systematic overhaul. World generation becomes a
+**short simulation of the planet's history, run once at load** on a mesh over the sphere, and the
+terrain at runtime reads its fields and adds only small detail.
+
+**The mesh.** An icosphere of about 100–160 thousand points (about 1 km² each on Tessera), with
+fields per point: plate, crust, uplift, height, drainage, temperature, rain, biome, region. At
+runtime a point's fields are interpolated over its triangle; noise adds detail only below the
+mesh's scale, its strength set by the fields (rough rock in ranges, smooth plains and floors).
+Generation takes about 1–3 s at load on the workers, deterministic from the seed (cacheable).
+
+**Stages** (each reads only the ones before it):
+
+1. **Plates:** a planet's plate count and size spread come from its data (Tessera: about 12,
+   from a few large to several small), grown by flood fill from random seeds at random rates, so
+   outlines are irregular and sizes vary. Each plate turns rigidly about its own pole (a rotation,
+   so motion is coherent across it); at every boundary point the relative motion splits into
+   closing, opening and sliding, so a boundary can be a collision at one end and a slide at the
+   other.
+2. **Crust and uplift:** continental crust as continents within plates (plates carry both, as
+   on Earth) and oceanic crust elsewhere. Ocean floor deepens with its age, the distance from the
+   spreading ridges, giving mid-ocean ridges and abyssal plains. Collisions raise ranges (higher
+   for harder collisions, a plateau behind the strongest); an ocean plate sinking under a
+   continent makes a coastal range and an offshore trench; ocean against ocean makes an island arc;
+   opening continents make rift valleys. A few fixed hotspots leave chains of volcanic islands,
+   older and lower away from the hotspot, along the plate's motion.
+3. **Erosion:** water flow over the mesh (pits filled, steepest descent, drainage area), and a
+   stream-power erosion model run over a number of steps while the uplift builds the land: ranges
+   are carved into branching valleys and sharp ridges, foothills form, sediment smooths lowlands,
+   coasts are shaped by drainage. This is what makes the land look formed rather than drawn.
+4. **Climate:** warmth from latitude and height; three circulation cells per hemisphere give the
+   winds and rain belts (a wet equator, dry belts near 30° latitude, wet westerlies, dry poles);
+   moisture is carried from the sea along the wind across the mesh and rains out where air rises
+   up slopes (windward rain, lee rain shadows); cold currents keep subtropical west coasts dry.
+5. **Water:** rivers where enough rain gathers along the erosion channels; lakes where a basin
+   gets more water than evaporates, salt flats where it doesn't; deltas where rivers meet the sea.
+   Rivers carve the land in any case; drawing them as water in the game is later work.
+6. **Biomes** from temperature and rainfall (the ecologists' Whittaker chart) and height (tree
+   line, snow line, glaciers down cold valleys); the same fields later set ground cover density.
+7. **Regions are river basins:** a region is a drainage area bounded by divides (crests) and
+   coasts; large basins split by biome, small coastal ones merged; seas split where coasts pinch
+   them. Named from what they hold.
+8. **Clouds** from the climate's rising air (the equatorial belt, storm tracks, windward ranges),
+   as in §3.7.
+
+**Arcade exaggeration** is a few knobs on the stages (stronger uplift, deeper trenches, faster
+erosion), so ranges are tall but placed and shaped believably. A Python prototype renders maps
+and views of Tessera for review before the Rust implementation (stages 1–2, 3 and 5, 4 and 6,
+7), each followed by a test round.
+
 ## 2. Principles
 
 - **Plains are geometry and identity, not geography.** A plain is a flat piece of ground with a
