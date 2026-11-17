@@ -188,9 +188,13 @@ centre; from far away the body is a point mass and orbits are unchanged.
 - **Long builds:** a structure stays on one plain's grid; it may cross a crease on a foundation
   that makes up the drop. Roads, rails and walls bend once at each crease.
 
-The demo village's ground (a flat 25 cm grid in the tangent plane, bent onto the sphere at the
-vertices) is the inside of one plain without the bending; it moves to the plain layout when
-planet-wide ground cover is built.
+**In the engine** (task 5.7, Tessera): the terrain still answers "how high is the ground along
+this direction from the centre", so tiles, collision, walking and landing are unchanged; on a
+body of plains that radial height is where the ray meets the plain moved out by the ground's
+**elevation** (height along the plain's normal, the regions' functions blended near creases).
+Everything that means "above sea level" (sea, climate, snow, biomes, the HUD) reads the
+elevation; gravity and "up" come from `Terrain::up` (the plain's normal near the ground). The
+demo village's block ground lies exactly in its plain.
 
 ### 5.2 Small bodies: one 3D grid
 

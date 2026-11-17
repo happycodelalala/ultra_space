@@ -1,0 +1,8 @@
+# Low orbit over Tessera's plains: shots every 12 s as the ship passes over creases and regions.
+3    shot creases-1.png
+15   shot creases-2.png
+27   shot creases-3.png
+39   shot creases-4.png
+51   shot creases-5.png
+63   shot creases-6.png
+64   quit

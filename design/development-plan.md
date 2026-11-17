@@ -594,10 +594,12 @@ views of the village; anything off outside them is a known issue, not a new task
 | 5.4 | **The demo village:** one village of the Meridian peoples built from block models on levelled pads, its paths, gardens and props; nature round it (trees, bushes, rocks, flowers, grass) placed through an occupancy plot so nothing overlaps, on the grid in quarter turns; villagers and chickens standing or in simple idle poses (block groups on a skeleton; full animation later); the player starts there on foot beside their landed ship | A new game starts in the village; it reads as the style renders from the same views |
 | 5.5 | **Light and weather to match the renders:** sun shadows, ambient occlusion, exposure and AgX tonemapping, bloom, haze and ground fog; day, golden hour, night with lit windows and lanterns, rain, fog; quality tiers | The review views read as the reference renders in each light and weather |
 | 5.6 | **Review views:** a test round of the village (wide, house, close, people, ship) in day, golden hour, fog, rain and night, plus the descent from orbit to the village | The views run in one round; no frame over 50 ms |
-| 5.7 | **Digging and placing:** a mining tool removing blocks under the crosshair (a brush, timed by hardness), big blocks split into children first, drops to a small inventory (stacks by material, a simple panel, saved with the player), placing blocks from it on the grid; edits kept per chunk and saved; re-meshing and colliders updated within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
-| 5.8 | **Batch review** | The views judged against the renders by the developer, from screenshots |
+| 5.7 | **The plains test planet** (developer's request, 2026-11-16): the game's world becomes one small planet of plains, the football of block-world.md §5.1 (12 pentagons and 20 hexagons, 40 km edges), each plain a region with its own climate and land, the demo village in a grassland region; Halcyon kept as test data | A new game starts in the village on the new planet; the football shows from orbit; walking and flying work on the plains; all earlier tests still pass on Halcyon |
+| 5.8 | **Digging and placing:** a mining tool removing blocks under the crosshair (a brush, timed by hardness), big blocks split into children first, drops to a small inventory (stacks by material, a simple panel, saved with the player), placing blocks from it on the grid; edits kept per chunk and saved; re-meshing and colliders updated within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
+| 5.9 | **Batch review** | The views judged against the renders by the developer, from screenshots |
 
-**Progress (2026-11-15):** 5.1–5.6 done, for the developer's review play-through before 5.7.
+**Progress (2026-11-16):** 5.1–5.7 done; 5.8 (digging and placing) next, after the developer's
+review play-through.
 
 - **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
   also needs a neighbour along its edge), a mesher merging flat faces and slope planes and
@@ -623,8 +625,23 @@ views of the village; anything off outside them is a known issue, not a new task
 - **5.6** Review round: `village`, `-dusk`, `-night`, `-rain`, `-fog`, `-walk`, `-perf` in
   `tools/test-scripts/tests.txt`. Village views about 140 fps; no frame over 50 ms in play
   except screenshot frames.
+- **5.7** Tessera (`content/data/star_systems/tessera.json`, a star and one planet; the default;
+  `ULTRA_SPACE_SYSTEM=halcyon` loads the old system, and the tests written for Meridian do):
+  `sim_planet::plains` (the football's flat plains, ray hits, crease weights), `regions` (nine
+  region types in `content/data/region_types/standard.json`; ice caps on the spin axis, two seas,
+  the rest by latitude, named), the terrain's plains mode (the regions' elevations blended
+  over ~2.5 km at creases, ground on the plain moved out by the elevation, a flat sea per
+  plain, region climates), gravity and "up" along the plain near the ground
+  (`BodyEnv::up`/`gravity`), tiles always drawn (the faceted outline shows), the village on the
+  flattest grassland at least 6 km inside its plain, lying exactly flat; HUD altitude above sea
+  level and "Entering <region>" on crossing a crease. Tests: `planet-day`, `planet-dusk`,
+  `creases`.
 
-Known issues (not tasks): the far tiles are not stepped (beyond 90 m the land is the faceted
+Known issues (not tasks): on Tessera the tile shader judges slopes against the direction from
+the centre, not the plain's "up" (hillsides near a plain's corners can turn to rock early);
+tiles don't follow the creases, so a crease is as sharp as the tile spacing; the inspector
+doesn't show the region yet; no seasons on a body of plains (each region's climate is fixed);
+the far tiles are not stepped (beyond 90 m the land is the faceted
 tiles); the block disc is one tangent grid round the village; the player's ship is the
 Kestrel's part model on the block ship's pad; villagers don't move yet; walls are boxes (a
 building's eaves are part of its box); frame times on the test machine vary between runs (40 to
@@ -638,8 +655,8 @@ than Batch 4b; CI passes.
 **After the village (planned at its review, in this batch or the next):** water (depth colour,
 shore foam, low-poly waves), planet-wide ground cover in the block style
 ([ground-cover.md](ground-cover.md)), weather changing over time by climate, effects (engine
-plumes, landing dust, splashes, chimney smoke), the plain layout and the block zone across its
-seams (block-world.md §5.1), and the
+plumes, landing dust, splashes, chimney smoke), the block zone across the plains' seams
+(block-world.md §5.1) and the general Goldberg layouts for larger bodies, and the
 other settlements' kits in blocks (design track).
 
 **Then (planned when it starts):** Batch 6, the first playable loop: the game shell (main menu,
