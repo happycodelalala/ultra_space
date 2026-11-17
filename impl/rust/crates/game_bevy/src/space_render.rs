@@ -111,29 +111,54 @@ pub struct AtmosphereUniform {
     /// x = cloud deck radius, y = 1 when clouds are on (needs the baked moisture map),
     /// z = time (s) for drift, w = noise seed.
     pub clouds: Vec4,
+    /// A body of plains: each plain's cloud deck as a plane in the body's frame (xyz normal,
+    /// w distance from the centre); the first `deck.x` are used.
+    pub planes: [Vec4; MAX_DECK_PLANES],
+    /// x = number of deck planes (0: the round deck at `clouds.x`), y = cloud size scale (noise
+    /// frequency relative to Meridian's).
+    pub deck: Vec4,
 }
+
+/// Most plains a body's cloud deck can have (the football has 32).
+pub const MAX_DECK_PLANES: usize = 32;
+/// Height of the clouds above each plain of a body of plains (m): high, with the tallest peaks
+/// above them.
+const PLAINS_CLOUD_ELEVATION: f64 = 7_000.0;
+/// Clouds on a body of plains are this many times smaller than Meridian's (a small world).
+const PLAINS_CLOUD_SCALE: f32 = 10.0;
 
 /// Cloud deck altitude as a fraction of the atmosphere's height (≈ 5.6 km on Meridian).
 pub const CLOUD_ALTITUDE: f64 = 0.08;
-/// Height of the cloud deck above the highest corner of a body of plains (m).
-const PLAINS_CLOUD_CLEARANCE: f64 = 4_000.0;
 
-/// Radius of a body's cloud deck: a fraction of the atmosphere above the reference radius, and
-/// on a body of plains above its highest corners (a deck under them would show only in the middle
-/// of each plain).
-fn cloud_deck(body: &sim_core::Body, atm: &sim_core::system::Atmosphere) -> f64 {
-    let deck = body.radius + CLOUD_ALTITUDE * atm.height;
-    match body.terrain.as_ref().and_then(|t| t.plains) {
-        Some(p) => {
-            let corners = match p.layout {
-                sim_core::PlainsLayout::TruncatedIcosahedron => {
-                    sim_planet::Plains::truncated_icosahedron(p.edge).corner_radius()
-                }
-            };
-            deck.max(corners + PLAINS_CLOUD_CLEARANCE)
+/// A body's cloud deck: its round radius (a fraction of the atmosphere above the reference
+/// radius), and on a body of plains a flat deck over each plain (planes in the body's frame, a
+/// fixed height above each plain), with the clouds' size scale.
+fn cloud_deck(
+    body: &sim_core::Body,
+    atm: &sim_core::system::Atmosphere,
+) -> (f64, [Vec4; MAX_DECK_PLANES], Vec4) {
+    let round = body.radius + CLOUD_ALTITUDE * atm.height;
+    let mut planes = [Vec4::ZERO; MAX_DECK_PLANES];
+    let Some(p) = body.terrain.as_ref().and_then(|t| t.plains) else {
+        return (round, planes, Vec4::new(0.0, 1.0, 0.0, 0.0));
+    };
+    let plains = match p.layout {
+        sim_core::PlainsLayout::TruncatedIcosahedron => {
+            sim_planet::Plains::truncated_icosahedron(p.edge)
         }
-        None => deck,
+    };
+    let n = plains.plains.len().min(MAX_DECK_PLANES);
+    for (slot, plain) in planes.iter_mut().zip(&plains.plains) {
+        *slot = plain
+            .normal
+            .as_vec3()
+            .extend((plain.distance + PLAINS_CLOUD_ELEVATION) as f32);
     }
+    (
+        round,
+        planes,
+        Vec4::new(n as f32, PLAINS_CLOUD_SCALE, 0.0, 0.0),
+    )
 }
 
 /// Rayleigh scattering of Earth's air in blue light at sea level (1/m).
@@ -335,6 +360,7 @@ fn spawn_bodies(
         ));
         if let Some(atm) = &body.atmosphere {
             let (shell, scatter) = atmosphere_scattering(body.radius, atm);
+            let (round, planes, deck) = cloud_deck(body, atm);
             let material = atmospheres.add(AtmosphereMaterial {
                 data: AtmosphereUniform {
                     star: Vec4::ZERO,
@@ -342,12 +368,9 @@ fn spawn_bodies(
                     shell,
                     scatter,
                     rotation: Vec4::W,
-                    clouds: Vec4::new(
-                        cloud_deck(body, atm) as f32,
-                        0.0,
-                        0.0,
-                        (i as f32) * 37.7 + 11.3,
-                    ),
+                    clouds: Vec4::new(round as f32, 0.0, 0.0, (i as f32) * 37.7 + 11.3),
+                    planes,
+                    deck,
                 },
                 field_map: None,
             });

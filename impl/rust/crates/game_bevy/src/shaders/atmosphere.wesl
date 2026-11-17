@@ -23,6 +23,9 @@ struct AtmosphereUniform {
     scatter: vec4<f32>,   // rgb Rayleigh coefficients at sea level (1/m), w Mie coefficient
     rotation: vec4<f32>,  // body rotation quaternion (xyzw), for clouds fixed to the planet
     clouds: vec4<f32>,    // x deck radius, y 1 = clouds on, z time (s), w seed
+    // A body of plains: a flat cloud deck over each plain (body frame: xyz normal, w distance).
+    planes: array<vec4<f32>, 32>,
+    deck: vec4<f32>,      // x number of planes (0: the round deck), y cloud size scale
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> atmosphere: AtmosphereUniform;
@@ -41,7 +44,7 @@ const MULTIPLE_SCATTERING: f32 = 3.0;
 // coverage per unit of sky luminance.
 const SKY_HIDES: f32 = 12.0;
 // Cloud look.
-const CLOUD_ALBEDO: f32 = 0.85;
+const CLOUD_ALBEDO: f32 = 1.1;
 const CLOUD_MAX_OPACITY: f32 = 0.95;
 // Cloud features: about 2.6 noise cycles per 1000 km of deck, drifting slowly.
 const CLOUD_FREQUENCY: f32 = 2.6e-6;
@@ -116,6 +119,32 @@ fn ray_sphere(o: vec3<f32>, d: vec3<f32>, c: vec3<f32>, r: f32) -> vec2<f32> {
     }
     let s = sqrt(disc);
     return vec2<f32>(-b - s, -b + s);
+}
+
+// Distances along `d` (unit, body frame) from `o` (body frame) where it enters and leaves the
+// convex shape bounded by the deck planes; x > y means no hit.
+fn ray_planes(o: vec3<f32>, d: vec3<f32>) -> vec2<f32> {
+    var t0 = -1.0e30;
+    var t1 = 1.0e30;
+    let count = i32(atmosphere.deck.x);
+    for (var i = 0; i < count; i++) {
+        let n = atmosphere.planes[i].xyz;
+        let num = atmosphere.planes[i].w - dot(n, o);
+        let den = dot(n, d);
+        if abs(den) < 1.0e-9 {
+            if num < 0.0 {
+                return vec2<f32>(1.0, -1.0);
+            }
+            continue;
+        }
+        let t = num / den;
+        if den < 0.0 {
+            t0 = max(t0, t);
+        } else {
+            t1 = min(t1, t);
+        }
+    }
+    return vec2<f32>(t0, t1);
 }
 
 fn density(p: vec3<f32>) -> vec2<f32> {
@@ -228,11 +257,19 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
 
         // Where the ray crosses the cloud deck, in the body's frame. Computed for every pixel so the
     // footprint derivative stays in uniform control flow.
-    let deck = ray_sphere(cam, d, c, atmosphere.clouds.x);
-    let t_deck = select(deck.x, deck.y, deck.x < 0.0);
     let q = atmosphere.rotation;
+    let inv = vec4<f32>(-q.xyz, q.w);
+    var deck = ray_sphere(cam, d, c, atmosphere.clouds.x);
+    var below_deck = length(cam - c) < atmosphere.clouds.x;
+    if atmosphere.deck.x > 0.5 {
+        // A flat deck over each plain.
+        deck = ray_planes(quat_rotate(inv, cam - c), quat_rotate(inv, d));
+        below_deck = deck.x < 0.0 && deck.y > 0.0;
+    }
+    let t_deck = select(deck.x, deck.y, deck.x < 0.0);
     let local = quat_rotate(vec4<f32>(-q.xyz, q.w), cam + d * max(t_deck, 0.0) - c);
-    let footprint = length(fwidth(local)) * CLOUD_FREQUENCY;
+    let frequency = CLOUD_FREQUENCY * atmosphere.deck.y;
+    let footprint = length(fwidth(local)) * frequency;
 
     // The cloud in front of anything opaque, if clouds are on.
     var t_cloud = -1.0;
@@ -252,16 +289,16 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
                 local.y,
                 local.x * sin(angle) + local.z * cos(angle),
             );
-                        let n = cloud_noise(drift * CLOUD_FREQUENCY + vec3<f32>(atmosphere.clouds.w), footprint);
+                        let n = cloud_noise(drift * frequency + vec3<f32>(atmosphere.clouds.w), footprint);
             // Wetter places need less noise to be cloudy.
-                        let threshold = 0.82 - 0.42 * moisture;
+                        let threshold = 0.76 - 0.42 * moisture;
             cloud_alpha = smoothstep(threshold, threshold + 0.12, n) * CLOUD_MAX_OPACITY;
             if cloud_alpha > 0.0 {
                 // Lit by the star through the air above the deck; darker underneath.
                 let up = normalize(p - c);
                 let sun = exp(-extinction(light_depth(p, l)));
                 let facing = clamp(dot(up, l) * 0.6 + 0.4, 0.0, 1.0);
-                let below = select(1.0, 0.55, length(cam - c) < atmosphere.clouds.x);
+                let below = select(1.0, 0.55, below_deck);
                 cloud_light = CLOUD_ALBEDO * atmosphere.star.w * sun * facing * below;
             }
         }

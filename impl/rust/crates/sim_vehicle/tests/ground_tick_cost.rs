@@ -70,7 +70,7 @@ fn run(height: f64, speed: f64, arcade: bool) -> (f64, f64) {
             .unwrap()
             .world
             .entity_mut(loc.entity)
-            .insert(ArcadeFlight { speed });
+            .insert(ArcadeFlight::at(speed));
     }
     let tick = Duration::from_secs_f64(1.0 / 30.0);
     let (mut total, mut worst) = (0.0f64, 0.0f64);
@@ -141,7 +141,7 @@ fn arcade_descent_stays_cheap() {
                 body,
                 FlightControl::default(),
                 FlightTelemetry::default(),
-                ArcadeFlight { speed: 3_000.0 },
+                ArcadeFlight::at(3_000.0),
             ),
         )
         .unwrap();

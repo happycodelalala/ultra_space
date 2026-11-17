@@ -636,6 +636,16 @@ review play-through.
   flattest grassland at least 6 km inside its plain, lying exactly flat; HUD altitude above sea
   level and "Entering <region>" on crossing a crease. Tests: `planet-day`, `planet-dusk`,
   `creases`.
+- **5.7, arcade direction** (developer, 2026-11-17: the toy world goes arcade): extreme land
+  (peaks to ~13 km, seas ~4.5 km deep with trenches, high downs and vales, mesas and canyons;
+  `region_types/standard.json`); a flat cloud deck 7 km over each plain (the atmosphere shader
+  meets the plains' planes; clouds ten times smaller than Meridian's, brighter); No Man's Sky
+  flight by default (`FlightModel`; a landed ship lifts off into arcade flight when the controls
+  move, L sets it down when low and slow, then it settles and rests; 600 m/s in the air, 4 km/s in
+  space; J is the pulse drive above the atmosphere; no orbit line or Ap/Pe in arcade flight).
+  Newtonian flight and orbits stay as a debug mode (N, `ULTRA_SPACE_FLIGHT=newtonian`, used by
+  the Halcyon tests). `ULTRA_SPACE_START_REGION=<type>` starts over a plain of that kind. Tests:
+  `fly-tessera`, `peaks`.
 
 Known issues (not tasks): on Tessera the tile shader judges slopes against the direction from
 the centre, not the plain's "up" (hillsides near a plain's corners can turn to rock early);

@@ -554,21 +554,17 @@ mod tests {
         for p in &w.plains.plains {
             let n = p.corners.len();
             for k in 0..n {
-                // Walk across the middle of each edge in 1 m steps.
-                let mid = (p.corners[k] + p.corners[(k + 1) % n]) / 2.0;
+                // Just either side of the crease, at a few points along it, the ground meets.
                 let inward = p
                     .normal
                     .cross(p.corners[(k + 1) % n] - p.corners[k])
                     .normalize();
-                let mut last = None;
-                for s in -20..=20 {
-                    let d = (mid + inward * f64::from(s)).normalize();
-                    let h = t.surface_height(d, 1.0);
-                    if let Some(l) = last {
-                        let step: f64 = h - l;
-                        assert!(step.abs() < 2.0, "jump of {step} m at a crease");
-                    }
-                    last = Some(h);
+                for f in [0.2, 0.5, 0.8] {
+                    let on = p.corners[k].lerp(p.corners[(k + 1) % n], f);
+                    let inside = t.surface_height((on + inward * 0.01).normalize(), 1.0);
+                    let outside = t.surface_height((on - inward * 0.01).normalize(), 1.0);
+                    let step: f64 = inside - outside;
+                    assert!(step.abs() < 0.1, "jump of {step} m at a crease");
                 }
             }
         }

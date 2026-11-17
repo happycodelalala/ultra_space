@@ -287,8 +287,9 @@ mod tests {
         for i in 0..32 {
             let t = w.kind(i);
             let p = &w.plains.plains[i];
-            let hi = t.base_m + t.hills_m + t.mountains_m + 1.0;
-            let lo = t.base_m - t.hills_m - t.valleys_m - 1.0;
+            // Fractal sums stay within about ±0.55 of their normalisation.
+            let hi = t.base_m + 1.1 * t.hills_m + t.mountains_m + 1.0;
+            let lo = t.base_m - 1.1 * t.hills_m - t.valleys_m - 1.0;
             for k in 0..200 {
                 let a = k as f64 * 0.37;
                 let q = p.from_local(

@@ -1,0 +1,19 @@
+# No Man's Sky flight on Tessera, from the village start (on foot beside the landed ship).
+1    log board
+1.5  orbit 0 -15
+2    press F                 # board the ship
+3    shot fly-1-board.png
+3.5  hold Space 3            # lift off (arcade)
+7    shot fly-2-lifted.png
+7.5  hold W 8                # speed up along the nose
+16   shot fly-3-flying.png
+24   shot fly-4-plains.png
+25   hold X 2                # stop
+27.5 hold ControlLeft 6      # sink toward the ground
+34   press L                 # land
+35   shot fly-5-landing.png
+36   wait landed 60
+37   shot fly-6-landed.png
+38   press F                 # step out
+40   shot fly-7-out.png
+41   quit

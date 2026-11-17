@@ -469,6 +469,8 @@ fn update_hud(
             arcade,
             cruise
         );
+        let in_arcade = player_arcade_speed(sim, ship).is_some();
+        let frame = if in_arcade { "FLIGHT" } else { frame };
         text.0 = notice.line(now)
             + &format!(
                 "{} | {frame}\n\
@@ -487,6 +489,17 @@ fn update_hud(
                 },
                 if telemetry.in_contact {
                     "(on the ground)".to_string()
+                } else if in_arcade {
+                    // No Man's Sky flight: no orbits, just what can be done here.
+                    if telemetry.ground_altitude < 200.0 && relative.length() < 60.0 {
+                        "L land".to_string()
+                    } else if telemetry.altitude
+                        > body.atmosphere.as_ref().map_or(0.0, |a| a.height)
+                    {
+                        "J pulse drive".to_string()
+                    } else {
+                        String::new()
+                    }
                 } else {
                     orbit_summary(
                         body.mu,
@@ -503,6 +516,13 @@ fn update_hud(
                     ""
                 },
             );
+        if in_arcade {
+            // No Man's Sky flight has its own keys.
+            text.0 = text.0.replace(
+                "T assist | X brake | Z stop | N arcade | M legs | J cruise",
+                "W/S speed | mouse steer | A/D Space/Ctrl slide | X stop | L land | J pulse",
+            );
+        }
     }
 }
 
@@ -596,12 +616,14 @@ fn draw_orbits(
         gizmos.linestrip(points, BODY_ORBIT_COLOR);
     }
 
-    // No orbit line while landed or walking: it would just lie along the ground.
+    // No orbit line while landed or walking (it would lie along the ground), nor in arcade
+    // flight (the ship doesn't follow it).
     let grounded = on_foot.is_some()
-        || ship
-            .as_deref()
-            .and_then(|s| player_ship_state(&sim.0, s))
-            .is_some_and(|(_, _, telemetry, _)| telemetry.in_contact);
+        || ship.as_deref().is_some_and(|s| {
+            player_arcade_speed(&sim.0, s).is_some()
+                || player_ship_state(&sim.0, s)
+                    .is_some_and(|(_, _, telemetry, _)| telemetry.in_contact)
+        });
     if !grounded
         && let Some(object) = tracked.state
         && let Some(region) = system

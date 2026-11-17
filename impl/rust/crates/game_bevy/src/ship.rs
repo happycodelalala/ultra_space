@@ -36,6 +36,26 @@ pub(crate) fn start_body(system: &StarSystem) -> Option<usize> {
         .or_else(|| system.bodies.iter().position(|b| b.terrain.is_some()))
 }
 
+/// How the player's ship flies: No Man's Sky style (arcade: flies where the nose points, no
+/// gravity, lands with L) by default; Newtonian flight with orbits (`ULTRA_SPACE_FLIGHT=newtonian`,
+/// or N in play: debug).
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FlightModel {
+    pub arcade: bool,
+}
+
+impl Default for FlightModel {
+    fn default() -> Self {
+        Self {
+            arcade: std::env::var("ULTRA_SPACE_FLIGHT").map_or(true, |v| v != "newtonian"),
+        }
+    }
+}
+
+/// Landing (L) is allowed below this height above the ground (m) and speed (m/s).
+const LAND_HEIGHT: f64 = 200.0;
+const LAND_SPEED_LIMIT: f64 = 60.0;
+
 /// Mouse movement (pixels per frame) giving full rotation stick.
 const MOUSE_FULL_STICK: f32 = 25.0;
 /// Chase camera offset behind and above the ship (vehicle axes), for a vehicle up to
@@ -50,6 +70,7 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PilotState>()
+            .init_resource::<FlightModel>()
             .init_resource::<ShipRenderState>()
             .add_systems(
                 OnEnter(GameState::Running),
@@ -67,6 +88,7 @@ impl Plugin for ShipPlugin {
                         pose_key,
                         walk_key,
                         pilot_input,
+                        arcade_rules,
                     )
                         .chain()
                         .after(pilot_mode_keys)
@@ -266,6 +288,33 @@ fn spawn_player_ship(
         s.position = s.position.normalize() * r;
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
+    // Debug: `ULTRA_SPACE_START_REGION=<region type>` starts over the middle of the first plain
+    // of that kind (a body of plains), at `ULTRA_SPACE_START_ALTITUDE` above it (default 3 km),
+    // still over the ground and level, heading along the plain.
+    if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
+        && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
+        && let Some(world) = terrain.world()
+        && let Some(i) = (0..world.regions.len()).find(|&i| world.kind(i).id == kind)
+    {
+        let body = &system.bodies[index];
+        let plain = &world.plains.plains[i];
+        let above = std::env::var("ULTRA_SPACE_START_ALTITUDE")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(3_000.0);
+        let frame = system
+            .frames
+            .state_in(body.inertial_frame, body.surface_frame, 0.0);
+        let local = plain.origin() + plain.normal * above;
+        let s = &mut state.state;
+        s.position = frame.rotation * local;
+        s.velocity = frame.angular_velocity.cross(s.position);
+        s.angular_velocity = frame.angular_velocity;
+        s.rotation = crate::camera::look_rotation(
+            frame.rotation * plain.east,
+            frame.rotation * plain.normal,
+        );
+    }
 
     let mut airborne = false;
     // The default start (Batch 5): landed in the demo village, on foot beside the ship.
@@ -304,9 +353,9 @@ fn spawn_player_ship(
             ),
         )
         .expect("start region exists");
-    if airborne {
-        // Started in the air near a settlement: in arcade flight, so it holds still (no
-        // gravity) until the controls move it.
+    if airborne || (FlightModel::default().arcade && on_foot.is_none()) {
+        // Started in the air: in arcade flight, so it holds still (no gravity) until the
+        // controls move it.
         if let Some(loc) = sim.objects.location(id)
             && let Some(region) = sim.regions.get_mut(loc.region)
         {
@@ -625,11 +674,13 @@ fn arcade_key(
     keys: Res<ButtonInput<KeyCode>>,
     ship: Option<Res<PlayerShip>>,
     pilot: Res<PilotState>,
+    mut model: ResMut<FlightModel>,
     mut sim: ResMut<Sim>,
 ) {
     if !pilot.controls_ship() || !keys.just_pressed(KeyCode::KeyN) {
         return;
     }
+    model.arcade = !model.arcade;
     let Some(ship) = ship else { return };
     let sim = &mut sim.0;
     let Some(loc) = sim.objects.location(ship.id) else {
@@ -656,9 +707,9 @@ fn arcade_key(
                 .max(0.0),
             _ => 0.0,
         };
-        e.insert(ArcadeFlight {
-            speed: forward_speed.min(sim_vehicle::arcade::MAX_SPEED),
-        });
+        e.insert(ArcadeFlight::at(
+            forward_speed.min(sim_vehicle::arcade::MAX_SPEED),
+        ));
         info!("arcade flight on: no gravity, flies where the nose points");
     }
 }
@@ -691,6 +742,76 @@ fn cruise_keys(
         *notice += time.delta_secs();
         if *notice > CRUISE_NOTICE_TIME {
             cruise.blocked = None;
+        }
+    }
+}
+
+/// No Man's Sky flight rules for the player's ship: a landed ship lifts off into arcade flight as
+/// soon as the pilot moves the controls; L sets it down (low and slow only), and once down it
+/// goes back to normal flight, which lets it settle and rest (LANDED, F to step out).
+fn arcade_rules(
+    keys: Res<ButtonInput<KeyCode>>,
+    ship: Option<Res<PlayerShip>>,
+    pilot: Res<PilotState>,
+    model: Res<FlightModel>,
+    real: Res<Time<Real>>,
+    mut notice: ResMut<crate::hud::Notice>,
+    mut sim: ResMut<Sim>,
+) {
+    if !model.arcade {
+        return;
+    }
+    let Some(ship) = ship else { return };
+    let sim = &mut sim.0;
+    let Some(loc) = sim.objects.location(ship.id) else {
+        return;
+    };
+    let Some(region) = sim.regions.get_mut(loc.region) else {
+        return;
+    };
+    let Ok(mut e) = region.world.get_entity_mut(loc.entity) else {
+        return;
+    };
+    let now = real.elapsed_secs_f64();
+    match e.get::<ArcadeFlight>().copied() {
+        Some(arcade) if arcade.touched_down => {
+            e.remove::<ArcadeFlight>();
+            if let Some(mut control) = e.get_mut::<FlightControl>() {
+                control.desired_velocity = None;
+            }
+            notice.show("Landed", now);
+        }
+        Some(arcade) => {
+            if pilot.controls_ship() && keys.just_pressed(KeyCode::KeyL) {
+                let (low, slow) = e.get::<FlightTelemetry>().map_or((false, false), |t| {
+                    (
+                        t.ground_altitude < LAND_HEIGHT,
+                        t.relative_velocity.length() < LAND_SPEED_LIMIT,
+                    )
+                });
+                if arcade.landing {
+                    if let Some(mut a) = e.get_mut::<ArcadeFlight>() {
+                        a.landing = false;
+                    }
+                    notice.show("Landing cancelled", now);
+                } else if low && slow {
+                    if let Some(mut a) = e.get_mut::<ArcadeFlight>() {
+                        a.landing = true;
+                    }
+                    notice.show("Landing", now);
+                } else {
+                    notice.show("Too high or too fast to land", now);
+                }
+            }
+        }
+        None => {
+            let moving = e
+                .get::<FlightControl>()
+                .is_some_and(|c| c.translate != DVec3::ZERO);
+            if pilot.controls_ship() && moving {
+                e.insert(ArcadeFlight::default());
+                info!("lift-off: arcade flight");
+            }
         }
     }
 }

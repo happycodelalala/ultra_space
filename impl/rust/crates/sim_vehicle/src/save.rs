@@ -538,7 +538,7 @@ pub fn restore(
                         e.insert(j);
                     }
                     if let Some(speed) = v.arcade_speed {
-                        e.insert(ArcadeFlight { speed });
+                        e.insert(ArcadeFlight::at(speed));
                     }
                     if v.legs_off {
                         e.insert(LegsOff);

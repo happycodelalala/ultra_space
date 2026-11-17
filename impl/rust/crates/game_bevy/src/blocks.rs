@@ -988,4 +988,5 @@ pub fn start_in_village() -> bool {
         && !set("ULTRA_SPACE_START_NEAR")
         && !set("ULTRA_SPACE_START_ALTITUDE")
         && !set("ULTRA_SPACE_START_SUN_ANGLE")
+        && !set("ULTRA_SPACE_START_REGION")
 }

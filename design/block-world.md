@@ -196,6 +196,10 @@ Everything that means "above sea level" (sea, climate, snow, biomes, the HUD) re
 elevation; gravity and "up" come from `Terrain::up` (the plain's normal near the ground). The
 demo village's block ground lies exactly in its plain.
 
+**The arcade direction** (developer, 2026-11-17): with the toy world of plains the game leans
+arcade: extreme land (peaks above the clouds, deep seas), a flat cloud deck over each plain, and No
+Man's Sky flight instead of orbital physics (development plan 5.7).
+
 ### 5.2 Small bodies: one 3D grid
 
 Bodies below about 25–50 km across (too small for 12 plains of 40 km) are one 3D square grid in

@@ -21,8 +21,12 @@ use crate::vehicle::{Vehicle, VehicleBody};
 
 /// How fast the held speed changes at full forward or back stick (m/s²).
 pub const SPEED_RATE: f64 = 150.0;
-/// Fastest held speed (m/s): enough to climb out to orbit.
+/// Fastest held speed (m/s), in space.
 pub const MAX_SPEED: f64 = 4_000.0;
+/// Fastest held speed inside the atmosphere (m/s): quick, but the ground still reads.
+pub const ATMOSPHERE_MAX_SPEED: f64 = 600.0;
+/// How fast a landing ship sinks to the ground (m/s).
+pub const LAND_SPEED: f64 = 8.0;
 /// Strafe and vertical speed at full stick, as a fraction of the held speed (with a floor).
 const STRAFE_FRACTION: f64 = 0.3;
 const MIN_STRAFE_SPEED: f64 = 40.0;
@@ -68,6 +72,21 @@ pub fn hull_depth(hull: &[crate::vehicle::PartCollider], rotation: DQuat, up: DV
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct ArcadeFlight {
     pub speed: f64,
+    /// Setting down (No Man's Sky style): the ship stops and sinks straight down to the ground.
+    pub landing: bool,
+    /// Set when a landing ship reaches the ground: the game then hands it to normal flight,
+    /// which lets it settle and rest.
+    pub touched_down: bool,
+}
+
+impl ArcadeFlight {
+    /// Flying at `speed`.
+    pub fn at(speed: f64) -> Self {
+        Self {
+            speed,
+            ..Self::default()
+        }
+    }
 }
 
 fn forward(rotation: DQuat) -> DVec3 {
@@ -86,8 +105,15 @@ pub fn arcade_step(
     let stick = control
         .translate
         .clamp(DVec3::splat(-1.0), DVec3::splat(1.0));
-    arcade.speed = (arcade.speed - stick.z * SPEED_RATE * dt).clamp(0.0, MAX_SPEED);
-    if control.brake {
+    // In the air the speed is capped so the ground still reads; in space the full speed.
+    let in_air = state.position.length() - env.radius < env.surface_reference_altitude;
+    let cap = if in_air {
+        ATMOSPHERE_MAX_SPEED
+    } else {
+        MAX_SPEED
+    };
+    arcade.speed = (arcade.speed - stick.z * SPEED_RATE * dt).clamp(0.0, cap);
+    if control.brake || arcade.landing {
         arcade.speed = 0.0;
     }
     let mut spin = control.rotate.clamp(DVec3::splat(-1.0), DVec3::splat(1.0)) * TURN_RATE;
@@ -101,8 +127,12 @@ pub fn arcade_step(
     state.angular_velocity = state.rotation * spin;
 
     let strafe = (arcade.speed * STRAFE_FRACTION).max(MIN_STRAFE_SPEED);
-    let relative = forward(state.rotation) * arcade.speed
-        + state.rotation * DVec3::new(stick.x, stick.y, 0.0) * strafe;
+    let relative = if arcade.landing {
+        -env.up(state.position) * LAND_SPEED
+    } else {
+        forward(state.rotation) * arcade.speed
+            + state.rotation * DVec3::new(stick.x, stick.y, 0.0) * strafe
+    };
     let (reference, _) = env.standing_still(state.position);
     if reference == crate::flight::Reference::Surface {
         // Ride with the ground exactly: turn position and heading with the planet's spin (a
@@ -129,6 +159,10 @@ pub fn arcade_step(
             let up = env.up(state.position);
             let climb = (floor - radius_before) / dt;
             relative = relative - up * relative.dot(up) + up * climb;
+            if arcade.landing {
+                arcade.touched_down = true;
+                relative = DVec3::ZERO;
+            }
         }
     }
     state.velocity = env.standing_still(state.position).1 + relative;
@@ -241,6 +275,58 @@ mod tests {
     }
 
     #[test]
+    fn landing_sinks_to_the_ground_and_touches_down() {
+        let env = meridian();
+        let mut s = level_at(60.0);
+        let mut arcade = ArcadeFlight {
+            speed: 50.0,
+            landing: true,
+            ..Default::default()
+        };
+        let control = FlightControl::default();
+        let mut steps = 0;
+        while !arcade.touched_down && steps < 600 {
+            arcade_step(&mut s, &mut arcade, &control, &env, &[], 1.0 / 30.0);
+            steps += 1;
+        }
+        assert!(arcade.touched_down, "touched down");
+        assert_eq!(arcade.speed, 0.0, "stopped");
+        let altitude = s.position.length() - env.radius;
+        assert!(
+            (altitude - MIN_ALTITUDE).abs() < 0.5,
+            "on the ground: {altitude}"
+        );
+        // 52 m at 8 m/s: about 6.5 s.
+        assert!(
+            (150..250).contains(&steps),
+            "sank at the landing speed: {steps} steps"
+        );
+    }
+
+    #[test]
+    fn speed_is_capped_in_the_air_but_not_in_space() {
+        let env = meridian();
+        let control = FlightControl {
+            translate: DVec3::new(0.0, 0.0, -1.0),
+            ..Default::default()
+        };
+        for (altitude, cap) in [(2_000.0, ATMOSPHERE_MAX_SPEED), (200_000.0, MAX_SPEED)] {
+            let mut s = level_at(altitude);
+            let mut arcade = ArcadeFlight::default();
+            for _ in 0..1_200 {
+                arcade_step(&mut s, &mut arcade, &control, &env, &[], 1.0 / 30.0);
+                // Hold the altitude (the test is about speed only).
+                s.position = s.position.normalize() * (env.radius + altitude);
+            }
+            assert!(
+                (arcade.speed - cap).abs() < 1e-6,
+                "{altitude} m: {}",
+                arcade.speed
+            );
+        }
+    }
+
+    #[test]
     fn forward_stick_builds_speed_along_the_nose() {
         let env = meridian();
         let mut s = level_at(1_000.0);
@@ -274,7 +360,7 @@ mod tests {
         let mut s = level_at(1.0);
         // Nose straight down.
         s.rotation = DQuat::from_rotation_arc(DVec3::NEG_Z, DVec3::NEG_X);
-        let mut arcade = ArcadeFlight { speed: 500.0 };
+        let mut arcade = ArcadeFlight::at(500.0);
         arcade_step(
             &mut s,
             &mut arcade,
@@ -304,7 +390,7 @@ mod tests {
         let mut s = level_at(30.0);
         // Nose straight down (toward the planet's centre).
         s.rotation = DQuat::from_rotation_arc(DVec3::NEG_Z, -s.position.normalize());
-        let mut arcade = ArcadeFlight { speed: 300.0 };
+        let mut arcade = ArcadeFlight::at(300.0);
         for _ in 0..30 {
             arcade_step(
                 &mut s,

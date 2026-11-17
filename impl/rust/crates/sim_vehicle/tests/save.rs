@@ -158,7 +158,7 @@ fn busy_world() -> World {
     region
         .world
         .entity_mut(loc.entity)
-        .insert(ArcadeFlight { speed: 42.0 });
+        .insert(ArcadeFlight::at(42.0));
     let loc = w.sim.objects.location(frame_id).unwrap();
     let region = w.sim.regions.get_mut(loc.region).unwrap();
     let mut joints = region.world.get_mut::<JointState>(loc.entity).unwrap();

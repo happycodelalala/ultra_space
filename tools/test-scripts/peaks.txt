@@ -1,0 +1,9 @@
+# Tessera's mountains at 9 km: peaks above the ship and the flat cloud deck below.
+2    shot peaks-1.png
+3    orbit 120 -5
+5    shot peaks-2.png
+6    orbit 0 -12
+6.5  hold W 10               # fly on between the peaks
+12   shot peaks-3.png
+17   shot peaks-4.png
+18   quit
