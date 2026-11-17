@@ -663,7 +663,7 @@ fn stream_chunks(
     let Some(here) = ground.plane(cam.normalize()) else {
         return;
     };
-    let height = cam.length() - ground.radius - ground.base;
+    let height = ground.height_above(cam);
     // High above, nothing is drawn (the tiles show the land).
     let wanted: HashSet<(i32, i32)> =
         if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {

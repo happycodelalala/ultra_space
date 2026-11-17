@@ -133,6 +133,9 @@ pub struct Geography {
     seeds: [u64; 8],
 }
 
+/// How much of the plates' height above the sea stays (the rest of land relief is features).
+const LAND_FLATTEN: f64 = 0.3;
+
 fn smooth(e0: f64, e1: f64, x: f64) -> f64 {
     let t = ((x - e0) / (e1 - e0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -280,7 +283,7 @@ impl Geography {
     /// The raw elevation below which a share `sea_share` of the surface lies.
     fn sea_level(&self, plains: &Plains) -> f64 {
         let mut values: Vec<f64> = crate::terrain::fibonacci_directions(6_000)
-            .map(|d| self.raw(plains, d, 2_000.0))
+            .map(|d| self.base(plains, d))
             .collect();
         values.sort_by(f64::total_cmp);
         values[((values.len() as f64 * self.params.sea_share) as usize).min(values.len() - 1)]
@@ -289,7 +292,7 @@ impl Geography {
     /// Elevation (m above sea level, along the plain's normal) at the unit direction `dir`, with
     /// detail down to `shortest` metres.
     pub fn elevation(&self, plains: &Plains, dir: DVec3, shortest: f64) -> f64 {
-        self.raw(plains, dir, shortest) - self.sea_offset
+        self.raw(plains, dir, shortest)
     }
 
     /// The open sea's floor level without the land's features: below 0 is sea connected to the
@@ -323,8 +326,15 @@ impl Geography {
         let hit = plains.hit(dir, 0.0);
         let b = dir * hit.radius;
         let own = hit.plain;
-        let mut e = self.base(plains, dir);
-        let land = smooth(-400.0, 400.0, e - self.sea_offset);
+        // The plates' level against the sea: land above it is flattened into lowlands and
+        // plateaus (ranges, belts and volcanoes give the heights), the sea floor kept.
+        let level = self.base(plains, dir) - self.sea_offset;
+        let mut e = if level > 0.0 {
+            LAND_FLATTEN * level
+        } else {
+            level
+        };
+        let land = smooth(-400.0, 400.0, level);
         let ridge_oct = octaves_between(4_500.0, shortest.max(60.0));
         for &k in &self.near[own] {
             let c = &self.creases[k];
@@ -433,10 +443,8 @@ impl Geography {
         p.range_height
             + p.belt_height.1
             + p.volcano_height.1
-            + p.continent_relief
+            + LAND_FLATTEN * (p.continent_relief + p.continental_base - self.sea_offset).max(0.0)
             + p.hills
-            + p.continental_base
-            - self.sea_offset
     }
 
     /// The lowest the sea floor can reach (m, negative).

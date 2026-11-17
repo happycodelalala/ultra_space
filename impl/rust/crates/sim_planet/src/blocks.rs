@@ -199,6 +199,15 @@ impl BlockGround {
         DQuat::from_mat3(&glam::DMat3::from_cols(self.east, up, -self.north))
     }
 
+    /// Height of `point` (surface frame, m) above the grid's floor: along the plain's normal on
+    /// a body of plains, from the centre otherwise.
+    pub fn height_above(&self, point: DVec3) -> f64 {
+        match self.flat {
+            Some((n, o)) => (point - o).dot(n),
+            None => point.length() - self.radius - self.base,
+        }
+    }
+
     /// "Up" at a point of the grid (surface frame): the plain's normal, or away from the centre.
     pub fn up_at(&self, point: DVec3) -> DVec3 {
         self.flat.map_or_else(|| point.normalize(), |(n, _)| n)

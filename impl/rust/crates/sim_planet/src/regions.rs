@@ -254,8 +254,8 @@ impl PlainWorld {
             .map(|p| {
                 // Samples over the plain.
                 let (mut sea, mut lakes, mut n) = (0.0f64, 0.0f64, 0.0f64);
-                let (mut temp, mut wet, mut high, mut sum, mut sum2) =
-                    (0.0, 0.0, f64::MIN, 0.0, 0.0);
+                let (mut temp, mut wet, mut sum, mut sum2) = (0.0, 0.0, 0.0, 0.0);
+                let mut heights = Vec::with_capacity(150);
                 for s in 0..150 {
                     let a = f64::from(s) * 2.399_963;
                     let r = 30_000.0 * (f64::from(s) / 150.0).sqrt();
@@ -274,24 +274,36 @@ impl PlainWorld {
                     }
                     temp += self.temperature(dir, e);
                     wet += self.wetness(dir);
-                    high = f64::max(high, e);
+                    heights.push(e);
                     sum += e;
                     sum2 += e * e;
                 }
                 let land = (n - sea - lakes).max(1.0);
                 let (temp, wet, mean) = (temp / land, wet / land, sum / land);
                 let rough = (sum2 / land - mean * mean).max(0.0).sqrt();
+                // The plain's typical ground, not its crease ranges: percentiles of the land.
+                heights.sort_by(f64::total_cmp);
+                let pct = |q: f64| {
+                    heights
+                        .get(
+                            ((heights.len() as f64 * q) as usize)
+                                .min(heights.len().saturating_sub(1)),
+                        )
+                        .copied()
+                        .unwrap_or(0.0)
+                };
+                let (median, upper) = (pct(0.5), pct(0.8));
                 let id = if sea / n > 0.7 {
                     "sea"
                 } else if sea / n > 0.45 {
                     "isles"
-                } else if high > 5_000.0 {
+                } else if upper > 3_500.0 {
                     "peaks"
                 } else if temp < -6.0 {
                     "icefield"
                 } else if temp < 2.0 {
                     "barrens"
-                } else if mean > 1_500.0 || high > 3_000.0 {
+                } else if median > 1_200.0 {
                     "highlands"
                 } else if wet < 0.28 {
                     if temp > 16.0 { "wastes" } else { "steppe" }

@@ -122,7 +122,7 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
             if t < -12.0 {
                 p *= 0.4;
             }
-            let size = (500.0 + 1_100.0 * next()) * (0.6 + 2.2 * w * w);
+            let size = (1_300.0 + 1_700.0 * next()) * (0.7 + 1.6 * w * w);
             Some(Candidate {
                 dir,
                 p,
@@ -159,13 +159,14 @@ pub fn clouds(world: &PlainWorld, seed: u64, cover: f64) -> Vec<Cloud> {
         let base_height = BASE.max(ground + GROUND_GAP);
         let base = c.dir * hit.radius + plain.normal * base_height;
         let tower = c.size * (0.5 + 0.5 * next()) * (0.6 + 1.2 * c.weather);
-        let count = ((10.0 + 16.0 * next()) * (1.0 + 1.5 * c.weather)) as usize;
+        // Few, large puffs: enough to read as cotton, cheap to draw.
+        let count = (5.0 + 4.0 * next() + 6.0 * c.weather) as usize;
         let puffs = (0..count)
             .map(|_| {
                 let a = next() * std::f64::consts::TAU;
                 let r = c.size * next().sqrt();
                 let edge = r / c.size;
-                let size = (0.18 + 0.2 * next()) * c.size * (1.15 - 0.6 * edge);
+                let size = (0.26 + 0.2 * next()) * c.size * (1.15 - 0.6 * edge);
                 let height = size * 0.55 + next() * tower * (1.0 - edge).powf(1.5);
                 Puff {
                     offset: DVec3::new(r * a.cos(), r * a.sin(), height),
@@ -193,6 +194,8 @@ mod tests {
         let world = PlainWorld::new(Plains::truncated_icosahedron(40_000.0), 11);
         let clouds = clouds(&world, 11, 1.0 / 3.0);
         assert!(clouds.len() > 300, "{} clouds", clouds.len());
+        let puffs: usize = clouds.iter().map(|c| c.puffs.len()).sum();
+        assert!(puffs < 30_000, "{puffs} puffs: too many to draw");
         let radius = world.plains.mean_distance();
         let area = 4.0 * std::f64::consts::PI * radius * radius;
         let covered: f64 = clouds

@@ -682,7 +682,7 @@ fn place_tiles(
             Some(b) => {
                 let g = &b.ground;
                 let cam = rotation.inverse() * (-position);
-                let low = cam.length() - g.radius - g.base < crate::blocks::DRAW_REACH;
+                let low = g.height_above(cam) < crate::blocks::DRAW_REACH;
                 let inside = g.plane(cam.normalize()).is_some();
                 (
                     g.center.as_vec3().extend((g.reach / g.radius).cos() as f32),

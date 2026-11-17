@@ -1,0 +1,9 @@
+# Four views round the ship (the chase camera turned), for geography reviews.
+3    shot view-1.png
+4    orbit 90 -20
+6    shot view-2.png
+7    orbit 180 -20
+9    shot view-3.png
+10   orbit 270 -20
+12   shot view-4.png
+13   quit
