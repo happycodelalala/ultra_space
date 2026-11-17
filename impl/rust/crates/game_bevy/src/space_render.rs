@@ -115,6 +115,26 @@ pub struct AtmosphereUniform {
 
 /// Cloud deck altitude as a fraction of the atmosphere's height (≈ 5.6 km on Meridian).
 pub const CLOUD_ALTITUDE: f64 = 0.08;
+/// Height of the cloud deck above the highest corner of a body of plains (m).
+const PLAINS_CLOUD_CLEARANCE: f64 = 4_000.0;
+
+/// Radius of a body's cloud deck: a fraction of the atmosphere above the reference radius, and
+/// on a body of plains above its highest corners (a deck under them would show only in the middle
+/// of each plain).
+fn cloud_deck(body: &sim_core::Body, atm: &sim_core::system::Atmosphere) -> f64 {
+    let deck = body.radius + CLOUD_ALTITUDE * atm.height;
+    match body.terrain.as_ref().and_then(|t| t.plains) {
+        Some(p) => {
+            let corners = match p.layout {
+                sim_core::PlainsLayout::TruncatedIcosahedron => {
+                    sim_planet::Plains::truncated_icosahedron(p.edge).corner_radius()
+                }
+            };
+            deck.max(corners + PLAINS_CLOUD_CLEARANCE)
+        }
+        None => deck,
+    }
+}
 
 /// Rayleigh scattering of Earth's air in blue light at sea level (1/m).
 const EARTH_RAYLEIGH_BLUE: f64 = 33.1e-6;
@@ -323,7 +343,7 @@ fn spawn_bodies(
                     scatter,
                     rotation: Vec4::W,
                     clouds: Vec4::new(
-                        (body.radius + CLOUD_ALTITUDE * atm.height) as f32,
+                        cloud_deck(body, atm) as f32,
                         0.0,
                         0.0,
                         (i as f32) * 37.7 + 11.3,
