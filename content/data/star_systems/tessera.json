@@ -41,10 +41,10 @@
       "terrain": {
         "seed": 11,
         "relief_km": 2.5,
-        "geography": { "plates": 32 }
+        "geography": { "plates": 12 }
       },
       "climate": { "equator_temperature_c": 22, "pole_temperature_c": -25, "moisture": 0.5 },
-      "description": "A small round world of 32 drifting plates: ranges and rifts along their curved borders, continents and seas, a climate of wind belts and rain shadows, and natural regions grown from the land. Home of the demo block village."
+      "description": "A small round world of 12 drifting plates: ranges and rifts along their curved borders, continents and seas, a climate of wind belts and rain shadows, and natural regions grown from the land. Home of the demo block village."
     }
   ]
 }

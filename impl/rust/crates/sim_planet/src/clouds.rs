@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn clouds_cover_about_a_third_and_clump() {
-        let world = GlobeWorld::new(92_000.0, 32, 11);
+        let world = GlobeWorld::new(92_000.0, 12, 11);
         let clouds = clouds(&world, 11, 1.0 / 3.0);
         assert!(clouds.len() > 300, "{} clouds", clouds.len());
         let puffs: usize = clouds.iter().map(|c| c.puffs.len()).sum();
