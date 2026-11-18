@@ -717,7 +717,8 @@ fn place_tiles(
             Some(b) => {
                 let g = &b.ground;
                 let cam = rotation.inverse() * (-position);
-                let low = g.height_above(cam) < crate::blocks::DRAW_REACH;
+                // The block ground reports no coverage when the camera is too high for blocks.
+                let low = g.height_above(cam).is_finite();
                 // The block ground follows the camera anywhere on the body: tiles are hidden
                 // within the coverage round it (the disc test passes everywhere).
                 (

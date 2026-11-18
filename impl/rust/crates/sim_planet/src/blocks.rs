@@ -526,15 +526,9 @@ impl BlockGround {
 
     /// The centre of a chunk of any level at its ground (surface frame, m).
     pub fn lod_centre_point(&self, key: LodKey) -> DVec3 {
-        let s = 1i32 << key.0;
-        let (i, j) = (
-            (key.2 * CHUNK + CHUNK / 2) * s,
-            (key.3 * CHUNK + CHUNK / 2) * s,
-        );
-        let t = self
-            .top_on(key.1, i, j)
-            .unwrap_or(-((self.base / CELL) as i32));
-        self.lod_centre(key) * (self.radius + self.base + f64::from(t + 1) * CELL)
+        let d = self.lod_centre(key);
+        let h = self.natural.height(d, Self::lod_size(key.0)).max(0.0);
+        d * (self.radius + h)
     }
 
     /// The four children of a chunk (the next level down).
@@ -556,7 +550,25 @@ impl BlockGround {
         let (level, face, ci, cj) = key;
         let s = 1i32 << level;
         let fine = |a: i32| a * s + s / 2;
-        let top = |a: i32, b: i32| self.top_on(face, fine(a), fine(b));
+        let width = f64::from(s) * CELL;
+        // Coarse columns read the ground at their own scale (and skip the fine cache), except
+        // in the village's square.
+        let top = |a: i32, b: i32| {
+            let (i, j) = (fine(a), fine(b));
+            let village = face == 0
+                && self
+                    .village
+                    .as_ref()
+                    .is_some_and(|v| v.index(i, j).is_some());
+            if level == 0 || village {
+                return self.top_on(face, i, j);
+            }
+            let h = self.natural.height(self.column_dir(face, i, j), width);
+            if self.natural.has_ocean() && h < 0.3 {
+                return None;
+            }
+            Some(((h - self.base) / CELL).floor() as i32)
+        };
         let (i0, j0) = (ci * CHUNK, cj * CHUNK);
         // The shell cells of the chunk and a margin round it (shapes and hidden faces look
         // two cells out).
@@ -646,6 +658,9 @@ impl BlockGround {
                 (i0 + CHUNK - 1, j0 + n, Vec3::X),
             ] {
                 let Some(t) = top_at(i, j) else { continue };
+                if level == 0 && face == 0 && self.carved_near.contains(&(i, j)) {
+                    continue; // dug ground: the hole's own walls
+                }
                 let z = (t + 1) as f32;
                 let (x0, y0) = (i as f32, j as f32);
                 let (a, b) = match out {
@@ -667,7 +682,6 @@ impl BlockGround {
         let south = east.cross(up);
         let basis = DQuat::from_mat3(&DMat3::from_cols(east, up, south));
         let inverse = basis.inverse();
-        let width = f64::from(s) * CELL;
         for p in &mut mesh.positions {
             let g = DVec3::new(
                 f64::from(p[0]) * width,

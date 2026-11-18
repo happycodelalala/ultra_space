@@ -24,21 +24,41 @@ use crate::camera::SpaceCamera;
 use crate::sim::RenderTime;
 use crate::universe::{InGame, Universe};
 
-/// Blocks are drawn this far round the camera (m): real 25 cm blocks within `SPLIT[0]`,
-/// columns 50 cm wide within `SPLIT[1]`, 1 m wide beyond (block-world.md §7).
-pub(crate) const DRAW_REACH: f64 = 400.0;
-/// A chunk of level `l + 1` gives way to its four children when it comes this close (m).
-const SPLIT: [f64; 2] = [100.0, 200.0];
-/// The coarsest level drawn.
-const TOP_LEVEL: u8 = 2;
-/// Terrain tiles are hidden this far round the camera inside the block ground (m).
-pub(crate) const HIDE_TILES: f64 = 390.0;
+/// The coarsest level of block chunks drawn: columns 2^4 blocks (4 m) wide (block-world.md §7).
+/// Beyond it the tiles, coloured and stepped like the blocks, carry on.
+const TOP_LEVEL: u8 = 4;
+/// The quality setting for the block ground: blocks of a level are drawn while their columns
+/// cover at least this many pixels (1–4; default 1: every block that could be told apart is a
+/// block). `ULTRA_SPACE_BLOCK_PIXELS` until the settings menu has it.
+fn block_pixels() -> f64 {
+    std::env::var("ULTRA_SPACE_BLOCK_PIXELS")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(1.0)
+        .clamp(1.0, 4.0)
+}
+
+/// How far (m) columns of `level` stay at least `pixels` wide, at `per_radian` pixels per
+/// radian of view.
+fn level_reach(level: u8, per_radian: f64, pixels: f64) -> f64 {
+    sim_planet::blocks::CELL * f64::from(1u32 << level) * per_radian / pixels
+}
+
+/// The chunk plan: the wanted chunks, worked out again only when the camera has moved, and
+/// chunk centres remembered.
+#[derive(Default)]
+struct ChunkPlan {
+    camera: Option<DVec3>,
+    per_radian: f64,
+    wanted: HashSet<LodKey>,
+    centres: HashMap<LodKey, DVec3>,
+}
 /// No collision boxes this close to the ship's landing spot (m).
 const SHIP_CLEAR: f64 = 8.0;
 /// Chunk meshes being made at once.
-const CHUNKS_IN_FLIGHT: usize = 24;
+const CHUNKS_IN_FLIGHT: usize = 64;
 /// Most finished chunks shown per frame.
-const CHUNKS_PER_FRAME: usize = 8;
+const CHUNKS_PER_FRAME: usize = 16;
 
 pub struct BlocksPlugin;
 
@@ -409,6 +429,17 @@ fn choose_globe_site(
         if !(8.0..=22.0).contains(&t) || !(0.35..=0.75).contains(&m) {
             continue;
         }
+        // Green ground all round (the village's ground eases into what grows there).
+        use sim_planet::globe::Cover;
+        let green = |d: DVec3| {
+            matches!(
+                globe.ground_cover(d, centre, 0.0),
+                Cover::Grass | Cover::Forest | Cover::Seasonal
+            )
+        };
+        if !green(dir) {
+            continue;
+        }
         let key = sim_planet::locate(dir, 12);
         let n_cells = f64::from(1u32 << 12);
         let (u, v) = (f64::from(key.x) / n_cells, f64::from(key.y) / n_cells);
@@ -434,7 +465,12 @@ fn choose_globe_site(
             lo = lo.min(g);
             hi = hi.max(g);
         }
-        let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs();
+        // Away from the edge of the green land (dry or cold patches within ~200 m).
+        let margin = [(200.0, 0.0), (-200.0, 0.0), (0.0, 200.0), (0.0, -200.0)]
+            .iter()
+            .filter(|(x, z)| !green((dir * r + east * *x + south * *z).normalize()))
+            .count() as f64;
+        let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs() + 10.0 * margin;
         if best.is_none_or(|b| score < b.0) {
             best = Some((score, dir));
         }
@@ -717,6 +753,9 @@ fn stream_chunks(
     mut meshes: ResMut<Assets<Mesh>>,
     mut last_count: Local<usize>,
     mut coverage: ResMut<BlockCoverage>,
+    mut plan: Local<ChunkPlan>,
+    projections: Query<&Projection, With<crate::space_render::MainCamera>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
 ) {
     let _slow = crate::debug_overlay::SlowSystem::new("stream_chunks");
     let (Some(world), Some(mut draw)) = (world, draw) else {
@@ -726,28 +765,61 @@ fn stream_chunks(
     let ground = &world.ground;
     let here = cam.normalize();
     let height = ground.height_above(cam);
+    // Pixels per radian of view: the window's height over the vertical field of view.
+    let fov = projections
+        .iter()
+        .find_map(|p| match p {
+            Projection::Perspective(p) => Some(f64::from(p.fov)),
+            _ => None,
+        })
+        .unwrap_or(1.0);
+    let viewport = windows
+        .iter()
+        .next()
+        .map_or(1080.0, |w| f64::from(w.height()));
+    let per_radian = viewport / (2.0 * (fov * 0.5).tan());
+    let pixels = block_pixels();
+    let outer = level_reach(TOP_LEVEL, per_radian, pixels);
+    let plan = &mut *plan;
+    if plan.centres.len() > 400_000 {
+        plan.centres.clear();
+    }
     // How near a chunk comes to the camera (m).
-    let near = |k: &LodKey| {
-        ground.lod_centre_point(*k).distance(cam)
-            - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
+    let near = |centres: &mut HashMap<LodKey, DVec3>, k: &LodKey| {
+        let c = *centres
+            .entry(*k)
+            .or_insert_with(|| ground.lod_centre_point(*k));
+        c.distance(cam) - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
     };
-    // The chunks wanted: a quadtree from the coarsest level, split near the camera. High
-    // above, nothing is drawn (the tiles show the land).
-    let mut wanted: HashSet<LodKey> = HashSet::new();
-    if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
-        let mut stack: Vec<LodKey> = ground
-            .lod_around(here, DRAW_REACH, TOP_LEVEL)
-            .into_iter()
-            .filter(|k| near(k) < DRAW_REACH)
-            .collect();
-        while let Some(k) = stack.pop() {
-            if k.0 > 0 && near(&k) < SPLIT[k.0 as usize - 1] {
-                stack.extend(BlockGround::lod_children(k));
-            } else {
-                wanted.insert(k);
+    // The chunks wanted: a quadtree from the coarsest level, a chunk splitting into its four
+    // children while their columns would still cover the pixels set; nothing where even the
+    // coarsest columns are smaller (the tiles show the land). Worked out again when the camera
+    // has moved a metre or the view changed.
+    let moved = plan
+        .camera
+        .is_none_or(|c| c.distance(cam) > 1.0 || (plan.per_radian - per_radian).abs() > 1.0);
+    if moved {
+        plan.camera = Some(cam);
+        plan.per_radian = per_radian;
+        plan.wanted.clear();
+        if height < outer && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
+            let mut stack: Vec<LodKey> = ground.lod_around(here, outer, TOP_LEVEL);
+            while let Some(k) = stack.pop() {
+                let d = near(&mut plan.centres, &k);
+                if d >= level_reach(k.0, per_radian, pixels) {
+                    continue;
+                }
+                if k.0 > 0 && d < level_reach(k.0 - 1, per_radian, pixels) {
+                    stack.extend(BlockGround::lod_children(k));
+                } else {
+                    plan.wanted.insert(k);
+                }
             }
         }
     }
+    let wanted = &plan.wanted;
+    let centres = &mut plan.centres;
+    let mut near = |k: &LodKey| near(centres, k);
     // Start the nearest missing ones.
     let mut missing: Vec<(f64, LodKey)> = wanted
         .iter()
@@ -806,9 +878,9 @@ fn stream_chunks(
         .iter()
         .filter(|k| !draw.chunks.contains_key(k))
         .map(near)
-        .fold(HIDE_TILES, f64::min)
+        .fold(outer, f64::min)
         .max(0.0);
-    coverage.0 = if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_HIDE").is_none() {
+    coverage.0 = if height < outer && std::env::var_os("ULTRA_SPACE_DEBUG_NO_HIDE").is_none() {
         ready
     } else {
         0.0
