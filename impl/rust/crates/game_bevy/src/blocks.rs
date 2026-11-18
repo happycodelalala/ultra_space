@@ -592,6 +592,9 @@ struct StreamStats {
 struct BlockDraw {
     root: Entity,
     chunks: HashMap<LodKey, Option<Entity>>,
+    /// Chunks made but not shown yet: they take over from the chunks they replace all at once,
+    /// so old and new ground never overlap (they would flicker against each other).
+    hidden: HashSet<LodKey>,
     pending: HashMap<LodKey, Task<Option<MadeChunk>>>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
@@ -835,6 +838,7 @@ fn setup_blocks(
     commands.insert_resource(BlockDraw {
         root,
         chunks: HashMap::new(),
+        hidden: HashSet::new(),
         pending: HashMap::new(),
         solid,
         chunk_material,
@@ -996,7 +1000,7 @@ fn stream_chunks(
                 ChunkPose { origin, basis },
                 Mesh3d(meshes.add(mesh)),
                 Transform::default(),
-                Visibility::Visible,
+                Visibility::Hidden,
             ));
             if faceted {
                 e.insert(MeshMaterial3d(draw.ground_material.clone()));
@@ -1005,6 +1009,9 @@ fn stream_chunks(
             }
             e.id()
         });
+        if entity.is_some() {
+            draw.hidden.insert(key);
+        }
         draw.chunks.insert(key, entity);
     }
     // The ground is ready out to the nearest wanted chunk not yet shown.
@@ -1080,8 +1087,29 @@ fn stream_chunks(
         .copied()
         .collect();
     for key in gone {
+        draw.hidden.remove(&key);
         if let Some(Some(e)) = draw.chunks.remove(&key) {
             commands.entity(e).despawn();
+        }
+    }
+    // Hidden chunks show once no old chunk still drawn overlaps them (the old ones went above
+    // in the same frame, once all their replacements were made).
+    let old: Vec<LodKey> = draw
+        .chunks
+        .iter()
+        .filter(|(k, e)| e.is_some() && !wanted.contains(k) && !draw.hidden.contains(k))
+        .map(|(k, _)| *k)
+        .collect();
+    let show: Vec<LodKey> = draw
+        .hidden
+        .iter()
+        .filter(|k| !old.iter().any(|o| overlaps(o, k)))
+        .copied()
+        .collect();
+    for key in show {
+        draw.hidden.remove(&key);
+        if let Some(Some(e)) = draw.chunks.get(&key) {
+            commands.entity(*e).insert(Visibility::Visible);
         }
     }
     // Chunks being made that are no longer wanted are forgotten.
