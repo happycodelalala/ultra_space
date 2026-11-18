@@ -14,10 +14,14 @@ const LAND_SHARE: f64 = 0.72;
 /// Plates under this share of the surface join a neighbour (tiny plates make rings).
 const MIN_PLATE: f64 = 0.03;
 /// Height of the strongest collision ranges before erosion (m).
-const RANGE_HEIGHT: f64 = 7_000.0;
+const RANGE_HEIGHT: f64 = 9_000.0;
+/// Mountain belts inside continents (old collisions): count per large continental plate and
+/// height before erosion (m).
+const BELTS_PER_PLATE: usize = 2;
+const BELT_HEIGHT: f64 = 5_500.0;
 /// Erosion: steps, stream-power constant, hillslope creep.
 const STEPS: usize = 40;
-const STREAM_POWER: f64 = 0.03;
+const STREAM_POWER: f64 = 0.02;
 const CREEP: f64 = 0.12;
 /// The highest peaks approach this (arcade cap, m).
 const PEAK_CAP: f64 = 8_500.0;
@@ -399,8 +403,8 @@ pub fn generate(s: &Sphere, radius: f64, plates: usize, seed: u64) -> Fields {
         let land = 350.0 + 250.0 * noise(p * 6.0, sd(9), 4) + 120.0 * noise(p * 40.0, sd(29), 3);
         let mut b = crust[i] * land + (1.0 - crust[i]) * floor;
         let along = 0.7 + 0.3 * noise(p * 9.0, sd(21), 3);
-        let w = (-(d / 10_000.0).powi(2)).exp();
-        let plateau = 0.3 * (-(d / 24_000.0).powi(2)).exp();
+        let w = (-(d / 13_000.0).powi(2)).exp();
+        let plateau = 0.35 * (-(d / 28_000.0).powi(2)).exp();
         let mut u = RANGE_HEIGHT * coll * own * oth * (w + plateau) * along;
         u += 0.65
             * RANGE_HEIGHT
@@ -420,6 +424,56 @@ pub fn generate(s: &Sphere, radius: f64, plates: usize, seed: u64) -> Fields {
         b -= 650.0 * open * own * oth * (-(d / 6_000.0).powi(2)).exp();
         base[i] = b;
         uplift[i] = u;
+    }
+    // Mountain belts inside continents: curving lines walked across the larger continental
+    // plates, raised like old collision ranges.
+    let mut belt_nodes: Vec<u32> = Vec::new();
+    let mut belt_height: Vec<f64> = Vec::new();
+    for k in 0..plates {
+        let members: Vec<usize> = (0..n)
+            .filter(|&i| plate[i] as usize == k && crust[i] > 0.85 && d_b[i] > 15_000.0)
+            .collect();
+        if (members.len() as f64) < 0.03 * n as f64 {
+            continue;
+        }
+        for _ in 0..BELTS_PER_PLATE {
+            let mut at = x[members[rng.below(members.len())]];
+            let (east, north) = {
+                let e = DVec3::Y.cross(at).normalize_or(DVec3::X);
+                (e, at.cross(e))
+            };
+            let a0 = rng.next() * std::f64::consts::TAU;
+            let mut heading = east * a0.cos() + north * a0.sin();
+            let bend = (rng.next() - 0.5) * 0.08;
+            let height = BELT_HEIGHT * (0.6 + 0.4 * rng.next());
+            let steps = (25_000.0 + 30_000.0 * rng.next()) / edge;
+            for _ in 0..steps as usize {
+                let i = s.nearest(at);
+                if crust[i] < 0.6 {
+                    break;
+                }
+                if belt_nodes.last() != Some(&(i as u32)) {
+                    belt_nodes.push(i as u32);
+                    belt_height.push(height);
+                }
+                at = (at + heading * s.spacing).normalize();
+                heading = (heading - at * heading.dot(at)).normalize_or(heading);
+                heading = glam::DQuat::from_axis_angle(at, bend) * heading;
+            }
+        }
+    }
+    if !belt_nodes.is_empty() {
+        let (d_belt, from_belt) = distances(s, edge, &belt_nodes);
+        for i in 0..n {
+            let d = d_belt[i];
+            if d < 30_000.0 {
+                let along = 0.7 + 0.3 * noise(x[i] * 9.0, sd(41), 3);
+                uplift[i] += belt_height[from_belt[i] as usize]
+                    * crust[i]
+                    * ((-(d / 9_000.0).powi(2)).exp() + 0.2 * (-(d / 20_000.0).powi(2)).exp())
+                    * along;
+            }
+        }
     }
     // Hotspots: chains of volcanoes trailing behind their plate's motion.
     for _ in 0..3 {

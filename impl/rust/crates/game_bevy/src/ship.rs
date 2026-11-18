@@ -288,13 +288,36 @@ fn spawn_player_ship(
         s.position = s.position.normalize() * r;
         s.velocity = s.velocity.normalize() * (body.mu / r).sqrt();
     }
-    // Debug: `ULTRA_SPACE_START_REGION=<region kind>` starts over the middle of the first region
-    // of that kind, at `ULTRA_SPACE_START_ALTITUDE` above sea level (default 3 km), still and
-    // level, heading east (a round body with geography; on a body of plains, along the plain).
+    // Debug: `ULTRA_SPACE_START_REGION=<region kind>` starts over the middle of the sunniest
+    // region of that kind (so test views are in daylight), at `ULTRA_SPACE_START_ALTITUDE` above
+    // sea level (default 3 km), still and level, heading east (a round body with geography; on a
+    // body of plains, the first plain of that kind, heading along it).
+    let to_star = system
+        .frames
+        .state_in(
+            system.bodies[index].inertial_frame,
+            system.star().inertial_frame,
+            0.0,
+        )
+        .position
+        .normalize_or(DVec3::X);
+    let surface_turn = system
+        .frames
+        .state_in(
+            system.bodies[index].inertial_frame,
+            system.bodies[index].surface_frame,
+            0.0,
+        )
+        .rotation;
     if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
         && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
         && let Some(globe) = terrain.globe()
-        && let Some(r) = (0..globe.regions.len()).find(|&r| globe.kind(r).id == kind)
+        && let Some(r) = (0..globe.regions.len())
+            .filter(|&r| globe.kind(r).id == kind)
+            .max_by(|&a, &b| {
+                let sun = |r: usize| (surface_turn * globe.regions[r].centre).dot(to_star);
+                sun(a).total_cmp(&sun(b))
+            })
     {
         let body = &system.bodies[index];
         let dir = globe.regions[r].centre;

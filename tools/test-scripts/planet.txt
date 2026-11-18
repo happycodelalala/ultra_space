@@ -1,7 +1,10 @@
-# Tessera from orbit (the planet of plains): the chase camera looks down past the ship.
+# Tessera from orbit: first the debug camera's view of the whole planet (no ship in the way),
+# then the chase camera looking down past the ship.
+1    press Tab
 3    shot planet-1.png
-4    orbit 40 -80
-6    shot planet-2.png
-7    orbit -50 -75
-9    shot planet-3.png
-10   quit
+4    press Tab
+5    orbit 40 -80
+7    shot planet-2.png
+8    orbit -50 -75
+10   shot planet-3.png
+11   quit

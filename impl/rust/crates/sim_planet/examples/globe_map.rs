@@ -122,6 +122,14 @@ fn main() {
             sea += usize::from(elev[i] < 0.0);
         }
     }
+    let land: Vec<f64> = elev.iter().copied().filter(|&e| e >= 0.0).collect();
+    let above = |m: f64| land.iter().filter(|&&e| e > m).count() as f64 / land.len() as f64;
+    eprintln!(
+        "land above 1.5 km {:.2}, 3 km {:.2}, 5 km {:.3}",
+        above(1_500.0),
+        above(3_000.0),
+        above(5_000.0)
+    );
     eprintln!(
         "sea share (by map area) {:.2}",
         sea as f64 / (width * height) as f64

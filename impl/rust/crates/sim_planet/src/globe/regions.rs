@@ -173,6 +173,37 @@ pub(super) fn grow(
     }
     let target = (land_points as f64 / LAND_REGIONS) as usize;
     merge_small(&mut label, &pairs, target / 2, target * 8 / 5);
+    // Small islands still on their own join the nearest bigger land region within reach.
+    let mut size: HashMap<u32, usize> = HashMap::new();
+    for &l in label.iter().filter(|&&l| l != u32::MAX) {
+        *size.entry(l).or_default() += 1;
+    }
+    let mut small: Vec<u32> = size
+        .iter()
+        .filter(|(_, c)| **c < target / 2)
+        .map(|(&l, _)| l)
+        .collect();
+    small.sort_unstable();
+    for l in small {
+        let members: Vec<usize> = (0..n).filter(|&i| label[i] == l).collect();
+        let centre = members
+            .iter()
+            .map(|&i| s.points[i])
+            .sum::<DVec3>()
+            .normalize_or(DVec3::Y);
+        let nearest = (0..n)
+            .filter(|&i| label[i] != u32::MAX && label[i] != l && size[&label[i]] >= target / 2)
+            .max_by(|&a, &b| s.points[a].dot(centre).total_cmp(&s.points[b].dot(centre)));
+        if let Some(j) = nearest
+            && s.points[j].angle_between(centre) * radius < 30_000.0
+        {
+            let into = label[j];
+            for &i in &members {
+                label[i] = into;
+            }
+            *size.entry(into).or_default() += members.len();
+        }
+    }
     let mut next_id = n as u32;
     split_big(s, &mut label, target, &mut rng, &mut next_id);
 
