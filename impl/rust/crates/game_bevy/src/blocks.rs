@@ -24,12 +24,12 @@ use crate::camera::SpaceCamera;
 use crate::sim::RenderTime;
 use crate::universe::{InGame, Universe};
 
-/// How the ground near the player is made: `ULTRA_SPACE_GROUND=faceted` for the faceted
-/// low-poly alternative (tried 2026-11-18), blocks otherwise.
+/// How the ground near the player is made: faceted (a density field, flat-shaded; adopted
+/// 2026-11-18), or `ULTRA_SPACE_GROUND=blocks` for the block ground.
 pub fn ground_style() -> sim_planet::GroundStyle {
     match std::env::var("ULTRA_SPACE_GROUND").as_deref() {
-        Ok("faceted") => sim_planet::GroundStyle::Faceted,
-        _ => sim_planet::GroundStyle::Blocks,
+        Ok("blocks") => sim_planet::GroundStyle::Blocks,
+        _ => sim_planet::GroundStyle::Faceted,
     }
 }
 
@@ -1248,7 +1248,16 @@ pub fn start(
         s
     };
     let ship = pose(world.village.ship.pos, world.village.ship.rot, 3.0);
-    let walker = pose(world.village.start.pos, world.village.start.facing, 1.0);
+    // Debug: `ULTRA_SPACE_VILLAGE_WALKER=x,y,heading` starts on foot there (village metres; the
+    // heading in degrees, 180 facing north).
+    let (at, facing) = std::env::var("ULTRA_SPACE_VILLAGE_WALKER")
+        .ok()
+        .and_then(|v| {
+            let n: Vec<f64> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+            (n.len() == 3).then(|| ([n[0], n[1], 0.0], n[2]))
+        })
+        .unwrap_or((world.village.start.pos, world.village.start.facing));
+    let walker = pose(at, facing, 1.0);
     Some((ship, walker, t))
 }
 

@@ -12,6 +12,12 @@ This replaces the heightmap-only terrain near the player (planet-surface.md) and
 patches" it deferred; the terrain function stays the source of the untouched world. The look is
 set in visual-style.md; this document is the system.
 
+**Adopted (2026-11-18, developer): the faceted density ground is the planet ground by
+default** (blocks remain as `ULTRA_SPACE_GROUND=blocks`). Density cells are one column wide (50 cm
+near the player, coarser far by the size-on-screen rule); dug faces are earth down from the rim;
+chunk skirts take the colour of the ground they hang from, so gaps to coarser neighbours don't
+show as dark lines.
+
 **The faceted ground as a density field (2026-11-18, developer):** the faceted try below is
 rebuilt so the ground stays diggable, the way No Man's Sky's terrain is usually described:
 

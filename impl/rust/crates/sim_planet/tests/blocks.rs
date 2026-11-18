@@ -279,7 +279,7 @@ fn faceted_ground_is_a_density_surface_that_can_be_dug() {
         before.mesh.positions.len()
     );
     // The village pit is carved: the chunk at the village centre reaches well below the ground.
-    let centre = g.chunk((0, 0, 0)).expect("the village chunk");
+    let centre = g.chunk((0, 0, -1)).expect("the pit's chunk");
     let top = g.facet_surface(0, DVec2::new(7.5, -8.5));
     let deepest = world(&centre)
         .map(|w| w.length() - g.radius)

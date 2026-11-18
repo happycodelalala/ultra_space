@@ -679,7 +679,8 @@ impl BlockGround {
     fn facet_chunk(&self, key: LodKey, n: i32, size: f64) -> Option<ChunkMesh> {
         let started = std::time::Instant::now();
         let (_, face, ci, cj) = key;
-        let cells = (n / 2).max(1);
+        // One density cell per column: 50 cm near the player, coarser far away.
+        let cells = n.max(1);
         let s = size / f64::from(cells);
         let (x0, y0) = (f64::from(ci) * size, f64::from(cj) * size);
         // Corner columns from -1 to cells + 1: their ground tops.
@@ -896,8 +897,8 @@ impl BlockGround {
                 }
             }
         }
-        // Skirts: from the top surface vertex of each outer cell, 2 cells down, along the edge.
-        let soil = colour("soil");
+        // Skirts: from the top surface vertex of each outer cell, 2 cells down, along the edge,
+        // coloured like the ground they hang from (a gap to a coarser neighbour shows no line).
         let top_vertex = |a: i32, b: i32| {
             (0..nz)
                 .rev()
@@ -916,8 +917,15 @@ impl BlockGround {
                 if let (Some(v0), Some(v1)) = (top_vertex(p.0, p.1), top_vertex(q.0, q.1)) {
                     let out = (v0 + v1) * 0.5 - centre;
                     let out = out - (v0 + v1).normalize() * out.dot((v0 + v1).normalize());
-                    tri(&mut m, [v0, v1, drop(v1)], out, Some(soil));
-                    tri(&mut m, [v0, drop(v1), drop(v0)], out, Some(soil));
+                    let up = ((v0 + v1) * 0.5).normalize();
+                    let c = self.facet_colour(
+                        face,
+                        (v0 + v1) * 0.5 + up * 0.01,
+                        up,
+                        globe.map(|g| &**g),
+                    );
+                    tri(&mut m, [v0, v1, drop(v1)], out, Some(c));
+                    tri(&mut m, [v0, drop(v1), drop(v0)], out, Some(c));
                 }
             }
         }
@@ -958,8 +966,18 @@ impl BlockGround {
                 5,
             )) - 0.5);
         let top = self.top_height(face, gp, 1.0);
-        if height < top - 0.8 {
-            // Dug or underground faces: earth.
+        // Dug faces, down from the rim, and anything underground: earth.
+        let dug = height < top - 0.25
+            || (face == 0
+                && self
+                    .village
+                    .as_ref()
+                    .is_some_and(|v| v.dug(DVec3::new(gp.x, gp.y, height)) < 0.6))
+            || self.edits.read().is_ok_and(|e| {
+                e.iter()
+                    .any(|e| !e.add && mid.distance(e.centre) < e.radius + 0.6)
+            });
+        if dug {
             return colour(if jitter < 0.0 { "soil" } else { "soil2" });
         }
         let on_path = face == 0
