@@ -12,6 +12,26 @@ This replaces the heightmap-only terrain near the player (planet-surface.md) and
 patches" it deferred; the terrain function stays the source of the untouched world. The look is
 set in visual-style.md; this document is the system.
 
+**The faceted ground as a density field (2026-11-18, developer):** the faceted try below is
+rebuilt so the ground stays diggable, the way No Man's Sky's terrain is usually described:
+
+- **Density, not occupancy.** Near the player the ground is a density field on a 1 m grid
+  (coarser far away by the same size-on-screen rule): positive inside rock, negative in air.
+  Untouched, it comes from the world's height (height − z), the village's pads, and its pits and
+  tunnel carved as negative shapes; caves and overhangs are possible later from 3D noise.
+- **Surface nets.** Each chunk's surface is extracted with surface nets (one vertex per cell
+  whose corners change sign, quads across sign-changing edges), drawn flat-shaded: faceted
+  triangles, each one colour from the world's cover (rock on steep faces, earth on dug and
+  underground faces, paths in the village). Chunks share their border cells so neighbours meet;
+  a skirt hangs from each chunk's edge for neighbours of another level.
+- **Edits are shapes.** Digging subtracts and filling adds a sphere of density (centre, radius);
+  edits are stored per chunk and applied when a chunk is built; the chunks an edit touches are
+  rebuilt. Built things stay block models on their own grids (the ground is sculpted, structures
+  are blocks).
+- **Collision** is the same triangles round moving bodies; the terrain's surface height near the
+  player is the field's top.
+- **Far away** the tiles stay, flat-shaded, coloured by the same rules.
+
 **Trying the faceted ground (2026-11-18, developer):** after rounds with block ground on the round
 planet (aliasing of small steps, the look), the faceted low-poly alternative is tried for the
 **terrain only** (buildings, trees and people stay block models): `ULTRA_SPACE_GROUND=faceted`
