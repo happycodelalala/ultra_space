@@ -19,7 +19,7 @@ set in visual-style.md; this document is the system.
 | Route | **Voxel art with shaped blocks.** Faceted low-poly was the alternative (better at a distance, lighter on the GPU); blocks won because the world, what is dug and what is built are then one language. A mix of block ground and faceted scenery was rejected: two shape languages side by side always show the seam |
 | Shapes | A **standard set** (§3) in every orientation; no free-form angles anywhere |
 | Sizes | **Powers of two**, each size twice the one below and aligned to its own multiples (§4), so sizes nest exactly |
-| Terrain block | **25 cm**; hills read as slopes between terraces, taller drops stay crisp cuts |
+| Terrain block | **50 cm** (developer, 2026-11-17; was 25 cm); hills read as slopes between terraces, taller drops stay crisp cuts. Built things keep their own grids (25 cm structure, finer fittings); the demo village's exported 25 cm ground is resampled to 50 cm at load |
 | Far terrain | **Blocky everywhere:** distant terrain is drawn from the terrain function stepped to the block grid with the same slopes, so near and far are one look (only the near zone is editable blocks) |
 | Dig depth | **Tens of metres** below the surface near the player; caves and deep layers designed now, generated later |
 | Mining | **Drops resources:** mined blocks become items in the player's inventory; placing a block uses one |
@@ -262,13 +262,15 @@ shape recipe.
   A **focus** (the camera, set each frame) bounds where the block surface replaces the natural
   one (2 km), so far queries and far vehicles use the natural ground. Faces mesh alone; where
   they meet the columns tilt and leave small cracks (seam blocks later).
-- **Levels of detail (implemented):** the blocks are drawn out to about 400 m as a quadtree of
-  chunks: real 25 cm blocks within ~100 m, columns 50 cm wide to ~200 m, 1 m wide to ~400 m,
-  all with the blocks' 25 cm height steps (so their terraces are the real ones seen coarser),
-  each chunk with a 2 m skirt so neighbours of different levels leave no slit; a chunk stays
-  until whatever replaces it is ready. Beyond, the tiles take the blocks' colours and draw the
-  25 cm steps as dark risers along the contours, so nowhere can the eye tell where blocks stop.
-  Collision stays real blocks round bodies only.
+- **Levels of detail (implemented):** block geometry is drawn as a quadtree of chunks (64 × 64
+  columns) chosen by size on screen: a chunk splits while its children's columns still cover
+  the pixels set (a quality setting, 2–8 px, default 4), from 8 m columns down to the real
+  50 cm blocks, all with the blocks' own 50 cm height steps (so coarse terraces are the real
+  ones seen coarser), each chunk with a 2 m skirt; a chunk stays until whatever replaces it is
+  ready, and the chunks drawn cover the ground once (tested). Below the geometry's size the
+  tiles take the blocks' colours and draw the same steps as sun-lit risers whose coverage of
+  each pixel is worked out exactly, so the far ground looks blocky down to a pixel without
+  zig-zag (no anti-aliasing pass needed). Collision stays real blocks round bodies only.
 - **Far terrain:** beyond the block zone the quadtree tiles stay, drawn from the same function
   stepped to the grid with the same slope rule, so the land reads as the same blocks from low
   flight; where block chunks are, the tiles are cut away under them. From orbit nothing changes

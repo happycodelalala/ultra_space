@@ -1,6 +1,6 @@
 //! The ground as blocks, planet-wide (block-world.md §5.0, §7).
 //!
-//! The ground is columns of 25 cm blocks on a bent cube-sphere grid: six faces, each mapped onto
+//! The ground is columns of 50 cm blocks on a bent cube-sphere grid: six faces, each mapped onto
 //! the sphere by equal angles (columns point away from the centre), oriented so face 0 is centred
 //! on the demo village with its axes east and north (there the grid is the village's tangent
 //! grid to well under a millimetre). A column's top is the natural terrain stepped to the grid,
@@ -23,7 +23,7 @@ use crate::Terrain;
 use crate::foundations::tangent_frame;
 
 /// Block edge (m).
-pub const CELL: f64 = 0.25;
+pub const CELL: f64 = 0.5;
 /// Columns per chunk side.
 pub const CHUNK: i32 = 32;
 /// How far below the block surface the coarse collision patches sit (m).
@@ -90,6 +90,60 @@ pub struct VillageGround {
 }
 
 impl VillageGround {
+    /// The village's ground exported in cells of `size` metres (heights from its floor),
+    /// resampled to the ground's cells of [`CELL`]: each column the mean height of the columns
+    /// it covers (stepped to the grid), the colour of its first, and a cell dug where any part
+    /// of it was.
+    pub fn resampled(
+        size: f64,
+        origin: [i32; 2],
+        dims: [i32; 2],
+        tops: &[i32],
+        colours: &[String],
+        carved: &HashSet<IVec3>,
+    ) -> Self {
+        let f = (CELL / size).round().max(1.0) as i32;
+        let lo = [origin[0].div_euclid(f), origin[1].div_euclid(f)];
+        let hi = [
+            (origin[0] + dims[0] - 1).div_euclid(f),
+            (origin[1] + dims[1] - 1).div_euclid(f),
+        ];
+        let new_dims = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1];
+        let mut new_tops = Vec::with_capacity((new_dims[0] * new_dims[1]) as usize);
+        let mut new_colours = Vec::with_capacity(new_tops.capacity());
+        for y in lo[1]..=hi[1] {
+            for x in lo[0]..=hi[0] {
+                let (mut sum, mut count, mut first) = (0.0, 0.0, None);
+                for b in 0..f {
+                    for a in 0..f {
+                        let (i, j) = (x * f + a - origin[0], y * f + b - origin[1]);
+                        if i < 0 || j < 0 || i >= dims[0] || j >= dims[1] {
+                            continue;
+                        }
+                        let k = (i + j * dims[0]) as usize;
+                        sum += f64::from(tops[k] + 1) * size;
+                        count += 1.0;
+                        first.get_or_insert(k);
+                    }
+                }
+                let height = if count > 0.0 { sum / count } else { 0.0 };
+                new_tops.push((height / CELL).round() as i32 - 1);
+                new_colours.push(first.map_or_else(|| "turf".to_string(), |k| colours[k].clone()));
+            }
+        }
+        let carved = carved
+            .iter()
+            .map(|c| IVec3::new(c.x.div_euclid(f), c.y.div_euclid(f), c.z.div_euclid(f)))
+            .collect();
+        Self {
+            origin: lo,
+            dims: new_dims,
+            tops: new_tops,
+            colours: new_colours,
+            carved,
+        }
+    }
+
     fn index(&self, i: i32, j: i32) -> Option<usize> {
         let (x, y) = (i - self.origin[0], j - self.origin[1]);
         (x >= 0 && y >= 0 && x < self.dims[0] && y < self.dims[1])
@@ -416,9 +470,10 @@ impl BlockGround {
             / 255.0
             - 0.5;
         let n = crate::noise::fbm(
+            // 0.3 per metre, as the tiles' shader (blocks and far ground jitter alike).
             DVec3::new(
-                f64::from(i) * 0.075,
-                f64::from(j) * 0.075,
+                f64::from(i) * CELL * 0.3,
+                f64::from(j) * CELL * 0.3,
                 9.0 + f64::from(face),
             ),
             7,
@@ -556,7 +611,7 @@ impl BlockGround {
     }
 
     /// The mesh of a chunk of any level in its own frame. Level `l` has columns 2^l blocks wide
-    /// (their tops the ground at each column's middle), with the blocks' own 25 cm height steps,
+    /// (their tops the ground at each column's middle), with the blocks' own 50 cm height steps,
     /// so its terraces are the real blocks' seen coarser.
     pub fn lod_chunk(&self, key: LodKey) -> Option<ChunkMesh> {
         self.chunk_of(key, LOD_COLUMNS, Self::lod_size(key.0))
@@ -627,7 +682,7 @@ impl BlockGround {
                         }
                     }
                     let deep = face == 0 && self.carved_near.contains(&(i, j));
-                    let lo = if deep { lo.min(t - 28) } else { lo - 1 };
+                    let lo = if deep { lo.min(t - 14) } else { lo - 1 };
                     lows.push(Some((lo, t)));
                     kmin = kmin.min(lo - 2);
                     kmax = kmax.max(t);
@@ -877,6 +932,36 @@ impl BlockGround {
             basis,
             timings: [t_heights, t_cells, t_mesh],
         })
+    }
+
+    /// The chunks to draw round the camera at `camera` (surface frame, m): a quadtree from
+    /// `top_level`, each chunk splitting into its children while their columns would still be
+    /// at least `reach(level - 1)` away... that is, `reach(level)` is how far columns of `level`
+    /// stay wide enough on screen. Only the coarsest chunks are left out by distance, so the
+    /// chunks drawn cover the ground without holes or overlaps. `near` gives how near a chunk
+    /// comes to the camera (m; callers may remember its centre).
+    pub fn lod_plan(
+        &self,
+        camera: DVec3,
+        top_level: u8,
+        reach: impl Fn(u8) -> f64,
+        mut near: impl FnMut(LodKey) -> f64,
+    ) -> HashSet<LodKey> {
+        let mut wanted = HashSet::new();
+        let mut stack: Vec<LodKey> =
+            self.lod_around(camera.normalize(), reach(top_level), top_level);
+        while let Some(k) = stack.pop() {
+            let d = near(k);
+            if k.0 == top_level && d >= reach(k.0) {
+                continue;
+            }
+            if k.0 > 0 && d < reach(k.0 - 1) {
+                stack.extend(Self::lod_children(k));
+            } else {
+                wanted.insert(k);
+            }
+        }
+        wanted
     }
 
     /// The chunks of `level` within `radius` (m) of unit direction `dir`, on whichever faces

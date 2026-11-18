@@ -189,17 +189,17 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     var albedo: vec3<f32>;
     if terrain.surface.z > 0.5 {
         // The block ground's colours, jittered like its tops (fading out where a pixel covers
-        // more than the pattern), and its 25 cm steps drawn as dark risers along the contours.
+        // more than the pattern), and its 50 cm steps drawn as dark risers along the contours.
         let footprint = length(fwidth(local));
         let fade = 1.0 - smoothstep(0.8, 1.6, footprint);
         let speck = 1.0 - smoothstep(0.06, 0.12, footprint);
         let jitter = ((value_noise(local * 0.3) - 0.5) * 0.8
-            + 0.15 * (hash3(floor(local * 4.0)) - 0.5) * speck) * fade;
+            + 0.15 * (hash3(floor(local * 2.0)) - 0.5) * speck) * fade;
         albedo = terrain.palette[cover_index(fields, slope, jitter)].rgb;
         if fields.x > 0.0 {
             // How much of this pixel the risers cover, worked out exactly: a riser line where
             // steps are wider than the pixel, their average share where several fall in it.
-            let s = fields.x / 0.25;
+            let s = fields.x / 0.5;
             let w = fwidth(s);
             let riser = 1.0 - smoothstep(0.0, max(w * 1.5, 0.001), fract(s));
             let cover = mix(riser, 0.22, smoothstep(0.4, 1.2, w));

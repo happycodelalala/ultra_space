@@ -201,3 +201,65 @@ fn coarse_chunks_sit_on_the_ground_and_their_children_fill_them() {
         }
     }
 }
+
+#[test]
+fn the_chunk_plan_covers_the_ground_once_without_holes() {
+    let t = meridian();
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    let up = g.dir(40.0, -30.0);
+    let camera = up * (g.radius + t.surface_height(up, 1.0) + 25.0);
+    // 4 px per column at 1,344 pixels per radian (2560 x 1552, 60°).
+    let reach = |level: u8| CELL * f64::from(1u32 << level) * 1_344.0 / 4.0;
+    let near = |k: sim_planet::blocks::LodKey| {
+        g.lod_centre_point(k).distance(camera)
+            - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
+    };
+    let plan = g.lod_plan(camera, 4, reach, near);
+    assert!(plan.len() > 20, "{} chunks", plan.len());
+    // Every point within reach of the coarsest level lies in exactly one chunk.
+    let (east, south) = sim_planet::tangent_frame(up);
+    let outer = reach(4) * 0.9;
+    for a in -20..=20 {
+        for b in -20..=20 {
+            let (x, y) = (f64::from(a) / 20.0 * outer, f64::from(b) / 20.0 * outer);
+            if x * x + y * y > outer * outer {
+                continue;
+            }
+            let d = (up * g.radius + east * x + south * y).normalize();
+            let (face, p) = g.locate(d);
+            let covering = plan
+                .iter()
+                .filter(|k| {
+                    let size = BlockGround::lod_size(k.0);
+                    k.1 == face
+                        && (p.x / size).floor() as i32 == k.2
+                        && (p.y / size).floor() as i32 == k.3
+                })
+                .count();
+            assert_eq!(
+                covering, 1,
+                "point {x:.0},{y:.0} m covered by {covering} chunks"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_village_ground_is_resampled_to_the_ground_cells() {
+    // 4 x 4 columns of 25 cm at 1.5 m (top cell 5), one cell dug.
+    let carved: HashSet<glam::IVec3> = [glam::IVec3::new(1, 1, 5)].into_iter().collect();
+    let v = VillageGround::resampled(
+        0.25,
+        [-2, -2],
+        [4, 4],
+        &[5; 16],
+        &vec!["path".to_string(); 16],
+        &carved,
+    );
+    assert_eq!(v.dims, [2, 2]);
+    assert_eq!(v.origin, [-1, -1]);
+    for &t in &v.tops {
+        assert!((f64::from(t + 1) * CELL - 1.5).abs() < 1e-9, "top {t}");
+    }
+    assert!(v.carved.contains(&glam::IVec3::new(0, 0, 2)));
+}

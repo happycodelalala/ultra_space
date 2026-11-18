@@ -29,7 +29,7 @@ use crate::universe::{InGame, Universe};
 const TOP_LEVEL: u8 = 4;
 /// The quality setting for the block ground: block geometry of a level is drawn while its
 /// columns cover at least this many pixels (2–8; default 4); below that the tiles' shader draws
-/// the same 25 cm steps averaged over each pixel (no zig-zag), down to a pixel and less.
+/// the same 50 cm steps averaged over each pixel (no zig-zag), down to a pixel and less.
 /// `ULTRA_SPACE_BLOCK_PIXELS` until the settings menu has it.
 fn block_pixels() -> f64 {
     std::env::var("ULTRA_SPACE_BLOCK_PIXELS")
@@ -152,7 +152,7 @@ impl BlockWorld {
     /// Ground surface (m above the grid's floor) in the village file's own ground at (x, y).
     fn file_ground_z(&self, x: f64, y: f64) -> Option<f64> {
         let g = &self.village.ground;
-        let (i, j) = BlockGround::column(x, y);
+        let (i, j) = ((x / g.size).floor() as i32, (y / g.size).floor() as i32);
         let (a, b) = (i - g.origin[0], j - g.origin[1]);
         if a < 0 || b < 0 || a >= g.dims[0] || b >= g.dims[1] {
             return None;
@@ -247,17 +247,14 @@ pub fn load(
     let center = choose_site(&region.world, &current, &system.bodies[body])
         .ok_or("no site for the demo village")?;
     let g = &village.ground;
-    let own = VillageGround {
-        origin: g.origin,
-        dims: g.dims,
-        tops: g.tops.clone(),
-        colours: g.colours.iter().map(|&c| g.palette[c].clone()).collect(),
-        carved: g
-            .carved
-            .iter()
-            .map(|c| IVec3::new(c[0], c[1], c[2]))
-            .collect(),
-    };
+    // The layout's ground is in its own cells (25 cm); the game's ground cells are bigger.
+    let colours: Vec<String> = g.colours.iter().map(|&c| g.palette[c].clone()).collect();
+    let carved: HashSet<IVec3> = g
+        .carved
+        .iter()
+        .map(|c| IVec3::new(c[0], c[1], c[2]))
+        .collect();
+    let own = VillageGround::resampled(g.size, g.origin, g.dims, &g.tops, &colours, &carved);
     let mut ground = BlockGround::new(current.clone(), center, Some(own));
     let world = BlockWorld {
         ground: Arc::new(BlockGround::new(current.clone(), center, None)),
@@ -782,7 +779,6 @@ fn stream_chunks(
     };
     let cam = crate::settlements::camera_on(&universe, &camera, world.body, render.0);
     let ground = &world.ground;
-    let here = cam.normalize();
     let height = ground.height_above(cam);
     // Pixels per radian of view: the window's height over the vertical field of view.
     let fov = projections
@@ -822,18 +818,13 @@ fn stream_chunks(
         plan.per_radian = per_radian;
         plan.wanted.clear();
         if height < outer && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
-            let mut stack: Vec<LodKey> = ground.lod_around(here, outer, TOP_LEVEL);
-            while let Some(k) = stack.pop() {
-                let d = near(&mut plan.centres, &k);
-                if d >= level_reach(k.0, per_radian, pixels) {
-                    continue;
-                }
-                if k.0 > 0 && d < level_reach(k.0 - 1, per_radian, pixels) {
-                    stack.extend(BlockGround::lod_children(k));
-                } else {
-                    plan.wanted.insert(k);
-                }
-            }
+            let centres = &mut plan.centres;
+            plan.wanted = ground.lod_plan(
+                cam,
+                TOP_LEVEL,
+                |level| level_reach(level, per_radian, pixels),
+                |k| near(centres, &k),
+            );
         }
     }
     let wanted = &plan.wanted;
