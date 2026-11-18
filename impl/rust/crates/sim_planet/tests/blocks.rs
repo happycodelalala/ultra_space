@@ -258,30 +258,45 @@ fn the_chunk_plan_covers_the_ground_once_without_holes() {
 }
 
 #[test]
-fn faceted_ground_is_walked_on_where_it_is_drawn() {
+fn faceted_ground_is_a_density_surface_that_can_be_dug() {
     let t = meridian();
     let c = land(&t);
     let g =
         BlockGround::new(t.clone(), c, Some(layout())).with_style(sim_planet::GroundStyle::Faceted);
-    let chunk = g.chunk((0, 3, -2)).expect("a faceted chunk");
-    assert!(chunk.mesh.triangles() > 100);
-    // Every top vertex lies on the walkable surface (skirt vertices hang 2 m below).
-    let mut on = 0;
-    for w in world(&chunk) {
-        let (face, p) = g.locate(w.normalize());
-        let surface = g.facet_surface(face, p);
-        let h = w.length() - g.radius;
-        if (h - surface).abs() < 0.05 {
-            on += 1;
-        } else {
-            assert!(
-                (h - (surface - 2.0)).abs() < 0.3,
-                "vertex {h:.2} vs surface {surface:.2}"
-            );
-        }
-    }
-    assert!(on > chunk.mesh.positions.len() / 2);
-    // The yard is flat in the faceted ground too.
+    let key = (0u8, 3, -2);
+    let before = g.chunk(key).expect("a faceted chunk");
+    assert!(before.mesh.triangles() > 100);
+    // Its surface vertices lie on the ground's top (within a cell); skirts hang below.
+    let near = world(&before)
+        .filter(|w| {
+            let (face, p) = g.locate(w.normalize());
+            (w.length() - g.radius - g.facet_surface(face, p)).abs() < 1.0
+        })
+        .count();
+    assert!(
+        near > before.mesh.positions.len() / 2,
+        "{near} of {}",
+        before.mesh.positions.len()
+    );
+    // The village pit is carved: the chunk at the village centre reaches well below the ground.
+    let centre = g.chunk((0, 0, 0)).expect("the village chunk");
+    let top = g.facet_surface(0, DVec2::new(7.5, -8.5));
+    let deepest = world(&centre)
+        .map(|w| w.length() - g.radius)
+        .fold(f64::MAX, f64::min);
+    assert!(deepest < top - 2.5, "deepest {deepest:.1} vs top {top:.1}");
+    // Digging a sphere lowers the ground there.
+    let (face, p) = (0u8, DVec2::new(16.0 * 3.0 + 8.0, -16.0 * 2.0 + 8.0));
+    let ground = g.facet_surface(face, p);
+    let at = g.dir_on(face, p.x, p.y) * (g.radius + ground);
+    g.edit(at, 3.0, false);
+    let after = g.chunk(key).expect("still a chunk");
+    let low = world(&after)
+        .filter(|w| w.distance(at) < 3.5)
+        .map(|w| w.length() - g.radius)
+        .fold(f64::MAX, f64::min);
+    assert!(low < ground - 2.0, "dug to {low:.1} from {ground:.1}");
+    // The yard is flat on the faceted ground too.
     let (a, b) = (g.ground_z(0.0, 0.0), g.ground_z(3.0, -3.0));
     assert!((a - b).abs() < 0.05, "yard {a:.2} vs {b:.2}");
 }

@@ -62,6 +62,17 @@ pub enum GroundStyle {
     Faceted,
 }
 
+/// A cell corner offset (x, y, z) in surface nets.
+type Corner = (i32, i32, i32);
+
+/// A sphere dug out of (or added to) the ground: centre (surface frame, m) and radius.
+#[derive(Clone, Copy, Debug)]
+pub struct GroundEdit {
+    pub centre: DVec3,
+    pub radius: f64,
+    pub add: bool,
+}
+
 /// A chunk: its grid face and chunk column indices.
 pub type ChunkKey = (u8, i32, i32);
 /// A chunk of any level of detail: level (columns 2^level blocks wide; 0 the real blocks),
@@ -229,6 +240,8 @@ pub struct BlockGround {
     /// Where the player is (unit direction); `None` means everywhere.
     focus: RwLock<Option<DVec3>>,
     pub style: GroundStyle,
+    /// Digs and fills of the faceted ground (block-world.md, the density field).
+    edits: RwLock<Vec<GroundEdit>>,
 }
 
 impl std::fmt::Debug for BlockGround {
@@ -272,6 +285,7 @@ impl BlockGround {
             clock: std::sync::atomic::AtomicU64::new(0),
             focus: RwLock::new(None),
             style: GroundStyle::Blocks,
+            edits: RwLock::new(Vec::new()),
         };
         if let Some(layout) = layout {
             g.lay_village(layout);
@@ -601,80 +615,185 @@ impl BlockGround {
         cover_colour(cover, n)
     }
 
-    // ---- the faceted ground ---------------------------------------------------------------------
+    // ---- the faceted ground: a density field meshed with surface nets ---------------------------
 
-    /// The ground's height (m above the reference radius) at grid point `p` of `face`, detail
-    /// down to `detail` (m): the natural ground, the village's pads, and its pits as hollows.
-    fn ground_height(&self, face: u8, p: DVec2, detail: f64) -> f64 {
-        let mut h = self.natural.height(self.dir_on(face, p.x, p.y), detail);
+    /// The ground's top (m above the reference radius) at grid point `p` of `face`, detail down
+    /// to `detail` (m): the natural ground with the village's pads (its pits are carved in the
+    /// density, not here).
+    fn top_height(&self, face: u8, p: DVec2, detail: f64) -> f64 {
+        let h = self.natural.height(self.dir_on(face, p.x, p.y), detail);
+        match &self.village {
+            Some(v)
+                if face == 0
+                    && p.x.abs() < v.layout.half_size_m
+                    && p.y.abs() < v.layout.half_size_m =>
+            {
+                v.height(p, h)
+            }
+            _ => h,
+        }
+    }
+
+    /// The faceted surface's height (m above the reference radius) at grid point `p` of
+    /// `face`: the top of the density field (pits and edits aside).
+    pub fn facet_surface(&self, face: u8, p: DVec2) -> f64 {
+        self.top_height(face, p, 2.0 * CELL)
+    }
+
+    /// Digs (or, with `add`, fills) a sphere of ground: centre (surface frame, m) and radius.
+    pub fn edit(&self, centre: DVec3, radius: f64, add: bool) {
+        if let Ok(mut e) = self.edits.write() {
+            e.push(GroundEdit {
+                centre,
+                radius,
+                add,
+            });
+        }
+    }
+
+    /// The density (m; positive in rock, negative in air) at grid point `p` of `face`, `z` m
+    /// above the grid floor, over ground whose top there is `top` (m above the radius).
+    fn density(&self, face: u8, p: DVec2, z: f64, top: f64, edits: &[GroundEdit]) -> f64 {
+        let height = self.base + z;
+        let mut d = top - height;
         if face == 0
             && let Some(v) = &self.village
-            && p.x.abs() < v.layout.half_size_m
-            && p.y.abs() < v.layout.half_size_m
+            && p.x.abs() < v.layout.half_size_m + 6.0
+            && p.y.abs() < v.layout.half_size_m + 6.0
         {
-            h = v.height(p, h);
-            for (pit, &z0) in v.layout.pits.iter().zip(&v.pit_ground) {
-                let d = (p - DVec2::from_array(pit.centre)).length();
-                if d < pit.radius_m {
-                    let depth = (pit.radius_m * pit.radius_m - d * d).sqrt() / 1.3;
-                    h = h.min(z0 - depth);
+            d = d.min(v.dug(DVec3::new(p.x, p.y, height)));
+        }
+        if !edits.is_empty() {
+            let q = self.point_on(face, DVec3::new(p.x, p.y, z));
+            for e in edits {
+                let s = q.distance(e.centre) - e.radius;
+                d = if e.add { d.max(-s) } else { d.min(s) };
+            }
+        }
+        d
+    }
+
+    /// A faceted chunk of `n` × `n` columns, `size` metres a side: the density field on cells two
+    /// columns wide, its surface extracted with surface nets, flat-shaded, each facet one colour;
+    /// a skirt hangs from its edge.
+    fn facet_chunk(&self, key: LodKey, n: i32, size: f64) -> Option<ChunkMesh> {
+        let started = std::time::Instant::now();
+        let (_, face, ci, cj) = key;
+        let cells = (n / 2).max(1);
+        let s = size / f64::from(cells);
+        let (x0, y0) = (f64::from(ci) * size, f64::from(cj) * size);
+        // Corner columns from -1 to cells + 1: their ground tops.
+        let side = (cells + 3) as usize;
+        let corner = |a: i32| (a + 1) as usize;
+        let mut tops = Vec::with_capacity(side * side);
+        for b in -1..=cells + 1 {
+            for a in -1..=cells + 1 {
+                let p = DVec2::new(x0 + f64::from(a) * s, y0 + f64::from(b) * s);
+                tops.push(self.top_height(face, p, s));
+            }
+        }
+        let top_at = |a: i32, b: i32| tops[corner(a) + corner(b) * side];
+        let (lo, hi) = tops
+            .iter()
+            .fold((f64::MAX, f64::MIN), |(l, h), &t| (l.min(t), h.max(t)));
+        // Vertical range: round the surface, deeper where the village is dug or ground edited.
+        let mid = self.point_on(face, DVec3::new(x0 + size * 0.5, y0 + size * 0.5, 0.0));
+        let edits: Vec<GroundEdit> = self
+            .edits
+            .read()
+            .map(|e| {
+                e.iter()
+                    .filter(|e| e.centre.distance(mid) < e.radius + size)
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut zlo = lo - self.base - 2.0 * s;
+        let mut zhi = hi - self.base + 2.0 * s;
+        if face == 0
+            && let Some(v) = &self.village
+            && x0 < v.layout.half_size_m + 6.0
+            && x0 + size > -v.layout.half_size_m - 6.0
+            && y0 < v.layout.half_size_m + 6.0
+            && y0 + size > -v.layout.half_size_m - 6.0
+        {
+            zlo -= 8.0;
+        }
+        for e in &edits {
+            let r = e.centre.length() - self.radius - self.base;
+            zlo = zlo.min(r - e.radius - s);
+            zhi = zhi.max(r + e.radius + s);
+        }
+        let zlo = (zlo / s).floor() * s;
+        let nz = ((zhi - zlo) / s).ceil() as i32 + 1;
+        // Densities at the corners.
+        let at = |a: i32, b: i32, c: i32| {
+            (corner(a) + corner(b) * side) * (nz as usize + 1) + c as usize
+        };
+        let mut dens = vec![0.0f64; side * side * (nz as usize + 1)];
+        for b in -1..=cells + 1 {
+            for a in -1..=cells + 1 {
+                let p = DVec2::new(x0 + f64::from(a) * s, y0 + f64::from(b) * s);
+                let top = top_at(a, b);
+                for c in 0..=nz {
+                    dens[at(a, b, c)] = self.density(face, p, zlo + f64::from(c) * s, top, &edits);
                 }
             }
         }
-        h
-    }
-
-    /// Whether the facet quad (a, b) of `face` at `level` is split along its other diagonal
-    /// (alternating by a hash, so the facets don't line up in rows).
-    fn facet_flip(face: u8, level: u8, a: i64, b: i64) -> bool {
-        let h = (a.wrapping_mul(73_856_093) ^ b.wrapping_mul(19_349_663))
-            .wrapping_add(i64::from(face) * 83_492_791 + i64::from(level) * 2_654_435);
-        (h >> 3) & 1 == 1
-    }
-
-    /// The faceted surface's height (m above the reference radius) at grid point `p` of `face`:
-    /// the plane of the finest facet over it.
-    pub fn facet_surface(&self, face: u8, p: DVec2) -> f64 {
-        let fs = 2.0 * CELL;
-        let (a, b) = ((p.x / fs).floor(), (p.y / fs).floor());
-        let (u, v) = (p.x / fs - a, p.y / fs - b);
-        let at = |da: f64, db: f64| {
-            self.ground_height(face, DVec2::new((a + da) * fs, (b + db) * fs), fs)
-        };
-        let (h00, h10, h01, h11) = (at(0.0, 0.0), at(1.0, 0.0), at(0.0, 1.0), at(1.0, 1.0));
-        if Self::facet_flip(face, 0, a as i64, b as i64) {
-            // Split along (0,1)-(1,0).
-            if u + v <= 1.0 {
-                h00 + (h10 - h00) * u + (h01 - h00) * v
-            } else {
-                h11 + (h01 - h11) * (1.0 - u) + (h10 - h11) * (1.0 - v)
-            }
-        } else if u >= v {
-            // Split along (0,0)-(1,1).
-            h00 + (h10 - h00) * u + (h11 - h10) * v
-        } else {
-            h00 + (h01 - h00) * v + (h11 - h01) * u
-        }
-    }
-
-    /// A faceted chunk of `n` × `n` columns, `size` metres a side: facets two columns wide,
-    /// flat-shaded, each one colour; a 2 m skirt round its edge.
-    fn facet_chunk(&self, key: LodKey, n: i32, size: f64) -> Option<ChunkMesh> {
-        let started = std::time::Instant::now();
-        let (level, face, ci, cj) = key;
-        let facets = (n / 2).max(1);
-        let fs = size / f64::from(facets);
-        let (x0, y0) = (f64::from(ci) * size, f64::from(cj) * size);
-        // Vertex heights.
-        let side = (facets + 1) as usize;
-        let mut hs = Vec::with_capacity(side * side);
-        for b in 0..=facets {
-            for a in 0..=facets {
-                let p = DVec2::new(x0 + f64::from(a) * fs, y0 + f64::from(b) * fs);
-                hs.push(self.ground_height(face, p, fs));
-            }
-        }
         let t_heights = started.elapsed().as_secs_f32() * 1e3;
+        // One vertex per cell (a, b in -1..cells, c in 0..nz) whose corners change sign: the mean
+        // of the crossings on its edges (grid metres; z above the floor).
+        let cell_side = (cells + 2) as usize;
+        let cell_at = |a: i32, b: i32, c: i32| {
+            ((corner(a) + corner(b) * cell_side) * nz as usize) + c as usize
+        };
+        let mut verts: Vec<Option<DVec3>> = vec![None; cell_side * cell_side * nz as usize];
+        const EDGES: [(Corner, Corner); 12] = [
+            ((0, 0, 0), (1, 0, 0)),
+            ((0, 1, 0), (1, 1, 0)),
+            ((0, 0, 1), (1, 0, 1)),
+            ((0, 1, 1), (1, 1, 1)),
+            ((0, 0, 0), (0, 1, 0)),
+            ((1, 0, 0), (1, 1, 0)),
+            ((0, 0, 1), (0, 1, 1)),
+            ((1, 0, 1), (1, 1, 1)),
+            ((0, 0, 0), (0, 0, 1)),
+            ((1, 0, 0), (1, 0, 1)),
+            ((0, 1, 0), (0, 1, 1)),
+            ((1, 1, 0), (1, 1, 1)),
+        ];
+        for b in -1..cells + 1 {
+            for a in -1..cells + 1 {
+                for c in 0..nz {
+                    let (mut sum, mut count) = (DVec3::ZERO, 0.0);
+                    for (p0, p1) in EDGES {
+                        let d0 = dens[at(a + p0.0, b + p0.1, c + p0.2)];
+                        let d1 = dens[at(a + p1.0, b + p1.1, c + p1.2)];
+                        if (d0 > 0.0) != (d1 > 0.0) {
+                            let t = d0 / (d0 - d1);
+                            let q0 = DVec3::new(
+                                f64::from(a + p0.0),
+                                f64::from(b + p0.1),
+                                f64::from(c + p0.2),
+                            );
+                            let q1 = DVec3::new(
+                                f64::from(a + p1.0),
+                                f64::from(b + p1.1),
+                                f64::from(c + p1.2),
+                            );
+                            sum += q0 + (q1 - q0) * t;
+                            count += 1.0;
+                        }
+                    }
+                    if count > 0.0 {
+                        let g = sum / count;
+                        verts[cell_at(a, b, c)] =
+                            Some(DVec3::new(x0 + g.x * s, y0 + g.y * s, zlo + g.z * s));
+                    }
+                }
+            }
+        }
+        // Into the chunk's own frame.
         let up = self.dir_on(face, x0 + size * 0.5, y0 + size * 0.5);
         let origin = up * (self.radius + self.base);
         let e = self.faces[face as usize][1];
@@ -682,104 +801,128 @@ impl BlockGround {
         let south = east.cross(up);
         let basis = DQuat::from_mat3(&DMat3::from_cols(east, up, south));
         let inverse = basis.inverse();
-        let point = |a: i32, b: i32, drop: f64| {
-            let p = DVec2::new(x0 + f64::from(a) * fs, y0 + f64::from(b) * fs);
-            let h = hs[a as usize + b as usize * side] - drop;
-            self.dir_on(face, p.x, p.y) * (self.radius + h)
-        };
+        let world = |g: DVec3| self.point_on(face, g);
+        let globe = self.natural.globe();
         let mut m = MeshData::default();
-        // A triangle facing `out` (default: up, away from the centre).
-        let tri = |m: &mut MeshData, w: [DVec3; 3], colour: u16, out: Option<DVec3>| {
-            let n = (w[1] - w[0]).cross(w[2] - w[0]);
-            let outward = out.unwrap_or_else(|| (w[0] + w[1] + w[2]).normalize());
-            let w = if n.dot(outward) < 0.0 {
+        let tri = |m: &mut MeshData, w: [DVec3; 3], out: DVec3, colour: Option<u16>| {
+            let nrm = (w[1] - w[0]).cross(w[2] - w[0]);
+            if nrm.length_squared() < 1e-12 {
+                return;
+            }
+            let w = if nrm.dot(out) < 0.0 {
                 [w[0], w[2], w[1]]
             } else {
                 w
             };
-            let normal = (inverse * (w[1] - w[0]).cross(w[2] - w[0]).normalize()).as_vec3();
+            let normal = (w[1] - w[0]).cross(w[2] - w[0]).normalize();
+            let colour = colour.unwrap_or_else(|| {
+                self.facet_colour(
+                    face,
+                    (w[0] + w[1] + w[2]) / 3.0,
+                    normal,
+                    globe.map(|g| &**g),
+                )
+            });
+            let local_normal = (inverse * normal).as_vec3();
             let first = m.positions.len() as u32;
             for q in w {
                 m.positions
                     .push((inverse * (q - origin)).as_vec3().to_array());
-                m.normals.push(normal.to_array());
+                m.normals.push(local_normal.to_array());
                 m.colours.push(colour);
             }
             m.indices.extend([first, first + 1, first + 2]);
         };
-        let globe = self.natural.globe();
-        for b in 0..facets {
-            for a in 0..facets {
-                let (ga, gb) = (
-                    i64::from(ci) * i64::from(facets) + i64::from(a),
-                    i64::from(cj) * i64::from(facets) + i64::from(b),
-                );
-                let c = [
-                    point(a, b, 0.0),
-                    point(a + 1, b, 0.0),
-                    point(a, b + 1, 0.0),
-                    point(a + 1, b + 1, 0.0),
-                ];
-                let tris = if Self::facet_flip(face, level, ga, gb) {
-                    [[c[0], c[1], c[2]], [c[3], c[2], c[1]]]
-                } else {
-                    [[c[0], c[1], c[3]], [c[0], c[3], c[2]]]
-                };
-                for w in tris {
-                    // The facet's colour from its middle.
-                    let mid = (w[0] + w[1] + w[2]) / 3.0;
-                    let height = mid.length() - self.radius;
-                    let dir = mid.normalize();
-                    let normal = (w[1] - w[0]).cross(w[2] - w[0]).normalize();
-                    let steep = normal.dot(dir).abs() < 0.72;
-                    let (_, gp) = self.locate(dir);
-                    let jitter = crate::noise::fbm(
-                        DVec3::new(gp.x * 0.3, gp.y * 0.3, 9.0 + f64::from(face)),
-                        7,
-                        2,
-                        0.5,
-                    ) + 0.1
-                        * (f64::from(((ga * 31 + gb * 17) & 255) as u8) / 255.0 - 0.5);
-                    let on_path = face == 0
-                        && self.village.as_ref().is_some_and(|v| {
-                            gp.x.abs() < v.layout.half_size_m
-                                && gp.y.abs() < v.layout.half_size_m
-                                && v.on_path(gp)
-                        });
-                    let cover = globe.map(|g| g.ground_cover(dir, height, jitter));
-                    use crate::globe::Cover;
-                    let col = if on_path {
-                        colour(if jitter < 0.0 { "path" } else { "path2" })
-                    } else if height < 0.0 && self.natural.has_ocean() {
-                        colour("path2")
-                    } else if steep && !matches!(cover, Some(Cover::Ice | Cover::Snow)) {
-                        colour(if jitter < 0.0 { "rock" } else { "rock2" })
-                    } else if height < 1.5 && self.natural.has_ocean() {
-                        colour(if jitter < 0.0 { "straw" } else { "straw2" })
+        // Quads across each sign-changing edge this chunk owns (its corner in 0..cells).
+        let corner_world = |a: i32, b: i32, c: i32| {
+            world(DVec3::new(
+                x0 + f64::from(a) * s,
+                y0 + f64::from(b) * s,
+                zlo + f64::from(c) * s,
+            ))
+        };
+        let quad = |m: &mut MeshData,
+                    cs: [(i32, i32, i32); 4],
+                    from: (i32, i32, i32),
+                    to: (i32, i32, i32)| {
+            let v: Vec<DVec3> = cs
+                .iter()
+                .filter_map(|&(a, b, c)| {
+                    if c < 0 || c >= nz {
+                        None
                     } else {
-                        cover_colour(cover, jitter)
-                    };
-                    tri(&mut m, w, col, None);
+                        verts[cell_at(a, b, c)]
+                    }
+                })
+                .map(world)
+                .collect();
+            if v.len() != 4 {
+                return;
+            }
+            let inside = dens[at(from.0, from.1, from.2)] > 0.0;
+            let dir = corner_world(to.0, to.1, to.2) - corner_world(from.0, from.1, from.2);
+            let out = if inside { dir } else { -dir };
+            tri(m, [v[0], v[1], v[2]], out, None);
+            tri(m, [v[0], v[2], v[3]], out, None);
+        };
+        for b in 0..cells {
+            for a in 0..cells {
+                for c in 0..nz {
+                    let d = dens[at(a, b, c)] > 0.0;
+                    if c > 0 && d != (dens[at(a + 1, b, c)] > 0.0) {
+                        quad(
+                            &mut m,
+                            [(a, b - 1, c - 1), (a, b, c - 1), (a, b, c), (a, b - 1, c)],
+                            (a, b, c),
+                            (a + 1, b, c),
+                        );
+                    }
+                    if c > 0 && d != (dens[at(a, b + 1, c)] > 0.0) {
+                        quad(
+                            &mut m,
+                            [(a - 1, b, c - 1), (a, b, c - 1), (a, b, c), (a - 1, b, c)],
+                            (a, b, c),
+                            (a, b + 1, c),
+                        );
+                    }
+                    if c < nz && d != (dens[at(a, b, c + 1)] > 0.0) {
+                        quad(
+                            &mut m,
+                            [(a - 1, b - 1, c), (a, b - 1, c), (a, b, c), (a - 1, b, c)],
+                            (a, b, c),
+                            (a, b, c + 1),
+                        );
+                    }
                 }
             }
         }
-        // Skirts: 2 m walls down the outside of the chunk's edge.
+        // Skirts: from the top surface vertex of each outer cell, 2 cells down, along the edge.
         let soil = colour("soil");
-        for k in 0..facets {
-            for (a, b, a2, b2) in [
-                (k, 0, k + 1, 0),
-                (k + 1, facets, k, facets),
-                (0, k + 1, 0, k),
-                (facets, k, facets, k + 1),
+        let top_vertex = |a: i32, b: i32| {
+            (0..nz)
+                .rev()
+                .find_map(|c| verts[cell_at(a, b, c)])
+                .map(world)
+        };
+        let drop = |p: DVec3| p - p.normalize() * 2.0 * s;
+        let centre = world(DVec3::new(x0 + size * 0.5, y0 + size * 0.5, zlo));
+        for k in -1..cells {
+            for (p, q) in [
+                ((k, -1), (k + 1, -1)),
+                ((k, cells), (k + 1, cells)),
+                ((-1, k), (-1, k + 1)),
+                ((cells, k), (cells, k + 1)),
             ] {
-                let (p, q) = (point(a, b, 0.0), point(a2, b2, 0.0));
-                let (pd, qd) = (point(a, b, 2.0), point(a2, b2, 2.0));
-                // Away from the chunk's middle.
-                let mid = point(facets / 2, facets / 2, 0.0);
-                let out = Some((p + q) * 0.5 - mid);
-                tri(&mut m, [p, q, qd], soil, out);
-                tri(&mut m, [p, qd, pd], soil, out);
+                if let (Some(v0), Some(v1)) = (top_vertex(p.0, p.1), top_vertex(q.0, q.1)) {
+                    let out = (v0 + v1) * 0.5 - centre;
+                    let out = out - (v0 + v1).normalize() * out.dot((v0 + v1).normalize());
+                    tri(&mut m, [v0, v1, drop(v1)], out, Some(soil));
+                    tri(&mut m, [v0, drop(v1), drop(v0)], out, Some(soil));
+                }
             }
+        }
+        if m.is_empty() {
+            return None;
         }
         let t_mesh = started.elapsed().as_secs_f32() * 1e3 - t_heights;
         Some(ChunkMesh {
@@ -788,6 +931,56 @@ impl BlockGround {
             basis,
             timings: [t_heights, 0.0, t_mesh],
         })
+    }
+
+    /// The colour of a facet whose middle is `mid` (surface frame) and normal `normal`.
+    fn facet_colour(
+        &self,
+        face: u8,
+        mid: DVec3,
+        normal: DVec3,
+        globe: Option<&crate::globe::GlobeWorld>,
+    ) -> u16 {
+        use crate::globe::Cover;
+        let dir = mid.normalize();
+        let height = mid.length() - self.radius;
+        let (_, gp) = self.locate(dir);
+        let jitter = crate::noise::fbm(
+            DVec3::new(gp.x * 0.3, gp.y * 0.3, 9.0 + f64::from(face)),
+            7,
+            2,
+            0.5,
+        ) + 0.1
+            * (crate::noise::unit(crate::noise::hash3(
+                (gp.x * 2.0) as i64,
+                (gp.y * 2.0) as i64,
+                i64::from(face),
+                5,
+            )) - 0.5);
+        let top = self.top_height(face, gp, 1.0);
+        if height < top - 0.8 {
+            // Dug or underground faces: earth.
+            return colour(if jitter < 0.0 { "soil" } else { "soil2" });
+        }
+        let on_path = face == 0
+            && self.village.as_ref().is_some_and(|v| {
+                gp.x.abs() < v.layout.half_size_m
+                    && gp.y.abs() < v.layout.half_size_m
+                    && v.on_path(gp)
+            });
+        let cover = globe.map(|g| g.ground_cover(dir, height, jitter));
+        let steep = normal.dot(dir) < 0.72;
+        if on_path {
+            colour(if jitter < 0.0 { "path" } else { "path2" })
+        } else if height < 0.0 && self.natural.has_ocean() {
+            colour("path2")
+        } else if steep && !matches!(cover, Some(Cover::Ice | Cover::Snow)) {
+            colour(if jitter < 0.0 { "rock" } else { "rock2" })
+        } else if height < 1.5 && self.natural.has_ocean() {
+            colour(if jitter < 0.0 { "straw" } else { "straw2" })
+        } else {
+            cover_colour(cover, jitter)
+        }
     }
 
     /// The cell at (i, j, k) of `face`: 0 empty, else a 1-based index into [`PALETTE`].
