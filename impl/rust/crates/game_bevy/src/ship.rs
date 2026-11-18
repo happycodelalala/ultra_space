@@ -319,8 +319,22 @@ fn spawn_player_ship(
             let globe = terrain.globe()?.clone();
             sim_planet::fibonacci_directions(20_000)
                 .filter(|&d| {
-                    format!("{:?}", globe.cover(d)).eq_ignore_ascii_case(&want)
-                        && terrain.height(d, 50.0) > 2.0
+                    // The biome as the ground cover reads it (the exact height, not the coarse
+                    // map), the same 150 m round, so the views show that landscape.
+                    let east = DVec3::Y.cross(d).normalize_or(DVec3::X);
+                    let north = d.cross(east);
+                    terrain.height(d, 50.0) > 5.0
+                        && (0..5).all(|k| {
+                            let a = f64::from(k) * 1.2566;
+                            let q = if k == 0 {
+                                d
+                            } else {
+                                (d * terrain.radius + (east * a.cos() + north * a.sin()) * 150.0)
+                                    .normalize()
+                            };
+                            format!("{:?}", globe.ground_cover(q, terrain.height(q, 50.0), 0.0))
+                                .eq_ignore_ascii_case(&want)
+                        })
                 })
                 .max_by(|&a, &b| {
                     let sun = |d: DVec3| (surface_turn * d).dot(to_star);
