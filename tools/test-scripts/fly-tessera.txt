@@ -9,11 +9,11 @@
 16   shot fly-3-flying.png
 24   shot fly-4-plains.png
 25   hold X 2                # stop
-27.5 hold ControlLeft 6      # sink toward the ground
-34   press L                 # land
-35   shot fly-5-landing.png
-36   wait landed 60
-37   shot fly-6-landed.png
-38   press F                 # step out
-40   shot fly-7-out.png
-41   quit
+27.5 hold ControlLeft 14     # sink toward the ground (below 200 m for L)
+42   press L                 # land
+43   shot fly-5-landing.png
+44   wait landed 60
+45   shot fly-6-landed.png
+46   press F                 # step out
+48   shot fly-7-out.png
+49   quit
