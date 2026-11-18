@@ -309,7 +309,43 @@ fn spawn_player_ship(
             0.0,
         )
         .rotation;
-    if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
+    // Debug: `ULTRA_SPACE_START_COVER=<biome>` (forest, taiga, desert, savanna, tundra, jungle,
+    // steppe, grass, ...; the world's cover in lower case) starts over the sunniest land of that
+    // biome, as `ULTRA_SPACE_START_REGION` does over a region.
+    let cover_dir = std::env::var("ULTRA_SPACE_START_COVER")
+        .ok()
+        .and_then(|want| {
+            let terrain = sim_planet::Terrain::of(&system.bodies[index])?;
+            let globe = terrain.globe()?.clone();
+            sim_planet::fibonacci_directions(20_000)
+                .filter(|&d| {
+                    format!("{:?}", globe.cover(d)).eq_ignore_ascii_case(&want)
+                        && terrain.height(d, 50.0) > 2.0
+                })
+                .max_by(|&a, &b| {
+                    let sun = |d: DVec3| (surface_turn * d).dot(to_star);
+                    sun(a).total_cmp(&sun(b))
+                })
+        });
+    if let Some(dir) = cover_dir
+        && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
+    {
+        let body = &system.bodies[index];
+        let ground = terrain.surface_height(dir, 100.0).max(0.0);
+        let above = std::env::var("ULTRA_SPACE_START_ALTITUDE")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .map_or(ground + 60.0, |a| a.max(ground + 25.0));
+        let frame = system
+            .frames
+            .state_in(body.inertial_frame, body.surface_frame, 0.0);
+        let east = DVec3::Y.cross(dir).normalize_or(DVec3::X);
+        let s = &mut state.state;
+        s.position = frame.rotation * (dir * (body.radius + above));
+        s.velocity = frame.angular_velocity.cross(s.position);
+        s.angular_velocity = frame.angular_velocity;
+        s.rotation = crate::camera::look_rotation(frame.rotation * east, frame.rotation * dir);
+    } else if let Ok(kind) = std::env::var("ULTRA_SPACE_START_REGION")
         && let Some(terrain) = sim_planet::Terrain::of(&system.bodies[index])
         && let Some(globe) = terrain.globe()
         && let Some(r) = (0..globe.regions.len())

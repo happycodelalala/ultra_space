@@ -246,6 +246,8 @@ pub struct BlockGround {
     pub style: GroundStyle,
     /// Digs and fills of the faceted ground (block-world.md, the density field).
     edits: RwLock<Vec<GroundEdit>>,
+    /// The ground cover (design/ground-cover.md), when the body has it.
+    pub cover: Option<std::sync::Arc<crate::cover::CoverWorld>>,
 }
 
 impl std::fmt::Debug for BlockGround {
@@ -290,6 +292,7 @@ impl BlockGround {
             focus: RwLock::new(None),
             style: GroundStyle::Blocks,
             edits: RwLock::new(Vec::new()),
+            cover: None,
         };
         if let Some(layout) = layout {
             g.lay_village(layout);
@@ -326,6 +329,12 @@ impl BlockGround {
             }
         }
         self.village = Some(village);
+    }
+
+    /// The same ground with ground cover.
+    pub fn with_cover(mut self, cover: std::sync::Arc<crate::cover::CoverWorld>) -> Self {
+        self.cover = Some(cover);
+        self
     }
 
     /// The same ground drawn and walked on in `style`.
@@ -624,7 +633,7 @@ impl BlockGround {
     /// The ground's top (m above the reference radius) at grid point `p` of `face`, detail down
     /// to `detail` (m): the natural ground with the village's pads (its pits are carved in the
     /// density, not here).
-    fn top_height(&self, face: u8, p: DVec2, detail: f64) -> f64 {
+    pub(crate) fn top_height(&self, face: u8, p: DVec2, detail: f64) -> f64 {
         let h = self.natural.height(self.dir_on(face, p.x, p.y), detail);
         match &self.village {
             Some(v)
@@ -636,6 +645,57 @@ impl BlockGround {
             }
             _ => h,
         }
+    }
+
+    /// The world's geography (when the body has one).
+    pub fn globe(&self) -> Option<&std::sync::Arc<crate::globe::GlobeWorld>> {
+        self.natural.globe()
+    }
+
+    /// The face's grid axes at `dir`, made tangent there (east-ish, north-ish).
+    pub fn face_axes(&self, face: u8, dir: DVec3) -> (DVec3, DVec3) {
+        let [_, e, n] = self.faces[face as usize];
+        let east = (e - dir * e.dot(dir)).normalize();
+        let north = (n - dir * n.dot(dir) - east * n.dot(east)).normalize();
+        (east, north)
+    }
+
+    /// The frame a ground chunk of any level is meshed in: origin at its centre on the grid
+    /// floor, basis (east-ish, up, south-ish).
+    pub fn chunk_frame(&self, key: LodKey) -> (DVec3, DQuat) {
+        let size = Self::lod_size(key.0);
+        let up = self.dir_on(
+            key.1,
+            (f64::from(key.2) + 0.5) * size,
+            (f64::from(key.3) + 0.5) * size,
+        );
+        let origin = up * (self.radius + self.base);
+        let e = self.faces[key.1 as usize][1];
+        let east = (e - up * e.dot(up)).normalize();
+        let south = east.cross(up);
+        (origin, DQuat::from_mat3(&DMat3::from_cols(east, up, south)))
+    }
+
+    /// Whether wild cover is kept off grid point `p` of `face`: the village's square, and dug
+    /// ground.
+    pub fn cleared(&self, face: u8, p: DVec2) -> bool {
+        if face == 0
+            && let Some(v) = &self.village
+        {
+            let half = v.layout.half_size_m + 2.0;
+            if p.x.abs() < half && p.y.abs() < half {
+                return true;
+            }
+        }
+        if let Ok(e) = self.edits.read()
+            && !e.is_empty()
+        {
+            let q = self.dir_on(face, p.x, p.y);
+            return e
+                .iter()
+                .any(|e| !e.add && (q * e.centre.length()).distance(e.centre) < e.radius + 0.5);
+        }
+        false
     }
 
     /// The faceted surface's height (m above the reference radius) at grid point `p` of

@@ -273,6 +273,26 @@ pub fn load(
         .map_err(|e| format!("{}: {e}", layout_path.display()))?;
     let mut ground =
         BlockGround::new(current.clone(), center, Some(own)).with_style(ground_style());
+    // Ground cover planet-wide (design/ground-cover.md) on the faceted ground of a body with
+    // geography; `ULTRA_SPACE_COVER=0` leaves it out, `ULTRA_SPACE_COVER_DENSITY` scales it.
+    if ground_style() == sim_planet::GroundStyle::Faceted
+        && current.globe().is_some()
+        && std::env::var("ULTRA_SPACE_COVER").as_deref() != Ok("0")
+    {
+        let density = std::env::var("ULTRA_SPACE_COVER_DENSITY")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(1.0);
+        let started = std::time::Instant::now();
+        let seed = system.bodies[body].terrain.as_ref().map_or(0, |t| t.seed);
+        let cover = Arc::new(sim_planet::cover::CoverWorld::new(seed, density));
+        info!(
+            "ground cover: {} species built in {:.0} ms",
+            cover.species_count(),
+            started.elapsed().as_secs_f64() * 1e3
+        );
+        ground = ground.with_cover(cover);
+    }
     let world = BlockWorld {
         ground: Arc::new(
             BlockGround::new(current.clone(), center, None).with_style(ground_style()),
@@ -572,8 +592,21 @@ struct ChunkPose {
 pub struct BlockCoverage(pub f64);
 
 /// A chunk made on a worker: its mesh, pose (origin, basis; surface frame), the time it took
-/// (ms) and its stages (heights, cells and colours, meshing; ms).
-type MadeChunk = (Mesh, DVec3, DQuat, f64, [f32; 3]);
+/// (ms), its stages (heights, cells and colours, meshing; ms) and its ground cover (in the same
+/// frame).
+type MadeChunk = (Mesh, DVec3, DQuat, f64, [f32; 3], Option<Mesh>);
+
+/// A chunk's ground cover as a Bevy mesh (vertex colours final).
+fn cover_mesh(c: sim_planet::cover::CoverMesh) -> Mesh {
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, c.positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, c.normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, c.colours)
+    .with_inserted_indices(Indices::U32(c.indices))
+}
 
 /// Block streaming counts since the last report (logged every few seconds, for performance
 /// rounds: how fast the workers keep up).
@@ -885,7 +918,12 @@ fn stream_chunks(
     };
     let cam = crate::settlements::camera_on(&universe, &camera, world.body, render.0);
     let ground = &world.ground;
-    let height = ground.height_above(cam);
+    // Height above the ground under the camera (not above the village's floor: on high land
+    // that would leave the ground without chunks).
+    let height = {
+        let (face, p) = ground.locate(cam);
+        cam.length() - ground.radius - ground.facet_surface(face, p)
+    };
     // Pixels per radian of view: the window's height over the vertical field of view.
     let fov = projections
         .iter()
@@ -965,12 +1003,18 @@ fn stream_chunks(
                     } else {
                         ground_mesh(&c, colour)
                     };
+                    let cover = g
+                        .cover
+                        .as_ref()
+                        .and_then(|cw| cw.chunk_mesh(&g, key))
+                        .map(cover_mesh);
                     (
                         mesh,
                         c.origin,
                         c.basis,
                         start.elapsed().as_secs_f64() * 1e3,
                         c.timings,
+                        cover,
                     )
                 })
             }),
@@ -993,20 +1037,24 @@ fn stream_chunks(
         };
         let m = block_on(poll_once(task)).flatten();
         match &m {
-            Some((mesh, _, _, ms, stages)) => {
+            Some((mesh, _, _, ms, stages, cover)) => {
                 for (sum, t) in stats.stages.iter_mut().zip(stages) {
                     *sum += f64::from(*t);
                 }
                 stats.built += 1;
                 stats.work_ms += ms;
                 stats.worst_ms = stats.worst_ms.max(*ms);
-                let triangles = mesh.indices().map_or(0, |i| i.len() / 3);
+                let triangles = mesh.indices().map_or(0, |i| i.len() / 3)
+                    + cover
+                        .as_ref()
+                        .and_then(|c| c.indices())
+                        .map_or(0, |i| i.len() / 3);
                 stats.triangles += triangles;
                 uploaded += triangles;
             }
             None => stats.empty += 1,
         }
-        let entity = m.map(|(mesh, origin, basis, _, _)| {
+        let entity = m.map(|(mesh, origin, basis, _, _, cover)| {
             let faceted = mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_some();
             let mut e = commands.spawn((
                 ChunkPose { origin, basis },
@@ -1019,7 +1067,22 @@ fn stream_chunks(
             } else {
                 e.insert(MeshMaterial3d(draw.chunk_material.clone()));
             }
-            e.id()
+            let id = e.id();
+            // The chunk's ground cover: a child in the same frame, shown and hidden with it;
+            // casting shadows only near.
+            if let Some(c) = cover {
+                let mut child = commands.spawn((
+                    Mesh3d(meshes.add(c)),
+                    MeshMaterial3d(draw.solid.clone()),
+                    Transform::IDENTITY,
+                    Visibility::Inherited,
+                    ChildOf(id),
+                ));
+                if key.0 >= 2 {
+                    child.insert(bevy::light::NotShadowCaster);
+                }
+            }
+            id
         });
         if entity.is_some() {
             draw.hidden.insert(key);

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ground_cover.schema.json",
+  "title": "Ground cover",
+  "description": "The species of ground cover the game generates and the recipes of what grows where (design/ground-cover.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["species", "recipes", "rules"],
+  "properties": {
+    "description": { "type": "string" },
+    "species": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "generator", "block_m", "height_m", "width_m", "variants", "colours", "tint", "scale_spread", "collider", "tilt_to_slope", "sink"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "generator": { "enum": ["broadleaf", "broadleaf_tall", "broadleaf_wide", "birch", "willow", "giant", "acacia", "baobab", "conifer", "pine", "krummholz", "palm", "dead", "log", "stump", "driftwood", "shrub", "fern", "dwarf", "bamboo", "reeds", "cactus", "padcactus", "tuft", "flowers", "mushrooms", "pebbles", "rock", "outcrop", "ice", "mound", "crust"] },
+          "block_m": { "description": "Voxel edge (m), a power of two.", "enum": [0.0625, 0.125, 0.25, 0.5] },
+          "height_m": { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 2, "maxItems": 2 },
+          "width_m": { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0 }, "minItems": 2, "maxItems": 2 },
+          "variants": { "type": "integer", "minimum": 1, "maximum": 32 },
+          "colours": { "description": "Palette colour names by role (wood, leaf, rock, accent...).", "type": "object", "additionalProperties": { "type": "string" } },
+          "tint": {
+            "type": "object", "additionalProperties": false, "required": ["hue", "value"],
+            "properties": { "hue": { "type": "number", "minimum": 0 }, "value": { "type": "number", "minimum": 0 } }
+          },
+          "scale_spread": { "type": "number", "minimum": 0, "maximum": 0.6 },
+          "collider": { "enum": ["none", "trunk", "box"] },
+          "tilt_to_slope": { "type": "boolean" },
+          "sink": { "description": "Share of the height sunk into the ground.", "type": "number", "minimum": 0, "maximum": 0.9 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "recipes": {
+      "description": "Per biome (the world's cover ids, lower case) and for shore, steep and high ground.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["species", "density_per_ha", "spacing_m", "cluster", "share", "slope_max_deg"],
+          "properties": {
+            "species": { "type": "string" },
+            "density_per_ha": { "type": "number", "minimum": 0 },
+            "spacing_m": { "type": "number", "exclusiveMinimum": 0 },
+            "cluster": {
+              "type": "object", "additionalProperties": false, "required": ["scale_m", "strength"],
+              "properties": { "scale_m": { "type": "number", "exclusiveMinimum": 0 }, "strength": { "type": "number", "minimum": 0, "maximum": 1 } }
+            },
+            "share": { "description": "How much the species' share wanders over the land (0 none, 1 from nothing to double).", "type": "number", "minimum": 0, "maximum": 1 },
+            "slope_max_deg": { "type": "number", "minimum": 0, "maximum": 90 },
+            "min_height_m": { "type": "number" },
+            "max_height_m": { "type": "number" }
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "object", "additionalProperties": false,
+      "required": ["shore_height_m", "steep_slope_deg", "high_temperature_c", "tree_line_temperature_c", "warm_shore_temperature_c"],
+      "properties": {
+        "shore_height_m": { "type": "number" },
+        "steep_slope_deg": { "type": "number" },
+        "high_temperature_c": { "type": "number" },
+        "tree_line_temperature_c": { "type": "number" },
+        "warm_shore_temperature_c": { "type": "number" }
+      }
+    }
+  }
+}

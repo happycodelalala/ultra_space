@@ -7,6 +7,7 @@
 pub mod blocks;
 pub mod climate;
 pub mod clouds;
+pub mod cover;
 pub mod foundations;
 pub mod geography;
 pub mod globe;

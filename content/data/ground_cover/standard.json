@@ -1,0 +1,2310 @@
+{
+ "description": "Ground cover (design/ground-cover.md): the species the game generates (each a generator with parameter ranges and colours from the block palette, tinted) and what grows where (recipes per biome of the world's cover, plus shore, steep and high ground that apply on top).",
+ "species": [
+  {
+   "id": "oak",
+   "generator": "broadleaf",
+   "block_m": 0.25,
+   "height_m": [
+    5,
+    9
+   ],
+   "width_m": [
+    4,
+    7
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "bark",
+    "wood2": "bark2",
+    "leaf": "leaf",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf2"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "thick trunk, limbs, rounded crown of cushion lobes"
+  },
+  {
+   "id": "beech",
+   "generator": "broadleaf_tall",
+   "block_m": 0.25,
+   "height_m": [
+    7,
+    12
+   ],
+   "width_m": [
+    4,
+    6
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "bark2",
+    "wood2": "bark",
+    "leaf": "leaf",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf2"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "tall straight trunk, high oval crown"
+  },
+  {
+   "id": "birch",
+   "generator": "birch",
+   "block_m": 0.25,
+   "height_m": [
+    5,
+    9
+   ],
+   "width_m": [
+    2,
+    3.5
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "birch",
+    "wood2": "birch2",
+    "leaf": "bleaf",
+    "leafhi": "bleafhi",
+    "leafdark": "bleaf3",
+    "leafvar": "bleafhi"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "slim white trunk, narrow light crown"
+  },
+  {
+   "id": "willow",
+   "generator": "willow",
+   "block_m": 0.25,
+   "height_m": [
+    5,
+    8
+   ],
+   "width_m": [
+    5,
+    8
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "bark",
+    "wood2": "bark2",
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf"
+   },
+   "tint": {
+    "hue": 0.05,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "wide crown with hanging curtains"
+  },
+  {
+   "id": "tropical",
+   "generator": "broadleaf_wide",
+   "block_m": 0.25,
+   "height_m": [
+    8,
+    14
+   ],
+   "width_m": [
+    7,
+    11
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "bark2",
+    "wood2": "birch2",
+    "leaf": "leafhi",
+    "leafhi": "bleafhi",
+    "leafdark": "leaf",
+    "leafvar": "leaf2"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "wide flat crown, light green, buttress flare"
+  },
+  {
+   "id": "jungle_giant",
+   "generator": "giant",
+   "block_m": 0.5,
+   "height_m": [
+    18,
+    30
+   ],
+   "width_m": [
+    10,
+    16
+   ],
+   "variants": 8,
+   "colours": {
+    "wood": "bark2",
+    "wood2": "bark",
+    "leaf": "leaf",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf2"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.15,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "tall trunk, buttress roots, broad emergent crown"
+  },
+  {
+   "id": "acacia",
+   "generator": "acacia",
+   "block_m": 0.25,
+   "height_m": [
+    4,
+    7
+   ],
+   "width_m": [
+    5,
+    8
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "bark",
+    "wood2": "bark2",
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf"
+   },
+   "tint": {
+    "hue": 0.06,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "forked leaning trunk, flat umbrella crown"
+  },
+  {
+   "id": "baobab",
+   "generator": "baobab",
+   "block_m": 0.25,
+   "height_m": [
+    5,
+    9
+   ],
+   "width_m": [
+    4,
+    7
+   ],
+   "variants": 8,
+   "colours": {
+    "wood": "brown2",
+    "wood2": "stone2",
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "fat bottle trunk, small stubby crown"
+  },
+  {
+   "id": "spruce",
+   "generator": "conifer",
+   "block_m": 0.25,
+   "height_m": [
+    8,
+    16
+   ],
+   "width_m": [
+    3,
+    5
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "bark",
+    "wood2": "bark2",
+    "leaf": "pine",
+    "leafhi": "pine2",
+    "leafdark": "pine3",
+    "leafvar": "pine3"
+   },
+   "tint": {
+    "hue": 0.03,
+    "value": 0.07
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "tiered narrow cone"
+  },
+  {
+   "id": "pine",
+   "generator": "pine",
+   "block_m": 0.25,
+   "height_m": [
+    8,
+    14
+   ],
+   "width_m": [
+    3,
+    5
+   ],
+   "variants": 12,
+   "colours": {
+    "wood": "bark2",
+    "wood2": "bark",
+    "leaf": "pine",
+    "leafhi": "pine2",
+    "leafdark": "pine3",
+    "leafvar": "pine2"
+   },
+   "tint": {
+    "hue": 0.03,
+    "value": 0.07
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "tall bare trunk, high rounded tiers"
+  },
+  {
+   "id": "krummholz",
+   "generator": "krummholz",
+   "block_m": 0.25,
+   "height_m": [
+    1,
+    3
+   ],
+   "width_m": [
+    1.5,
+    3
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "bark",
+    "wood2": "bark2",
+    "leaf": "pine3",
+    "leafhi": "pine2",
+    "leafdark": "pine3",
+    "leafvar": "pine"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "stunted, bent, flat-topped conifer"
+  },
+  {
+   "id": "palm",
+   "generator": "palm",
+   "block_m": 0.25,
+   "height_m": [
+    6,
+    12
+   ],
+   "width_m": [
+    4,
+    7
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "brown",
+    "wood2": "bark",
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "curved ringed trunk, drooping fronds"
+  },
+  {
+   "id": "dead_tree",
+   "generator": "dead",
+   "block_m": 0.25,
+   "height_m": [
+    4,
+    10
+   ],
+   "width_m": [
+    2,
+    5
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "stone2",
+    "wood2": "stone",
+    "leaf": "stone",
+    "leafhi": "stone",
+    "leafdark": "stone2",
+    "leafvar": "stone"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "bare grey snag with broken limbs"
+  },
+  {
+   "id": "log",
+   "generator": "log",
+   "block_m": 0.25,
+   "height_m": [
+    0.6,
+    1.0
+   ],
+   "width_m": [
+    3,
+    6
+   ],
+   "variants": 10,
+   "colours": {
+    "wood": "bark",
+    "wood2": "endgrain",
+    "leaf": "moss",
+    "leafhi": "moss",
+    "leafdark": "bark2",
+    "leafvar": "moss"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": true,
+   "sink": 0.15,
+   "description": "fallen trunk with stubs and moss"
+  },
+  {
+   "id": "stump",
+   "generator": "stump",
+   "block_m": 0.25,
+   "height_m": [
+    0.4,
+    0.8
+   ],
+   "width_m": [
+    0.8,
+    1.4
+   ],
+   "variants": 8,
+   "colours": {
+    "wood": "bark",
+    "wood2": "endgrain",
+    "leaf": "moss",
+    "leafhi": "moss",
+    "leafdark": "bark2",
+    "leafvar": "moss"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": false,
+   "sink": 0.1,
+   "description": "cut or broken stump with roots"
+  },
+  {
+   "id": "driftwood",
+   "generator": "driftwood",
+   "block_m": 0.125,
+   "height_m": [
+    0.3,
+    0.6
+   ],
+   "width_m": [
+    1.5,
+    3
+   ],
+   "variants": 8,
+   "colours": {
+    "wood": "stone",
+    "wood2": "stone2",
+    "leaf": "stone",
+    "leafhi": "stone",
+    "leafdark": "stone2",
+    "leafvar": "stone"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": true,
+   "sink": 0.1,
+   "description": "bleached lying branch"
+  },
+  {
+   "id": "shrub",
+   "generator": "shrub",
+   "block_m": 0.125,
+   "height_m": [
+    0.6,
+    1.5
+   ],
+   "width_m": [
+    0.8,
+    1.8
+   ],
+   "variants": 10,
+   "colours": {
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf",
+    "leafvar": "leaf3",
+    "wood": "bark",
+    "wood2": "bark2"
+   },
+   "tint": {
+    "hue": 0.05,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "two or three leafy balls"
+  },
+  {
+   "id": "berry_bush",
+   "generator": "shrub",
+   "block_m": 0.125,
+   "height_m": [
+    0.8,
+    1.4
+   ],
+   "width_m": [
+    0.9,
+    1.6
+   ],
+   "variants": 10,
+   "colours": {
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf",
+    "leafvar": "leaf3",
+    "wood": "bark",
+    "wood2": "bark2",
+    "accent": "berry"
+   },
+   "tint": {
+    "hue": 0.05,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "shrub with berries"
+  },
+  {
+   "id": "fern",
+   "generator": "fern",
+   "block_m": 0.0625,
+   "height_m": [
+    0.4,
+    0.9
+   ],
+   "width_m": [
+    0.6,
+    1.2
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "leaf",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf2",
+    "wood": "leaf3",
+    "wood2": "leaf3"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "fan of arched fronds"
+  },
+  {
+   "id": "heather",
+   "generator": "dwarf",
+   "block_m": 0.125,
+   "height_m": [
+    0.2,
+    0.5
+   ],
+   "width_m": [
+    0.6,
+    1.4
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "pine3",
+    "leafhi": "purple",
+    "leafdark": "brown2",
+    "leafvar": "berry2",
+    "wood": "brown",
+    "wood2": "brown"
+   },
+   "tint": {
+    "hue": 0.05,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "low mat, purple-brown"
+  },
+  {
+   "id": "sagebrush",
+   "generator": "shrub",
+   "block_m": 0.125,
+   "height_m": [
+    0.5,
+    1.0
+   ],
+   "width_m": [
+    0.6,
+    1.3
+   ],
+   "variants": 10,
+   "colours": {
+    "leaf": "stone2",
+    "leafhi": "stone",
+    "leafdark": "moss",
+    "leafvar": "stone3",
+    "wood": "bark",
+    "wood2": "bark2"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "grey-green rounded tufts"
+  },
+  {
+   "id": "bamboo",
+   "generator": "bamboo",
+   "block_m": 0.125,
+   "height_m": [
+    4,
+    8
+   ],
+   "width_m": [
+    1.0,
+    2.0
+   ],
+   "variants": 8,
+   "colours": {
+    "wood": "green",
+    "wood2": "leaf3",
+    "leaf": "leaf2",
+    "leafhi": "leafhi",
+    "leafdark": "leaf3",
+    "leafvar": "leaf"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "clump of segmented canes"
+  },
+  {
+   "id": "reeds",
+   "generator": "reeds",
+   "block_m": 0.0625,
+   "height_m": [
+    1,
+    2
+   ],
+   "width_m": [
+    0.6,
+    1.2
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "grass",
+    "leafhi": "grass2",
+    "leafdark": "leaf3",
+    "leafvar": "straw2",
+    "wood": "brown2",
+    "wood2": "brown"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "upright stems with brown heads"
+  },
+  {
+   "id": "cactus",
+   "generator": "cactus",
+   "block_m": 0.25,
+   "height_m": [
+    2,
+    6
+   ],
+   "width_m": [
+    1,
+    3
+   ],
+   "variants": 10,
+   "colours": {
+    "leaf": "green",
+    "leafhi": "leaf2",
+    "leafdark": "leaf3",
+    "leafvar": "green",
+    "wood": "green",
+    "wood2": "green",
+    "accent": "yellow"
+   },
+   "tint": {
+    "hue": 0.03,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "trunk",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "column with upturned arms"
+  },
+  {
+   "id": "pad_cactus",
+   "generator": "padcactus",
+   "block_m": 0.125,
+   "height_m": [
+    0.6,
+    1.2
+   ],
+   "width_m": [
+    0.8,
+    1.5
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "green",
+    "leafhi": "leaf2",
+    "leafdark": "leaf3",
+    "leafvar": "green",
+    "wood": "green",
+    "wood2": "green",
+    "accent": "pink"
+   },
+   "tint": {
+    "hue": 0.03,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "stacked flat pads with flowers"
+  },
+  {
+   "id": "grass",
+   "generator": "tuft",
+   "block_m": 0.0625,
+   "height_m": [
+    0.2,
+    0.5
+   ],
+   "width_m": [
+    0.3,
+    0.5
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "grass",
+    "leafhi": "grass2",
+    "leafdark": "leaf3",
+    "leafvar": "grass",
+    "wood": "grass",
+    "wood2": "grass"
+   },
+   "tint": {
+    "hue": 0.05,
+    "value": 0.1
+   },
+   "scale_spread": 0.25,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "tuft of blades"
+  },
+  {
+   "id": "dry_grass",
+   "generator": "tuft",
+   "block_m": 0.0625,
+   "height_m": [
+    0.3,
+    0.6
+   ],
+   "width_m": [
+    0.3,
+    0.6
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "straw",
+    "leafhi": "straw2",
+    "leafdark": "straw2",
+    "leafvar": "straw",
+    "wood": "straw",
+    "wood2": "straw"
+   },
+   "tint": {
+    "hue": 0.04,
+    "value": 0.1
+   },
+   "scale_spread": 0.25,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "straw-coloured tuft"
+  },
+  {
+   "id": "flowers",
+   "generator": "flowers",
+   "block_m": 0.0625,
+   "height_m": [
+    0.15,
+    0.35
+   ],
+   "width_m": [
+    0.3,
+    0.6
+   ],
+   "variants": 12,
+   "colours": {
+    "leaf": "grass",
+    "leafhi": "grass2",
+    "leafdark": "leaf3",
+    "leafvar": "grass",
+    "wood": "grass",
+    "wood2": "grass",
+    "accent": "yellow"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.08
+   },
+   "scale_spread": 0.25,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "stems with heads of one colour"
+  },
+  {
+   "id": "mushrooms",
+   "generator": "mushrooms",
+   "block_m": 0.0625,
+   "height_m": [
+    0.1,
+    0.3
+   ],
+   "width_m": [
+    0.3,
+    0.8
+   ],
+   "variants": 8,
+   "colours": {
+    "leaf": "red",
+    "leafhi": "white",
+    "leafdark": "brown",
+    "leafvar": "brown2",
+    "wood": "cream",
+    "wood2": "cream",
+    "accent": "white"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.08
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": false,
+   "sink": 0.0,
+   "description": "a clump of capped stems"
+  },
+  {
+   "id": "pebbles",
+   "generator": "pebbles",
+   "block_m": 0.0625,
+   "height_m": [
+    0.1,
+    0.2
+   ],
+   "width_m": [
+    0.4,
+    1.0
+   ],
+   "variants": 8,
+   "colours": {
+    "rock": "rock2",
+    "rockhi": "rock",
+    "rockdark": "rock3",
+    "moss": "moss"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": true,
+   "sink": 0.3,
+   "description": "a scatter of small stones"
+  },
+  {
+   "id": "rock",
+   "generator": "rock",
+   "block_m": 0.125,
+   "height_m": [
+    0.4,
+    1.0
+   ],
+   "width_m": [
+    0.6,
+    1.4
+   ],
+   "variants": 16,
+   "colours": {
+    "rock": "rock",
+    "rockhi": "rock2",
+    "rockdark": "rock3",
+    "moss": "moss"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": true,
+   "sink": 0.25,
+   "description": "rounded lump, moss in wet places"
+  },
+  {
+   "id": "boulder",
+   "generator": "rock",
+   "block_m": 0.25,
+   "height_m": [
+    1,
+    3
+   ],
+   "width_m": [
+    1.5,
+    4
+   ],
+   "variants": 16,
+   "colours": {
+    "rock": "rock",
+    "rockhi": "rock2",
+    "rockdark": "rock3",
+    "moss": "moss"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.1
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": true,
+   "sink": 0.3,
+   "description": "big rounded rock, part sunk"
+  },
+  {
+   "id": "outcrop",
+   "generator": "outcrop",
+   "block_m": 0.5,
+   "height_m": [
+    3,
+    8
+   ],
+   "width_m": [
+    4,
+    10
+   ],
+   "variants": 10,
+   "colours": {
+    "rock": "stone",
+    "rockhi": "stone2",
+    "rockdark": "stone3",
+    "moss": "moss"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.08
+   },
+   "scale_spread": 0.25,
+   "collider": "box",
+   "tilt_to_slope": false,
+   "sink": 0.2,
+   "description": "stack of blocky slabs, a landmark"
+  },
+  {
+   "id": "ice_chunk",
+   "generator": "ice",
+   "block_m": 0.25,
+   "height_m": [
+    0.5,
+    2
+   ],
+   "width_m": [
+    0.8,
+    2.5
+   ],
+   "variants": 10,
+   "colours": {
+    "rock": "white",
+    "rockhi": "white",
+    "rockdark": "waterhi",
+    "moss": "white"
+   },
+   "tint": {
+    "hue": 0.01,
+    "value": 0.05
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": true,
+   "sink": 0.3,
+   "description": "white-blue angular block"
+  },
+  {
+   "id": "termite_mound",
+   "generator": "mound",
+   "block_m": 0.125,
+   "height_m": [
+    1,
+    3
+   ],
+   "width_m": [
+    0.8,
+    1.6
+   ],
+   "variants": 8,
+   "colours": {
+    "rock": "path",
+    "rockhi": "path2",
+    "rockdark": "soil2",
+    "moss": "path"
+   },
+   "tint": {
+    "hue": 0.02,
+    "value": 0.06
+   },
+   "scale_spread": 0.18,
+   "collider": "box",
+   "tilt_to_slope": false,
+   "sink": 0.05,
+   "description": "tall clay cone with ridges"
+  },
+  {
+   "id": "salt_crust",
+   "generator": "crust",
+   "block_m": 0.0625,
+   "height_m": [
+    0.1,
+    0.2
+   ],
+   "width_m": [
+    1,
+    2
+   ],
+   "variants": 8,
+   "colours": {
+    "rock": "white",
+    "rockhi": "white",
+    "rockdark": "stone",
+    "moss": "white"
+   },
+   "tint": {
+    "hue": 0.01,
+    "value": 0.04
+   },
+   "scale_spread": 0.18,
+   "collider": "none",
+   "tilt_to_slope": true,
+   "sink": 0.5,
+   "description": "white polygon plates"
+  }
+ ],
+ "recipes": {
+  "grass": [
+   {
+    "species": "oak",
+    "density_per_ha": 5,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.9
+    },
+    "share": 0.7,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "birch",
+    "density_per_ha": 3,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.9
+    },
+    "share": 0.3,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "shrub",
+    "density_per_ha": 15,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.7
+    },
+    "share": 0.6,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "berry_bush",
+    "density_per_ha": 6,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.7
+    },
+    "share": 0.4,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 750,
+    "spacing_m": 0.9,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "flowers",
+    "density_per_ha": 150,
+    "spacing_m": 1.2,
+    "cluster": {
+     "scale_m": 18,
+     "strength": 0.9
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 4,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 10,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   }
+  ],
+  "forest": [
+   {
+    "species": "oak",
+    "density_per_ha": 120,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.7
+    },
+    "share": 0.4,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "beech",
+    "density_per_ha": 100,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.7
+    },
+    "share": 0.35,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "birch",
+    "density_per_ha": 70,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.7
+    },
+    "share": 0.25,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "shrub",
+    "density_per_ha": 60,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 0.6,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "berry_bush",
+    "density_per_ha": 20,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 0.4,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "fern",
+    "density_per_ha": 125,
+    "spacing_m": 1.2,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "log",
+    "density_per_ha": 8,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "stump",
+    "density_per_ha": 6,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "mushrooms",
+    "density_per_ha": 30,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 20,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 8,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 180,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "flowers",
+    "density_per_ha": 30,
+    "spacing_m": 1.5,
+    "cluster": {
+     "scale_m": 18,
+     "strength": 0.9
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   }
+  ],
+  "seasonal": [
+   {
+    "species": "tropical",
+    "density_per_ha": 80,
+    "spacing_m": 7,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.7
+    },
+    "share": 0.7,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "palm",
+    "density_per_ha": 30,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.7
+    },
+    "share": 0.3,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "bamboo",
+    "density_per_ha": 15,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "shrub",
+    "density_per_ha": 40,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 360,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 180,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 5,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   }
+  ],
+  "rainforest": [
+   {
+    "species": "spruce",
+    "density_per_ha": 180,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.6
+    },
+    "share": 0.6,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "beech",
+    "density_per_ha": 120,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.6
+    },
+    "share": 0.4,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "fern",
+    "density_per_ha": 250,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "shrub",
+    "density_per_ha": 50,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "log",
+    "density_per_ha": 12,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "mushrooms",
+    "density_per_ha": 40,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 20,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 10,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 90,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   }
+  ],
+  "jungle": [
+   {
+    "species": "tropical",
+    "density_per_ha": 200,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.6
+    },
+    "share": 0.8,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "jungle_giant",
+    "density_per_ha": 4,
+    "spacing_m": 25,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "palm",
+    "density_per_ha": 40,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.6
+    },
+    "share": 0.2,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "fern",
+    "density_per_ha": 250,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "bamboo",
+    "density_per_ha": 20,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "shrub",
+    "density_per_ha": 80,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "log",
+    "density_per_ha": 10,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 6,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   }
+  ],
+  "savanna": [
+   {
+    "species": "acacia",
+    "density_per_ha": 6,
+    "spacing_m": 15,
+    "cluster": {
+     "scale_m": 250,
+     "strength": 0.6
+    },
+    "share": 0.9,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "baobab",
+    "density_per_ha": 0.4,
+    "spacing_m": 40,
+    "cluster": {
+     "scale_m": 300,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "sagebrush",
+    "density_per_ha": 15,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "pad_cactus",
+    "density_per_ha": 3,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 750,
+    "spacing_m": 0.9,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "termite_mound",
+    "density_per_ha": 2,
+    "spacing_m": 12,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 1,
+    "spacing_m": 15,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.9
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 4,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   }
+  ],
+  "steppe": [
+   {
+    "species": "dead_tree",
+    "density_per_ha": 0.3,
+    "spacing_m": 40,
+    "cluster": {
+     "scale_m": 300,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "sagebrush",
+    "density_per_ha": 40,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 840,
+    "spacing_m": 0.9,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 120,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 6,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 15,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   }
+  ],
+  "desert": [
+   {
+    "species": "cactus",
+    "density_per_ha": 3,
+    "spacing_m": 12,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "pad_cactus",
+    "density_per_ha": 5,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "sagebrush",
+    "density_per_ha": 5,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 18,
+    "spacing_m": 2,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 40,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 10,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 1.5,
+    "spacing_m": 12,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   }
+  ],
+  "colddesert": [
+   {
+    "species": "sagebrush",
+    "density_per_ha": 15,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "heather",
+    "density_per_ha": 10,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 60,
+    "spacing_m": 1.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 40,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 12,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 2,
+    "spacing_m": 12,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   }
+  ],
+  "taiga": [
+   {
+    "species": "spruce",
+    "density_per_ha": 180,
+    "spacing_m": 4.5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.6
+    },
+    "share": 0.6,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "pine",
+    "density_per_ha": 80,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.6
+    },
+    "share": 0.25,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "birch",
+    "density_per_ha": 40,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.7
+    },
+    "share": 0.15,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "heather",
+    "density_per_ha": 75,
+    "spacing_m": 1.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "berry_bush",
+    "density_per_ha": 20,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 50,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "log",
+    "density_per_ha": 8,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "mushrooms",
+    "density_per_ha": 20,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 20,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 10,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 45
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 90,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   }
+  ],
+  "tundra": [
+   {
+    "species": "krummholz",
+    "density_per_ha": 15,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dead_tree",
+    "density_per_ha": 0.5,
+    "spacing_m": 30,
+    "cluster": {
+     "scale_m": 300,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "heather",
+    "density_per_ha": 250,
+    "spacing_m": 1.0,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "dry_grass",
+    "density_per_ha": 120,
+    "spacing_m": 1.2,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 20,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 2,
+    "spacing_m": 12,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 30,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   }
+  ],
+  "snow": [
+   {
+    "species": "rock",
+    "density_per_ha": 6,
+    "spacing_m": 5,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   },
+   {
+    "species": "ice_chunk",
+    "density_per_ha": 3,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   }
+  ],
+  "ice": [
+   {
+    "species": "ice_chunk",
+    "density_per_ha": 4,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 2,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   }
+  ],
+  "salt": [
+   {
+    "species": "salt_crust",
+    "density_per_ha": 200,
+    "spacing_m": 2,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.4
+    },
+    "share": 1.0,
+    "slope_max_deg": 20
+   }
+  ],
+  "shore": [
+   {
+    "species": "palm",
+    "density_per_ha": 15,
+    "spacing_m": 7,
+    "cluster": {
+     "scale_m": 120,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "reeds",
+    "density_per_ha": 200,
+    "spacing_m": 1.2,
+    "cluster": {
+     "scale_m": 30,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "driftwood",
+    "density_per_ha": 6,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 25
+   },
+   {
+    "species": "pebbles",
+    "density_per_ha": 40,
+    "spacing_m": 2.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 40
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 10,
+    "spacing_m": 4,
+    "cluster": {
+     "scale_m": 80,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 50
+   },
+   {
+    "species": "grass",
+    "density_per_ha": 120,
+    "spacing_m": 1.2,
+    "cluster": {
+     "scale_m": 25,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   }
+  ],
+  "steep": [
+   {
+    "species": "outcrop",
+    "density_per_ha": 1.5,
+    "spacing_m": 20,
+    "cluster": {
+     "scale_m": 200,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 80
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 8,
+    "spacing_m": 8,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 70
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 30,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.5
+    },
+    "share": 1.0,
+    "slope_max_deg": 75
+   },
+   {
+    "species": "krummholz",
+    "density_per_ha": 4,
+    "spacing_m": 6,
+    "cluster": {
+     "scale_m": 100,
+     "strength": 0.8
+    },
+    "share": 1.0,
+    "slope_max_deg": 55
+   }
+  ],
+  "high": [
+   {
+    "species": "heather",
+    "density_per_ha": 100,
+    "spacing_m": 1.5,
+    "cluster": {
+     "scale_m": 40,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "flowers",
+    "density_per_ha": 40,
+    "spacing_m": 1.5,
+    "cluster": {
+     "scale_m": 18,
+     "strength": 0.9
+    },
+    "share": 1.0,
+    "slope_max_deg": 30
+   },
+   {
+    "species": "rock",
+    "density_per_ha": 25,
+    "spacing_m": 3,
+    "cluster": {
+     "scale_m": 60,
+     "strength": 0.6
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   },
+   {
+    "species": "boulder",
+    "density_per_ha": 4,
+    "spacing_m": 10,
+    "cluster": {
+     "scale_m": 150,
+     "strength": 0.7
+    },
+    "share": 1.0,
+    "slope_max_deg": 60
+   }
+  ]
+ },
+ "rules": {
+  "shore_height_m": 3.0,
+  "steep_slope_deg": 35.0,
+  "high_temperature_c": -1.0,
+  "tree_line_temperature_c": 1.0,
+  "warm_shore_temperature_c": 16.0
+ }
+}
