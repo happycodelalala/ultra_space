@@ -19,7 +19,7 @@ set in visual-style.md; this document is the system.
 | Route | **Voxel art with shaped blocks.** Faceted low-poly was the alternative (better at a distance, lighter on the GPU); blocks won because the world, what is dug and what is built are then one language. A mix of block ground and faceted scenery was rejected: two shape languages side by side always show the seam |
 | Shapes | A **standard set** (§3) in every orientation; no free-form angles anywhere |
 | Sizes | **Powers of two**, each size twice the one below and aligned to its own multiples (§4), so sizes nest exactly |
-| Terrain block | **50 cm** (developer, 2026-11-17; was 25 cm); hills read as slopes between terraces, taller drops stay crisp cuts. Built things keep their own grids (25 cm structure, finer fittings); the demo village's exported 25 cm ground is resampled to 50 cm at load |
+| Terrain block | **50 cm** (developer, 2026-11-17; was 25 cm); hills read as slopes between terraces, taller drops stay crisp cuts. Built things keep their own grids (25 cm structure, finer fittings). The game is the truth for the ground: the demo village's layout (pads, paths, pit; `content/data/village_layouts`) is laid on the planet's real ground at 50 cm; the style scene's 25 cm ground is a prototype for renders |
 | Far terrain | **Blocky everywhere:** distant terrain is drawn from the terrain function stepped to the block grid with the same slopes, so near and far are one look (only the near zone is editable blocks) |
 | Dig depth | **Tens of metres** below the surface near the player; caves and deep layers designed now, generated later |
 | Mining | **Drops resources:** mined blocks become items in the player's inventory; placing a block uses one |

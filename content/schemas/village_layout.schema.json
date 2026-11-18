@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "village_layout.schema.json",
+  "title": "Village layout",
+  "description": "A village's ground laid on the planet's real ground by the game (block-world.md section 13): levelled pads under structures, paths and dug pits, in metres from the village centre (x east, y north).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "half_size_m", "pads", "paths", "pits"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "description": { "type": "string" },
+    "half_size_m": { "description": "Half the side of the square the layout covers.", "type": "number", "exclusiveMinimum": 0 },
+    "pads": {
+      "description": "Levelled areas: flat at the real ground's height at their middle, easing into the ground over blend_m.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["blend_m"],
+        "properties": {
+          "name": { "type": "string" },
+          "rect": { "description": "x0, y0, x1, y1.", "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+          "circle": { "description": "x, y, radius.", "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "blend_m": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "oneOf": [ { "required": ["rect"] }, { "required": ["circle"] } ]
+      }
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["points", "half_width_m"],
+        "properties": {
+          "points": { "type": "array", "minItems": 2, "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } },
+          "half_width_m": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      }
+    },
+    "pits": {
+      "description": "Dug spaces: a squashed sphere at the ground of their centre and a tunnel from beside it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["centre", "radius_m", "tunnel_m"],
+        "properties": {
+          "centre": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+          "radius_m": { "type": "number", "exclusiveMinimum": 0 },
+          "tunnel_m": { "description": "The tunnel's run (x, y, z) from its start beside the pit.", "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 }
+        }
+      }
+    }
+  }
+}

@@ -14,11 +14,11 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::tasks::{Task, block_on, poll_once};
-use glam::{DQuat, DVec3, IVec3};
+use glam::{DQuat, DVec3};
 use serde::Deserialize;
 use sim_blocks::{BlockModel, MeshData, Palette};
+use sim_planet::BlockGround;
 use sim_planet::blocks::LodKey;
-use sim_planet::{BlockGround, VillageGround};
 
 use crate::camera::SpaceCamera;
 use crate::sim::RenderTime;
@@ -94,15 +94,14 @@ impl Plugin for BlocksPlugin {
 
 // ---- the village file ------------------------------------------------------------------------------
 
+/// The prototype's own ground in the village file (its 25 cm cells): read only to know what
+/// the placements stood on, so they can be set on the game's ground instead.
 #[derive(Deserialize, Clone, Debug)]
 pub struct GroundFile {
     pub size: f64,
     pub origin: [i32; 2],
     pub dims: [i32; 2],
     pub tops: Vec<i32>,
-    pub palette: Vec<String>,
-    pub colours: Vec<usize>,
-    pub carved: Vec<[i32; 3]>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -246,15 +245,13 @@ pub fn load(
         .ok_or("the village's body has no terrain")?;
     let center = choose_site(&region.world, &current, &system.bodies[body])
         .ok_or("no site for the demo village")?;
-    let g = &village.ground;
-    // The layout's ground is in its own cells (25 cm); the game's ground cells are bigger.
-    let colours: Vec<String> = g.colours.iter().map(|&c| g.palette[c].clone()).collect();
-    let carved: HashSet<IVec3> = g
-        .carved
-        .iter()
-        .map(|c| IVec3::new(c[0], c[1], c[2]))
-        .collect();
-    let own = VillageGround::resampled(g.size, g.origin, g.dims, &g.tops, &colours, &carved);
+    // The village's ground: its layout (the game's own, content/data/village_layouts) laid on
+    // the planet's real ground at the game's block size.
+    let layout_path = crate::universe::content_dir()
+        .ok_or("content folder not found")?
+        .join("data/village_layouts/demo_village.json");
+    let own: sim_planet::VillageLayout = serde_json::from_str(&read(&layout_path)?)
+        .map_err(|e| format!("{}: {e}", layout_path.display()))?;
     let mut ground = BlockGround::new(current.clone(), center, Some(own));
     let world = BlockWorld {
         ground: Arc::new(BlockGround::new(current.clone(), center, None)),

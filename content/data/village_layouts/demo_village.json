@@ -1,0 +1,19 @@
+{
+  "id": "demo_village",
+  "description": "The demo village's ground (block-world.md section 13), owned by the game: laid on the planet's real ground at the game's terrain block size. Metres from the village centre, x east, y north. Taken from the style scene's prototype (tools/blocks/scene.py), which keeps its own 25 cm ground for renders.",
+  "half_size_m": 22.0,
+  "pads": [
+    { "name": "yard", "rect": [-5.75, -7.75, 8.0, 4.75], "blend_m": 2.0 },
+    { "name": "woodshed", "rect": [-10.0, -7.5, -6.0, -3.5], "blend_m": 1.5 },
+    { "name": "well", "circle": [-7.0, 1.5, 1.3], "blend_m": 1.5 },
+    { "name": "landing ground", "circle": [-11.0, -12.5, 4.0], "blend_m": 2.0 }
+  ],
+  "paths": [
+    { "points": [[1.0, -4.1], [0.9, -7.5], [0.7, -11.0], [0.6, -16.0], [0.3, -22.0]], "half_width_m": 0.6 },
+    { "points": [[0.9, -7.6], [3.0, -8.0], [5.1, -8.3]], "half_width_m": 0.5 },
+    { "points": [[0.7, -11.0], [-4.5, -10.0], [-9.0, -9.2], [-12.2, -9.4]], "half_width_m": 0.5 }
+  ],
+  "pits": [
+    { "centre": [7.5, -8.5], "radius_m": 2.2, "tunnel_m": [4.5, 5.0, -1.4] }
+  ]
+}

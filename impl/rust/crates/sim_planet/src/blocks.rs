@@ -4,8 +4,8 @@
 //! the sphere by equal angles (columns point away from the centre), oriented so face 0 is centred
 //! on the demo village with its axes east and north (there the grid is the village's tangent
 //! grid to well under a millimetre). A column's top is the natural terrain stepped to the grid,
-//! or, in the village's square, the ground its layout exported (levelled pads, paths, the dug
-//! pit), easing into the natural ground at its edge. Heights are radial, cell k = 0 at one floor
+//! with, round the demo village, its layout laid on that ground (levelled pads, paths, the dug
+//! pit; content/data/village_layouts). Heights are radial, cell k = 0 at one floor
 //! height everywhere. Chunks of 32 × 32 columns are made on demand near the player; nothing is
 //! stored for untouched ground.
 //!
@@ -74,87 +74,125 @@ fn colour(name: &str) -> u16 {
         .map_or(1, |i| i as u16 + 1)
 }
 
-/// The village's own ground, as its layout exported it (cells of `CELL`, k = 0 the first
-/// layer above the village's base height).
-#[derive(Clone, Debug, Default)]
-pub struct VillageGround {
-    /// Column index of the first column (x east, y north).
-    pub origin: [i32; 2],
-    pub dims: [i32; 2],
-    /// Top cell index per column, x fastest.
-    pub tops: Vec<i32>,
-    /// Top colour name per column.
-    pub colours: Vec<String>,
-    /// Cells dug out.
-    pub carved: HashSet<IVec3>,
+/// A village's ground (content/data/village_layouts): levelled pads, paths and dug pits in
+/// metres from the village centre (x east, y north), laid on the real ground by the game.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct VillageLayout {
+    pub id: String,
+    #[serde(default)]
+    pub description: String,
+    pub half_size_m: f64,
+    pub pads: Vec<LayoutPad>,
+    pub paths: Vec<LayoutPath>,
+    pub pits: Vec<LayoutPit>,
 }
 
-impl VillageGround {
-    /// The village's ground exported in cells of `size` metres (heights from its floor),
-    /// resampled to the ground's cells of [`CELL`]: each column the mean height of the columns
-    /// it covers (stepped to the grid), the colour of its first, and a cell dug where any part
-    /// of it was.
-    pub fn resampled(
-        size: f64,
-        origin: [i32; 2],
-        dims: [i32; 2],
-        tops: &[i32],
-        colours: &[String],
-        carved: &HashSet<IVec3>,
-    ) -> Self {
-        let f = (CELL / size).round().max(1.0) as i32;
-        let lo = [origin[0].div_euclid(f), origin[1].div_euclid(f)];
-        let hi = [
-            (origin[0] + dims[0] - 1).div_euclid(f),
-            (origin[1] + dims[1] - 1).div_euclid(f),
-        ];
-        let new_dims = [hi[0] - lo[0] + 1, hi[1] - lo[1] + 1];
-        let mut new_tops = Vec::with_capacity((new_dims[0] * new_dims[1]) as usize);
-        let mut new_colours = Vec::with_capacity(new_tops.capacity());
-        for y in lo[1]..=hi[1] {
-            for x in lo[0]..=hi[0] {
-                let (mut sum, mut count, mut first) = (0.0, 0.0, None);
-                for b in 0..f {
-                    for a in 0..f {
-                        let (i, j) = (x * f + a - origin[0], y * f + b - origin[1]);
-                        if i < 0 || j < 0 || i >= dims[0] || j >= dims[1] {
-                            continue;
-                        }
-                        let k = (i + j * dims[0]) as usize;
-                        sum += f64::from(tops[k] + 1) * size;
-                        count += 1.0;
-                        first.get_or_insert(k);
-                    }
-                }
-                let height = if count > 0.0 { sum / count } else { 0.0 };
-                new_tops.push((height / CELL).round() as i32 - 1);
-                new_colours.push(first.map_or_else(|| "turf".to_string(), |k| colours[k].clone()));
-            }
-        }
-        let carved = carved
-            .iter()
-            .map(|c| IVec3::new(c.x.div_euclid(f), c.y.div_euclid(f), c.z.div_euclid(f)))
-            .collect();
-        Self {
-            origin: lo,
-            dims: new_dims,
-            tops: new_tops,
-            colours: new_colours,
-            carved,
+/// A levelled area: flat at the real ground's height at its middle, easing into the ground.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct LayoutPad {
+    #[serde(default)]
+    pub name: String,
+    pub rect: Option<[f64; 4]>,
+    pub circle: Option<[f64; 3]>,
+    pub blend_m: f64,
+}
+
+impl LayoutPad {
+    fn middle(&self) -> DVec2 {
+        match (self.rect, self.circle) {
+            (Some(r), _) => DVec2::new((r[0] + r[2]) * 0.5, (r[1] + r[3]) * 0.5),
+            (_, Some(c)) => DVec2::new(c[0], c[1]),
+            _ => DVec2::ZERO,
         }
     }
 
-    fn index(&self, i: i32, j: i32) -> Option<usize> {
-        let (x, y) = (i - self.origin[0], j - self.origin[1]);
-        (x >= 0 && y >= 0 && x < self.dims[0] && y < self.dims[1])
-            .then(|| (x + y * self.dims[0]) as usize)
+    /// Distance from the pad (0 inside).
+    fn distance(&self, p: DVec2) -> f64 {
+        match (self.rect, self.circle) {
+            (Some(r), _) => (r[0] - p.x)
+                .max(p.x - r[2])
+                .max(r[1] - p.y)
+                .max(p.y - r[3])
+                .max(0.0),
+            (_, Some(c)) => ((p - DVec2::new(c[0], c[1])).length() - c[2]).max(0.0),
+            _ => f64::INFINITY,
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct LayoutPath {
+    pub points: Vec<[f64; 2]>,
+    pub half_width_m: f64,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct LayoutPit {
+    pub centre: [f64; 2],
+    pub radius_m: f64,
+    pub tunnel_m: [f64; 3],
+}
+
+/// A village laid on the ground: its layout, each pad's level and each pit's ground (m above
+/// the reference radius).
+struct Village {
+    layout: VillageLayout,
+    levels: Vec<f64>,
+    pit_ground: Vec<f64>,
+}
+
+fn smoothstep01(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+impl Village {
+    /// The ground height (m above the reference radius) at face 0's grid point `p`, from the
+    /// natural height `h` there: pulled to each pad's level within its blend.
+    fn height(&self, p: DVec2, mut h: f64) -> f64 {
+        for (pad, &level) in self.layout.pads.iter().zip(&self.levels) {
+            let w = smoothstep01(pad.distance(p) / pad.blend_m);
+            h = level + (h - level) * w;
+        }
+        h
     }
 
-    /// Distance (in columns) from (i, j) inward to the square's nearest edge (negative outside).
-    fn inset(&self, i: i32, j: i32) -> i32 {
-        let x = (i - self.origin[0]).min(self.origin[0] + self.dims[0] - 1 - i);
-        let y = (j - self.origin[1]).min(self.origin[1] + self.dims[1] - 1 - j);
-        x.min(y)
+    /// Whether `p` (grid metres) is on a path (ragged edges).
+    fn on_path(&self, p: DVec2) -> bool {
+        let rag = 0.15 * crate::noise::fbm(DVec3::new(p.x * 0.9, p.y * 0.9, 5.0), 3, 2, 0.5) * 2.0;
+        self.layout.paths.iter().any(|path| {
+            path.points.windows(2).any(|w| {
+                let (a, b) = (DVec2::from_array(w[0]), DVec2::from_array(w[1]));
+                let ab = b - a;
+                let t = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+                (p - (a + ab * t)).length() - path.half_width_m < rag
+            })
+        })
+    }
+
+    /// Negative inside a dug space; `q` is a grid point with z the height (m above the
+    /// reference radius).
+    fn dug(&self, q: DVec3) -> f64 {
+        let mut best = f64::INFINITY;
+        for (pit, &z0) in self.layout.pits.iter().zip(&self.pit_ground) {
+            let c = DVec2::from_array(pit.centre);
+            let d = DVec3::new(q.x - c.x, q.y - c.y, (q.z - z0) * 1.3);
+            best = best.min(d.length() - pit.radius_m);
+            let a = DVec3::new(c.x + 1.0, c.y, z0 - 1.6);
+            let b = a + DVec3::from_array(pit.tunnel_m);
+            let t = ((q - a).dot(b - a) / (b - a).length_squared()).clamp(0.0, 1.0);
+            best = best.min((q - (a + (b - a) * t)).length() - 1.0);
+        }
+        best
+    }
+
+    /// Whether `p` is near a pit or its tunnel (where the ground is meshed deep).
+    fn near_pit(&self, p: DVec2) -> bool {
+        self.layout.pits.iter().any(|pit| {
+            let c = DVec2::from_array(pit.centre);
+            let end = c + DVec2::new(pit.tunnel_m[0], pit.tunnel_m[1]);
+            (p - c).length() < pit.radius_m + 3.5 || (p - end).length() < 3.0
+        })
     }
 }
 
@@ -168,9 +206,7 @@ pub struct BlockGround {
     pub base: f64,
     pub radius: f64,
     natural: Arc<Terrain>,
-    village: Option<VillageGround>,
-    /// Columns over which the village's ground eases into the natural ground.
-    blend: i32,
+    village: Option<Village>,
     /// Columns at or next to a dug cell (meshed deeper).
     carved_near: HashSet<(i32, i32)>,
     /// Collision boxes of the village's buildings, props and tree trunks (surface frame).
@@ -196,36 +232,21 @@ impl BlockGround {
     /// The block ground of `natural`'s body, face 0 centred on `center` (unit direction) with
     /// the village's ground there; its floor at the natural height of the centre stepped down
     /// to the grid.
-    pub fn new(natural: Arc<Terrain>, center: DVec3, village: Option<VillageGround>) -> Self {
+    pub fn new(natural: Arc<Terrain>, center: DVec3, layout: Option<VillageLayout>) -> Self {
         let c = center.normalize();
         let (e, south) = tangent_frame(c);
         let n = -south;
         let h = natural.surface_height(c, 1.0);
         let base = (h / CELL).floor() * CELL;
-        let carved_near = village
-            .as_ref()
-            .map(|v| {
-                let mut s = HashSet::new();
-                for cell in &v.carved {
-                    for a in -1..=1 {
-                        for b in -1..=1 {
-                            s.insert((cell.x + a, cell.y + b));
-                        }
-                    }
-                }
-                s
-            })
-            .unwrap_or_default();
-        Self {
+        let mut g = Self {
             center: c,
             east: e,
             north: n,
             base,
             radius: natural.radius,
             natural,
-            village,
-            blend: 20,
-            carved_near,
+            village: None,
+            carved_near: HashSet::new(),
             structures: Vec::new(),
             faces: [
                 [c, e, n],
@@ -238,7 +259,42 @@ impl BlockGround {
             tops: RwLock::new(HashMap::new()),
             clock: std::sync::atomic::AtomicU64::new(0),
             focus: RwLock::new(None),
+        };
+        if let Some(layout) = layout {
+            g.lay_village(layout);
         }
+        g
+    }
+
+    /// Lays a village on the ground round face 0's centre: each pad at the real ground's height
+    /// at its middle, each pit at the ground of its centre (after the pads).
+    fn lay_village(&mut self, layout: VillageLayout) {
+        let ground = |p: DVec2| self.natural.height(self.dir(p.x, p.y), 4.0);
+        let levels: Vec<f64> = layout.pads.iter().map(|pad| ground(pad.middle())).collect();
+        let mut village = Village {
+            layout,
+            levels,
+            pit_ground: Vec::new(),
+        };
+        village.pit_ground = village
+            .layout
+            .pits
+            .iter()
+            .map(|pit| {
+                let c = DVec2::from_array(pit.centre);
+                village.height(c, ground(c))
+            })
+            .collect();
+        let n = (village.layout.half_size_m / CELL).ceil() as i32;
+        for j in -n..n {
+            for i in -n..n {
+                let p = DVec2::new((f64::from(i) + 0.5) * CELL, (f64::from(j) + 0.5) * CELL);
+                if village.near_pit(p) {
+                    self.carved_near.insert((i, j));
+                }
+            }
+        }
+        self.village = Some(village);
     }
 
     /// Sets where the player is (unit direction, surface frame); `None` for everywhere.
@@ -385,19 +441,13 @@ impl BlockGround {
             let v = c.tops[slot];
             return (v != NO_BLOCKS).then_some(v);
         }
-        let natural = self.natural_top(face, i, j);
         let v = match &self.village {
-            Some(v) if face == 0 && v.index(i, j).is_some() => {
-                let own = v.tops[v.index(i, j).unwrap_or(0)];
-                let w = (f64::from(v.inset(i, j)) / f64::from(self.blend)).clamp(0.0, 1.0);
-                match natural {
-                    Some(n) => {
-                        Some((f64::from(n) + (f64::from(own) - f64::from(n)) * w).round() as i32)
-                    }
-                    None => Some(own),
-                }
+            Some(v) if face == 0 && self.in_village(i, j) => {
+                let p = DVec2::new((f64::from(i) + 0.5) * CELL, (f64::from(j) + 0.5) * CELL);
+                let h = v.height(p, self.natural.height(self.column_dir(face, i, j), 4.0));
+                Some(((h - self.base) / CELL).floor() as i32)
             }
-            _ => natural,
+            _ => self.natural_top(face, i, j),
         };
         if let Ok(mut t) = self.tops.write() {
             if t.len() >= CACHE_CHUNKS && !t.contains_key(&key) {
@@ -447,8 +497,26 @@ impl BlockGround {
         self.top(i, j).map_or(0.0, |t| f64::from(t + 1) * CELL)
     }
 
+    /// Whether face 0's column (i, j) lies in the village's square.
+    fn in_village(&self, i: i32, j: i32) -> bool {
+        self.village.as_ref().is_some_and(|v| {
+            let half = v.layout.half_size_m;
+            let (x, y) = ((f64::from(i) + 0.5) * CELL, (f64::from(j) + 0.5) * CELL);
+            x.abs() < half && y.abs() < half
+        })
+    }
+
     fn carved(&self, face: u8, p: IVec3) -> bool {
-        face == 0 && self.village.as_ref().is_some_and(|v| v.carved.contains(&p))
+        face == 0
+            && self.carved_near.contains(&(p.x, p.y))
+            && self.village.as_ref().is_some_and(|v| {
+                let q = DVec3::new(
+                    (f64::from(p.x) + 0.5) * CELL,
+                    (f64::from(p.y) + 0.5) * CELL,
+                    self.base + (f64::from(p.z) + 0.5) * CELL,
+                );
+                v.dug(q) <= 0.0
+            })
     }
 
     /// The colour of the top cell of column (i, j) of `face`: the village's own, rock where
@@ -460,11 +528,18 @@ impl BlockGround {
     /// `top_colour`, with the steepness given (`None`: judged from the fine neighbours).
     fn top_colour_with(&self, face: u8, i: i32, j: i32, t: i32, steep: Option<bool>) -> u16 {
         if face == 0
+            && self.in_village(i, j)
             && let Some(v) = &self.village
-            && let Some(k) = v.index(i, j)
-            && v.inset(i, j) > self.blend / 2
+            && v.on_path(DVec2::new(
+                (f64::from(i) + 0.5) * CELL,
+                (f64::from(j) + 0.5) * CELL,
+            ))
         {
-            return colour(&v.colours[k]);
+            return colour(if (i * 7 + j * 3).rem_euclid(5) == 0 {
+                "path2"
+            } else {
+                "path"
+            });
         }
         let speckle = f64::from((i.wrapping_mul(73_856_093) ^ j.wrapping_mul(19_349_663)) & 255)
             / 255.0
@@ -627,11 +702,7 @@ impl BlockGround {
         // in the village's square.
         let top = |a: i32, b: i32| {
             let (i, j) = (fine(a), fine(b));
-            let village = face == 0
-                && self
-                    .village
-                    .as_ref()
-                    .is_some_and(|v| v.index(i, j).is_some());
+            let village = face == 0 && self.in_village(i, j);
             if level == 0 || village {
                 return self.top_on(face, i, j);
             }

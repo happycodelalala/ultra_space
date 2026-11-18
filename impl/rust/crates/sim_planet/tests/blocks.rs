@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use glam::{DVec2, DVec3};
 use sim_planet::blocks::ChunkKey;
-use sim_planet::{BlockGround, Terrain, VillageGround, blocks::CELL};
+use sim_planet::{BlockGround, Terrain, VillageLayout, blocks::CELL};
 
 fn meridian() -> Arc<Terrain> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -96,20 +96,33 @@ fn the_focus_bounds_the_block_surface() {
     assert!(g.surface(far).is_some());
 }
 
+fn layout() -> VillageLayout {
+    serde_json::from_str(
+        &std::fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../content/data/village_layouts/demo_village.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap()
+}
+
 #[test]
-fn the_village_ground_shows_inside_its_square() {
+fn the_village_is_laid_on_the_real_ground() {
     let t = meridian();
     let c = land(&t);
-    let n = 8;
-    let village = VillageGround {
-        origin: [-n, -n],
-        dims: [2 * n, 2 * n],
-        tops: vec![5; (4 * n * n) as usize],
-        colours: vec!["path".into(); (4 * n * n) as usize],
-        carved: HashSet::new(),
-    };
-    let g = BlockGround::new(t.clone(), c, Some(village));
-    assert!(g.top(0, 0).is_some());
+    let g = BlockGround::new(t.clone(), c, Some(layout()));
+    // The yard is level: its columns' tops differ by at most a block.
+    let tops: Vec<i32> = (0..10)
+        .flat_map(|a| (0..10).map(move |b| (a, b)))
+        .filter_map(|(a, b)| g.top(-4 + a, -6 + b))
+        .collect();
+    let (lo, hi) = (tops.iter().min().unwrap(), tops.iter().max().unwrap());
+    assert!(hi - lo <= 1, "yard tops {lo}..{hi}");
+    // The pit is dug: a cell below the ground at its centre is empty.
+    let (i, j) = BlockGround::column(7.5, -8.5);
+    let top = g.top(i, j).expect("ground at the pit");
+    assert_eq!(g.cell(glam::IVec3::new(i, j, top - 2)), 0, "dug");
     let chunk = g.chunk((0, 0, 0)).expect("a chunk at the centre");
     assert!(chunk.mesh.triangles() > 10);
     assert!(world(&chunk).all(|p| p.is_finite()));
@@ -242,24 +255,4 @@ fn the_chunk_plan_covers_the_ground_once_without_holes() {
             );
         }
     }
-}
-
-#[test]
-fn the_village_ground_is_resampled_to_the_ground_cells() {
-    // 4 x 4 columns of 25 cm at 1.5 m (top cell 5), one cell dug.
-    let carved: HashSet<glam::IVec3> = [glam::IVec3::new(1, 1, 5)].into_iter().collect();
-    let v = VillageGround::resampled(
-        0.25,
-        [-2, -2],
-        [4, 4],
-        &[5; 16],
-        &vec!["path".to_string(); 16],
-        &carved,
-    );
-    assert_eq!(v.dims, [2, 2]);
-    assert_eq!(v.origin, [-1, -1]);
-    for &t in &v.tops {
-        assert!((f64::from(t + 1) * CELL - 1.5).abs() < 1e-9, "top {t}");
-    }
-    assert!(v.carved.contains(&glam::IVec3::new(0, 0, 2)));
 }
