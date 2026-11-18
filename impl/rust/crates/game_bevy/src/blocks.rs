@@ -17,25 +17,28 @@ use bevy::tasks::{Task, block_on, poll_once};
 use glam::{DQuat, DVec3, IVec3};
 use serde::Deserialize;
 use sim_blocks::{BlockModel, MeshData, Palette};
-use sim_planet::blocks::ChunkKey;
+use sim_planet::blocks::LodKey;
 use sim_planet::{BlockGround, VillageGround};
 
 use crate::camera::SpaceCamera;
 use crate::sim::RenderTime;
 use crate::universe::{InGame, Universe};
 
-/// Blocks are drawn this far round the camera (m).
-pub(crate) const DRAW_REACH: f64 = 90.0;
+/// Blocks are drawn this far round the camera (m): real 25 cm blocks within `SPLIT[0]`,
+/// columns 50 cm wide within `SPLIT[1]`, 1 m wide beyond (block-world.md §7).
+pub(crate) const DRAW_REACH: f64 = 400.0;
+/// A chunk of level `l + 1` gives way to its four children when it comes this close (m).
+const SPLIT: [f64; 2] = [100.0, 200.0];
+/// The coarsest level drawn.
+const TOP_LEVEL: u8 = 2;
 /// Terrain tiles are hidden this far round the camera inside the block ground (m).
-pub(crate) const HIDE_TILES: f64 = 80.0;
-/// ... and dropped beyond this (m).
-const DROP_REACH: f64 = 115.0;
+pub(crate) const HIDE_TILES: f64 = 390.0;
 /// No collision boxes this close to the ship's landing spot (m).
 const SHIP_CLEAR: f64 = 8.0;
 /// Chunk meshes being made at once.
-const CHUNKS_IN_FLIGHT: usize = 12;
+const CHUNKS_IN_FLIGHT: usize = 24;
 /// Most finished chunks shown per frame.
-const CHUNKS_PER_FRAME: usize = 4;
+const CHUNKS_PER_FRAME: usize = 8;
 
 pub struct BlocksPlugin;
 
@@ -520,8 +523,8 @@ type MadeChunk = (Mesh, DVec3, DQuat);
 #[derive(Resource)]
 struct BlockDraw {
     root: Entity,
-    chunks: HashMap<ChunkKey, Option<Entity>>,
-    pending: HashMap<ChunkKey, Task<Option<MadeChunk>>>,
+    chunks: HashMap<LodKey, Option<Entity>>,
+    pending: HashMap<LodKey, Task<Option<MadeChunk>>>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
     glow: Handle<StandardMaterial>,
@@ -723,24 +726,37 @@ fn stream_chunks(
     let ground = &world.ground;
     let here = cam.normalize();
     let height = ground.height_above(cam);
-    // High above, nothing is drawn (the tiles show the land).
-    let wanted: HashSet<ChunkKey> =
-        if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
-            ground.chunks_around(here, DRAW_REACH).into_iter().collect()
-        } else {
-            HashSet::new()
-        };
+    // How near a chunk comes to the camera (m).
+    let near = |k: &LodKey| {
+        ground.lod_centre_point(*k).distance(cam)
+            - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
+    };
+    // The chunks wanted: a quadtree from the coarsest level, split near the camera. High
+    // above, nothing is drawn (the tiles show the land).
+    let mut wanted: HashSet<LodKey> = HashSet::new();
+    if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
+        let mut stack: Vec<LodKey> = ground
+            .lod_around(here, DRAW_REACH, TOP_LEVEL)
+            .into_iter()
+            .filter(|k| near(k) < DRAW_REACH)
+            .collect();
+        while let Some(k) = stack.pop() {
+            if k.0 > 0 && near(&k) < SPLIT[k.0 as usize - 1] {
+                stack.extend(BlockGround::lod_children(k));
+            } else {
+                wanted.insert(k);
+            }
+        }
+    }
     // Start the nearest missing ones.
-    let mut missing: Vec<ChunkKey> = wanted
+    let mut missing: Vec<(f64, LodKey)> = wanted
         .iter()
         .filter(|k| !draw.chunks.contains_key(k) && !draw.pending.contains_key(k))
-        .copied()
+        .map(|k| (near(k), *k))
         .collect();
-    let size = BlockGround::chunk_size();
-    let dist = |k: &ChunkKey| ground.chunk_centre(*k).angle_between(here) * ground.radius;
-    missing.sort_by(|a, b| dist(a).total_cmp(&dist(b)));
+    missing.sort_by(|a, b| a.0.total_cmp(&b.0));
     let pool = crate::workers::workers();
-    for key in missing
+    for (_, key) in missing
         .into_iter()
         .take(CHUNKS_IN_FLIGHT.saturating_sub(draw.pending.len()))
     {
@@ -750,7 +766,7 @@ fn stream_chunks(
             key,
             pool.spawn(async move {
                 // The Bevy mesh is made here too, off the main thread.
-                g.chunk(key).map(|c| {
+                g.lod_chunk(key).map(|c| {
                     let mesh = bevy_mesh(&c.mesh, |i| {
                         let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
                         [r, g, b, 1.0]
@@ -760,7 +776,7 @@ fn stream_chunks(
             }),
         );
     }
-    let done: Vec<ChunkKey> = draw
+    let done: Vec<LodKey> = draw
         .pending
         .iter_mut()
         .filter_map(|(k, t)| t.is_finished().then_some(*k))
@@ -772,9 +788,6 @@ fn stream_chunks(
             continue;
         };
         let m = block_on(poll_once(task)).flatten();
-        if m.is_none() {
-            debug!("block chunk {key:?}: nothing to draw");
-        }
         let entity = m.map(|(mesh, origin, basis)| {
             commands
                 .spawn((
@@ -789,11 +802,10 @@ fn stream_chunks(
         draw.chunks.insert(key, entity);
     }
     // The ground is ready out to the nearest wanted chunk not yet shown.
-    let half_diagonal = size * 0.71;
     let ready = wanted
         .iter()
         .filter(|k| !draw.chunks.contains_key(k))
-        .map(|k| dist(k) - half_diagonal)
+        .map(near)
         .fold(HIDE_TILES, f64::min)
         .max(0.0);
     coverage.0 = if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_HIDE").is_none() {
@@ -804,25 +816,45 @@ fn stream_chunks(
     if draw.chunks.len() != *last_count {
         *last_count = draw.chunks.len();
         debug!(
-            "block chunks: {} shown, {} empty, {} being made, camera {:.1} m up",
+            "block chunks: {} shown, {} empty, {} being made, {} wanted, camera {:.1} m up",
             draw.chunks.values().filter(|c| c.is_some()).count(),
             draw.chunks.values().filter(|c| c.is_none()).count(),
             draw.pending.len(),
+            wanted.len(),
             height
         );
     }
-    // Drop far chunks.
-    let far: Vec<ChunkKey> = draw
+    // Chunks no longer wanted go once every wanted chunk overlapping them is shown (a parent
+    // stays until all its children are ready, children until their parent is), or at once
+    // when they cover nothing wanted.
+    let overlaps = |a: &LodKey, b: &LodKey| {
+        if a.1 != b.1 {
+            return false;
+        }
+        let (hi, lo) = if a.0 >= b.0 { (a, b) } else { (b, a) };
+        let shift = i32::from(hi.0 - lo.0);
+        lo.2 >> shift == hi.2 && lo.3 >> shift == hi.3
+    };
+    let gone: Vec<LodKey> = draw
         .chunks
         .keys()
-        .filter(|k| height >= DRAW_REACH || dist(k) > DROP_REACH)
+        .filter(|k| !wanted.contains(k))
+        .filter(|k| {
+            let mut covering = wanted.iter().filter(|w| overlaps(k, w)).peekable();
+            if covering.peek().is_none() {
+                return true;
+            }
+            covering.all(|w| draw.chunks.contains_key(w))
+        })
         .copied()
         .collect();
-    for key in far {
+    for key in gone {
         if let Some(Some(e)) = draw.chunks.remove(&key) {
             commands.entity(e).despawn();
         }
     }
+    // Chunks being made that are no longer wanted are forgotten.
+    draw.pending.retain(|k, _| wanted.contains(k));
 }
 
 /// The block surface stands round the player (on foot or in the ship; the camera when there

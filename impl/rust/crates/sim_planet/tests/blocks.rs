@@ -171,3 +171,33 @@ fn the_column_cache_forgets_old_chunks_and_still_answers() {
     }
     assert_eq!(g.top(3, 4), first, "worked out again the same");
 }
+
+#[test]
+fn coarse_chunks_sit_on_the_ground_and_their_children_fill_them() {
+    let t = meridian();
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    for level in 1..=2u8 {
+        let key = (level, 0u8, 3, -2);
+        let chunk = g.lod_chunk(key).expect("a coarse chunk");
+        let top = world(&chunk)
+            .map(|w| w.length() - g.radius)
+            .fold(f64::MIN, f64::max);
+        let natural = t.surface_height(g.lod_centre(key), 1.0);
+        assert!(
+            (top - natural).abs() < 12.0,
+            "level {level}: top {top:.2} vs ground {natural:.2}"
+        );
+        // Its four children tile it exactly.
+        let size = BlockGround::lod_size(level);
+        let child = BlockGround::lod_size(level - 1);
+        assert!((size - 2.0 * child).abs() < 1e-9);
+        let centre = g.lod_centre(key);
+        for c in BlockGround::lod_children(key) {
+            let off = g.lod_centre(c).angle_between(centre) * g.radius;
+            assert!(
+                (off - child * std::f64::consts::FRAC_1_SQRT_2).abs() < 0.01,
+                "{off}"
+            );
+        }
+    }
+}

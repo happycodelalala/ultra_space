@@ -50,6 +50,9 @@ struct ChunkTops {
 
 /// A chunk: its grid face and chunk column indices.
 pub type ChunkKey = (u8, i32, i32);
+/// A chunk of any level of detail: level (columns 2^level blocks wide; 0 the real blocks),
+/// face and chunk indices at that level. Its four children are the next level down.
+pub type LodKey = (u8, u8, i32, i32);
 
 /// A chunk's mesh in its own frame: positions relative to `origin` (surface frame, m; the
 /// chunk's centre at the grid floor) turned by `basis` (columns east-ish, up, south-ish).
@@ -485,22 +488,6 @@ impl BlockGround {
         self.cell_on(0, p)
     }
 
-    /// The lowest cell worth meshing in column (i, j): one below the lowest neighbouring top
-    /// (deeper where something is dug).
-    fn floor(&self, face: u8, i: i32, j: i32) -> Option<i32> {
-        let t = self.top_on(face, i, j)?;
-        let mut lo = t;
-        for a in -1..=1 {
-            for b in -1..=1 {
-                if let Some(n) = self.top_on(face, i + a, j + b) {
-                    lo = lo.min(n);
-                }
-            }
-        }
-        let deep = face == 0 && self.carved_near.contains(&(i, j));
-        Some(if deep { lo.min(t - 28) } else { lo - 1 })
-    }
-
     /// Side of a chunk (m).
     pub fn chunk_size() -> f64 {
         f64::from(CHUNK) * CELL
@@ -519,22 +506,92 @@ impl BlockGround {
     /// The mesh of a chunk in its own frame (colours 1-based into [`PALETTE`]); `None` when it
     /// has no blocks.
     pub fn chunk(&self, key: ChunkKey) -> Option<ChunkMesh> {
-        let (face, ci, cj) = key;
+        self.lod_chunk((0, key.0, key.1, key.2))
+    }
+
+    /// Side of a chunk of `level` (m).
+    pub fn lod_size(level: u8) -> f64 {
+        Self::chunk_size() * f64::from(1u32 << level)
+    }
+
+    /// The unit direction through the centre of a chunk of any level.
+    pub fn lod_centre(&self, key: LodKey) -> DVec3 {
+        let size = Self::lod_size(key.0);
+        self.dir_on(
+            key.1,
+            (f64::from(key.2) + 0.5) * size,
+            (f64::from(key.3) + 0.5) * size,
+        )
+    }
+
+    /// The centre of a chunk of any level at its ground (surface frame, m).
+    pub fn lod_centre_point(&self, key: LodKey) -> DVec3 {
+        let s = 1i32 << key.0;
+        let (i, j) = (
+            (key.2 * CHUNK + CHUNK / 2) * s,
+            (key.3 * CHUNK + CHUNK / 2) * s,
+        );
+        let t = self
+            .top_on(key.1, i, j)
+            .unwrap_or(-((self.base / CELL) as i32));
+        self.lod_centre(key) * (self.radius + self.base + f64::from(t + 1) * CELL)
+    }
+
+    /// The four children of a chunk (the next level down).
+    pub fn lod_children(key: LodKey) -> [LodKey; 4] {
+        let (l, f, i, j) = key;
+        let l = l.saturating_sub(1);
+        [
+            (l, f, 2 * i, 2 * j),
+            (l, f, 2 * i + 1, 2 * j),
+            (l, f, 2 * i, 2 * j + 1),
+            (l, f, 2 * i + 1, 2 * j + 1),
+        ]
+    }
+
+    /// The mesh of a chunk of any level in its own frame. Level `l` has columns 2^l blocks wide
+    /// (their tops the ground at each column's middle), with the blocks' own 25 cm height steps,
+    /// so its terraces are the real blocks' seen coarser.
+    pub fn lod_chunk(&self, key: LodKey) -> Option<ChunkMesh> {
+        let (level, face, ci, cj) = key;
+        let s = 1i32 << level;
+        let fine = |a: i32| a * s + s / 2;
+        let top = |a: i32, b: i32| self.top_on(face, fine(a), fine(b));
         let (i0, j0) = (ci * CHUNK, cj * CHUNK);
         // The shell cells of the chunk and a margin round it (shapes and hidden faces look
         // two cells out).
+        let mut tops: HashMap<(i32, i32), Option<i32>> = HashMap::new();
+        for j in j0 - 4..j0 + CHUNK + 4 {
+            for i in i0 - 4..i0 + CHUNK + 4 {
+                tops.insert((i, j), top(i, j));
+            }
+        }
+        let top_at = |i: i32, j: i32| tops.get(&(i, j)).copied().flatten();
         let mut cells: HashMap<IVec3, u16> = HashMap::new();
         let (mut klo, mut khi) = (i32::MAX, i32::MIN);
         for j in j0 - 3..j0 + CHUNK + 3 {
             for i in i0 - 3..i0 + CHUNK + 3 {
-                let (Some(t), Some(lo)) = (self.top_on(face, i, j), self.floor(face, i, j)) else {
+                let Some(t) = top_at(i, j) else {
                     continue;
                 };
+                let mut lo = t;
+                for a in -1..=1 {
+                    for b in -1..=1 {
+                        if let Some(n) = top_at(i + a, j + b) {
+                            lo = lo.min(n);
+                        }
+                    }
+                }
+                let deep = level == 0 && face == 0 && self.carved_near.contains(&(i, j));
+                let lo = if deep { lo.min(t - 28) } else { lo - 1 };
                 for k in lo..=t {
-                    let p = IVec3::new(i, j, k);
-                    let c = self.cell_on(face, p);
+                    let c = if level == 0 {
+                        self.cell_on(face, IVec3::new(i, j, k))
+                    } else {
+                        self.coarse_cell(face, fine(i), fine(j), t, k)
+                    };
                     if c != 0 {
-                        cells.insert(p, c);
+                        cells.insert(IVec3::new(i, j, k), c);
                     }
                 }
                 // Below the shell counts as solid, so its faces stay hidden.
@@ -556,27 +613,86 @@ impl BlockGround {
             IVec3::new(i0, j0, klo),
             IVec3::new(i0 + CHUNK, j0 + CHUNK, khi + 1),
             &[Dir::PZ],
-            CELL as f32,
+            1.0,
         );
         if mesh.is_empty() {
             return None;
         }
+        // Skirts: a wall 2 m down the outside of every border column, so where the neighbour is
+        // of another level (its edge a step lower) no slit opens; elsewhere it stays hidden
+        // under the neighbour's tops.
+        let soil = colour("soil");
+        let wall = |m: &mut MeshData, a: Vec3, b: Vec3, out: Vec3, depth: f32| {
+            let down = Vec3::new(0.0, 0.0, -depth);
+            let mut quad = [a, b, b + down, a + down];
+            if (quad[1] - quad[0]).cross(quad[2] - quad[0]).dot(out) < 0.0 {
+                quad.reverse();
+            }
+            let first = m.positions.len() as u32;
+            for p in quad {
+                m.positions.push(p.to_array());
+                m.normals.push(out.to_array());
+                m.colours.push(soil);
+            }
+            m.indices
+                .extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+        };
+        let depth = 8.0;
+        for n in 0..CHUNK {
+            for (i, j, out) in [
+                (i0 + n, j0, Vec3::NEG_Y),
+                (i0 + n, j0 + CHUNK - 1, Vec3::Y),
+                (i0, j0 + n, Vec3::NEG_X),
+                (i0 + CHUNK - 1, j0 + n, Vec3::X),
+            ] {
+                let Some(t) = top_at(i, j) else { continue };
+                let z = (t + 1) as f32;
+                let (x0, y0) = (i as f32, j as f32);
+                let (a, b) = match out {
+                    o if o == Vec3::NEG_Y => (Vec3::new(x0, y0, z), Vec3::new(x0 + 1.0, y0, z)),
+                    o if o == Vec3::Y => {
+                        (Vec3::new(x0, y0 + 1.0, z), Vec3::new(x0 + 1.0, y0 + 1.0, z))
+                    }
+                    o if o == Vec3::NEG_X => (Vec3::new(x0, y0, z), Vec3::new(x0, y0 + 1.0, z)),
+                    _ => (Vec3::new(x0 + 1.0, y0, z), Vec3::new(x0 + 1.0, y0 + 1.0, z)),
+                };
+                wall(&mut mesh, a, b, out, depth);
+            }
+        }
         // Into the chunk's own frame: origin at its centre on the floor, up there.
-        let up = self.chunk_centre(key);
+        let up = self.lod_centre(key);
         let origin = up * (self.radius + self.base);
         let e = self.faces[face as usize][1];
         let east = (e - up * e.dot(up)).normalize();
         let south = east.cross(up);
         let basis = DQuat::from_mat3(&DMat3::from_cols(east, up, south));
         let inverse = basis.inverse();
+        let width = f64::from(s) * CELL;
         for p in &mut mesh.positions {
-            let g = DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
+            let g = DVec3::new(
+                f64::from(p[0]) * width,
+                f64::from(p[1]) * width,
+                f64::from(p[2]) * CELL,
+            );
             *p = (inverse * (self.point_on(face, g) - origin))
                 .as_vec3()
                 .to_array();
         }
-        for n in &mut mesh.normals {
-            *n = Vec3::new(n[0], n[2], -n[1]).to_array();
+        if level == 0 {
+            for n in &mut mesh.normals {
+                *n = Vec3::new(n[0], n[2], -n[1]).to_array();
+            }
+        } else {
+            // Columns wider than tall: slopes tilt differently, so normals from the triangles
+            // (every face has its own vertices).
+            for t in mesh.indices.chunks(3) {
+                let [a, b, c] =
+                    [t[0], t[1], t[2]].map(|v| Vec3::from_array(mesh.positions[v as usize]));
+                let n = (b - a).cross(c - a).normalize_or_zero().to_array();
+                for &v in t {
+                    mesh.normals[v as usize] = n;
+                }
+            }
         }
         Some(ChunkMesh {
             mesh,
@@ -585,11 +701,23 @@ impl BlockGround {
         })
     }
 
-    /// The chunks within `radius` (m) of unit direction `dir`, on whichever faces that disc
-    /// touches.
-    pub fn chunks_around(&self, dir: DVec3, radius: f64) -> Vec<ChunkKey> {
+    /// A cell of a coarse column whose middle is fine column (i, j) and top `t`.
+    fn coarse_cell(&self, face: u8, i: i32, j: i32, t: i32, k: i32) -> u16 {
+        if k > t {
+            return 0;
+        }
+        let d = t - k;
+        if d == 0 {
+            return self.top_colour(face, i, j, t);
+        }
+        colour(if d < 7 { "soil" } else { "bedrock" })
+    }
+
+    /// The chunks of `level` within `radius` (m) of unit direction `dir`, on whichever faces
+    /// that disc touches.
+    pub fn lod_around(&self, dir: DVec3, radius: f64, level: u8) -> Vec<LodKey> {
         let d = dir.normalize();
-        let size = Self::chunk_size();
+        let size = Self::lod_size(level);
         let (east, south) = tangent_frame(d);
         let step = size * 0.5;
         let n = (radius / step).ceil() as i32 + 1;
@@ -603,19 +731,27 @@ impl BlockGround {
                 let at = (d * self.radius + east * x + south * y).normalize();
                 let (face, p) = self.locate(at);
                 keys.insert((
+                    level,
                     face,
                     (p.x / size).floor() as i32,
                     (p.y / size).floor() as i32,
                 ));
             }
         }
-        let mut out: Vec<ChunkKey> = keys
+        let mut out: Vec<LodKey> = keys
             .into_iter()
-            .filter(|&k| {
-                self.chunk_centre(k).angle_between(d) * self.radius <= radius + size * 0.71
-            })
+            .filter(|&k| self.lod_centre(k).angle_between(d) * self.radius <= radius + size * 0.71)
             .collect();
         out.sort_unstable();
         out
+    }
+
+    /// The chunks within `radius` (m) of unit direction `dir`, on whichever faces that disc
+    /// touches.
+    pub fn chunks_around(&self, dir: DVec3, radius: f64) -> Vec<ChunkKey> {
+        self.lod_around(dir, radius, 0)
+            .into_iter()
+            .map(|k| (k.1, k.2, k.3))
+            .collect()
     }
 }

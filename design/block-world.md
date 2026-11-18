@@ -262,6 +262,13 @@ shape recipe.
   A **focus** (the camera, set each frame) bounds where the block surface replaces the natural
   one (2 km), so far queries and far vehicles use the natural ground. Faces mesh alone; where
   they meet the columns tilt and leave small cracks (seam blocks later).
+- **Levels of detail (implemented):** the blocks are drawn out to about 400 m as a quadtree of
+  chunks: real 25 cm blocks within ~100 m, columns 50 cm wide to ~200 m, 1 m wide to ~400 m,
+  all with the blocks' 25 cm height steps (so their terraces are the real ones seen coarser),
+  each chunk with a 2 m skirt so neighbours of different levels leave no slit; a chunk stays
+  until whatever replaces it is ready. Beyond, the tiles take the blocks' colours and draw the
+  25 cm steps as dark risers along the contours, so nowhere can the eye tell where blocks stop.
+  Collision stays real blocks round bodies only.
 - **Far terrain:** beyond the block zone the quadtree tiles stay, drawn from the same function
   stepped to the grid with the same slope rule, so the land reads as the same blocks from low
   flight; where block chunks are, the tiles are cut away under them. From orbit nothing changes
