@@ -10,7 +10,7 @@ struct TerrainUniform {
     center: vec4<f32>,    // xyz body centre (render space), w radius
     rotation: vec4<f32>,  // body rotation quaternion (xyzw)
     params: vec4<f32>,    // x baked map present, y blend start (m), z blend end (m), w detail fade (m)
-    surface: vec4<f32>,   // x has ocean, y has atmosphere, z cover mode (a body with geography)
+    surface: vec4<f32>,   // x has ocean, y has atmosphere, z cover mode (a body with geography), w faceted ground
     palette: array<vec4<f32>, 12>, // linear biome colours by biome index
     blocks: vec4<f32>,    // xyz block ground centre (body frame, unit), w cosine of its angular radius
     hide: vec4<f32>,      // x: tiles this close (horizontally) to the camera inside the block ground are hidden
@@ -147,7 +147,12 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // Position in the body's own frame (metres), so patterns stay fixed to the ground.
     let local = quat_rotate(vec4<f32>(-q.xyz, q.w), rel);
     let dir = normalize(local);
-    let n = normalize(in.world_normal);
+    var n = normalize(in.world_normal);
+    if terrain.surface.w > 0.5 {
+        // Faceted ground: each triangle flat, its normal from the screen-space derivatives.
+        let flat = normalize(cross(dpdx(p), dpdy(p)));
+        n = select(-flat, flat, dot(flat, normalize(p - terrain.center.xyz)) > 0.0);
+    }
     let dist = length(p - view.world_position);
     // Inside the block ground near the camera the blocks are drawn instead.
     if terrain.hide.x > 0.0 && dot(dir, terrain.blocks.xyz) > terrain.blocks.w {
@@ -196,7 +201,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         let jitter = ((value_noise(local * 0.3) - 0.5) * 0.8
             + 0.15 * (hash3(floor(local * 2.0)) - 0.5) * speck) * fade;
         albedo = terrain.palette[cover_index(fields, slope, jitter)].rgb;
-        if fields.x > 0.0 {
+        if fields.x > 0.0 && terrain.surface.w < 0.5 {
             // How much of this pixel the risers cover, worked out exactly: a riser line where
             // steps are wider than the pixel, their average share where several fall in it.
             let s = fields.x / 0.5;

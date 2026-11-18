@@ -24,6 +24,15 @@ use crate::camera::SpaceCamera;
 use crate::sim::RenderTime;
 use crate::universe::{InGame, Universe};
 
+/// How the ground near the player is made: `ULTRA_SPACE_GROUND=faceted` for the faceted
+/// low-poly alternative (tried 2026-11-18), blocks otherwise.
+pub fn ground_style() -> sim_planet::GroundStyle {
+    match std::env::var("ULTRA_SPACE_GROUND").as_deref() {
+        Ok("faceted") => sim_planet::GroundStyle::Faceted,
+        _ => sim_planet::GroundStyle::Blocks,
+    }
+}
+
 /// The coarsest level of block chunks drawn: columns 2^4 blocks (4 m) wide (block-world.md §7).
 /// Beyond it the tiles, coloured and stepped like the blocks, carry on.
 const TOP_LEVEL: u8 = 4;
@@ -252,9 +261,12 @@ pub fn load(
         .join("data/village_layouts/demo_village.json");
     let own: sim_planet::VillageLayout = serde_json::from_str(&read(&layout_path)?)
         .map_err(|e| format!("{}: {e}", layout_path.display()))?;
-    let mut ground = BlockGround::new(current.clone(), center, Some(own));
+    let mut ground =
+        BlockGround::new(current.clone(), center, Some(own)).with_style(ground_style());
     let world = BlockWorld {
-        ground: Arc::new(BlockGround::new(current.clone(), center, None)),
+        ground: Arc::new(
+            BlockGround::new(current.clone(), center, None).with_style(ground_style()),
+        ),
         body,
         village: Arc::new(village),
         models: Arc::new(models),

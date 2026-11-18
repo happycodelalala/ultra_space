@@ -256,3 +256,32 @@ fn the_chunk_plan_covers_the_ground_once_without_holes() {
         }
     }
 }
+
+#[test]
+fn faceted_ground_is_walked_on_where_it_is_drawn() {
+    let t = meridian();
+    let c = land(&t);
+    let g =
+        BlockGround::new(t.clone(), c, Some(layout())).with_style(sim_planet::GroundStyle::Faceted);
+    let chunk = g.chunk((0, 3, -2)).expect("a faceted chunk");
+    assert!(chunk.mesh.triangles() > 100);
+    // Every top vertex lies on the walkable surface (skirt vertices hang 2 m below).
+    let mut on = 0;
+    for w in world(&chunk) {
+        let (face, p) = g.locate(w.normalize());
+        let surface = g.facet_surface(face, p);
+        let h = w.length() - g.radius;
+        if (h - surface).abs() < 0.05 {
+            on += 1;
+        } else {
+            assert!(
+                (h - (surface - 2.0)).abs() < 0.3,
+                "vertex {h:.2} vs surface {surface:.2}"
+            );
+        }
+    }
+    assert!(on > chunk.mesh.positions.len() / 2);
+    // The yard is flat in the faceted ground too.
+    let (a, b) = (g.ground_z(0.0, 0.0), g.ground_z(3.0, -3.0));
+    assert!((a - b).abs() < 0.05, "yard {a:.2} vs {b:.2}");
+}

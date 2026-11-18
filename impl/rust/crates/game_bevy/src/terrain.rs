@@ -269,7 +269,9 @@ pub fn surface_flags(body: &sim_core::Body) -> Vec4 {
         f32::from(u8::from(ocean)),
         f32::from(u8::from(body.atmosphere.is_some())),
         f32::from(u8::from(geography)),
-        0.0,
+        f32::from(u8::from(
+            crate::blocks::ground_style() == sim_planet::GroundStyle::Faceted,
+        )),
     )
 }
 

@@ -51,6 +51,17 @@ struct ChunkTops {
     used: std::sync::atomic::AtomicU64,
 }
 
+/// How the ground near the player is drawn and walked on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GroundStyle {
+    /// Columns of blocks (block-world.md).
+    #[default]
+    Blocks,
+    /// Flat-shaded low-poly triangles over the same ground (the faceted alternative, tried
+    /// 2026-11-18): facets two columns wide, coloured per facet.
+    Faceted,
+}
+
 /// A chunk: its grid face and chunk column indices.
 pub type ChunkKey = (u8, i32, i32);
 /// A chunk of any level of detail: level (columns 2^level blocks wide; 0 the real blocks),
@@ -217,6 +228,7 @@ pub struct BlockGround {
     clock: std::sync::atomic::AtomicU64,
     /// Where the player is (unit direction); `None` means everywhere.
     focus: RwLock<Option<DVec3>>,
+    pub style: GroundStyle,
 }
 
 impl std::fmt::Debug for BlockGround {
@@ -259,6 +271,7 @@ impl BlockGround {
             tops: RwLock::new(HashMap::new()),
             clock: std::sync::atomic::AtomicU64::new(0),
             focus: RwLock::new(None),
+            style: GroundStyle::Blocks,
         };
         if let Some(layout) = layout {
             g.lay_village(layout);
@@ -295,6 +308,12 @@ impl BlockGround {
             }
         }
         self.village = Some(village);
+    }
+
+    /// The same ground drawn and walked on in `style`.
+    pub fn with_style(mut self, style: GroundStyle) -> Self {
+        self.style = style;
+        self
     }
 
     /// Sets where the player is (unit direction, surface frame); `None` for everywhere.
@@ -485,6 +504,9 @@ impl BlockGround {
             return None;
         }
         let (face, p) = self.locate(dir);
+        if self.style == GroundStyle::Faceted {
+            return Some(self.facet_surface(face, p));
+        }
         let (i, j) = Self::column(p.x, p.y);
         let t = self.top_on(face, i, j)?;
         Some(self.base + f64::from(t + 1) * CELL)
@@ -493,6 +515,9 @@ impl BlockGround {
     /// The ground surface height above the floor at face 0's grid point (x, y) (m; 0 where
     /// there are no blocks).
     pub fn ground_z(&self, x: f64, y: f64) -> f64 {
+        if self.style == GroundStyle::Faceted {
+            return self.facet_surface(0, DVec2::new(x, y)) - self.base;
+        }
         let (i, j) = Self::column(x, y);
         self.top(i, j).map_or(0.0, |t| f64::from(t + 1) * CELL)
     }
@@ -573,25 +598,196 @@ impl BlockGround {
         if height < 1.5 && self.natural.has_ocean() {
             return colour(if n < 0.0 { "straw" } else { "straw2" });
         }
-        let pick = |a: &str, b: &str, c: &str| {
-            colour(if n < -0.12 {
-                a
-            } else if n < 0.1 {
-                b
-            } else {
-                c
-            })
-        };
-        match cover {
-            Some(Cover::Ice | Cover::Snow | Cover::Salt) => colour("white"),
-            Some(Cover::Tundra) => pick("moss", "stone", "moss"),
-            Some(Cover::ColdDesert) => pick("stone", "stone2", "path2"),
-            Some(Cover::Desert) => pick("straw", "straw2", "straw"),
-            Some(Cover::Steppe | Cover::Savanna) => pick("straw2", "turf2", "straw"),
-            Some(Cover::Taiga | Cover::Rainforest | Cover::Jungle) => pick("moss", "turf3", "moss"),
-            Some(Cover::Forest | Cover::Seasonal) => pick("turf3", "turf", "turf3"),
-            _ => pick("turf3", "turf", "turf2"),
+        cover_colour(cover, n)
+    }
+
+    // ---- the faceted ground ---------------------------------------------------------------------
+
+    /// The ground's height (m above the reference radius) at grid point `p` of `face`, detail
+    /// down to `detail` (m): the natural ground, the village's pads, and its pits as hollows.
+    fn ground_height(&self, face: u8, p: DVec2, detail: f64) -> f64 {
+        let mut h = self.natural.height(self.dir_on(face, p.x, p.y), detail);
+        if face == 0
+            && let Some(v) = &self.village
+            && p.x.abs() < v.layout.half_size_m
+            && p.y.abs() < v.layout.half_size_m
+        {
+            h = v.height(p, h);
+            for (pit, &z0) in v.layout.pits.iter().zip(&v.pit_ground) {
+                let d = (p - DVec2::from_array(pit.centre)).length();
+                if d < pit.radius_m {
+                    let depth = (pit.radius_m * pit.radius_m - d * d).sqrt() / 1.3;
+                    h = h.min(z0 - depth);
+                }
+            }
         }
+        h
+    }
+
+    /// Whether the facet quad (a, b) of `face` at `level` is split along its other diagonal
+    /// (alternating by a hash, so the facets don't line up in rows).
+    fn facet_flip(face: u8, level: u8, a: i64, b: i64) -> bool {
+        let h = (a.wrapping_mul(73_856_093) ^ b.wrapping_mul(19_349_663))
+            .wrapping_add(i64::from(face) * 83_492_791 + i64::from(level) * 2_654_435);
+        (h >> 3) & 1 == 1
+    }
+
+    /// The faceted surface's height (m above the reference radius) at grid point `p` of `face`:
+    /// the plane of the finest facet over it.
+    pub fn facet_surface(&self, face: u8, p: DVec2) -> f64 {
+        let fs = 2.0 * CELL;
+        let (a, b) = ((p.x / fs).floor(), (p.y / fs).floor());
+        let (u, v) = (p.x / fs - a, p.y / fs - b);
+        let at = |da: f64, db: f64| {
+            self.ground_height(face, DVec2::new((a + da) * fs, (b + db) * fs), fs)
+        };
+        let (h00, h10, h01, h11) = (at(0.0, 0.0), at(1.0, 0.0), at(0.0, 1.0), at(1.0, 1.0));
+        if Self::facet_flip(face, 0, a as i64, b as i64) {
+            // Split along (0,1)-(1,0).
+            if u + v <= 1.0 {
+                h00 + (h10 - h00) * u + (h01 - h00) * v
+            } else {
+                h11 + (h01 - h11) * (1.0 - u) + (h10 - h11) * (1.0 - v)
+            }
+        } else if u >= v {
+            // Split along (0,0)-(1,1).
+            h00 + (h10 - h00) * u + (h11 - h10) * v
+        } else {
+            h00 + (h01 - h00) * v + (h11 - h01) * u
+        }
+    }
+
+    /// A faceted chunk of `n` × `n` columns, `size` metres a side: facets two columns wide,
+    /// flat-shaded, each one colour; a 2 m skirt round its edge.
+    fn facet_chunk(&self, key: LodKey, n: i32, size: f64) -> Option<ChunkMesh> {
+        let started = std::time::Instant::now();
+        let (level, face, ci, cj) = key;
+        let facets = (n / 2).max(1);
+        let fs = size / f64::from(facets);
+        let (x0, y0) = (f64::from(ci) * size, f64::from(cj) * size);
+        // Vertex heights.
+        let side = (facets + 1) as usize;
+        let mut hs = Vec::with_capacity(side * side);
+        for b in 0..=facets {
+            for a in 0..=facets {
+                let p = DVec2::new(x0 + f64::from(a) * fs, y0 + f64::from(b) * fs);
+                hs.push(self.ground_height(face, p, fs));
+            }
+        }
+        let t_heights = started.elapsed().as_secs_f32() * 1e3;
+        let up = self.dir_on(face, x0 + size * 0.5, y0 + size * 0.5);
+        let origin = up * (self.radius + self.base);
+        let e = self.faces[face as usize][1];
+        let east = (e - up * e.dot(up)).normalize();
+        let south = east.cross(up);
+        let basis = DQuat::from_mat3(&DMat3::from_cols(east, up, south));
+        let inverse = basis.inverse();
+        let point = |a: i32, b: i32, drop: f64| {
+            let p = DVec2::new(x0 + f64::from(a) * fs, y0 + f64::from(b) * fs);
+            let h = hs[a as usize + b as usize * side] - drop;
+            self.dir_on(face, p.x, p.y) * (self.radius + h)
+        };
+        let mut m = MeshData::default();
+        // A triangle facing `out` (default: up, away from the centre).
+        let tri = |m: &mut MeshData, w: [DVec3; 3], colour: u16, out: Option<DVec3>| {
+            let n = (w[1] - w[0]).cross(w[2] - w[0]);
+            let outward = out.unwrap_or_else(|| (w[0] + w[1] + w[2]).normalize());
+            let w = if n.dot(outward) < 0.0 {
+                [w[0], w[2], w[1]]
+            } else {
+                w
+            };
+            let normal = (inverse * (w[1] - w[0]).cross(w[2] - w[0]).normalize()).as_vec3();
+            let first = m.positions.len() as u32;
+            for q in w {
+                m.positions
+                    .push((inverse * (q - origin)).as_vec3().to_array());
+                m.normals.push(normal.to_array());
+                m.colours.push(colour);
+            }
+            m.indices.extend([first, first + 1, first + 2]);
+        };
+        let globe = self.natural.globe();
+        for b in 0..facets {
+            for a in 0..facets {
+                let (ga, gb) = (
+                    i64::from(ci) * i64::from(facets) + i64::from(a),
+                    i64::from(cj) * i64::from(facets) + i64::from(b),
+                );
+                let c = [
+                    point(a, b, 0.0),
+                    point(a + 1, b, 0.0),
+                    point(a, b + 1, 0.0),
+                    point(a + 1, b + 1, 0.0),
+                ];
+                let tris = if Self::facet_flip(face, level, ga, gb) {
+                    [[c[0], c[1], c[2]], [c[3], c[2], c[1]]]
+                } else {
+                    [[c[0], c[1], c[3]], [c[0], c[3], c[2]]]
+                };
+                for w in tris {
+                    // The facet's colour from its middle.
+                    let mid = (w[0] + w[1] + w[2]) / 3.0;
+                    let height = mid.length() - self.radius;
+                    let dir = mid.normalize();
+                    let normal = (w[1] - w[0]).cross(w[2] - w[0]).normalize();
+                    let steep = normal.dot(dir).abs() < 0.72;
+                    let (_, gp) = self.locate(dir);
+                    let jitter = crate::noise::fbm(
+                        DVec3::new(gp.x * 0.3, gp.y * 0.3, 9.0 + f64::from(face)),
+                        7,
+                        2,
+                        0.5,
+                    ) + 0.1
+                        * (f64::from(((ga * 31 + gb * 17) & 255) as u8) / 255.0 - 0.5);
+                    let on_path = face == 0
+                        && self.village.as_ref().is_some_and(|v| {
+                            gp.x.abs() < v.layout.half_size_m
+                                && gp.y.abs() < v.layout.half_size_m
+                                && v.on_path(gp)
+                        });
+                    let cover = globe.map(|g| g.ground_cover(dir, height, jitter));
+                    use crate::globe::Cover;
+                    let col = if on_path {
+                        colour(if jitter < 0.0 { "path" } else { "path2" })
+                    } else if height < 0.0 && self.natural.has_ocean() {
+                        colour("path2")
+                    } else if steep && !matches!(cover, Some(Cover::Ice | Cover::Snow)) {
+                        colour(if jitter < 0.0 { "rock" } else { "rock2" })
+                    } else if height < 1.5 && self.natural.has_ocean() {
+                        colour(if jitter < 0.0 { "straw" } else { "straw2" })
+                    } else {
+                        cover_colour(cover, jitter)
+                    };
+                    tri(&mut m, w, col, None);
+                }
+            }
+        }
+        // Skirts: 2 m walls down the outside of the chunk's edge.
+        let soil = colour("soil");
+        for k in 0..facets {
+            for (a, b, a2, b2) in [
+                (k, 0, k + 1, 0),
+                (k + 1, facets, k, facets),
+                (0, k + 1, 0, k),
+                (facets, k, facets, k + 1),
+            ] {
+                let (p, q) = (point(a, b, 0.0), point(a2, b2, 0.0));
+                let (pd, qd) = (point(a, b, 2.0), point(a2, b2, 2.0));
+                // Away from the chunk's middle.
+                let mid = point(facets / 2, facets / 2, 0.0);
+                let out = Some((p + q) * 0.5 - mid);
+                tri(&mut m, [p, q, qd], soil, out);
+                tri(&mut m, [p, qd, pd], soil, out);
+            }
+        }
+        let t_mesh = started.elapsed().as_secs_f32() * 1e3 - t_heights;
+        Some(ChunkMesh {
+            mesh: m,
+            origin,
+            basis,
+            timings: [t_heights, 0.0, t_mesh],
+        })
     }
 
     /// The cell at (i, j, k) of `face`: 0 empty, else a 1-based index into [`PALETTE`].
@@ -694,6 +890,9 @@ impl BlockGround {
 
     /// The mesh of chunk `key` of `n` × `n` columns, `size` metres a side.
     fn chunk_of(&self, key: LodKey, n: i32, size: f64) -> Option<ChunkMesh> {
+        if self.style == GroundStyle::Faceted {
+            return self.facet_chunk(key, n, size);
+        }
         let (level, face, ci, cj) = key;
         let s = 1i32 << level;
         let fine = |a: i32| a * s + s / 2;
@@ -1103,4 +1302,28 @@ fn push_quad(m: &mut MeshData, corners: [Vec3; 4], out: Vec3, colour: u16) {
     }
     m.indices
         .extend([first, first + 1, first + 2, first, first + 2, first + 3]);
+}
+
+/// The ground's colour for what covers it, jittered by `n` (about ±0.5) between three shades.
+fn cover_colour(cover: Option<crate::globe::Cover>, n: f64) -> u16 {
+    use crate::globe::Cover;
+    let pick = |a: &str, b: &str, c: &str| {
+        colour(if n < -0.12 {
+            a
+        } else if n < 0.1 {
+            b
+        } else {
+            c
+        })
+    };
+    match cover {
+        Some(Cover::Ice | Cover::Snow | Cover::Salt) => colour("white"),
+        Some(Cover::Tundra) => pick("moss", "stone", "moss"),
+        Some(Cover::ColdDesert) => pick("stone", "stone2", "path2"),
+        Some(Cover::Desert) => pick("straw", "straw2", "straw"),
+        Some(Cover::Steppe | Cover::Savanna) => pick("straw2", "turf2", "straw"),
+        Some(Cover::Taiga | Cover::Rainforest | Cover::Jungle) => pick("moss", "turf3", "moss"),
+        Some(Cover::Forest | Cover::Seasonal) => pick("turf3", "turf", "turf3"),
+        _ => pick("turf3", "turf", "turf2"),
+    }
 }

@@ -18,7 +18,7 @@ pub mod quadtree;
 pub mod regions;
 pub mod terrain;
 
-pub use blocks::{BlockGround, VillageLayout};
+pub use blocks::{BlockGround, GroundStyle, VillageLayout};
 pub use climate::{Biome, Climate, latitude, subsolar_latitude};
 pub use foundations::{Footprint, Foundations, PlacedBox, Site, Structure, tangent_frame};
 pub use mesh::{CollisionPatch, TileMesh, build_tile, collision_patch, tile_indices};

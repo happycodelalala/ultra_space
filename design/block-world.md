@@ -12,6 +12,14 @@ This replaces the heightmap-only terrain near the player (planet-surface.md) and
 patches" it deferred; the terrain function stays the source of the untouched world. The look is
 set in visual-style.md; this document is the system.
 
+**Trying the faceted ground (2026-11-18, developer):** after rounds with block ground on the round
+planet (aliasing of small steps, the look), the faceted low-poly alternative is tried for the
+**terrain only** (buildings, trees and people stay block models): `ULTRA_SPACE_GROUND=faceted`
+draws and walks on flat-shaded triangles over the same ground (facets 1 m near, coarser far by
+the same size-on-screen rule, coloured per facet from the world's cover, rock on steep facets,
+the village's pads, paths and pit), the far tiles flat-shaded without step lines. Blocks stay
+the default until the comparison is judged.
+
 ## 1. Decisions
 
 | Question | Decision |
