@@ -1,0 +1,11 @@
+# The block ground under load (performance round, alone): hovering 25 m over a vale while the
+# blocks fill in to the horizon, a full turn on the spot, then low fast flight (600 m/s) with
+# the blocks streaming under the ship. The log reports the streaming every 5 s.
+8    shot perf-1-hover.png
+9    mouse 24 0 6            # turn round on the spot
+15   shot perf-2-turned.png
+16   hold Space 2            # climb a little
+18.5 hold W 18               # speed up low over the land
+28   shot perf-3-fast.png
+36   shot perf-4-fast.png
+37   quit

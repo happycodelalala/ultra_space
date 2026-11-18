@@ -38,7 +38,10 @@ export ULTRA_SPACE_SCRIPT
 ULTRA_SPACE_SCRIPT="$(wslpath -w "$RUN_DIR/script.txt")"
 export ULTRA_SPACE_LOG
 ULTRA_SPACE_LOG="$(wslpath -w "$RUN_DIR")\\game.log"
-WSLENV_LIST="ULTRA_SPACE_SCRIPT:ULTRA_SPACE_LOG"
+# The window: the developer's screen, 2560 x 1600 less the title bar (a test's settings can
+# override it).
+export ULTRA_SPACE_WINDOW="${ULTRA_SPACE_WINDOW:-2560x1552}"
+WSLENV_LIST="ULTRA_SPACE_SCRIPT:ULTRA_SPACE_LOG:ULTRA_SPACE_WINDOW"
 for pair in "$@"; do
     var="${pair%%=*}"
     export "$var"="${pair#*=}"

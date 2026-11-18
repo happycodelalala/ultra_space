@@ -57,8 +57,10 @@ struct ChunkPlan {
 const SHIP_CLEAR: f64 = 8.0;
 /// Chunk meshes being made at once.
 const CHUNKS_IN_FLIGHT: usize = 64;
-/// Most finished chunks shown per frame.
+/// Most finished chunks shown per frame, and most triangles uploaded per frame (the first
+/// chunk always goes).
 const CHUNKS_PER_FRAME: usize = 16;
+const TRIANGLES_PER_FRAME: usize = 400_000;
 
 pub struct BlocksPlugin;
 
@@ -552,8 +554,21 @@ struct ChunkPose {
 #[derive(Resource, Default, Clone, Copy)]
 pub struct BlockCoverage(pub f64);
 
-/// A chunk made on a worker: its mesh and pose (origin, basis; surface frame).
-type MadeChunk = (Mesh, DVec3, DQuat);
+/// A chunk made on a worker: its mesh, pose (origin, basis; surface frame) and the time it
+/// took (ms).
+type MadeChunk = (Mesh, DVec3, DQuat, f64);
+
+/// Block streaming counts since the last report (logged every few seconds, for performance
+/// rounds: how fast the workers keep up).
+#[derive(Default)]
+struct StreamStats {
+    since: f64,
+    built: usize,
+    empty: usize,
+    work_ms: f64,
+    worst_ms: f64,
+    triangles: usize,
+}
 
 /// What is drawn: the root, chunks shown and being made, the materials.
 #[derive(Resource)]
@@ -754,6 +769,8 @@ fn stream_chunks(
     mut last_count: Local<usize>,
     mut coverage: ResMut<BlockCoverage>,
     mut plan: Local<ChunkPlan>,
+    mut stats: Local<StreamStats>,
+    real: Res<Time<Real>>,
     projections: Query<&Projection, With<crate::space_render::MainCamera>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
 ) {
@@ -838,12 +855,13 @@ fn stream_chunks(
             key,
             pool.spawn(async move {
                 // The Bevy mesh is made here too, off the main thread.
+                let start = std::time::Instant::now();
                 g.lod_chunk(key).map(|c| {
                     let mesh = bevy_mesh(&c.mesh, |i| {
                         let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
                         [r, g, b, 1.0]
                     });
-                    (mesh, c.origin, c.basis)
+                    (mesh, c.origin, c.basis, start.elapsed().as_secs_f64() * 1e3)
                 })
             }),
         );
@@ -855,12 +873,27 @@ fn stream_chunks(
         // A few a frame: each is a mesh upload.
         .take(CHUNKS_PER_FRAME)
         .collect();
+    let mut uploaded = 0usize;
     for key in done {
+        if uploaded >= TRIANGLES_PER_FRAME {
+            break; // the rest next frame
+        }
         let Some(task) = draw.pending.remove(&key) else {
             continue;
         };
         let m = block_on(poll_once(task)).flatten();
-        let entity = m.map(|(mesh, origin, basis)| {
+        match &m {
+            Some((mesh, _, _, ms)) => {
+                stats.built += 1;
+                stats.work_ms += ms;
+                stats.worst_ms = stats.worst_ms.max(*ms);
+                let triangles = mesh.indices().map_or(0, |i| i.len() / 3);
+                stats.triangles += triangles;
+                uploaded += triangles;
+            }
+            None => stats.empty += 1,
+        }
+        let entity = m.map(|(mesh, origin, basis, _)| {
             commands
                 .spawn((
                     ChunkPose { origin, basis },
@@ -885,6 +918,28 @@ fn stream_chunks(
     } else {
         0.0
     };
+    let now = real.elapsed_secs_f64();
+    if now - stats.since >= 5.0 {
+        let span = now - stats.since;
+        let shown = draw.chunks.values().filter(|c| c.is_some()).count();
+        info!(
+            "blocks: {shown} chunks shown of {} wanted ({} pending), {:.0} built/s, {:.1} ms each on \
+             the workers (worst {:.0} ms, {:.1} workers busy on average), {:.0}k triangles built/s, \
+             {} px per column",
+            wanted.len(),
+            draw.pending.len(),
+            stats.built as f64 / span,
+            stats.work_ms / stats.built.max(1) as f64,
+            stats.worst_ms,
+            stats.work_ms / 1e3 / span,
+            stats.triangles as f64 / span / 1e3,
+            pixels
+        );
+        *stats = StreamStats {
+            since: now,
+            ..default()
+        };
+    }
     if draw.chunks.len() != *last_count {
         *last_count = draw.chunks.len();
         debug!(

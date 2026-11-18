@@ -96,6 +96,7 @@ fn main() {
             clouds::CloudsPlugin,
         ))
         .add_systems(Startup, log_startup)
+        .add_systems(Update, window_size)
         .run();
 }
 
@@ -116,6 +117,30 @@ fn log_file_layer(_app: &mut App) -> Option<BoxedLayer> {
             .with_writer(std::sync::Mutex::new(file))
             .boxed(),
     )
+}
+
+/// Debug: `ULTRA_SPACE_WINDOW=<width>x<height>` sets the window's inner size in physical pixels
+/// (whatever the display's scaling), at the screen's top left; test rounds use the
+/// developer's screen (2560 × 1600 less the title bar).
+fn window_size(
+    mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    mut done: Local<bool>,
+) {
+    if *done {
+        return;
+    }
+    *done = true;
+    let Some((w, h)) = std::env::var("ULTRA_SPACE_WINDOW").ok().and_then(|v| {
+        let (w, h) = v.split_once(['x', 'X'])?;
+        Some((w.trim().parse::<u32>().ok()?, h.trim().parse::<u32>().ok()?))
+    }) else {
+        return;
+    };
+    for mut window in &mut windows {
+        window.resolution.set_physical_resolution(w, h);
+        window.position = bevy::window::WindowPosition::At(IVec2::ZERO);
+        info!("window: {w} x {h} physical pixels");
+    }
 }
 
 fn log_startup() {
