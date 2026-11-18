@@ -84,6 +84,7 @@ pub struct BlocksPlugin;
 impl Plugin for BlocksPlugin {
     fn build(&self, app: &mut App) {
         bevy::asset::embedded_asset!(app, "shaders/ground.wesl");
+        bevy::asset::embedded_asset!(app, "shaders/ground_prepass.wesl");
         app.add_plugins(bevy::pbr::MaterialPlugin::<GroundMaterial>::default())
             .init_resource::<BlockCoverage>()
             .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
@@ -623,16 +624,26 @@ pub type GroundMaterial = ExtendedMaterial<StandardMaterial, GroundDetail>;
 /// The ground detail's settings.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct GroundDetail {
-    /// x: pattern strength (0 none, 1 default).
+    /// x: pattern strength (0 none, 1 default); y: the radius round the camera within which the
+    /// chunks are drawn and the far tiles hidden (m; 0 everywhere).
     #[uniform(100)]
     pub strength: Vec4,
+    /// xyz: the body's centre (render space).
+    #[uniform(100)]
+    pub centre: Vec4,
 }
 
 impl MaterialExtension for GroundDetail {
     fn fragment_shader() -> ShaderRef {
         GROUND_SHADER.into()
     }
+
+    fn prepass_fragment_shader() -> ShaderRef {
+        GROUND_PREPASS_SHADER.into()
+    }
 }
+
+const GROUND_PREPASS_SHADER: &str = "embedded://ultra_space/shaders/ground_prepass.wesl";
 
 const GROUND_SHADER: &str = "embedded://ultra_space/shaders/ground.wesl";
 
@@ -722,6 +733,7 @@ fn setup_blocks(
         },
         extension: GroundDetail {
             strength: Vec4::new(detail, 0.0, 0.0, 0.0),
+            centre: Vec4::ZERO,
         },
     });
     let solid = materials.add(StandardMaterial {
@@ -1014,10 +1026,25 @@ fn stream_chunks(
         }
         draw.chunks.insert(key, entity);
     }
-    // The ground is ready out to the nearest wanted chunk not yet shown.
+    // The ground is ready out to the nearest wanted chunk not yet made whose ground no chunk
+    // drawn covers either (chunks being remade over shown ground don't count, or the disc would
+    // shrink and grow all the time as the camera moves).
+    let overlaps_any = |k: &LodKey| {
+        draw.chunks.iter().any(|(o, e)| {
+            e.is_some() && !draw.hidden.contains(o) && {
+                if o.1 != k.1 {
+                    false
+                } else {
+                    let (hi, lo) = if o.0 >= k.0 { (o, k) } else { (k, o) };
+                    let shift = i32::from(hi.0 - lo.0);
+                    lo.2 >> shift == hi.2 && lo.3 >> shift == hi.3
+                }
+            }
+        })
+    };
     let ready = wanted
         .iter()
-        .filter(|k| !draw.chunks.contains_key(k))
+        .filter(|k| !draw.chunks.contains_key(k) && !overlaps_any(k))
         .map(near)
         .fold(outer, f64::min)
         .max(0.0);
@@ -1148,11 +1175,15 @@ fn block_focus(
 }
 
 /// Places the chunks camera-relative, each in its own frame.
+#[allow(clippy::too_many_arguments)]
 fn place_chunks(
     world: Option<Res<BlockWorld>>,
+    draw: Option<Res<BlockDraw>>,
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
+    coverage: Res<BlockCoverage>,
+    mut materials: ResMut<Assets<GroundMaterial>>,
     mut chunks: Query<(&ChunkPose, &mut Transform)>,
 ) {
     let Some(world) = world else { return };
@@ -1164,6 +1195,13 @@ fn place_chunks(
     for (pose, mut t) in &mut chunks {
         t.translation = (s.position + s.rotation * pose.origin - camera.offset).as_vec3();
         t.rotation = (s.rotation * pose.basis).as_quat().normalize();
+    }
+    // The circle the chunks and the far tiles share (the tiles hide inside the same radius).
+    if let Some(draw) = draw
+        && let Some(mut m) = materials.get_mut(&draw.ground_material)
+    {
+        m.extension.strength.y = coverage.0 as f32;
+        m.extension.centre = (s.position - camera.offset).as_vec3().extend(0.0);
     }
 }
 

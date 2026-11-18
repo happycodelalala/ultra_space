@@ -258,6 +258,21 @@ fn plain_planes(terrain: &Terrain) -> ([Vec4; crate::space_render::MAX_DECK_PLAN
     (planes, Vec4::new(n as f32, 0.0, 0.0, 0.0))
 }
 
+/// How far below the ground the tiles sit under the faceted ground (m).
+const TILE_DROP: f64 = 0.5;
+/// Under the faceted ground, tiles are hidden only this close to the camera (m), where pits and
+/// digs go below the ground; farther out they lie a little below the chunks.
+const TILE_HIDE_NEAR: f64 = 60.0;
+
+/// Whether body `body` has the faceted ground (a body with geography, faceted style).
+fn faceted_body(universe: &Universe, body: usize) -> bool {
+    crate::blocks::ground_style() == sim_planet::GroundStyle::Faceted
+        && universe.0.bodies[body]
+            .terrain
+            .as_ref()
+            .is_some_and(|t| t.geography.is_some())
+}
+
 pub fn surface_flags(body: &sim_core::Body) -> Vec4 {
     let geography = body.terrain.as_ref().is_some_and(|t| t.geography.is_some());
     let ocean = body
@@ -545,7 +560,18 @@ fn update_terrain(
 
             // Upload a few finished tiles.
             let count = bt.finished.len().min(UPLOADS_PER_FRAME);
-            for m in bt.finished.drain(..count) {
+            for mut m in bt.finished.drain(..count) {
+                // Under the faceted ground the tiles sit a little low: they fill any crack between
+                // chunks with ground, and never lie level with the chunks (they would flicker
+                // against each other); far away the drop is far below a pixel.
+                if faceted_body(&universe, bt.body) {
+                    for p in &mut m.positions {
+                        let world = m.origin
+                            + DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
+                        let lowered = world - world.normalize() * TILE_DROP;
+                        *p = (lowered - m.origin).as_vec3().to_array();
+                    }
+                }
                 let ground = meshes.add(tile_mesh(m.positions, m.normals, Some(&m.fields)));
                 let mut entities = vec![
                     commands
@@ -727,7 +753,12 @@ fn place_tiles(
                     cam.normalize_or(DVec3::Y).as_vec3().extend(-2.0),
                     Vec4::new(
                         if low {
-                            coverage.as_deref().map_or(0.0, |c| c.0) as f32
+                            let c = coverage.as_deref().map_or(0.0, |c| c.0);
+                            (if faceted_body(&universe, bt.body) {
+                                c.min(TILE_HIDE_NEAR)
+                            } else {
+                                c
+                            }) as f32
                         } else {
                             0.0
                         },

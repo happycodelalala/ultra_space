@@ -6,14 +6,18 @@
 // uv.x is the kind: 0 grass, 1 rock, 2 sand and paths, 3 earth, 4 snow.
 
 import bevy_pbr::render::{
+    mesh_view_bindings::view,
     forward_io::{VertexOutput, FragmentOutput},
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
 };
 
 struct GroundDetail {
-    // x: pattern strength (0 none, 1 default)
+    // x: pattern strength (0 none, 1 default); y: the radius (m, along the ground) round the
+    // camera inside which the chunks are drawn and the far tiles hidden (0: everywhere)
     strength: vec4<f32>,
+    // xyz: the body's centre (render space)
+    centre: vec4<f32>,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> detail: GroundDetail;
@@ -82,6 +86,15 @@ fn pattern(kind: f32, g: vec2<f32>, h: f32, fp: f32) -> f32 {
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
+    // The chunks and the far tiles share the ground along one circle round the camera: beyond
+    // it the tiles draw, so the chunks don't (the two would flicker against each other).
+    if detail.strength.y > 0.0 {
+        let v = in.world_position.xyz - view.world_position;
+        let up = normalize(view.world_position - detail.centre.xyz);
+        if length(v - up * dot(v, up)) > detail.strength.y {
+            discard;
+        }
+    }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     let g = in.uv_b;
     // Metres per pixel on the ground.

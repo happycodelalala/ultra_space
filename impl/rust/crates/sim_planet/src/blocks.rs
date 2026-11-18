@@ -742,7 +742,9 @@ impl BlockGround {
             let (a, b) = (a as i32, b as i32);
             let h0 = top_at(a, b) + (top_at(a + 1, b) - top_at(a, b)) * fu;
             let h1 = top_at(a, b + 1) + (top_at(a + 1, b + 1) - top_at(a, b + 1)) * fu;
-            h0 + (h1 - h0) * fv
+            // Coarse facets sag below the top between their corners; only what lies deeper than
+            // that counts as dug (earth).
+            h0 + (h1 - h0) * fv - (0.6 * s - 0.25).max(0.0)
         };
         let (lo, hi) = tops
             .iter()

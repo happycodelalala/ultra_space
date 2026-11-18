@@ -151,7 +151,12 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if terrain.surface.w > 0.5 {
         // Faceted ground: each triangle flat, its normal from the screen-space derivatives.
         let flat = normalize(cross(dpdx(p), dpdy(p)));
-        n = select(-flat, flat, dot(flat, normalize(p - terrain.center.xyz)) > 0.0);
+        let oriented = select(-flat, flat, dot(flat, normalize(p - terrain.center.xyz)) > 0.0);
+        // The tiles' skirts (near-vertical walls hanging from their edges) keep the smooth
+        // ground normal, so where one shows it reads as ground, not as a dark line.
+        if dot(oriented, normalize(p - terrain.center.xyz)) > 0.25 {
+            n = oriented;
+        }
     }
     let dist = length(p - view.world_position);
     // Inside the block ground near the camera the blocks are drawn instead.
