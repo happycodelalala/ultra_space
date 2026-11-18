@@ -85,6 +85,10 @@ impl Climate {
         height: f64,
         subsolar_latitude: f64,
     ) -> f64 {
+        if let Some(g) = terrain.globe() {
+            // A body with geography: its own climate, as the block ground reads it.
+            return g.temperature(dir, height);
+        }
         if let Some((sea_level, _)) = terrain.region_climate(dir) {
             // A body of plains: each region has its own climate; `height` is the elevation.
             let air = if self.has_atmosphere {
@@ -116,6 +120,9 @@ impl Climate {
     /// Moisture, 0–1: rain belts at the equator and around 60° latitude, dry belts around 30°
     /// and at the poles, wetter near coasts, plus regional variation.
     pub fn moisture(&self, terrain: &Terrain, dir: DVec3, sample: &Sample) -> f64 {
+        if let Some(g) = terrain.globe() {
+            return g.wetness(dir);
+        }
         if let Some((_, wet)) = terrain.region_climate(dir) {
             let coast = 1.0 - smoothstep(0.0, 0.05, sample.land);
             let variation = terrain.climate_noise(dir, 0);

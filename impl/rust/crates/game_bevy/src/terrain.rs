@@ -164,7 +164,7 @@ fn setup_terrains(
                 data: TerrainUniform {
                     params: Vec4::new(0.0, MAP_BLEND.0, MAP_BLEND.1, 0.0),
                     surface: surface_flags(body),
-                    palette: biome_palette(),
+                    palette: palette_for(body),
                     planes: plain_planes(&terrain).0,
                     plain_count: plain_planes(&terrain).1,
                     ..default()
@@ -259,16 +259,51 @@ fn plain_planes(terrain: &Terrain) -> ([Vec4; crate::space_render::MAX_DECK_PLAN
 }
 
 pub fn surface_flags(body: &sim_core::Body) -> Vec4 {
+    let geography = body.terrain.as_ref().is_some_and(|t| t.geography.is_some());
     let ocean = body
         .terrain
         .as_ref()
-        .is_some_and(|t| t.ocean_coverage > 0.0);
+        .is_some_and(|t| t.ocean_coverage > 0.0 || t.plains.is_some())
+        || geography;
     Vec4::new(
         f32::from(u8::from(ocean)),
         f32::from(u8::from(body.atmosphere.is_some())),
-        0.0,
+        f32::from(u8::from(geography)),
         0.0,
     )
+}
+
+/// The shaders' palette for a body: the block ground's colours (cover mode) on a body with
+/// geography, else the biome colours.
+pub fn palette_for(body: &sim_core::Body) -> [Vec4; 12] {
+    if body.terrain.as_ref().is_some_and(|t| t.geography.is_some()) {
+        cover_palette()
+    } else {
+        biome_palette()
+    }
+}
+
+/// Cover-mode colours in shader index order (see `cover_index` in the shaders), from the
+/// block palette (assets/export/blocks/palette.json); the sea floor as the biome palette's ocean.
+pub fn cover_palette() -> [Vec4; 12] {
+    const NAMES: [&str; 11] = [
+        "turf", "turf2", "turf3", "moss", "stone", "stone2", "straw", "straw2", "white", "rock",
+        "path2",
+    ];
+    let palette = crate::blocks::blocks_dir()
+        .and_then(|d| std::fs::read_to_string(d.join("palette.json")).ok())
+        .and_then(|t| sim_blocks::Palette::parse(&t).ok());
+    let mut out = [biome_palette()[0]; 12];
+    for (slot, name) in out[1..].iter_mut().zip(NAMES) {
+        *slot = match &palette {
+            Some(p) => {
+                let [r, g, b] = p.linear(name);
+                Vec4::new(r, g, b, 1.0)
+            }
+            None => Vec4::new(0.2, 0.35, 0.12, 1.0),
+        };
+    }
+    out
 }
 
 /// A tile mesh; `fields` (height, temperature, moisture, continent signal) go into the two UV
@@ -909,6 +944,11 @@ mod tests {
         let planet = include_str!("shaders/planet.wesl");
         let terrain = include_str!("shaders/terrain.wesl");
         assert_eq!(biome_block(planet), biome_block(terrain));
+        let cover = |s: &'static str| {
+            &s[s.find("// COVER BEGIN").expect("cover start")
+                ..s.find("// COVER END").expect("cover end")]
+        };
+        assert_eq!(cover(planet), cover(terrain));
     }
 
     #[test]

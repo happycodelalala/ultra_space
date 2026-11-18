@@ -11,7 +11,7 @@ struct PlanetUniform {
     star: vec4<f32>,      // xyz star position (render space), w starlight brightness
     rotation: vec4<f32>,  // body rotation quaternion (xyzw)
             params: vec4<f32>,    // x kind (0 rocky, 1 gas giant, 2 star), y seed, z polar ice, w baked maps
-    surface: vec4<f32>,   // x has ocean, y has atmosphere
+    surface: vec4<f32>,   // x has ocean, y has atmosphere, z cover mode (a body with geography)
     palette: array<vec4<f32>, 12>, // linear biome colours by biome index
 };
 
@@ -59,6 +59,50 @@ fn biome_index(f: vec4<f32>, slope: f32, flags: vec4<f32>) -> u32 {
     return 4u;
 }
 // BIOMES END
+
+// COVER BEGIN
+// Ground colours on a body with geography (planet-geography.md §1b): what grows there from the
+// temperature and rain (as sim_planet::globe's land_cover) and the block ground's colour picks
+// (sim_planet::blocks top_colour), so the far ground matches the blocks. Palette (cover mode):
+// 0 sea floor, 1 turf, 2 turf2, 3 turf3, 4 moss, 5 stone, 6 stone2, 7 straw, 8 straw2, 9 white,
+// 10 rock, 11 path2. fields: x height (m), y temperature (°C), z wetness (rain / 1.8 m).
+// n: the colour jitter (about ±0.5; 0 far away).
+fn pick3(n: f32, a: u32, b: u32, c: u32) -> u32 {
+    if n < -0.12 { return a; }
+    if n < 0.1 { return b; }
+    return c;
+}
+
+fn cover_index(f: vec4<f32>, slope: f32, n: f32) -> u32 {
+    let h = f.x;
+    if h < 0.0 { return 0u; }
+    if slope > 1.15 { return 10u; }
+    if h < 1.5 {
+        if n < 0.0 { return 7u; }
+        return 8u;
+    }
+    let t = f.y + 2.0 * n;
+    let p = f.z * 1800.0 * (1.0 + 0.25 * n);
+    if t < -8.0 { return 9u; }
+    if t < -3.0 && h > 1500.0 { return 9u; }
+    if t < 0.0 { return pick3(n, 4u, 5u, 4u); }
+    if t < 7.0 {
+        if p < 300.0 { return pick3(n, 5u, 6u, 11u); }
+        return pick3(n, 4u, 3u, 4u);
+    }
+    if t < 20.0 {
+        if p < 250.0 { return pick3(n, 7u, 8u, 7u); }
+        if p < 550.0 { return pick3(n, 8u, 2u, 7u); }
+        if p < 900.0 { return pick3(n, 3u, 1u, 2u); }
+        if p < 1700.0 { return pick3(n, 3u, 1u, 3u); }
+        return pick3(n, 4u, 3u, 4u);
+    }
+    if p < 250.0 { return pick3(n, 7u, 8u, 7u); }
+    if p < 900.0 { return pick3(n, 8u, 2u, 7u); }
+    if p < 1800.0 { return pick3(n, 3u, 1u, 3u); }
+    return pick3(n, 4u, 3u, 4u);
+}
+// COVER END
 
 fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
     let t = 2.0 * cross(q.xyz, v);
@@ -152,7 +196,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         let fields = textureSample(field_map, field_sampler, n_local);
         let n_map = normalize(textureSample(normal_map, normal_sampler, n_local).xyz * 2.0 - 1.0);
         let slope = acos(clamp(dot(n_map, n_local), -1.0, 1.0));
-        let biome = biome_index(fields, slope, planet.surface);
+        var biome = biome_index(fields, slope, planet.surface);
+        if planet.surface.z > 0.5 {
+            biome = cover_index(fields, slope, 0.0);
+        }
         albedo = planet.palette[biome].rgb;
         if biome == 0u {
             shininess = 1.0;

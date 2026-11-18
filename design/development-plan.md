@@ -657,8 +657,7 @@ doesn't show the region yet; no seasons on a body of plains (each region's clima
 the far tiles are not stepped (beyond 90 m the land is the faceted
 tiles); where two faces of the block grid meet (about 72 km from the village) the columns tilt
 against each other and leave small cracks; blocks aren't made on a body of plains any more (the
-plains mode is terrain only); the tile shader's biome colours don't come from the world's cover
-yet (high ranges can show as sand); the region starts' frame rates are from parallel visual
+plains mode is terrain only); the region starts' frame rates are from parallel visual
 runs; the player's ship is the
 Kestrel's part model on the block ship's pad; villagers don't move yet; walls are boxes (a
 building's eaves are part of its box); frame times on the test machine vary between runs (40 to

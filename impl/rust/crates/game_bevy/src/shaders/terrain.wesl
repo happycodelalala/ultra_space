@@ -10,7 +10,7 @@ struct TerrainUniform {
     center: vec4<f32>,    // xyz body centre (render space), w radius
     rotation: vec4<f32>,  // body rotation quaternion (xyzw)
     params: vec4<f32>,    // x baked map present, y blend start (m), z blend end (m), w detail fade (m)
-    surface: vec4<f32>,   // x has ocean, y has atmosphere
+    surface: vec4<f32>,   // x has ocean, y has atmosphere, z cover mode (a body with geography)
     palette: array<vec4<f32>, 12>, // linear biome colours by biome index
     blocks: vec4<f32>,    // xyz block ground centre (body frame, unit), w cosine of its angular radius
     hide: vec4<f32>,      // x: tiles this close (horizontally) to the camera inside the block ground are hidden
@@ -59,6 +59,50 @@ fn biome_index(f: vec4<f32>, slope: f32, flags: vec4<f32>) -> u32 {
     return 4u;
 }
 // BIOMES END
+
+// COVER BEGIN
+// Ground colours on a body with geography (planet-geography.md §1b): what grows there from the
+// temperature and rain (as sim_planet::globe's land_cover) and the block ground's colour picks
+// (sim_planet::blocks top_colour), so the far ground matches the blocks. Palette (cover mode):
+// 0 sea floor, 1 turf, 2 turf2, 3 turf3, 4 moss, 5 stone, 6 stone2, 7 straw, 8 straw2, 9 white,
+// 10 rock, 11 path2. fields: x height (m), y temperature (°C), z wetness (rain / 1.8 m).
+// n: the colour jitter (about ±0.5; 0 far away).
+fn pick3(n: f32, a: u32, b: u32, c: u32) -> u32 {
+    if n < -0.12 { return a; }
+    if n < 0.1 { return b; }
+    return c;
+}
+
+fn cover_index(f: vec4<f32>, slope: f32, n: f32) -> u32 {
+    let h = f.x;
+    if h < 0.0 { return 0u; }
+    if slope > 1.15 { return 10u; }
+    if h < 1.5 {
+        if n < 0.0 { return 7u; }
+        return 8u;
+    }
+    let t = f.y + 2.0 * n;
+    let p = f.z * 1800.0 * (1.0 + 0.25 * n);
+    if t < -8.0 { return 9u; }
+    if t < -3.0 && h > 1500.0 { return 9u; }
+    if t < 0.0 { return pick3(n, 4u, 5u, 4u); }
+    if t < 7.0 {
+        if p < 300.0 { return pick3(n, 5u, 6u, 11u); }
+        return pick3(n, 4u, 3u, 4u);
+    }
+    if t < 20.0 {
+        if p < 250.0 { return pick3(n, 7u, 8u, 7u); }
+        if p < 550.0 { return pick3(n, 8u, 2u, 7u); }
+        if p < 900.0 { return pick3(n, 3u, 1u, 2u); }
+        if p < 1700.0 { return pick3(n, 3u, 1u, 3u); }
+        return pick3(n, 4u, 3u, 4u);
+    }
+    if p < 250.0 { return pick3(n, 7u, 8u, 7u); }
+    if p < 900.0 { return pick3(n, 8u, 2u, 7u); }
+    if p < 1800.0 { return pick3(n, 3u, 1u, 3u); }
+    return pick3(n, 4u, 3u, 4u);
+}
+// COVER END
 
 
 fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
@@ -142,7 +186,26 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         ground_up = quat_rotate(q, normal);
     }
     let slope = acos(clamp(dot(n, ground_up), -1.0, 1.0));
-    var albedo = terrain.palette[biome_index(fields, slope, terrain.surface)].rgb;
+    var albedo: vec3<f32>;
+    if terrain.surface.z > 0.5 {
+        // The block ground's colours, jittered like its tops (fading out where a pixel covers
+        // more than the pattern), and its 25 cm steps drawn as dark risers along the contours.
+        let footprint = length(fwidth(local));
+        let fade = 1.0 - smoothstep(0.8, 1.6, footprint);
+        let speck = 1.0 - smoothstep(0.06, 0.12, footprint);
+        let jitter = ((value_noise(local * 0.3) - 0.5) * 0.8
+            + 0.15 * (hash3(floor(local * 4.0)) - 0.5) * speck) * fade;
+        albedo = terrain.palette[cover_index(fields, slope, jitter)].rgb;
+        if fields.x > 0.0 {
+            let s = fields.x / 0.25;
+            let w = fwidth(s);
+            let riser = 1.0 - smoothstep(0.0, max(w * 1.5, 0.001), fract(s));
+            let dark = mix(0.35 * riser, 0.08, smoothstep(0.4, 1.2, w));
+            albedo *= 1.0 - dark;
+        }
+    } else {
+        albedo = terrain.palette[biome_index(fields, slope, terrain.surface)].rgb;
+    }
 
         // Fine detail near the camera: two scales of brightness variation. Each fades out once a
     // pixel covers more than a quarter of its wavelength, or it would alias into sparkle.

@@ -343,7 +343,7 @@ fn spawn_bodies(
                 rotation: Vec4::new(0.0, 0.0, 0.0, 1.0),
                 params: Vec4::new(kind, (i as f32) * 17.31 + 3.7, a.polar_ice as f32, 0.0),
                 surface: crate::terrain::surface_flags(body),
-                palette: crate::terrain::biome_palette(),
+                palette: crate::terrain::palette_for(body),
             },
             field_map: None,
             normal_map: None,
