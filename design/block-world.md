@@ -255,6 +255,13 @@ shape recipe.
   of one colour (greedy meshing); runs of identical slopes are merged the same way, so a roof
   plane or a hillside is a few large faces. Faces between two cells that both cover them are
   never drawn.
+- **The grid (implemented, 5.7b):** six cube faces with the equal-angle mapping, oriented so
+  face 0 is centred on the demo village (there it is the village's tangent grid to well under a
+  millimetre); cell k = 0 at one floor height everywhere. Chunks are keyed by face and column
+  and meshed in their own frame (origin at the chunk's centre), so they are precise anywhere.
+  A **focus** (the camera, set each frame) bounds where the block surface replaces the natural
+  one (2 km), so far queries and far vehicles use the natural ground. Faces mesh alone; where
+  they meet the columns tilt and leave small cracks (seam blocks later).
 - **Far terrain:** beyond the block zone the quadtree tiles stay, drawn from the same function
   stepped to the grid with the same slope rule, so the land reads as the same blocks from low
   flight; where block chunks are, the tiles are cut away under them. From orbit nothing changes

@@ -1,6 +1,7 @@
-# Tessera from orbit: first the debug camera's view of the whole planet (no ship in the way),
-# then the chase camera looking down past the ship.
+# Tessera from orbit: first the free camera framing the whole planet (Tab, then 2 jumps to the
+# second body: no ship in the way), then the chase camera looking down past the ship.
 1    press Tab
+1.5  press 2
 3    shot planet-1.png
 4    press Tab
 5    orbit 40 -80

@@ -10,6 +10,7 @@
 //! ground and ahead along its motion. Where a body's patches aren't ready yet, the physics scene
 //! falls back to the Batch 2 contact model, so nothing falls through.
 
+use sim_planet::blocks::ChunkKey;
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -75,7 +76,7 @@ const PATCHES_PER_TICK: usize = 8;
 type Job = Box<dyn FnOnce() + Send>;
 /// Block chunks finished by the workers: terrain generation, chunk, collision shape (none when
 /// the chunk is empty).
-type ChunksDone = Arc<Mutex<Vec<(u64, (i32, i32), Option<SharedShape>)>>>;
+type ChunksDone = Arc<Mutex<Vec<(u64, ChunkKey, Option<SharedShape>)>>>;
 
 /// The shared pool that builds patches.
 fn workers() -> &'static Mutex<Sender<Job>> {
@@ -122,8 +123,8 @@ pub(crate) struct Ground {
     /// structures under site `BLOCK_SITE`.
     boxes: HashMap<(u32, u32), Patch>,
     /// The block ground's chunks near bodies (block-world.md), by chunk.
-    chunks: HashMap<(i32, i32), Patch>,
-    chunks_pending: HashSet<(i32, i32)>,
+    chunks: HashMap<ChunkKey, Patch>,
+    chunks_pending: HashSet<ChunkKey>,
     chunks_done: ChunksDone,
     pending: HashSet<TileKey>,
     /// Patches finished by the workers (with the terrain generation they were built from),
@@ -243,7 +244,7 @@ impl Ground {
         }
     }
 
-    fn request_chunk(&mut self, key: (i32, i32), blocks: &Arc<sim_planet::BlockGround>) {
+    fn request_chunk(&mut self, key: ChunkKey, blocks: &Arc<sim_planet::BlockGround>) {
         if !self.chunks_pending.insert(key) {
             return;
         }
@@ -251,9 +252,9 @@ impl Ground {
         let done = Arc::clone(&self.chunks_done);
         let generation = self.generation;
         let job = move || {
-            // The chunk's mesh, from the village frame into the surface frame.
-            let shape = blocks.chunk(key.0, key.1).and_then(|m| {
-                let (basis, origin) = (blocks.basis(), blocks.origin());
+            // The chunk's mesh, from its own frame into the surface frame.
+            let shape = blocks.chunk(key).and_then(|c| {
+                let (basis, origin, m) = (c.basis, c.origin, c.mesh);
                 let vertices: Vec<DVec3> = m
                     .positions
                     .iter()
@@ -345,8 +346,8 @@ impl Ground {
                     })
                     .wanted_at = now;
             }
-            if let Some(p) = b.plane(dir) {
-                for key in b.chunks_near(p, radius.min(CHUNK_REACH)) {
+            if b.in_focus(dir) {
+                for key in b.chunks_around(dir, radius.min(CHUNK_REACH)) {
                     if let Some(c) = self.chunks.get_mut(&key) {
                         c.wanted_at = now;
                     } else {
@@ -440,7 +441,7 @@ impl Ground {
                 },
             );
         }
-        let gone: Vec<(i32, i32)> = self
+        let gone: Vec<ChunkKey> = self
             .chunks
             .iter()
             .filter(|(_, c)| now - c.wanted_at > PATCH_LIFETIME)

@@ -683,11 +683,12 @@ fn place_tiles(
                 let g = &b.ground;
                 let cam = rotation.inverse() * (-position);
                 let low = g.height_above(cam) < crate::blocks::DRAW_REACH;
-                let inside = g.plane(cam.normalize()).is_some();
+                // The block ground follows the camera anywhere on the body: tiles are hidden
+                // within the coverage round it (the disc test passes everywhere).
                 (
-                    g.center.as_vec3().extend((g.reach / g.radius).cos() as f32),
+                    cam.normalize_or(DVec3::Y).as_vec3().extend(-2.0),
                     Vec4::new(
-                        if low && inside {
+                        if low {
                             coverage.as_deref().map_or(0.0, |c| c.0) as f32
                         } else {
                             0.0

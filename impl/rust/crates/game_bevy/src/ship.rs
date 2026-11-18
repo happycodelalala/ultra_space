@@ -321,11 +321,16 @@ fn spawn_player_ship(
     {
         let body = &system.bodies[index];
         let dir = globe.regions[r].centre;
-        let above = std::env::var("ULTRA_SPACE_START_ALTITUDE")
+        // An altitude given is kept down to 25 m above the ground (low enough for the block
+        // ground to show); the default stays well clear.
+        let ground = terrain.surface_height(dir, 100.0).max(0.0);
+        let above = match std::env::var("ULTRA_SPACE_START_ALTITUDE")
             .ok()
             .and_then(|v| v.parse::<f64>().ok())
-            .unwrap_or(3_000.0)
-            .max(terrain.surface_height(dir, 100.0) + 200.0);
+        {
+            Some(a) => a.max(ground + 25.0),
+            None => 3_000.0f64.max(ground + 200.0),
+        };
         let frame = system
             .frames
             .state_in(body.inertial_frame, body.surface_frame, 0.0);

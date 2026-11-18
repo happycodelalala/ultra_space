@@ -595,11 +595,14 @@ views of the village; anything off outside them is a known issue, not a new task
 | 5.5 | **Light and weather to match the renders:** sun shadows, ambient occlusion, exposure and AgX tonemapping, bloom, haze and ground fog; day, golden hour, night with lit windows and lanterns, rain, fog; quality tiers | The review views read as the reference renders in each light and weather |
 | 5.6 | **Review views:** a test round of the village (wide, house, close, people, ship) in day, golden hour, fog, rain and night, plus the descent from orbit to the village | The views run in one round; no frame over 50 ms |
 | 5.7 | **The plains test planet** (developer's request, 2026-11-16): the game's world becomes one small planet of plains, the football of block-world.md §5.1 (12 pentagons and 20 hexagons, 40 km edges), each plain a region with its own climate and land, the demo village in a grassland region; Halcyon kept as test data | A new game starts in the village on the new planet; the football shows from orbit; walking and flying work on the plains; all earlier tests still pass on Halcyon |
+| 5.7a | **The world as a simulation** (developer's request, 2026-11-17): Tessera round again, its land, climate and regions generated on a mesh (planet-geography.md §1b: plates, uplift, erosion, rain, rivers, biomes, regions as river basins) | The maps and test views show continents, ranges, rivers, climate belts and natural regions |
+| 5.7b | **The streamed block zone:** the block ground planet-wide on a bent cube-sphere grid (six faces, equal angles, face 0 centred on the village), chunks made round the player anywhere, top colours from the world's cover, tiles hidden round the camera; the block surface stands within 2 km of the focus (the camera) | Blocks show and carry the player anywhere on Tessera (`blocks-far`), the village unchanged |
 | 5.8 | **Digging and placing:** a mining tool removing blocks under the crosshair (a brush, timed by hardness), big blocks split into children first, drops to a small inventory (stacks by material, a simple panel, saved with the player), placing blocks from it on the grid; edits kept per chunk and saved; re-meshing and colliders updated within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
 | 5.9 | **Batch review** | The views judged against the renders by the developer, from screenshots |
 
-**Progress (2026-11-16):** 5.1–5.7 done; 5.8 (digging and placing) next, after the developer's
-review play-through.
+**Progress (2026-11-17):** 5.1–5.7 done; Tessera round again with world generation as a
+simulation (5.7a) and the block zone streamed planet-wide (5.7b); 5.8 (digging and placing)
+next.
 
 - **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
   also needs a neighbour along its edge), a mesher merging flat faces and slope planes and
@@ -652,7 +655,11 @@ the centre, not the plain's "up" (hillsides near a plain's corners can turn to r
 tiles don't follow the creases, so a crease is as sharp as the tile spacing; the inspector
 doesn't show the region yet; no seasons on a body of plains (each region's climate is fixed);
 the far tiles are not stepped (beyond 90 m the land is the faceted
-tiles); the block disc is one tangent grid round the village; the player's ship is the
+tiles); where two faces of the block grid meet (about 72 km from the village) the columns tilt
+against each other and leave small cracks; blocks aren't made on a body of plains any more (the
+plains mode is terrain only); the tile shader's biome colours don't come from the world's cover
+yet (high ranges can show as sand); the region starts' frame rates are from parallel visual
+runs; the player's ship is the
 Kestrel's part model on the block ship's pad; villagers don't move yet; walls are boxes (a
 building's eaves are part of its box); frame times on the test machine vary between runs (40 to
 140 fps on the same views, the same with the blocks switched off).

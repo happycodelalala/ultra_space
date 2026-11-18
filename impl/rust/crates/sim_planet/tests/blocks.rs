@@ -1,10 +1,11 @@
-//! The block ground round the demo village (block-world.md; task 5.3).
+//! The block ground, planet-wide (block-world.md §5.0, §7).
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use glam::{DVec2, DVec3};
+use sim_planet::blocks::ChunkKey;
 use sim_planet::{BlockGround, Terrain, VillageGround, blocks::CELL};
 
 fn meridian() -> Arc<Terrain> {
@@ -21,23 +22,48 @@ fn land(t: &Terrain) -> DVec3 {
         .unwrap()
 }
 
+fn world(c: &sim_planet::blocks::ChunkMesh) -> impl Iterator<Item = DVec3> + '_ {
+    c.mesh
+        .positions
+        .iter()
+        .map(|p| c.origin + c.basis * DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])))
+}
+
 #[test]
-fn the_plane_maps_both_ways() {
+fn every_face_maps_both_ways_and_face_0_is_the_village_plane() {
     let t = meridian();
-    let g = BlockGround::new(t.clone(), land(&t), 1_000.0, None);
-    for (x, y) in [(0.0, 0.0), (120.5, -40.25), (-700.0, 600.0)] {
-        let p = g.plane(g.dir(x, y)).unwrap();
-        assert!((p - DVec2::new(x, y)).length() < 1e-6, "{p} vs {x},{y}");
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    for face in 0..6u8 {
+        for (x, y) in [
+            (0.0, 0.0),
+            (120.5, -40.25),
+            (-70_000.0, 60_000.0),
+            (3_000.0, 55_000.0),
+        ] {
+            let (f, p) = g.locate(g.dir_on(face, x, y));
+            assert_eq!(f, face);
+            assert!((p - DVec2::new(x, y)).length() < 1e-6, "{p} vs {x},{y}");
+        }
     }
-    assert!(g.plane(g.dir(2_000.0, 0.0)).is_none(), "outside the disc");
+    // Near the village the grid is its tangent grid (well under a millimetre off).
+    for (x, y) in [(10.0, 20.0), (-60.0, 45.0)] {
+        let tangent = (g.center * g.radius + g.east * x + g.north * y).normalize();
+        assert!(g.dir(x, y).angle_between(tangent) * g.radius < 1e-3);
+    }
+    // Every direction lands on one face, inside its square.
+    for d in sim_planet::fibonacci_directions(2_000) {
+        let (_, p) = g.locate(d);
+        let half = std::f64::consts::FRAC_PI_4 * g.radius + 1e-6;
+        assert!(p.x.abs() <= half && p.y.abs() <= half);
+    }
 }
 
 #[test]
 fn the_surface_is_the_natural_ground_stepped() {
     let t = meridian();
     let c = land(&t);
-    let g = BlockGround::new(t.clone(), c, 1_000.0, None);
-    let with = t.with_blocks(Arc::new(BlockGround::new(t.clone(), c, 1_000.0, None)));
+    let g = BlockGround::new(t.clone(), c, None);
+    let with = t.with_blocks(Arc::new(BlockGround::new(t.clone(), c, None)));
     for (x, y) in [(3.1, 4.2), (50.0, -80.0), (-300.0, 200.0)] {
         let d = g.dir(x, y);
         let natural = t.surface_height(d, 1.0);
@@ -56,6 +82,21 @@ fn the_surface_is_the_natural_ground_stepped() {
 }
 
 #[test]
+fn the_focus_bounds_the_block_surface() {
+    let t = meridian();
+    let c = land(&t);
+    let g = Arc::new(BlockGround::new(t.clone(), c, None));
+    let with = t.with_blocks(g.clone());
+    let far = g.dir(5_000.0, 0.0);
+    g.set_focus(Some(c));
+    assert!(g.surface(c).is_some());
+    assert!(g.surface(far).is_none(), "beyond the focus: natural ground");
+    assert!((with.surface_height(far, 1.0) - t.surface_height(far, 1.0)).abs() < 1e-9);
+    g.set_focus(Some(far));
+    assert!(g.surface(far).is_some());
+}
+
+#[test]
 fn the_village_ground_shows_inside_its_square() {
     let t = meridian();
     let c = land(&t);
@@ -67,36 +108,54 @@ fn the_village_ground_shows_inside_its_square() {
         colours: vec!["path".into(); (4 * n * n) as usize],
         carved: HashSet::new(),
     };
-    let g = BlockGround::new(t.clone(), c, 1_000.0, Some(village));
+    let g = BlockGround::new(t.clone(), c, Some(village));
     assert!(g.top(0, 0).is_some());
-    let mesh = g.chunk(0, 0).expect("a chunk at the centre");
-    assert!(mesh.triangles() > 10);
-    assert!(
-        mesh.positions
-            .iter()
-            .all(|p| p.iter().all(|v| v.is_finite()))
-    );
+    let chunk = g.chunk((0, 0, 0)).expect("a chunk at the centre");
+    assert!(chunk.mesh.triangles() > 10);
+    assert!(world(&chunk).all(|p| p.is_finite()));
 }
 
 #[test]
-fn chunks_follow_the_sphere() {
+fn chunks_sit_on_the_ground_anywhere() {
     let t = meridian();
-    let g = BlockGround::new(t.clone(), land(&t), 1_500.0, None);
-    // A chunk 1 km out: its blocks sit on the ground there, not on the centre's flat plane
-    // (which would leave them ~0.8 m off).
-    let (ci, cj) = (1_000 / 8, 0);
-    let mesh = g.chunk(ci, cj).expect("chunk 1 km out");
-    let (basis, origin) = (g.basis(), g.origin());
-    let top = mesh
-        .positions
-        .iter()
-        .map(|p| origin + basis * DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])))
-        .map(|w| w.length() - g.radius)
-        .fold(f64::MIN, f64::max);
-    let x = (f64::from(ci) + 0.5) * 8.0;
-    let natural = t.surface_height(g.dir(x, 4.0), 1.0);
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    // A chunk 1 km out on the village's face, and chunks on land on every other face: their
+    // blocks sit on the ground there.
+    let mut keys: Vec<ChunkKey> = vec![(0, 1_000 / 8, 0)];
+    for face in 1..6u8 {
+        if let Some(d) = sim_planet::fibonacci_directions(4_000)
+            .find(|&d| g.locate(d).0 == face && t.height(d, 1.0) > 40.0)
+        {
+            let (f, p) = g.locate(d);
+            let size = BlockGround::chunk_size();
+            keys.push((f, (p.x / size).floor() as i32, (p.y / size).floor() as i32));
+        }
+    }
+    assert!(keys.len() >= 3, "land on several faces");
+    for key in keys {
+        let chunk = g.chunk(key).unwrap_or_else(|| panic!("chunk {key:?}"));
+        let top = world(&chunk)
+            .map(|w| w.length() - g.radius)
+            .fold(f64::MIN, f64::max);
+        let natural = t.surface_height(g.chunk_centre(key), 1.0);
+        assert!(
+            (top - natural).abs() < 6.0,
+            "chunk {key:?} top {top:.2} m vs ground {natural:.2} m"
+        );
+    }
+}
+
+#[test]
+fn chunks_round_a_point_cover_it_across_a_face_edge() {
+    let t = meridian();
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    // On the edge between faces 0 and 2 (x = πR/4).
+    let edge = g.dir_on(0, std::f64::consts::FRAC_PI_4 * g.radius - 1.0, 0.0);
+    let keys = g.chunks_around(edge, 40.0);
+    let faces: HashSet<u8> = keys.iter().map(|k| k.0).collect();
+    assert!(faces.len() >= 2, "both faces: {faces:?}");
     assert!(
-        (top - natural).abs() < 4.0,
-        "chunk top {top:.2} m vs ground {natural:.2} m"
+        keys.iter()
+            .any(|&k| g.chunk_centre(k).angle_between(edge) * g.radius < 8.0)
     );
 }

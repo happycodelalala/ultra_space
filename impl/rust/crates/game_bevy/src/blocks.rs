@@ -14,9 +14,10 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::tasks::{Task, block_on, poll_once};
-use glam::{DQuat, DVec2, DVec3, IVec3};
+use glam::{DQuat, DVec3, IVec3};
 use serde::Deserialize;
 use sim_blocks::{BlockModel, MeshData, Palette};
+use sim_planet::blocks::ChunkKey;
 use sim_planet::{BlockGround, VillageGround};
 
 use crate::camera::SpaceCamera;
@@ -29,8 +30,6 @@ pub(crate) const DRAW_REACH: f64 = 90.0;
 pub(crate) const HIDE_TILES: f64 = 80.0;
 /// ... and dropped beyond this (m).
 const DROP_REACH: f64 = 115.0;
-/// The disc of block ground round the village (m).
-const GROUND_REACH: f64 = 1_500.0;
 /// No collision boxes this close to the ship's landing spot (m).
 const SHIP_CLEAR: f64 = 8.0;
 /// Chunk meshes being made at once.
@@ -46,7 +45,7 @@ impl Plugin for BlocksPlugin {
             .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
             .add_systems(
                 Update,
-                (stream_chunks, place_root, night_glow)
+                (stream_chunks, place_root, place_chunks, night_glow)
                     .chain()
                     .after(crate::camera::CameraSet)
                     .in_set(InGame),
@@ -227,14 +226,9 @@ pub fn load(
             .map(|c| IVec3::new(c[0], c[1], c[2]))
             .collect(),
     };
-    let mut ground = BlockGround::new(current.clone(), center, GROUND_REACH, Some(own));
+    let mut ground = BlockGround::new(current.clone(), center, Some(own));
     let world = BlockWorld {
-        ground: Arc::new(BlockGround::new(
-            current.clone(),
-            center,
-            GROUND_REACH,
-            None,
-        )),
+        ground: Arc::new(BlockGround::new(current.clone(), center, None)),
         body,
         village: Arc::new(village),
         models: Arc::new(models),
@@ -502,19 +496,26 @@ fn choose_plain_site(
 #[derive(Component)]
 struct BlockRoot;
 
+/// A chunk of the block ground, in its own frame (surface frame of `body`).
 #[derive(Component)]
-struct ChunkMesh;
+struct ChunkPose {
+    origin: DVec3,
+    basis: DQuat,
+}
 
 /// How far round the camera the block ground is ready (m): tiles are hidden only that far.
 #[derive(Resource, Default, Clone, Copy)]
 pub struct BlockCoverage(pub f64);
 
+/// A chunk made on a worker: its mesh and pose (origin, basis; surface frame).
+type MadeChunk = (Mesh, DVec3, DQuat);
+
 /// What is drawn: the root, chunks shown and being made, the materials.
 #[derive(Resource)]
 struct BlockDraw {
     root: Entity,
-    chunks: HashMap<(i32, i32), Option<Entity>>,
-    pending: HashMap<(i32, i32), Task<Option<Mesh>>>,
+    chunks: HashMap<ChunkKey, Option<Entity>>,
+    pending: HashMap<ChunkKey, Task<Option<MadeChunk>>>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
     glow: Handle<StandardMaterial>,
@@ -714,27 +715,25 @@ fn stream_chunks(
     };
     let cam = crate::settlements::camera_on(&universe, &camera, world.body, render.0);
     let ground = &world.ground;
-    let Some(here) = ground.plane(cam.normalize()) else {
-        return;
-    };
+    let here = cam.normalize();
+    // The block surface stands round the camera (the player is near it when it matters).
+    ground.set_focus(Some(here));
     let height = ground.height_above(cam);
     // High above, nothing is drawn (the tiles show the land).
-    let wanted: HashSet<(i32, i32)> =
+    let wanted: HashSet<ChunkKey> =
         if height < DRAW_REACH && std::env::var_os("ULTRA_SPACE_DEBUG_NO_CHUNKS").is_none() {
-            ground.chunks_near(here, DRAW_REACH).into_iter().collect()
+            ground.chunks_around(here, DRAW_REACH).into_iter().collect()
         } else {
             HashSet::new()
         };
     // Start the nearest missing ones.
-    let mut missing: Vec<(i32, i32)> = wanted
+    let mut missing: Vec<ChunkKey> = wanted
         .iter()
         .filter(|k| !draw.chunks.contains_key(k) && !draw.pending.contains_key(k))
         .copied()
         .collect();
-    let size = f64::from(sim_planet::blocks::CHUNK) * sim_planet::blocks::CELL;
-    let dist = |k: &(i32, i32)| {
-        DVec2::new((f64::from(k.0) + 0.5) * size, (f64::from(k.1) + 0.5) * size).distance(here)
-    };
+    let size = BlockGround::chunk_size();
+    let dist = |k: &ChunkKey| ground.chunk_centre(*k).angle_between(here) * ground.radius;
     missing.sort_by(|a, b| dist(a).total_cmp(&dist(b)));
     let pool = crate::workers::workers();
     for key in missing
@@ -747,16 +746,17 @@ fn stream_chunks(
             key,
             pool.spawn(async move {
                 // The Bevy mesh is made here too, off the main thread.
-                g.chunk(key.0, key.1).map(|m| {
-                    bevy_mesh(&m, |c| {
-                        let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[c as usize - 1]);
+                g.chunk(key).map(|c| {
+                    let mesh = bevy_mesh(&c.mesh, |i| {
+                        let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
                         [r, g, b, 1.0]
-                    })
+                    });
+                    (mesh, c.origin, c.basis)
                 })
             }),
         );
     }
-    let done: Vec<(i32, i32)> = draw
+    let done: Vec<ChunkKey> = draw
         .pending
         .iter_mut()
         .filter_map(|(k, t)| t.is_finished().then_some(*k))
@@ -771,14 +771,14 @@ fn stream_chunks(
         if m.is_none() {
             debug!("block chunk {key:?}: nothing to draw");
         }
-        let entity = m.map(|mesh| {
+        let entity = m.map(|(mesh, origin, basis)| {
             commands
                 .spawn((
-                    ChunkMesh,
+                    ChunkPose { origin, basis },
                     Mesh3d(meshes.add(mesh)),
                     MeshMaterial3d(draw.chunk_material.clone()),
                     Transform::default(),
-                    ChildOf(draw.root),
+                    Visibility::Visible,
                 ))
                 .id()
         });
@@ -800,17 +800,15 @@ fn stream_chunks(
     if draw.chunks.len() != *last_count {
         *last_count = draw.chunks.len();
         debug!(
-            "block chunks: {} shown, {} empty, {} being made, camera at {:.1},{:.1} ({:.1} m up)",
+            "block chunks: {} shown, {} empty, {} being made, camera {:.1} m up",
             draw.chunks.values().filter(|c| c.is_some()).count(),
             draw.chunks.values().filter(|c| c.is_none()).count(),
             draw.pending.len(),
-            here.x,
-            here.y,
             height
         );
     }
     // Drop far chunks.
-    let far: Vec<(i32, i32)> = draw
+    let far: Vec<ChunkKey> = draw
         .chunks
         .keys()
         .filter(|k| height >= DRAW_REACH || dist(k) > DROP_REACH)
@@ -820,6 +818,26 @@ fn stream_chunks(
         if let Some(Some(e)) = draw.chunks.remove(&key) {
             commands.entity(e).despawn();
         }
+    }
+}
+
+/// Places the chunks camera-relative, each in its own frame.
+fn place_chunks(
+    world: Option<Res<BlockWorld>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+    mut chunks: Query<(&ChunkPose, &mut Transform)>,
+) {
+    let Some(world) = world else { return };
+    let system = &universe.0;
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let s = system
+        .frames
+        .state_in(anchor, system.bodies[world.body].surface_frame, render.0);
+    for (pose, mut t) in &mut chunks {
+        t.translation = (s.position + s.rotation * pose.origin - camera.offset).as_vec3();
+        t.rotation = (s.rotation * pose.basis).as_quat().normalize();
     }
 }
 

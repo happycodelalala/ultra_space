@@ -64,6 +64,38 @@ impl Cover {
     }
 }
 
+/// What grows on land at temperature `t` (°C), rain `p` (mm a year) and height `h` (m).
+pub(super) fn land_cover(t: f64, p: f64, h: f64) -> Cover {
+    if t < -8.0 {
+        Cover::Ice
+    } else if t < -3.0 && h > 1_500.0 {
+        Cover::Snow
+    } else if t < 0.0 {
+        Cover::Tundra
+    } else if t < 7.0 {
+        if p < 300.0 {
+            Cover::ColdDesert
+        } else {
+            Cover::Taiga
+        }
+    } else if t < 20.0 {
+        match p {
+            p if p < 250.0 => Cover::Desert,
+            p if p < 550.0 => Cover::Steppe,
+            p if p < 900.0 => Cover::Grass,
+            p if p < 1_700.0 => Cover::Forest,
+            _ => Cover::Rainforest,
+        }
+    } else {
+        match p {
+            p if p < 250.0 => Cover::Desert,
+            p if p < 900.0 => Cover::Savanna,
+            p if p < 1_800.0 => Cover::Seasonal,
+            _ => Cover::Jungle,
+        }
+    }
+}
+
 /// The fields over the mesh.
 pub struct Fields {
     /// Height above sea level (m).
@@ -682,33 +714,8 @@ pub fn generate(s: &Sphere, radius: f64, plates: usize, seed: u64) -> Fields {
                 Cover::River
             } else if salt[i] {
                 Cover::Salt
-            } else if t < -8.0 {
-                Cover::Ice
-            } else if t < -3.0 && hi > 1_500.0 {
-                Cover::Snow
-            } else if t < 0.0 {
-                Cover::Tundra
-            } else if t < 7.0 {
-                if p < 300.0 {
-                    Cover::ColdDesert
-                } else {
-                    Cover::Taiga
-                }
-            } else if t < 20.0 {
-                match p {
-                    p if p < 250.0 => Cover::Desert,
-                    p if p < 550.0 => Cover::Steppe,
-                    p if p < 900.0 => Cover::Grass,
-                    p if p < 1_700.0 => Cover::Forest,
-                    _ => Cover::Rainforest,
-                }
             } else {
-                match p {
-                    p if p < 250.0 => Cover::Desert,
-                    p if p < 900.0 => Cover::Savanna,
-                    p if p < 1_800.0 => Cover::Seasonal,
-                    _ => Cover::Jungle,
-                }
+                land_cover(t, p, hi)
             }
         })
         .collect();

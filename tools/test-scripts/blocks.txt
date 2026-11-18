@@ -1,0 +1,10 @@
+# The block ground away from the village: the chase camera looks round once the chunks have
+# streamed in (a few seconds), then from lower down.
+8    shot blocks-1.png
+9    orbit 90 -25
+12   shot blocks-2.png
+13   orbit 200 -12
+16   shot blocks-3.png
+17   orbit 300 -60
+20   shot blocks-4.png
+21   quit

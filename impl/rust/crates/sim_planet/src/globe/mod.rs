@@ -179,6 +179,15 @@ impl GlobeWorld {
         self.fields.cover[self.sphere.nearest(dir.normalize())]
     }
 
+    /// What grows on the ground at `dir` and `height` (m), from the interpolated rain and
+    /// warmth (smooth boundaries), `jitter` (about ±0.5) shifting the boundaries a little.
+    pub fn ground_cover(&self, dir: DVec3, height: f64, jitter: f64) -> Cover {
+        let d = dir.normalize();
+        let t = self.temperature(d, height) + 2.0 * jitter;
+        let p = self.rain(d) * (1.0 + 0.25 * jitter);
+        generate::land_cover(t, p, height)
+    }
+
     /// Whether a river runs at the point nearest `dir`.
     pub fn river(&self, dir: DVec3) -> bool {
         self.fields.river[self.sphere.nearest(dir.normalize())]
