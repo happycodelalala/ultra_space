@@ -12,7 +12,10 @@ use std::sync::Arc;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
+use bevy::render::render_resource::AsBindGroup;
+use bevy::shader::ShaderRef;
 use bevy::tasks::{Task, block_on, poll_once};
 use glam::{DQuat, DVec3};
 use serde::Deserialize;
@@ -36,16 +39,20 @@ pub fn ground_style() -> sim_planet::GroundStyle {
 /// The coarsest level of block chunks drawn: columns 2^4 blocks (4 m) wide (block-world.md §7).
 /// Beyond it the tiles, coloured and stepped like the blocks, carry on.
 const TOP_LEVEL: u8 = 4;
-/// The quality setting for the block ground: block geometry of a level is drawn while its
-/// columns cover at least this many pixels (2–8; default 4); below that the tiles' shader draws
-/// the same 50 cm steps averaged over each pixel (no zig-zag), down to a pixel and less.
+/// The quality setting for the ground near the player: its geometry of a level is drawn while
+/// its cells cover at least this many pixels (2–12). Default 8 for the faceted ground (flat
+/// facets have no steps to alias), 4 for blocks (below that the tiles' shader draws their steps).
 /// `ULTRA_SPACE_BLOCK_PIXELS` until the settings menu has it.
 fn block_pixels() -> f64 {
+    let default = match ground_style() {
+        sim_planet::GroundStyle::Faceted => 8.0,
+        sim_planet::GroundStyle::Blocks => 4.0,
+    };
     std::env::var("ULTRA_SPACE_BLOCK_PIXELS")
         .ok()
         .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(4.0)
-        .clamp(2.0, 8.0)
+        .unwrap_or(default)
+        .clamp(2.0, 12.0)
 }
 
 /// How far (m) columns of `level` stay at least `pixels` wide, at `per_radian` pixels per
@@ -76,7 +83,9 @@ pub struct BlocksPlugin;
 
 impl Plugin for BlocksPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BlockCoverage>()
+        bevy::asset::embedded_asset!(app, "shaders/ground.wesl");
+        app.add_plugins(bevy::pbr::MaterialPlugin::<GroundMaterial>::default())
+            .init_resource::<BlockCoverage>()
             .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
             .add_systems(
                 Update,
@@ -586,6 +595,7 @@ struct BlockDraw {
     pending: HashMap<LodKey, Task<Option<MadeChunk>>>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
+    ground_material: Handle<GroundMaterial>,
     glow: Handle<StandardMaterial>,
     windows: Handle<StandardMaterial>,
     lights: Vec<Entity>,
@@ -602,6 +612,58 @@ fn bevy_mesh(m: &MeshData, colour: impl Fn(u16) -> [f32; 4]) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, m.normals.clone())
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
     .with_inserted_indices(Indices::U32(m.indices.clone()))
+}
+
+/// The faceted ground's material: the standard one with procedural detail (shaders/ground.wesl).
+pub type GroundMaterial = ExtendedMaterial<StandardMaterial, GroundDetail>;
+
+/// The ground detail's settings.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct GroundDetail {
+    /// x: pattern strength (0 none, 1 default).
+    #[uniform(100)]
+    pub strength: Vec4,
+}
+
+impl MaterialExtension for GroundDetail {
+    fn fragment_shader() -> ShaderRef {
+        GROUND_SHADER.into()
+    }
+}
+
+const GROUND_SHADER: &str = "embedded://ultra_space/shaders/ground.wesl";
+
+/// The detail class of a ground colour (shaders/ground.wesl): 0 grass, 1 rock, 2 sand and
+/// paths, 3 earth, 4 snow.
+fn ground_class(name: &str) -> f32 {
+    match name {
+        "rock" | "rock2" | "stone" | "stone2" | "bedrock" | "bedrock2" | "ore" => 1.0,
+        "straw" | "straw2" | "sand" | "path" | "path2" => 2.0,
+        "soil" | "soil2" | "tilled" => 3.0,
+        "white" => 4.0,
+        _ => 0.0,
+    }
+}
+
+/// A faceted ground chunk's mesh: colours, and per vertex its detail class and height (UV 0)
+/// and point on the face grid (UV 1).
+fn ground_mesh(c: &sim_planet::blocks::ChunkMesh, colour: impl Fn(u16) -> [f32; 4]) -> Mesh {
+    let uv0: Vec<[f32; 2]> = c
+        .mesh
+        .colours
+        .iter()
+        .zip(&c.ground)
+        .map(|(&k, g)| {
+            [
+                ground_class(sim_planet::blocks::PALETTE[k as usize - 1]),
+                g[2],
+            ]
+        })
+        .collect();
+    let uv1: Vec<[f32; 2]> = c.ground.iter().map(|g| [g[0], g[1]]).collect();
+    bevy_mesh(&c.mesh, colour)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv0)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, uv1)
 }
 
 /// Splits `m` into the triangles whose colour `keep` accepts and the rest.
@@ -639,8 +701,26 @@ fn setup_blocks(
     world: Option<Res<BlockWorld>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut ground_materials: ResMut<Assets<GroundMaterial>>,
 ) {
     let Some(world) = world else { return };
+    // The faceted ground: matte, with its detail patterns (`ULTRA_SPACE_GROUND_DETAIL=0` turns
+    // them off).
+    let detail = std::env::var("ULTRA_SPACE_GROUND_DETAIL")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(1.0);
+    let ground_material = ground_materials.add(GroundMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.9,
+            reflectance: 0.15,
+            ..default()
+        },
+        extension: GroundDetail {
+            strength: Vec4::new(detail, 0.0, 0.0, 0.0),
+        },
+    });
     let solid = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.8,
@@ -758,6 +838,7 @@ fn setup_blocks(
         pending: HashMap::new(),
         solid,
         chunk_material,
+        ground_material,
         glow,
         windows,
         lights,
@@ -859,10 +940,15 @@ fn stream_chunks(
                 // The Bevy mesh is made here too, off the main thread.
                 let start = std::time::Instant::now();
                 g.lod_chunk(key).map(|c| {
-                    let mesh = bevy_mesh(&c.mesh, |i| {
+                    let colour = |i: u16| {
                         let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
                         [r, g, b, 1.0]
-                    });
+                    };
+                    let mesh = if c.ground.is_empty() {
+                        bevy_mesh(&c.mesh, colour)
+                    } else {
+                        ground_mesh(&c, colour)
+                    };
                     (
                         mesh,
                         c.origin,
@@ -905,15 +991,19 @@ fn stream_chunks(
             None => stats.empty += 1,
         }
         let entity = m.map(|(mesh, origin, basis, _, _)| {
-            commands
-                .spawn((
-                    ChunkPose { origin, basis },
-                    Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(draw.chunk_material.clone()),
-                    Transform::default(),
-                    Visibility::Visible,
-                ))
-                .id()
+            let faceted = mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_some();
+            let mut e = commands.spawn((
+                ChunkPose { origin, basis },
+                Mesh3d(meshes.add(mesh)),
+                Transform::default(),
+                Visibility::Visible,
+            ));
+            if faceted {
+                e.insert(MeshMaterial3d(draw.ground_material.clone()));
+            } else {
+                e.insert(MeshMaterial3d(draw.chunk_material.clone()));
+            }
+            e.id()
         });
         draw.chunks.insert(key, entity);
     }

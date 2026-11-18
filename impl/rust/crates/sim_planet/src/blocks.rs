@@ -87,6 +87,10 @@ pub struct ChunkMesh {
     pub basis: DQuat,
     /// Time spent (ms): column heights, cells and colours, meshing.
     pub timings: [f32; 3],
+    /// Per vertex, for the ground's detail patterns (faceted ground only, else empty): its point
+    /// on the face grid (m) and height above the reference radius (m), so patterns stay fixed
+    /// to the ground and run on across chunks.
+    pub ground: Vec<[f32; 3]>,
 }
 
 fn colour(name: &str) -> u16 {
@@ -694,6 +698,19 @@ impl BlockGround {
             }
         }
         let top_at = |a: i32, b: i32| tops[corner(a) + corner(b) * side];
+        // The ground's top anywhere in the chunk, from its corner columns.
+        let top_lerp = |g: DVec2| {
+            let (u, v) = ((g.x - x0) / s, (g.y - y0) / s);
+            let (a, b) = (
+                u.floor().clamp(-1.0, f64::from(cells)),
+                v.floor().clamp(-1.0, f64::from(cells)),
+            );
+            let (fu, fv) = ((u - a).clamp(0.0, 1.0), (v - b).clamp(0.0, 1.0));
+            let (a, b) = (a as i32, b as i32);
+            let h0 = top_at(a, b) + (top_at(a + 1, b) - top_at(a, b)) * fu;
+            let h1 = top_at(a, b + 1) + (top_at(a + 1, b + 1) - top_at(a, b + 1)) * fu;
+            h0 + (h1 - h0) * fv
+        };
         let (lo, hi) = tops
             .iter()
             .fold((f64::MAX, f64::MIN), |(l, h), &t| (l.min(t), h.max(t)));
@@ -822,6 +839,7 @@ impl BlockGround {
                     (w[0] + w[1] + w[2]) / 3.0,
                     normal,
                     globe.map(|g| &**g),
+                    &top_lerp,
                 )
             });
             let local_normal = (inverse * normal).as_vec3();
@@ -923,6 +941,7 @@ impl BlockGround {
                         (v0 + v1) * 0.5 + up * 0.01,
                         up,
                         globe.map(|g| &**g),
+                        &top_lerp,
                     );
                     tri(&mut m, [v0, v1, drop(v1)], out, Some(c));
                     tri(&mut m, [v0, drop(v1), drop(v0)], out, Some(c));
@@ -932,12 +951,23 @@ impl BlockGround {
         if m.is_empty() {
             return None;
         }
+        let ground = m
+            .positions
+            .iter()
+            .map(|p| {
+                let q =
+                    origin + basis * DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
+                let (_, g) = self.locate(q);
+                [g.x as f32, g.y as f32, (q.length() - self.radius) as f32]
+            })
+            .collect();
         let t_mesh = started.elapsed().as_secs_f32() * 1e3 - t_heights;
         Some(ChunkMesh {
             mesh: m,
             origin,
             basis,
             timings: [t_heights, 0.0, t_mesh],
+            ground,
         })
     }
 
@@ -948,6 +978,7 @@ impl BlockGround {
         mid: DVec3,
         normal: DVec3,
         globe: Option<&crate::globe::GlobeWorld>,
+        top_at: &dyn Fn(DVec2) -> f64,
     ) -> u16 {
         use crate::globe::Cover;
         let dir = mid.normalize();
@@ -965,7 +996,7 @@ impl BlockGround {
                 i64::from(face),
                 5,
             )) - 0.5);
-        let top = self.top_height(face, gp, 1.0);
+        let top = top_at(gp);
         // Dug faces, down from the rim, and anything underground: earth.
         let dug = height < top - 0.25
             || (face == 0
@@ -1412,6 +1443,7 @@ impl BlockGround {
             origin,
             basis,
             timings: [t_heights, t_cells, t_mesh],
+            ground: Vec::new(),
         })
     }
 
