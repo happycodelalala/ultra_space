@@ -272,6 +272,17 @@ mod tests {
     }
 
     #[test]
+    fn the_same_seed_gives_the_same_world() {
+        let a = GlobeWorld::with_level(92_000.0, 12, 11, 5);
+        let b = GlobeWorld::with_level(92_000.0, 12, 11, 5);
+        let names = |w: &GlobeWorld| w.regions.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&a), names(&b));
+        for d in fibonacci_directions(500) {
+            assert_eq!(a.region_at(d), b.region_at(d));
+        }
+    }
+
+    #[test]
     fn climate_has_deserts_forests_rivers_and_cold_poles() {
         let w = tessera();
         assert!(w.sea_level_temperature(DVec3::Y) < -20.0);

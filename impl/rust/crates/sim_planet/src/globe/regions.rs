@@ -2,7 +2,7 @@
 //! small ones merged and big ones split; at sea, basins of open water split where coasts pinch
 //! them. Each is named from what it holds.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use glam::DVec3;
 
@@ -24,7 +24,9 @@ fn merge_small(label: &mut [u32], pairs: &[(u32, u32, f64)], min: usize, max: us
                 *size.entry(l).or_default() += 1;
             }
         }
-        let mut border: HashMap<(u32, u32), f64> = HashMap::new();
+        // Ordered maps: ties must break the same way every run (region borders and names are
+        // part of the world).
+        let mut border: BTreeMap<(u32, u32), f64> = BTreeMap::new();
         for &(i, j, w) in pairs {
             let (a, b) = (label[i as usize], label[j as usize]);
             if a == b || a == u32::MAX || b == u32::MAX {
@@ -36,7 +38,7 @@ fn merge_small(label: &mut [u32], pairs: &[(u32, u32, f64)], min: usize, max: us
                 }
             }
         }
-        let mut choice: HashMap<u32, (u32, f64)> = HashMap::new();
+        let mut choice: BTreeMap<u32, (u32, f64)> = BTreeMap::new();
         for (&(u, v), &w) in &border {
             // Prefer the smaller neighbour, so regions stay even.
             let score = w / (1.0 + size[&v] as f64 / min as f64);
