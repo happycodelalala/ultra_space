@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 use glam::{DMat3, DQuat, DVec2, DVec3, IVec3, Vec3};
-use sim_blocks::{Cells, Dir, MeshData};
+use sim_blocks::{Dir, MeshData};
 
 use crate::Terrain;
 use crate::foundations::tangent_frame;
@@ -63,6 +63,8 @@ pub struct ChunkMesh {
     pub mesh: MeshData,
     pub origin: DVec3,
     pub basis: DQuat,
+    /// Time spent (ms): column heights, cells and colours, meshing.
+    pub timings: [f32; 3],
 }
 
 fn colour(name: &str) -> u16 {
@@ -398,6 +400,11 @@ impl BlockGround {
     /// The colour of the top cell of column (i, j) of `face`: the village's own, rock where
     /// steep, beaches by the sea, else from what grows there (the world's cover).
     fn top_colour(&self, face: u8, i: i32, j: i32, t: i32) -> u16 {
+        self.top_colour_with(face, i, j, t, None)
+    }
+
+    /// `top_colour`, with the steepness given (`None`: judged from the fine neighbours).
+    fn top_colour_with(&self, face: u8, i: i32, j: i32, t: i32, steep: Option<bool>) -> u16 {
         if face == 0
             && let Some(v) = &self.village
             && let Some(k) = v.index(i, j)
@@ -418,10 +425,12 @@ impl BlockGround {
             2,
             0.5,
         ) + 0.15 * speckle;
-        let steep = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-            .iter()
-            .filter_map(|&(a, b)| self.top_on(face, i + a, j + b))
-            .any(|m| (m - t).abs() >= 3);
+        let steep = steep.unwrap_or_else(|| {
+            [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                .iter()
+                .filter_map(|&(a, b)| self.top_on(face, i + a, j + b))
+                .any(|m| (m - t).abs() >= 3)
+        });
         let height = self.base + f64::from(t) * CELL;
         let cover = self
             .natural
@@ -577,64 +586,205 @@ impl BlockGround {
             }
             Some(((h - self.base) / CELL).floor() as i32)
         };
+        let started = std::time::Instant::now();
         let (i0, j0) = (ci * n, cj * n);
-        // The shell cells of the chunk and a margin round it (shapes and hidden faces look
-        // two cells out).
-        let mut tops: HashMap<(i32, i32), Option<i32>> = HashMap::new();
-        for j in j0 - 4..j0 + n + 4 {
-            for i in i0 - 4..i0 + n + 4 {
-                tops.insert((i, j), top(i, j));
+        // Column tops of the chunk and a margin round it (shapes and hidden faces look two
+        // cells out), in a plain array.
+        const MARGIN: i32 = 4;
+        let side = n + 2 * MARGIN;
+        let mut tops: Vec<Option<i32>> = Vec::with_capacity((side * side) as usize);
+        for j in j0 - MARGIN..j0 + n + MARGIN {
+            for i in i0 - MARGIN..i0 + n + MARGIN {
+                tops.push(top(i, j));
             }
         }
-        let top_at = |i: i32, j: i32| tops.get(&(i, j)).copied().flatten();
-        let mut cells: HashMap<IVec3, u16> = HashMap::new();
-        let (mut klo, mut khi) = (i32::MAX, i32::MIN);
-        for j in j0 - 3..j0 + n + 3 {
-            for i in i0 - 3..i0 + n + 3 {
-                let Some(t) = top_at(i, j) else {
-                    continue;
-                };
-                let mut lo = t;
-                for a in -1..=1 {
-                    for b in -1..=1 {
-                        if let Some(n) = top_at(i + a, j + b) {
-                            lo = lo.min(n);
+        let top_at = |i: i32, j: i32| {
+            let (a, b) = (i - i0 + MARGIN, j - j0 + MARGIN);
+            if a < 0 || b < 0 || a >= side || b >= side {
+                return None;
+            }
+            tops[(a + b * side) as usize]
+        };
+        let t_heights = started.elapsed().as_secs_f32() * 1e3;
+        let mesh = if level == 0 {
+            // Real blocks: the full mesher (slopes on terrace edges), over a dense grid.
+            let mut lows: Vec<Option<(i32, i32)>> =
+                Vec::with_capacity(((n + 6) * (n + 6)) as usize);
+            let (mut kmin, mut kmax) = (i32::MAX, i32::MIN);
+            let (mut klo, mut khi) = (i32::MAX, i32::MIN);
+            for j in j0 - 3..j0 + n + 3 {
+                for i in i0 - 3..i0 + n + 3 {
+                    let Some(t) = top_at(i, j) else {
+                        lows.push(None);
+                        continue;
+                    };
+                    let mut lo = t;
+                    for a in -1..=1 {
+                        for b in -1..=1 {
+                            if let Some(m) = top_at(i + a, j + b) {
+                                lo = lo.min(m);
+                            }
+                        }
+                    }
+                    let deep = face == 0 && self.carved_near.contains(&(i, j));
+                    let lo = if deep { lo.min(t - 28) } else { lo - 1 };
+                    lows.push(Some((lo, t)));
+                    kmin = kmin.min(lo - 2);
+                    kmax = kmax.max(t);
+                    if (i0..i0 + n).contains(&i) && (j0..j0 + n).contains(&j) {
+                        klo = klo.min(lo);
+                        khi = khi.max(t);
+                    }
+                }
+            }
+            if klo > khi {
+                return None;
+            }
+            let origin = IVec3::new(i0 - 3, j0 - 3, kmin);
+            let mut grid = sim_blocks::Grid::new(origin, IVec3::new(n + 6, n + 6, kmax - kmin + 1));
+            let mut slot = 0;
+            for j in j0 - 3..j0 + n + 3 {
+                for i in i0 - 3..i0 + n + 3 {
+                    if let Some((lo, t)) = lows[slot] {
+                        for k in lo..=t {
+                            let c = self.cell_on(face, IVec3::new(i, j, k));
+                            if c != 0 {
+                                grid.set(IVec3::new(i, j, k), c);
+                            }
+                        }
+                        // Below the shell counts as solid, so its faces stay hidden.
+                        for k in lo - 2..lo {
+                            grid.set(IVec3::new(i, j, k), colour("bedrock"));
+                        }
+                    }
+                    slot += 1;
+                }
+            }
+            let t_cells = started.elapsed().as_secs_f32() * 1e3 - t_heights;
+            let mesh = sim_blocks::mesh(
+                &grid,
+                IVec3::new(i0, j0, klo),
+                IVec3::new(i0 + n, j0 + n, khi + 1),
+                &[Dir::PZ],
+                1.0,
+            );
+            (mesh, t_cells)
+        } else {
+            // Coarse columns: tops merged along each row, walls only where a neighbour is lower.
+            let t0 = started.elapsed().as_secs_f32() * 1e3;
+            let mut m = MeshData::default();
+            let soil = colour("soil");
+            let mut colours: Vec<u16> = Vec::with_capacity((n * n) as usize);
+            for j in j0..j0 + n {
+                for i in i0..i0 + n {
+                    let c = match top_at(i, j) {
+                        Some(t) => {
+                            let steep = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                                .iter()
+                                .filter_map(|&(a, b)| top_at(i + a, j + b))
+                                .any(|o| (o - t).abs() >= 3 * s);
+                            self.top_colour_with(face, fine(i), fine(j), t, Some(steep))
+                        }
+                        None => 0,
+                    };
+                    colours.push(c);
+                }
+            }
+            let t_cells = started.elapsed().as_secs_f32() * 1e3 - t0;
+            let colour_at = |i: i32, j: i32| colours[((i - i0) + (j - j0) * n) as usize];
+            for j in j0..j0 + n {
+                let mut i = i0;
+                while i < i0 + n {
+                    let Some(t) = top_at(i, j) else {
+                        i += 1;
+                        continue;
+                    };
+                    let c = colour_at(i, j);
+                    let mut e = i + 1;
+                    while e < i0 + n && top_at(e, j) == Some(t) && colour_at(e, j) == c {
+                        e += 1;
+                    }
+                    let z = (t + 1) as f32;
+                    push_quad(
+                        &mut m,
+                        [
+                            Vec3::new(i as f32, j as f32, z),
+                            Vec3::new(e as f32, j as f32, z),
+                            Vec3::new(e as f32, (j + 1) as f32, z),
+                            Vec3::new(i as f32, (j + 1) as f32, z),
+                        ],
+                        Vec3::Z,
+                        c,
+                    );
+                    i = e;
+                }
+            }
+            for j in j0..j0 + n {
+                for i in i0..i0 + n {
+                    let Some(t) = top_at(i, j) else { continue };
+                    let (x, y) = (i as f32, j as f32);
+                    for (di, dj, out, a, b) in [
+                        (
+                            1,
+                            0,
+                            Vec3::X,
+                            Vec3::new(x + 1.0, y, 0.0),
+                            Vec3::new(x + 1.0, y + 1.0, 0.0),
+                        ),
+                        (
+                            -1,
+                            0,
+                            Vec3::NEG_X,
+                            Vec3::new(x, y, 0.0),
+                            Vec3::new(x, y + 1.0, 0.0),
+                        ),
+                        (
+                            0,
+                            1,
+                            Vec3::Y,
+                            Vec3::new(x, y + 1.0, 0.0),
+                            Vec3::new(x + 1.0, y + 1.0, 0.0),
+                        ),
+                        (
+                            0,
+                            -1,
+                            Vec3::NEG_Y,
+                            Vec3::new(x, y, 0.0),
+                            Vec3::new(x + 1.0, y, 0.0),
+                        ),
+                    ] {
+                        let low = top_at(i + di, j + dj).unwrap_or(t - 8);
+                        if low >= t {
+                            continue;
+                        }
+                        let (top_z, mid_z, bottom_z) = ((t + 1) as f32, t as f32, (low + 1) as f32);
+                        let at = |p: Vec3, z: f32| Vec3::new(p.x, p.y, z);
+                        // The top cell's side in its own colour, the rest soil.
+                        push_quad(
+                            &mut m,
+                            [at(a, top_z), at(b, top_z), at(b, mid_z), at(a, mid_z)],
+                            out,
+                            colour_at(i, j),
+                        );
+                        if bottom_z < mid_z {
+                            push_quad(
+                                &mut m,
+                                [at(a, mid_z), at(b, mid_z), at(b, bottom_z), at(a, bottom_z)],
+                                out,
+                                soil,
+                            );
                         }
                     }
                 }
-                let deep = level == 0 && face == 0 && self.carved_near.contains(&(i, j));
-                let lo = if deep { lo.min(t - 28) } else { lo - 1 };
-                for k in lo..=t {
-                    let c = if level == 0 {
-                        self.cell_on(face, IVec3::new(i, j, k))
-                    } else {
-                        self.coarse_cell(face, fine(i), fine(j), t, k)
-                    };
-                    if c != 0 {
-                        cells.insert(IVec3::new(i, j, k), c);
-                    }
-                }
-                // Below the shell counts as solid, so its faces stay hidden.
-                for k in lo - 2..lo {
-                    cells.insert(IVec3::new(i, j, k), colour("bedrock"));
-                }
-                if (i0..i0 + n).contains(&i) && (j0..j0 + n).contains(&j) {
-                    klo = klo.min(lo);
-                    khi = khi.max(t);
-                }
             }
-        }
-        if klo > khi {
-            return None;
-        }
-        let shell = |p: IVec3| -> u16 { Cells::get(&cells, p) };
-        let mut mesh = sim_blocks::mesh(
-            &shell,
-            IVec3::new(i0, j0, klo),
-            IVec3::new(i0 + n, j0 + n, khi + 1),
-            &[Dir::PZ],
-            1.0,
-        );
+            if m.is_empty() {
+                return None;
+            }
+            (m, t_cells)
+        };
+        let t_cells = mesh.1;
+        let t_mesh = started.elapsed().as_secs_f32() * 1e3 - t_heights - t_cells;
+        let mut mesh = mesh.0;
         if mesh.is_empty() {
             return None;
         }
@@ -725,19 +875,8 @@ impl BlockGround {
             mesh,
             origin,
             basis,
+            timings: [t_heights, t_cells, t_mesh],
         })
-    }
-
-    /// A cell of a coarse column whose middle is fine column (i, j) and top `t`.
-    fn coarse_cell(&self, face: u8, i: i32, j: i32, t: i32, k: i32) -> u16 {
-        if k > t {
-            return 0;
-        }
-        let d = t - k;
-        if d == 0 {
-            return self.top_colour(face, i, j, t);
-        }
-        colour(if d < 7 { "soil" } else { "bedrock" })
     }
 
     /// The chunks of `level` within `radius` (m) of unit direction `dir`, on whichever faces
@@ -792,4 +931,20 @@ impl BlockGround {
             .map(|k| (k.1, k.2, k.3))
             .collect()
     }
+}
+
+/// Adds a flat quad (corners in order round it) facing `out`, in colour `colour`.
+fn push_quad(m: &mut MeshData, corners: [Vec3; 4], out: Vec3, colour: u16) {
+    let mut q = corners;
+    if (q[1] - q[0]).cross(q[2] - q[0]).dot(out) < 0.0 {
+        q.reverse();
+    }
+    let first = m.positions.len() as u32;
+    for p in q {
+        m.positions.push(p.to_array());
+        m.normals.push(out.to_array());
+        m.colours.push(colour);
+    }
+    m.indices
+        .extend([first, first + 1, first + 2, first, first + 2, first + 3]);
 }

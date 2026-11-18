@@ -27,15 +27,16 @@ use crate::universe::{InGame, Universe};
 /// The coarsest level of block chunks drawn: columns 2^4 blocks (4 m) wide (block-world.md §7).
 /// Beyond it the tiles, coloured and stepped like the blocks, carry on.
 const TOP_LEVEL: u8 = 4;
-/// The quality setting for the block ground: blocks of a level are drawn while their columns
-/// cover at least this many pixels (1–4; default 1: every block that could be told apart is a
-/// block). `ULTRA_SPACE_BLOCK_PIXELS` until the settings menu has it.
+/// The quality setting for the block ground: block geometry of a level is drawn while its
+/// columns cover at least this many pixels (2–8; default 4); below that the tiles' shader draws
+/// the same 25 cm steps averaged over each pixel (no zig-zag), down to a pixel and less.
+/// `ULTRA_SPACE_BLOCK_PIXELS` until the settings menu has it.
 fn block_pixels() -> f64 {
     std::env::var("ULTRA_SPACE_BLOCK_PIXELS")
         .ok()
         .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(1.0)
-        .clamp(1.0, 4.0)
+        .unwrap_or(4.0)
+        .clamp(2.0, 8.0)
 }
 
 /// How far (m) columns of `level` stay at least `pixels` wide, at `per_radian` pixels per
@@ -554,9 +555,9 @@ struct ChunkPose {
 #[derive(Resource, Default, Clone, Copy)]
 pub struct BlockCoverage(pub f64);
 
-/// A chunk made on a worker: its mesh, pose (origin, basis; surface frame) and the time it
-/// took (ms).
-type MadeChunk = (Mesh, DVec3, DQuat, f64);
+/// A chunk made on a worker: its mesh, pose (origin, basis; surface frame), the time it took
+/// (ms) and its stages (heights, cells and colours, meshing; ms).
+type MadeChunk = (Mesh, DVec3, DQuat, f64, [f32; 3]);
 
 /// Block streaming counts since the last report (logged every few seconds, for performance
 /// rounds: how fast the workers keep up).
@@ -568,6 +569,7 @@ struct StreamStats {
     work_ms: f64,
     worst_ms: f64,
     triangles: usize,
+    stages: [f64; 3],
 }
 
 /// What is drawn: the root, chunks shown and being made, the materials.
@@ -861,7 +863,13 @@ fn stream_chunks(
                         let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
                         [r, g, b, 1.0]
                     });
-                    (mesh, c.origin, c.basis, start.elapsed().as_secs_f64() * 1e3)
+                    (
+                        mesh,
+                        c.origin,
+                        c.basis,
+                        start.elapsed().as_secs_f64() * 1e3,
+                        c.timings,
+                    )
                 })
             }),
         );
@@ -883,7 +891,10 @@ fn stream_chunks(
         };
         let m = block_on(poll_once(task)).flatten();
         match &m {
-            Some((mesh, _, _, ms)) => {
+            Some((mesh, _, _, ms, stages)) => {
+                for (sum, t) in stats.stages.iter_mut().zip(stages) {
+                    *sum += f64::from(*t);
+                }
                 stats.built += 1;
                 stats.work_ms += ms;
                 stats.worst_ms = stats.worst_ms.max(*ms);
@@ -893,7 +904,7 @@ fn stream_chunks(
             }
             None => stats.empty += 1,
         }
-        let entity = m.map(|(mesh, origin, basis, _)| {
+        let entity = m.map(|(mesh, origin, basis, _, _)| {
             commands
                 .spawn((
                     ChunkPose { origin, basis },
@@ -924,12 +935,15 @@ fn stream_chunks(
         let shown = draw.chunks.values().filter(|c| c.is_some()).count();
         info!(
             "blocks: {shown} chunks shown of {} wanted ({} pending), {:.0} built/s, {:.1} ms each on \
-             the workers (worst {:.0} ms, {:.1} workers busy on average), {:.0}k triangles built/s, \
-             {} px per column",
+             the workers (heights {:.1}, cells {:.1}, mesh {:.1}; worst {:.0} ms, {:.1} workers busy \
+             on average), {:.0}k triangles built/s, {} px per column",
             wanted.len(),
             draw.pending.len(),
             stats.built as f64 / span,
             stats.work_ms / stats.built.max(1) as f64,
+            stats.stages[0] / stats.built.max(1) as f64,
+            stats.stages[1] / stats.built.max(1) as f64,
+            stats.stages[2] / stats.built.max(1) as f64,
             stats.worst_ms,
             stats.work_ms / 1e3 / span,
             stats.triangles as f64 / span / 1e3,

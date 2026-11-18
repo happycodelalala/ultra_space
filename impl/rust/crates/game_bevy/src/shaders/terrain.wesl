@@ -197,11 +197,18 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
             + 0.15 * (hash3(floor(local * 4.0)) - 0.5) * speck) * fade;
         albedo = terrain.palette[cover_index(fields, slope, jitter)].rgb;
         if fields.x > 0.0 {
+            // How much of this pixel the risers cover, worked out exactly: a riser line where
+            // steps are wider than the pixel, their average share where several fall in it.
             let s = fields.x / 0.25;
             let w = fwidth(s);
             let riser = 1.0 - smoothstep(0.0, max(w * 1.5, 0.001), fract(s));
-            let dark = mix(0.35 * riser, 0.08, smoothstep(0.4, 1.2, w));
-            albedo *= 1.0 - dark;
+            let cover = mix(riser, 0.22, smoothstep(0.4, 1.2, w));
+            // Risers face downhill: lit by the sun like the sides of real blocks.
+            let tilt = n - ground_up * dot(n, ground_up);
+            let downhill = select(ground_up, normalize(tilt), length(tilt) > 1.0e-4);
+            let sun = normalize(terrain.star.xyz - p);
+            let riser_light = mix(0.5, 1.15, clamp(dot(downhill, sun) * 0.5 + 0.5, 0.0, 1.0));
+            albedo = mix(albedo, albedo * riser_light * 0.85, cover);
         }
     } else {
         albedo = terrain.palette[biome_index(fields, slope, terrain.surface)].rgb;
