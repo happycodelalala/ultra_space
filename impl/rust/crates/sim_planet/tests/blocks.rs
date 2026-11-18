@@ -280,11 +280,14 @@ fn faceted_ground_is_a_density_surface_that_can_be_dug() {
     );
     // The village pit is carved: the chunk at the village centre reaches well below the ground.
     let centre = g.chunk((0, 0, -1)).expect("the pit's chunk");
-    let top = g.facet_surface(0, DVec2::new(7.5, -8.5));
+    let top = g.facet_surface(0, DVec2::new(7.5, -14.0));
     let deepest = world(&centre)
         .map(|w| w.length() - g.radius)
         .fold(f64::MAX, f64::min);
     assert!(deepest < top - 2.5, "deepest {deepest:.1} vs top {top:.1}");
+    // The walking surface follows the carved pit.
+    let floor = g.facet_surface(0, DVec2::new(7.5, -8.5));
+    assert!(floor < top - 1.0, "pit floor {floor:.1} vs ground {top:.1}");
     // Digging a sphere lowers the ground there.
     let (face, p) = (0u8, DVec2::new(16.0 * 3.0 + 8.0, -16.0 * 2.0 + 8.0));
     let ground = g.facet_surface(face, p);

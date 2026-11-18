@@ -641,7 +641,40 @@ impl BlockGround {
     /// The faceted surface's height (m above the reference radius) at grid point `p` of
     /// `face`: the top of the density field (pits and edits aside).
     pub fn facet_surface(&self, face: u8, p: DVec2) -> f64 {
-        self.top_height(face, p, 2.0 * CELL)
+        let top = self.top_height(face, p, CELL);
+        // Carved below the top (the village's pits, digs)? Search down for the first rock.
+        let here = self.point_on(face, DVec3::new(p.x, p.y, top - self.base));
+        let edits: Vec<GroundEdit> = self
+            .edits
+            .read()
+            .map(|e| {
+                e.iter()
+                    .filter(|e| e.centre.distance(here) < e.radius + 1.0)
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default();
+        let density = |h: f64| self.density(face, p, h - self.base, top, &edits);
+        if density(top - 0.05) > 0.0 {
+            return top;
+        }
+        let step = 0.25;
+        let mut above = top;
+        let mut h = top - step;
+        while h > top - 40.0 {
+            if density(h) > 0.0 {
+                // Refine between the last air and this rock.
+                let (mut a, mut b) = (h, above);
+                for _ in 0..8 {
+                    let m = 0.5 * (a + b);
+                    if density(m) > 0.0 { a = m } else { b = m }
+                }
+                return 0.5 * (a + b);
+            }
+            above = h;
+            h -= step;
+        }
+        top
     }
 
     /// Digs (or, with `add`, fills) a sphere of ground: centre (surface frame, m) and radius.
@@ -923,8 +956,14 @@ impl BlockGround {
                 .find_map(|c| verts[cell_at(a, b, c)])
                 .map(world)
         };
-        let drop = |p: DVec3| p - p.normalize() * 2.0 * s;
         let centre = world(DVec3::new(x0 + size * 0.5, y0 + size * 0.5, zlo));
+        // Down and outward, so from above a skirt also covers a gap to a coarser neighbour.
+        let drop = |p: DVec3| {
+            let up = p.normalize();
+            let away = p - centre;
+            let away = (away - up * away.dot(up)).normalize_or(DVec3::ZERO);
+            p - up * 2.0 * s + away * 1.5 * s
+        };
         for k in -1..cells {
             for (p, q) in [
                 ((k, -1), (k + 1, -1)),

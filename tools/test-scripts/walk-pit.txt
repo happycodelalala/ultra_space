@@ -1,7 +1,7 @@
 # On foot into the village pit (the faceted ground's carved hollow): start 6.5 m south of it,
 # facing north, walk down into it, stop inside, then on and out the far side.
 2    shot pit-1-start.png
-2.5  hold W 1.4
+2.5  hold W 1.0
 4.5  shot pit-2-in.png
 5    hold W 0.6
 6.5  shot pit-3-bottom.png
