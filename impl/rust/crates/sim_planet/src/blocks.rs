@@ -866,6 +866,7 @@ impl BlockGround {
                 w
             };
             let normal = (w[1] - w[0]).cross(w[2] - w[0]).normalize();
+            let colour_given = colour.is_some();
             let colour = colour.unwrap_or_else(|| {
                 self.facet_colour(
                     face,
@@ -875,7 +876,14 @@ impl BlockGround {
                     &top_lerp,
                 )
             });
-            let local_normal = (inverse * normal).as_vec3();
+            // Skirts (their colour given) are lit as the ground they hang from, facing up, so a
+            // strip of one that shows reads as ground, not as a dark wall.
+            let shading = if colour_given {
+                ((w[0] + w[1] + w[2]) / 3.0).normalize()
+            } else {
+                normal
+            };
+            let local_normal = (inverse * shading).as_vec3();
             let first = m.positions.len() as u32;
             for q in w {
                 m.positions

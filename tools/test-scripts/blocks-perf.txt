@@ -3,7 +3,9 @@
 # then low fast flight (600 m/s) with the blocks streaming under the ship. The log reports the
 # streaming every 5 s.
 6    shot perf-1-hover.png
-6.5  mouse 2 0 4             # slow pan
+6.5  mouse 2 0 4             # slow pan (pairs of shots 0.1 s apart: flicker shows as a difference)
+8.0  shot perf-2a-pan.png
+8.1  shot perf-2b-pan.png
 10.5 shot perf-2-pan.png
 11   mouse 24 0 6            # turn round on the spot
 17   shot perf-3-turned.png
