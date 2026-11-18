@@ -45,7 +45,13 @@ impl Plugin for BlocksPlugin {
             .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
             .add_systems(
                 Update,
-                (stream_chunks, place_root, place_chunks, night_glow)
+                (
+                    block_focus,
+                    stream_chunks,
+                    place_root,
+                    place_chunks,
+                    night_glow,
+                )
                     .chain()
                     .after(crate::camera::CameraSet)
                     .in_set(InGame),
@@ -716,8 +722,6 @@ fn stream_chunks(
     let cam = crate::settlements::camera_on(&universe, &camera, world.body, render.0);
     let ground = &world.ground;
     let here = cam.normalize();
-    // The block surface stands round the camera (the player is near it when it matters).
-    ground.set_focus(Some(here));
     let height = ground.height_above(cam);
     // High above, nothing is drawn (the tiles show the land).
     let wanted: HashSet<ChunkKey> =
@@ -819,6 +823,37 @@ fn stream_chunks(
             commands.entity(e).despawn();
         }
     }
+}
+
+/// The block surface stands round the player (on foot or in the ship; the camera when there
+/// is neither), wherever the camera goes.
+fn block_focus(
+    world: Option<Res<BlockWorld>>,
+    sim: Res<crate::sim::Sim>,
+    on_foot: Option<Res<crate::walk::OnFoot>>,
+    ship: Option<Res<crate::ship::PlayerShip>>,
+    universe: Res<Universe>,
+    render: Res<RenderTime>,
+    camera: Res<SpaceCamera>,
+) {
+    let Some(world) = world else { return };
+    let system = &universe.0;
+    let surface = system.bodies[world.body].surface_frame;
+    let id = on_foot.map(|f| f.id).or_else(|| ship.map(|s| s.id));
+    let player = id.and_then(|id| {
+        let loc = sim.0.objects.location(id)?;
+        let region = sim.0.regions.get(loc.region)?;
+        let state = region.world.get::<sim_core::ObjectState>(loc.entity)?;
+        let t = sim.0.universe_time().as_secs_f64();
+        Some(
+            system
+                .frames
+                .transform_point(surface, state.frame, t, state.state.position),
+        )
+    });
+    let at = player
+        .unwrap_or_else(|| crate::settlements::camera_on(&universe, &camera, world.body, render.0));
+    world.ground.set_focus(Some(at.normalize_or(DVec3::Y)));
 }
 
 /// Places the chunks camera-relative, each in its own frame.

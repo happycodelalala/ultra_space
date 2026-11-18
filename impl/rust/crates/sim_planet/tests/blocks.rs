@@ -159,3 +159,15 @@ fn chunks_round_a_point_cover_it_across_a_face_edge() {
             .any(|&k| g.chunk_centre(k).angle_between(edge) * g.radius < 8.0)
     );
 }
+
+#[test]
+fn the_column_cache_forgets_old_chunks_and_still_answers() {
+    let t = meridian();
+    let g = BlockGround::new(t.clone(), land(&t), None);
+    let first = g.top(3, 4);
+    // Touch more chunks than the cache keeps (one column each, 8 m apart).
+    for k in 0..3_200 {
+        let _ = g.top(k * 32, 4);
+    }
+    assert_eq!(g.top(3, 4), first, "worked out again the same");
+}

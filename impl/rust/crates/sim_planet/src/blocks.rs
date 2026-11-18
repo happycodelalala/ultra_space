@@ -36,8 +36,17 @@ pub const PALETTE: [&str; 20] = [
 ];
 /// How far round the focus the block surface replaces the natural one (m).
 pub const FOCUS_REACH: f64 = 2_000.0;
-/// Columns remembered before the cache starts afresh.
-const CACHE_MAX: usize = 4_000_000;
+/// Chunks of column tops remembered (4 KB each); the least recently used half goes past this.
+const CACHE_CHUNKS: usize = 3_000;
+/// A column not yet worked out, and a column with no blocks (in the cache).
+const UNKNOWN: i32 = i32::MIN;
+const NO_BLOCKS: i32 = i32::MIN + 1;
+
+/// The tops of one chunk's columns, as worked out so far, and when it was last used.
+struct ChunkTops {
+    tops: Box<[i32]>,
+    used: std::sync::atomic::AtomicU64,
+}
 
 /// A chunk: its grid face and chunk column indices.
 pub type ChunkKey = (u8, i32, i32);
@@ -106,7 +115,8 @@ pub struct BlockGround {
     pub structures: Vec<crate::foundations::Structure>,
     /// The cube's faces: centre, x axis, y axis (surface frame, unit).
     faces: [[DVec3; 3]; 6],
-    tops: RwLock<HashMap<(u8, i32, i32), Option<i32>>>,
+    tops: RwLock<HashMap<ChunkKey, ChunkTops>>,
+    clock: std::sync::atomic::AtomicU64,
     /// Where the player is (unit direction); `None` means everywhere.
     focus: RwLock<Option<DVec3>>,
 }
@@ -164,6 +174,7 @@ impl BlockGround {
                 [-n, e, c],
             ],
             tops: RwLock::new(HashMap::new()),
+            clock: std::sync::atomic::AtomicU64::new(0),
             focus: RwLock::new(None),
         }
     }
@@ -173,6 +184,11 @@ impl BlockGround {
         if let Ok(mut f) = self.focus.write() {
             *f = dir.map(DVec3::normalize);
         }
+    }
+
+    /// Where the player is (unit direction), if set.
+    pub fn focus(&self) -> Option<DVec3> {
+        self.focus.read().ok().and_then(|f| *f)
     }
 
     /// Whether `dir` is near enough the focus for the block surface to stand.
@@ -295,10 +311,17 @@ impl BlockGround {
 
     /// The top cell of column (i, j) of `face`, or `None` where there are no blocks.
     pub fn top_on(&self, face: u8, i: i32, j: i32) -> Option<i32> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let key = (face, i.div_euclid(CHUNK), j.div_euclid(CHUNK));
+        let slot = (i.rem_euclid(CHUNK) + CHUNK * j.rem_euclid(CHUNK)) as usize;
+        let now = self.clock.fetch_add(1, Relaxed);
         if let Ok(t) = self.tops.read()
-            && let Some(&v) = t.get(&(face, i, j))
+            && let Some(c) = t.get(&key)
+            && c.tops[slot] != UNKNOWN
         {
-            return v;
+            c.used.store(now, Relaxed);
+            let v = c.tops[slot];
+            return (v != NO_BLOCKS).then_some(v);
         }
         let natural = self.natural_top(face, i, j);
         let v = match &self.village {
@@ -315,10 +338,21 @@ impl BlockGround {
             _ => natural,
         };
         if let Ok(mut t) = self.tops.write() {
-            if t.len() > CACHE_MAX {
-                t.clear();
+            if t.len() >= CACHE_CHUNKS && !t.contains_key(&key) {
+                // Forget the least recently used half.
+                let mut ages: Vec<(u64, ChunkKey)> =
+                    t.iter().map(|(k, c)| (c.used.load(Relaxed), *k)).collect();
+                ages.sort_unstable();
+                for (_, k) in ages.iter().take(ages.len() / 2) {
+                    t.remove(k);
+                }
             }
-            t.insert((face, i, j), v);
+            let c = t.entry(key).or_insert_with(|| ChunkTops {
+                tops: vec![UNKNOWN; (CHUNK * CHUNK) as usize].into_boxed_slice(),
+                used: std::sync::atomic::AtomicU64::new(now),
+            });
+            c.tops[slot] = v.unwrap_or(NO_BLOCKS);
+            c.used.store(now, Relaxed);
         }
         v
     }

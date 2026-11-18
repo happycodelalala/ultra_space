@@ -132,6 +132,9 @@ pub(crate) struct Ground {
     done: Arc<Mutex<Vec<(u64, TileKey, SharedShape)>>>,
     /// Bumped whenever the terrain changes; older results are dropped.
     generation: u64,
+    /// The block ground's focus the patches were last checked against (patches near the
+    /// player sink under the blocks; elsewhere they are the natural ground).
+    focus_seen: Option<DVec3>,
     /// Build patches on the calling thread (tests).
     inline: bool,
 }
@@ -157,6 +160,7 @@ impl Ground {
             pending: HashSet::new(),
             done: Arc::default(),
             generation: 0,
+            focus_seen: None,
             inline,
         }
     }
@@ -369,7 +373,47 @@ impl Ground {
     }
 
     /// Adds finished patches to the world and drops ones nobody wants any more.
+    /// When the block ground's focus has moved, rebuilds the patches whose ground changed:
+    /// those that came into its reach (they sink under the blocks) or left it (they rise to
+    /// the natural ground). Each old patch stays until its replacement is ready.
+    fn follow_focus(&mut self) {
+        let Some(b) = self.terrain.blocks().cloned() else {
+            return;
+        };
+        let focus = b.focus();
+        let moved = match (self.focus_seen, focus) {
+            (Some(a), Some(f)) => a.angle_between(f) * self.terrain.radius > 50.0,
+            (None, None) => false,
+            _ => true,
+        };
+        if !moved {
+            return;
+        }
+        let old = self.focus_seen;
+        self.focus_seen = focus;
+        let reach = sim_planet::blocks::FOCUS_REACH;
+        let radius = self.terrain.radius;
+        let near_edge = |f: Option<DVec3>, c: DVec3| {
+            f.is_some_and(|f| (f.angle_between(c) * radius - reach).abs() < self.patch_size)
+        };
+        let within =
+            |f: Option<DVec3>, c: DVec3| f.is_none_or(|f| f.angle_between(c) * radius <= reach);
+        let stale: Vec<TileKey> = self
+            .patches
+            .keys()
+            .filter(|k| {
+                let c = k.center();
+                within(old, c) != within(focus, c) || near_edge(old, c) || near_edge(focus, c)
+            })
+            .copied()
+            .collect();
+        for key in stale {
+            self.request(key);
+        }
+    }
+
     pub(crate) fn update(&mut self, world: &mut PhysicsWorld, now: f64) {
+        self.follow_focus();
         // A few finished patches per tick keep the cost of inserting them small.
         let finished: Vec<_> = match self.done.lock() {
             Ok(mut done) => {
