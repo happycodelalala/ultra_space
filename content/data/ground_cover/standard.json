@@ -128,7 +128,7 @@
   {
    "id": "tropical",
    "generator": "broadleaf_wide",
-   "block_m": 0.25,
+   "block_m": 0.5,
    "height_m": [
     8,
     14
@@ -1203,7 +1203,7 @@
   "forest": [
    {
     "species": "oak",
-    "density_per_ha": 120,
+    "density_per_ha": 55,
     "spacing_m": 5,
     "cluster": {
      "scale_m": 150,
@@ -1214,7 +1214,7 @@
    },
    {
     "species": "beech",
-    "density_per_ha": 100,
+    "density_per_ha": 45,
     "spacing_m": 5,
     "cluster": {
      "scale_m": 150,
@@ -1225,7 +1225,7 @@
    },
    {
     "species": "birch",
-    "density_per_ha": 70,
+    "density_per_ha": 30,
     "spacing_m": 4,
     "cluster": {
      "scale_m": 120,
@@ -1258,7 +1258,7 @@
    },
    {
     "species": "fern",
-    "density_per_ha": 125,
+    "density_per_ha": 60,
     "spacing_m": 1.2,
     "cluster": {
      "scale_m": 30,
@@ -1337,7 +1337,7 @@
   "seasonal": [
    {
     "species": "tropical",
-    "density_per_ha": 80,
+    "density_per_ha": 40,
     "spacing_m": 7,
     "cluster": {
      "scale_m": 150,
@@ -1348,7 +1348,7 @@
    },
    {
     "species": "palm",
-    "density_per_ha": 30,
+    "density_per_ha": 20,
     "spacing_m": 6,
     "cluster": {
      "scale_m": 120,
@@ -1416,7 +1416,7 @@
   "rainforest": [
    {
     "species": "spruce",
-    "density_per_ha": 180,
+    "density_per_ha": 60,
     "spacing_m": 5,
     "cluster": {
      "scale_m": 150,
@@ -1427,7 +1427,7 @@
    },
    {
     "species": "beech",
-    "density_per_ha": 120,
+    "density_per_ha": 35,
     "spacing_m": 5,
     "cluster": {
      "scale_m": 150,
@@ -1438,7 +1438,7 @@
    },
    {
     "species": "fern",
-    "density_per_ha": 250,
+    "density_per_ha": 120,
     "spacing_m": 1.0,
     "cluster": {
      "scale_m": 30,
@@ -1506,7 +1506,7 @@
   "jungle": [
    {
     "species": "tropical",
-    "density_per_ha": 200,
+    "density_per_ha": 60,
     "spacing_m": 6,
     "cluster": {
      "scale_m": 150,
@@ -1528,7 +1528,7 @@
    },
    {
     "species": "palm",
-    "density_per_ha": 40,
+    "density_per_ha": 20,
     "spacing_m": 6,
     "cluster": {
      "scale_m": 120,
@@ -1539,7 +1539,7 @@
    },
    {
     "species": "fern",
-    "density_per_ha": 250,
+    "density_per_ha": 120,
     "spacing_m": 1.0,
     "cluster": {
      "scale_m": 30,
@@ -1901,7 +1901,7 @@
   "taiga": [
    {
     "species": "spruce",
-    "density_per_ha": 180,
+    "density_per_ha": 90,
     "spacing_m": 4.5,
     "cluster": {
      "scale_m": 150,
@@ -1912,7 +1912,7 @@
    },
    {
     "species": "pine",
-    "density_per_ha": 80,
+    "density_per_ha": 40,
     "spacing_m": 5,
     "cluster": {
      "scale_m": 150,
@@ -1923,7 +1923,7 @@
    },
    {
     "species": "birch",
-    "density_per_ha": 40,
+    "density_per_ha": 20,
     "spacing_m": 4,
     "cluster": {
      "scale_m": 120,

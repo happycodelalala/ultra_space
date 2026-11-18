@@ -13,17 +13,19 @@ fn main() {
         .with_style(sim_planet::GroundStyle::Faceted)
         .with_cover(cover.clone());
     let globe = t.globe().unwrap().clone();
-    let mut by_kind = std::collections::BTreeMap::new();
-    for (r, reg) in globe.regions.iter().enumerate() {
-        by_kind
-            .entry(globe.kind(r).id.clone())
-            .or_insert(reg.centre);
+    let mut by_kind: std::collections::BTreeMap<String, glam::DVec3> =
+        std::collections::BTreeMap::new();
+    for d in sim_planet::fibonacci_directions(20000) {
+        if t.height(d, 50.0) > 5.0 {
+            by_kind.entry(format!("{:?}", globe.cover(d))).or_insert(d);
+        }
     }
+    let plan_levels = [(0u8, 30usize), (1, 30), (2, 30), (3, 30), (4, 30)];
     for (kind, dir) in &by_kind {
         let (face, p) = g.locate(*dir);
-        let cover_name = format!("{:?}", globe.cover(*dir));
-        let mut line = format!("{kind:10} {cover_name:10}");
-        for level in 0..=4u8 {
+        let mut line = format!("{kind:10}");
+        let mut total = 0usize;
+        for (level, n) in plan_levels {
             let size = sim_planet::BlockGround::lod_size(level);
             let key = (
                 level,
@@ -34,9 +36,10 @@ fn main() {
             let s = std::time::Instant::now();
             let m = cover.chunk_mesh(&g, key);
             let ms = s.elapsed().as_secs_f64() * 1e3;
-            let (n, tri) = m.map_or((0, 0), |m| (m.instances, m.indices.len() / 3));
-            line += &format!(" | L{level}: {n} things {}k tri {ms:.0} ms", tri / 1000);
+            let (k, tri) = m.map_or((0, 0), |m| (m.instances, m.indices.len() / 3));
+            total += tri * n;
+            line += &format!(" | L{level}: {k} {}k {ms:.0}ms", tri / 1000);
         }
-        println!("{line}");
+        println!("{line} | ~{:.1}M in view", total as f64 / 1e6);
     }
 }

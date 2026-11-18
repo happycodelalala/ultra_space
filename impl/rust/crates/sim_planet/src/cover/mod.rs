@@ -102,10 +102,10 @@ const TREES: [&str; 11] = [
     "palm",
 ];
 
-/// One variant: its meshes at three levels of voxel detail (full, merged 2×, merged 4×), its
+/// One variant: its meshes at four levels of voxel detail (full, merged 2×, 4× and 8×), its
 /// size, and the colours of its roles (linear RGB).
 struct Variant {
-    meshes: [MeshData; 3],
+    meshes: [MeshData; 4],
     height: f64,
     radius: f64,
     colours: [[f32; 3]; 13],
@@ -340,10 +340,12 @@ impl CoverWorld {
         let up = ups(&s.generator);
         let l1 = coarsen(&vox.cells);
         let l2 = coarsen(&l1);
+        let l3 = coarsen(&l2);
         let meshes = [
             mesh_cells(&vox.cells, &up, s.block_m),
             mesh_cells(&l1, &up, s.block_m * 2.0),
             mesh_cells(&l2, &up, s.block_m * 4.0),
+            mesh_cells(&l3, &up, s.block_m * 8.0),
         ];
         let radius = vox
             .cells
@@ -404,7 +406,7 @@ impl CoverWorld {
         lod: usize,
     ) -> (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<u32>) {
         let var = &self.variants[i][v];
-        let m = &var.meshes[lod.min(2)];
+        let m = &var.meshes[lod.min(3)];
         let cols = m
             .colours
             .iter()
@@ -681,7 +683,7 @@ impl CoverWorld {
         let (origin, basis) = g.chunk_frame(key);
         let inverse = basis.inverse();
         // Voxels merged with the level: each about the size a ground cell is drawn at.
-        let lod = usize::from(key.0.min(2));
+        let lod = usize::from(key.0.min(3));
         let face = key.1;
         let mut m = CoverMesh {
             instances: instances.len(),
@@ -690,7 +692,10 @@ impl CoverWorld {
         for inst in &instances {
             let sp = &self.species[inst.species as usize];
             let var = &self.variants[inst.species as usize][inst.variant as usize];
-            let mesh = &var.meshes[lod];
+            // Big trees one voxel level coarser beyond the nearest chunks (their voxels still
+            // cover several pixels there).
+            let big = sp.height_m[1] >= 8.0 && key.0 >= 1;
+            let mesh = &var.meshes[(lod + usize::from(big)).min(3)];
             if mesh.is_empty() {
                 continue;
             }
@@ -771,7 +776,7 @@ mod tests {
                 );
                 // Coarser levels have no more triangles.
                 assert!(
-                    v.meshes[2].triangles() <= v.meshes[0].triangles() + 12,
+                    v.meshes[3].triangles() <= v.meshes[0].triangles() + 12,
                     "{}",
                     s.id
                 );
