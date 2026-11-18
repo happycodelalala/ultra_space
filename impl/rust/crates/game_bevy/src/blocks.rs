@@ -1237,16 +1237,15 @@ fn block_focus(
     world.ground.set_focus(Some(at.normalize_or(DVec3::Y)));
 }
 
-/// Places the chunks camera-relative, each in its own frame.
-#[allow(clippy::too_many_arguments)]
+/// Places the chunks camera-relative, each in its own frame. (The ground chunks don't cut
+/// themselves off at the circle they share with the far tiles any more: the tiles lie 0.5 m
+/// below the faceted ground and hide only near the camera, so the ground material isn't
+/// touched every frame; `get_mut` marks it changed and every ground chunk is re-prepared.)
 fn place_chunks(
     world: Option<Res<BlockWorld>>,
-    draw: Option<Res<BlockDraw>>,
     universe: Res<Universe>,
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
-    coverage: Res<BlockCoverage>,
-    mut materials: ResMut<Assets<GroundMaterial>>,
     mut chunks: Query<(&ChunkPose, &mut Transform)>,
 ) {
     let Some(world) = world else { return };
@@ -1258,13 +1257,6 @@ fn place_chunks(
     for (pose, mut t) in &mut chunks {
         t.translation = (s.position + s.rotation * pose.origin - camera.offset).as_vec3();
         t.rotation = (s.rotation * pose.basis).as_quat().normalize();
-    }
-    // The circle the chunks and the far tiles share (the tiles hide inside the same radius).
-    if let Some(draw) = draw
-        && let Some(mut m) = materials.get_mut(&draw.ground_material)
-    {
-        m.extension.strength.y = coverage.0 as f32;
-        m.extension.centre = (s.position - camera.offset).as_vec3().extend(0.0);
     }
 }
 
@@ -1339,14 +1331,20 @@ fn night_glow(
     };
     let exposure = bevy::camera::Exposure::default().exposure();
     let want = LinearRgba::rgb(1.0, 0.6, 0.25) * (night * 6.0 / exposure);
-    if let Some(mut m) = materials.get_mut(&draw.glow)
-        && m.emissive != want
+    // `get_mut` marks the material changed (and every entity using it re-prepared): only
+    // when the value really changes.
+    if materials
+        .get(&draw.glow)
+        .is_some_and(|m| m.emissive != want)
+        && let Some(mut m) = materials.get_mut(&draw.glow)
     {
         m.emissive = want;
     }
     let win = LinearRgba::rgb(1.0, 0.62, 0.3) * (night * 3.0 / exposure);
-    if let Some(mut m) = materials.get_mut(&draw.windows)
-        && m.emissive != win
+    if materials
+        .get(&draw.windows)
+        .is_some_and(|m| m.emissive != win)
+        && let Some(mut m) = materials.get_mut(&draw.windows)
     {
         m.emissive = win;
     }
