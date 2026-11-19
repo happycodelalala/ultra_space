@@ -634,13 +634,32 @@ impl Made {
     }
 }
 
-/// A dissolve in progress.
+/// A chunk dissolving out (it goes to the cache when done).
 struct Fading {
     key: LodKey,
-    ground: Option<Handle<GroundMaterial>>,
-    cover: Option<Handle<CoverMaterial>>,
     start: f64,
-    out: bool,
+}
+
+/// Starts a dissolve (in or out) of a chunk's ground and cover materials at `start` (the
+/// clock the shaders read, wrapping hourly): written once, the shaders work out the progress.
+fn start_fade(
+    ground_materials: &mut Assets<GroundMaterial>,
+    cover_materials: &mut Assets<CoverMaterial>,
+    ground: Option<&Handle<GroundMaterial>>,
+    cover: Option<&Handle<CoverMaterial>>,
+    start: f32,
+    mode: f32,
+) {
+    if let Some(h) = ground
+        && let Some(mut g) = ground_materials.get_mut(h)
+    {
+        g.extension.fade = Vec4::new(start, mode, 0.0, FADE as f32);
+    }
+    if let Some(h) = cover
+        && let Some(mut c) = cover_materials.get_mut(h)
+    {
+        c.extension.fade = Vec4::new(start, mode, c.extension.fade.z, FADE as f32);
+    }
 }
 
 /// The camera's motion, smoothed (surface frame): for ordering the work by when each chunk
@@ -1009,14 +1028,15 @@ struct StreamState {
     last_count: usize,
 }
 
-/// The streaming worker pool: most of the cores, the generation pool and the frame keep the
-/// rest. Few jobs are handed to it at once, so the most urgent chunk is always next.
+/// The streaming worker pool: a third of the logical cores (the generation pool has half, and
+/// the main and render threads must never starve: q0123 with all but four lost half the frame
+/// rate). Few jobs are handed to it at once, so the most urgent chunk is always next.
 fn streaming() -> &'static bevy::tasks::TaskPool {
     static POOL: std::sync::OnceLock<bevy::tasks::TaskPool> = std::sync::OnceLock::new();
     POOL.get_or_init(|| {
         let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
         bevy::tasks::TaskPoolBuilder::new()
-            .num_threads(cores.saturating_sub(4).max(2))
+            .num_threads((cores / 3).max(2))
             .thread_name("streaming".into())
             .build()
     })
@@ -1052,7 +1072,7 @@ fn spawn_cover(
             ..default()
         },
         extension: CoverFade {
-            fade: Vec4::new(0.0, 1.0, far, 0.0),
+            fade: Vec4::new(0.0, 0.0, far, FADE as f32),
         },
     });
     let mut e = commands.spawn((
@@ -1126,6 +1146,7 @@ fn stream_chunks(
     projections: Query<&Projection, With<crate::space_render::MainCamera>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     views: Query<&GlobalTransform, With<crate::space_render::MainCamera>>,
+    time: Res<Time>,
 ) {
     let _slow = crate::debug_overlay::SlowSystem::new("stream_chunks");
     let (Some(world), Some(mut draw)) = (world, draw) else {
@@ -1192,6 +1213,8 @@ fn stream_chunks(
     let wanted = &wanted_set;
     let draw = &mut *draw;
     let now = real.elapsed_secs_f64();
+    // The clock the dissolve shaders read.
+    let clock = time.elapsed_secs_wrapped();
     let with_cover = ground.cover.is_some();
     let far = (outer * 0.92) as f32;
     // The camera's motion (surface frame), smoothed over a fraction of a second.
@@ -1546,13 +1569,14 @@ fn stream_chunks(
         m.cover_material = Some(material.clone());
         // Over a chunk already shown, the trees dissolve in one by one.
         if m.shown {
-            draw.fading.push(Fading {
-                key,
-                ground: None,
-                cover: Some(material),
-                start: now,
-                out: false,
-            });
+            start_fade(
+                &mut ground_materials,
+                &mut cover_materials,
+                None,
+                Some(&material),
+                clock,
+                1.0,
+            );
         }
     }
     // The ground is ready out to the nearest wanted chunk not yet made whose ground no chunk
@@ -1599,12 +1623,17 @@ fn stream_chunks(
                 CoverSlot::Made(Some(_)) => m.cover_material.clone(),
                 _ => None,
             };
+            start_fade(
+                &mut ground_materials,
+                &mut cover_materials,
+                m.material.as_ref(),
+                cover.as_ref(),
+                clock,
+                -1.0,
+            );
             draw.fading.push(Fading {
                 key: *key,
-                ground: m.material.clone(),
-                cover,
                 start: now,
-                out: true,
             });
             draw.leaving.insert(*key, m);
         } else {
@@ -1649,26 +1678,19 @@ fn stream_chunks(
             _ => None,
         };
         draw.fading.retain(|f| f.key != key);
-        if replacing || near > SHOW_AT_ONCE {
-            draw.fading.push(Fading {
-                key,
-                ground: m.material.clone(),
-                cover,
-                start: now,
-                out: false,
-            });
+        let mode = if replacing || near > SHOW_AT_ONCE {
+            1.0
         } else {
-            for h in m.material.iter() {
-                if let Some(mut g) = ground_materials.get_mut(h) {
-                    g.extension.fade = Vec4::ZERO;
-                }
-            }
-            for h in cover.iter() {
-                if let Some(mut c) = cover_materials.get_mut(h) {
-                    c.extension.fade = Vec4::new(0.0, 0.0, far, 0.0);
-                }
-            }
-        }
+            0.0
+        };
+        start_fade(
+            &mut ground_materials,
+            &mut cover_materials,
+            m.material.as_ref(),
+            cover.as_ref(),
+            clock,
+            mode,
+        );
     }
     // Late chunks: wanted, in view, not shown yet (how long they waited is logged).
     let mut late = 0usize;
@@ -1746,49 +1768,21 @@ fn stream_chunks(
         .retain(|k, _| wanted.contains(k) || ahead_wanted.contains(k));
 }
 
-/// Advances the dissolves: each material's progress; chunks dissolved out go to the cache.
-fn fade_chunks(
-    mut commands: Commands,
-    draw: Option<ResMut<BlockDraw>>,
-    real: Res<Time<Real>>,
-    mut ground_materials: ResMut<Assets<GroundMaterial>>,
-    mut cover_materials: ResMut<Assets<CoverMaterial>>,
-) {
+/// Chunks dissolved out go to the cache (the shaders run the dissolves themselves).
+fn fade_chunks(mut commands: Commands, draw: Option<ResMut<BlockDraw>>, real: Res<Time<Real>>) {
     let Some(mut draw) = draw else { return };
     let draw = &mut *draw;
     let now = real.elapsed_secs_f64();
-    let mut finished = Vec::new();
-    for (i, f) in draw.fading.iter().enumerate() {
-        let q = ((now - f.start) / FADE).clamp(0.0, 1.0) as f32;
-        let done = q >= 1.0;
-        let mode = if done && !f.out {
-            0.0
-        } else if f.out {
-            -1.0
-        } else {
-            1.0
-        };
-        for h in f.ground.iter() {
-            if let Some(mut g) = ground_materials.get_mut(h) {
-                g.extension.fade = Vec4::new(q, mode, 0.0, 0.0);
-            }
-        }
-        for h in f.cover.iter() {
-            if let Some(mut c) = cover_materials.get_mut(h) {
-                c.extension.fade.x = q;
-                c.extension.fade.y = mode;
-            }
-        }
-        if done {
-            finished.push(i);
-        }
-    }
-    for i in finished.into_iter().rev() {
-        let f = draw.fading.swap_remove(i);
-        if f.out
-            && let Some(m) = draw.leaving.remove(&f.key)
-        {
-            cache_put(draw, &mut commands, f.key, m, now);
+    let done: Vec<LodKey> = draw
+        .fading
+        .iter()
+        .filter(|f| now - f.start >= FADE)
+        .map(|f| f.key)
+        .collect();
+    draw.fading.retain(|f| now - f.start < FADE);
+    for key in done {
+        if let Some(m) = draw.leaving.remove(&key) {
+            cache_put(draw, &mut commands, key, m, now);
         }
     }
 }

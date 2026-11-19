@@ -3,6 +3,10 @@
 // beyond fail the main pass's depth test and nothing is drawn there: a dark band).
 
 import bevy_pbr::prepass::io::{VertexOutput, FragmentOutput};
+import bevy_render::globals::Globals;
+
+// The prepass view bind group carries the globals (time) at binding 1.
+@group(0) @binding(1) var<uniform> globals: Globals;
 
 struct GroundDetail {
     strength: vec4<f32>,
@@ -12,12 +16,22 @@ struct GroundDetail {
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> detail: GroundDetail;
 
+// The fade's progress 0..1 from its start time (fade.x, the clock that wraps every hour) over
+// its duration (fade.w).
+fn progress(fade: vec4<f32>) -> f32 {
+    var t = globals.time - fade.x;
+    if t < -1.0 {
+        t += 3600.0;
+    }
+    return clamp(t / max(fade.w, 1.0e-3), 0.0, 1.0);
+}
+
 // A dither value in [0, 1) per pixel (interleaved gradient noise: no visible grid).
 fn dither(pixel: vec2<f32>) -> f32 {
     return fract(52.9829189 * fract(dot(floor(pixel), vec2<f32>(0.06711056, 0.00583715))));
 }
 
-// Whether a pixel is drawn. `fade`: x progress 0..1, y mode (+1 fading in, -1 fading out,
+// Whether a pixel is drawn. `fade`: x start time, w duration, y mode (+1 fading in, -1 fading out,
 // 0 steady); `share` how much of the fade this pixel's thing has reached (the progress for the
 // ground; staggered per thing for the cover). Fading out uses the mirrored pattern, so an old
 // chunk and its replacements started together never both draw a pixel.
@@ -50,7 +64,7 @@ fn outside(p: vec3<f32>) -> bool {
 @if(PREPASS_FRAGMENT)
 @fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
-    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, detail.fade.x) {
+    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, progress(detail.fade)) {
         discard;
     }
     var out: FragmentOutput;
@@ -61,7 +75,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 @else
 @fragment
 fn fragment(in: VertexOutput) {
-    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, detail.fade.x) {
+    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, progress(detail.fade)) {
         discard;
     }
 }

@@ -5,22 +5,33 @@ import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    mesh_view_bindings::globals,
 };
 
 struct CoverFade {
-    // x progress 0..1, y mode (+1 in, -1 out, 0 steady), z the distance (m) things thin out
-    // towards (0 none)
+    // x start time (s, wrapping hourly), y mode (+1 in, -1 out, 0 steady), z the distance (m)
+    // things thin out towards (0 none), w duration (s)
     fade: vec4<f32>,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> cover: CoverFade;
+
+// The fade's progress 0..1 from its start time (fade.x, the clock that wraps every hour) over
+// its duration (fade.w).
+fn progress(fade: vec4<f32>) -> f32 {
+    var t = globals.time - fade.x;
+    if t < -1.0 {
+        t += 3600.0;
+    }
+    return clamp(t / max(fade.w, 1.0e-3), 0.0, 1.0);
+}
 
 // A dither value in [0, 1) per pixel (interleaved gradient noise: no visible grid).
 fn dither(pixel: vec2<f32>) -> f32 {
     return fract(52.9829189 * fract(dot(floor(pixel), vec2<f32>(0.06711056, 0.00583715))));
 }
 
-// Whether a pixel is drawn. `fade`: x progress 0..1, y mode (+1 fading in, -1 fading out,
+// Whether a pixel is drawn. `fade`: x start time, w duration, y mode (+1 fading in, -1 fading out,
 // 0 steady); `share` how much of the fade this pixel's thing has reached (the progress for the
 // ground; staggered per thing for the cover). Fading out uses the mirrored pattern, so an old
 // chunk and its replacements started together never both draw a pixel.
@@ -53,9 +64,10 @@ fn thinned(p: vec3<f32>, pixel: vec2<f32>, fade: vec4<f32>, r: f32) -> bool {
 
 // Whether a pixel of a thing with random number `r` is drawn.
 fn cover_drawn(p: vec3<f32>, pixel: vec2<f32>, fade: vec4<f32>, r: f32) -> bool {
-    var share = staggered(fade.x, r);
+    let q = progress(fade);
+    var share = staggered(q, r);
     if fade.y < 0.0 {
-        share = staggered(fade.x, 1.0 - r);
+        share = staggered(q, 1.0 - r);
     }
     return shown(pixel, fade, share) && !thinned(p, pixel, fade, r);
 }

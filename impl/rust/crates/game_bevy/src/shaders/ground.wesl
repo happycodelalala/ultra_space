@@ -10,6 +10,7 @@ import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    mesh_view_bindings::globals,
 };
 
 struct GroundDetail {
@@ -18,7 +19,7 @@ struct GroundDetail {
     strength: vec4<f32>,
     // xyz: the body's centre (render space)
     centre: vec4<f32>,
-    // x fade progress 0..1, y mode (+1 fading in, -1 fading out, 0 steady)
+    // x fade start time (s, wrapping hourly), y mode (+1 in, -1 out, 0 steady), w duration (s)
     fade: vec4<f32>,
 };
 
@@ -86,12 +87,22 @@ fn pattern(kind: f32, g: vec2<f32>, h: f32, fp: f32) -> f32 {
     return 1.0 + 0.06 * (noise2(g * 0.25) - 0.5) * keep(4.0, fp);
 }
 
+// The fade's progress 0..1 from its start time (fade.x, the clock that wraps every hour) over
+// its duration (fade.w).
+fn progress(fade: vec4<f32>) -> f32 {
+    var t = globals.time - fade.x;
+    if t < -1.0 {
+        t += 3600.0;
+    }
+    return clamp(t / max(fade.w, 1.0e-3), 0.0, 1.0);
+}
+
 // A dither value in [0, 1) per pixel (interleaved gradient noise: no visible grid).
 fn dither(pixel: vec2<f32>) -> f32 {
     return fract(52.9829189 * fract(dot(floor(pixel), vec2<f32>(0.06711056, 0.00583715))));
 }
 
-// Whether a pixel is drawn. `fade`: x progress 0..1, y mode (+1 fading in, -1 fading out,
+// Whether a pixel is drawn. `fade`: x start time, w duration, y mode (+1 fading in, -1 fading out,
 // 0 steady); `share` how much of the fade this pixel's thing has reached (the progress for the
 // ground; staggered per thing for the cover). Fading out uses the mirrored pattern, so an old
 // chunk and its replacements started together never both draw a pixel.
@@ -123,7 +134,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
             discard;
         }
     }
-    if !shown(in.position.xy, detail.fade, detail.fade.x) {
+    if !shown(in.position.xy, detail.fade, progress(detail.fade)) {
         discard;
     }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
