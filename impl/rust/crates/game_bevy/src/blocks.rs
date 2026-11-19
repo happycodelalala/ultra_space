@@ -732,6 +732,8 @@ struct BlockDraw {
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
     ground_material: Handle<GroundMaterial>,
+    /// One cover material for all chunks (measuring only, `ULTRA_SPACE_STREAM_SHARED`).
+    cover_shared: Option<Handle<CoverMaterial>>,
     glow: Handle<StandardMaterial>,
     windows: Handle<StandardMaterial>,
     lights: Vec<Entity>,
@@ -1073,6 +1075,7 @@ fn setup_blocks(
         solid,
         chunk_material,
         ground_material,
+        cover_shared: None,
         glow,
         windows,
         lights,
@@ -1100,7 +1103,12 @@ fn streaming() -> &'static bevy::tasks::TaskPool {
     POOL.get_or_init(|| {
         let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
         bevy::tasks::TaskPoolBuilder::new()
-            .num_threads((cores / 3).max(2))
+            .num_threads(
+                std::env::var("ULTRA_SPACE_STREAM_THREADS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or((cores / 3).max(2)),
+            )
             .thread_name("streaming".into())
             .build()
     })
@@ -1119,6 +1127,7 @@ fn overlaps(a: &LodKey, b: &LodKey) -> bool {
 /// A chunk's cover entity: a child of its ground in the same frame, its own material (its
 /// dissolve), casting shadows only near. `visible`: dissolving in from now on, else waiting
 /// unseen until its chunk shows.
+#[allow(clippy::too_many_arguments)]
 fn spawn_cover(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -1127,23 +1136,27 @@ fn spawn_cover(
     key: LodKey,
     mesh: Mesh,
     far: f32,
-) -> (Entity, Handle<CoverMaterial>) {
-    let material = materials.add(CoverMaterial {
-        base: StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 0.8,
-            reflectance: 0.2,
-            ..default()
-        },
-        extension: CoverFade {
-            // Thinning out only where the cover ends (the coarsest two levels).
-            fade: Vec4::new(
-                0.0,
-                0.0,
-                if key.0 + 1 >= TOP_LEVEL { far } else { 0.0 },
-                FADE as f32,
-            ),
-        },
+    shared: Option<&Handle<CoverMaterial>>,
+) -> (Entity, Option<Handle<CoverMaterial>>) {
+    let own = shared.is_none();
+    let material = shared.cloned().unwrap_or_else(|| {
+        materials.add(CoverMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                perceptual_roughness: 0.8,
+                reflectance: 0.2,
+                ..default()
+            },
+            extension: CoverFade {
+                // Thinning out only where the cover ends (the coarsest two levels).
+                fade: Vec4::new(
+                    0.0,
+                    0.0,
+                    if key.0 + 1 >= TOP_LEVEL { far } else { 0.0 },
+                    FADE as f32,
+                ),
+            },
+        })
     });
     let mut e = commands.spawn((
         Mesh3d(meshes.add(mesh)),
@@ -1155,7 +1168,7 @@ fn spawn_cover(
     if key.0 >= 2 {
         e.insert(bevy::light::NotShadowCaster);
     }
-    (e.id(), material)
+    (e.id(), own.then_some(material))
 }
 
 /// Puts a chunk away hidden (its cover being made is dropped), dropping the least recently
@@ -1286,6 +1299,20 @@ fn stream_chunks(
     // The clock the dissolve shaders read.
     let clock = time.elapsed_secs_wrapped();
     let with_cover = ground.cover.is_some();
+    // `ULTRA_SPACE_STREAM_SHARED=1`: one ground and one cover material for all chunks, no
+    // dissolves (for measuring what per-chunk materials cost).
+    let shared = std::env::var("ULTRA_SPACE_STREAM_SHARED").as_deref() == Ok("1");
+    if shared && draw.cover_shared.is_none() {
+        draw.cover_shared = Some(cover_materials.add(CoverMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                perceptual_roughness: 0.8,
+                reflectance: 0.2,
+                ..default()
+            },
+            extension: CoverFade { fade: Vec4::ZERO },
+        }));
+    }
     let far = (outer * 0.92) as f32;
     // The camera's motion (surface frame), smoothed over a fraction of a second.
     let system = &universe.0;
@@ -1388,7 +1415,10 @@ fn stream_chunks(
         );
     }
     // The chunks a moment ahead (when moving): built into the cache, after the wanted ones.
-    let moving = state.motion.velocity.length() > 3.0 && height < outer;
+    // (`ULTRA_SPACE_STREAM_AHEAD=0` builds nothing ahead: for measuring.)
+    let moving = state.motion.velocity.length() > 3.0
+        && height < outer
+        && std::env::var("ULTRA_SPACE_STREAM_AHEAD").as_deref() != Ok("0");
     if moving {
         let a = &mut state.ahead;
         if a.camera.is_none_or(|c| c.distance(ahead) > 5.0) {
@@ -1554,7 +1584,9 @@ fn stream_chunks(
                     Transform::default(),
                     Visibility::Hidden,
                 ));
-                if faceted {
+                if faceted && shared {
+                    e.insert(MeshMaterial3d(draw.ground_material.clone()));
+                } else if faceted {
                     let material = ground_materials
                         .get(&draw.ground_material)
                         .cloned()
@@ -1579,8 +1611,9 @@ fn stream_chunks(
                             key,
                             c,
                             far,
+                            draw.cover_shared.as_ref(),
                         );
-                        made.cover_material = Some(material);
+                        made.cover_material = material;
                         CoverSlot::Made(Some(child))
                     }
                     Some(None) => CoverSlot::Made(None),
@@ -1634,11 +1667,14 @@ fn stream_chunks(
             key,
             mesh,
             far,
+            draw.cover_shared.as_ref(),
         );
         m.cover = CoverSlot::Made(Some(child));
-        m.cover_material = Some(material.clone());
+        m.cover_material = material.clone();
         // Over a chunk already shown, the trees dissolve in one by one.
-        if m.shown {
+        if m.shown
+            && let Some(material) = material
+        {
             start_fade(
                 &mut ground_materials,
                 &mut cover_materials,
