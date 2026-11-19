@@ -75,8 +75,8 @@ const PATCHES_PER_TICK: usize = 8;
 
 type Job = Box<dyn FnOnce() + Send>;
 /// Block chunks finished by the workers: terrain generation, chunk, collision shape (none when
-/// the chunk is empty).
-type ChunksDone = Arc<Mutex<Vec<(u64, ChunkKey, Option<SharedShape>)>>>;
+/// the chunk is empty) and its ground cover's boxes (trunks, rocks, logs; none when bare).
+type ChunksDone = Arc<Mutex<Vec<(u64, ChunkKey, Option<SharedShape>, Option<SharedShape>)>>>;
 
 /// The shared pool that builds patches.
 fn workers() -> &'static Mutex<Sender<Job>> {
@@ -124,6 +124,8 @@ pub(crate) struct Ground {
     boxes: HashMap<(u32, u32), Patch>,
     /// The block ground's chunks near bodies (block-world.md), by chunk.
     chunks: HashMap<ChunkKey, Patch>,
+    /// Their ground cover's boxes (one compound collider per chunk that has any).
+    cover: HashMap<ChunkKey, ColliderHandle>,
     chunks_pending: HashSet<ChunkKey>,
     chunks_done: ChunksDone,
     pending: HashSet<TileKey>,
@@ -155,6 +157,7 @@ impl Ground {
             patches: HashMap::new(),
             boxes: HashMap::new(),
             chunks: HashMap::new(),
+            cover: HashMap::new(),
             chunks_pending: HashSet::new(),
             chunks_done: Arc::default(),
             pending: HashSet::new(),
@@ -271,8 +274,30 @@ impl Ground {
                     m.indices.chunks(3).map(|t| [t[0], t[1], t[2]]).collect();
                 SharedShape::trimesh(vertices, triangles).ok()
             });
+            // The ground cover's trunks, rocks and logs on the chunk (design/ground-cover.md):
+            // walkers bump into them, ships land between them.
+            let cover = blocks.cover.as_ref().and_then(|cw| {
+                let size = sim_planet::BlockGround::chunk_size();
+                let boxes = cw.boxes(
+                    &blocks,
+                    key.0,
+                    f64::from(key.1) * size,
+                    f64::from(key.2) * size,
+                    size,
+                );
+                let parts: Vec<(Pose, SharedShape)> = boxes
+                    .iter()
+                    .map(|b| {
+                        (
+                            Pose::from_parts(b.center, b.rotation),
+                            SharedShape::cuboid(b.half.x, b.half.y, b.half.z),
+                        )
+                    })
+                    .collect();
+                (!parts.is_empty()).then(|| SharedShape::compound(parts))
+            });
             if let Ok(mut done) = done.lock() {
-                done.push((generation, key, shape));
+                done.push((generation, key, shape, cover));
             }
         };
         if self.inline {
@@ -457,7 +482,7 @@ impl Ground {
             }
             Err(_) => Vec::new(),
         };
-        for (generation, key, shape) in finished {
+        for (generation, key, shape, cover) in finished {
             if generation != self.generation || !self.chunks_pending.remove(&key) {
                 continue;
             }
@@ -465,6 +490,21 @@ impl Ground {
                 && old.collider != ColliderHandle::invalid()
             {
                 world.remove_collider(old.collider);
+            }
+            if let Some(old) = self.cover.remove(&key) {
+                world.remove_collider(old);
+            }
+            if let Some(shape) = cover {
+                let builder = ColliderBuilder::new(shape)
+                    .density(0.0)
+                    .friction(GROUND_FRICTION)
+                    .collision_groups(InteractionGroups::new(
+                        GROUND_GROUP | STRUCTURE_GROUP,
+                        Group::ALL,
+                        InteractionTestMode::And,
+                    ));
+                self.cover
+                    .insert(key, world.insert_collider(builder, Some(self.body)));
             }
             let collider = shape.map_or(ColliderHandle::invalid(), |shape| {
                 let builder = ColliderBuilder::new(shape)
@@ -496,6 +536,9 @@ impl Ground {
                 && c.collider != ColliderHandle::invalid()
             {
                 world.remove_collider(c.collider);
+            }
+            if let Some(c) = self.cover.remove(&key) {
+                world.remove_collider(c);
             }
         }
         // Buildings wanted for the first time get their colliders; unwanted ones go.

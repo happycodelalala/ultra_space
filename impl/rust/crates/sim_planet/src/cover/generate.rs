@@ -594,37 +594,48 @@ fn baobab(v: &mut Vox, rng: &mut Rng, h: f64, w: f64) {
 }
 
 fn conifer(v: &mut Vox, rng: &mut Rng, h: f64, w: f64) {
-    trunk(v, dv(0.0, 0.0, h * 0.9), 0.25, 0.15, Role::Wood2);
-    let tiers = ((h / 1.6).round() as i32).clamp(4, 10);
+    // A spruce: a cone wide at the base tapering to a point, its edge a sawtooth of drooping
+    // tiers (each tier widest at its bottom), the tiers' spacing and spread a little uneven.
+    trunk(v, dv(0.0, 0.0, h * 0.85), 0.25, 0.12, Role::Wood2);
+    let z0 = h * rng.range(0.08, 0.16);
+    let tiers = ((h - z0) / rng.range(1.1, 1.5)).round().max(4.0) as i32;
+    let mut edges = vec![z0];
+    for t in 1..tiers {
+        let even = z0 + (h - z0) * f64::from(t) / f64::from(tiers);
+        edges.push(even + rng.range(-0.15, 0.15) * (h - z0) / f64::from(tiers));
+    }
+    edges.push(h);
+    let spread: Vec<f64> = (0..tiers).map(|_| rng.range(0.88, 1.1)).collect();
     let r0 = w * 0.5;
-    let step = (h * 0.82) / f64::from(tiers);
-    for t in 0..tiers {
-        let ft = f64::from(t) / f64::from(tiers);
-        let z0 = h * 0.12 + f64::from(t) * step;
-        // Each tier at least as tall as the step to the next, so tiers touch.
-        let rr0 = (r0 * (1.0 - 0.8 * ft) * rng.range(0.85, 1.1)).max(step + v.s);
-        let mut m = 0;
-        loop {
-            let rr = rr0 - f64::from(m) * v.s;
-            if rr < v.s * 0.8 || m > 12 {
-                break;
-            }
-            let k = ((z0 / v.s).floor() as i32) + m;
-            for i in v.r(-rr, rr) {
-                for j in v.r(-rr, rr) {
-                    let px = ((f64::from(i) + 0.5) * v.s).abs();
-                    let py = ((f64::from(j) + 0.5) * v.s).abs();
-                    if px.max(py) <= rr && px + py <= rr * 1.35 {
-                        v.put(IVec3::new(i, j, k), Role::Leaf);
-                    }
+    let k0 = (z0 / v.s).floor() as i32;
+    let k1 = (h / v.s).ceil() as i32;
+    for k in k0..k1 {
+        let z = (f64::from(k) + 0.5) * v.s;
+        let t = edges
+            .iter()
+            .rposition(|&e| e <= z)
+            .unwrap_or(0)
+            .min(tiers as usize - 1);
+        let (zb, zt) = (edges[t], edges[t + 1]);
+        // The cone at this height, each tier's skirt sticking out below and tucked in above.
+        let envelope = r0 * (1.0 - (z - z0) / (h - z0)).max(0.0) * spread[t];
+        let f = ((z - zb) / (zt - zb).max(1e-3)).clamp(0.0, 1.0);
+        let rr = envelope * (1.3 - 0.55 * f);
+        if rr < v.s * 1.2 {
+            // The leader: a spire one cell thin.
+            v.put(IVec3::new(0, 0, k), Role::Leaf);
+            continue;
+        }
+        for i in v.r(-rr, rr) {
+            for j in v.r(-rr, rr) {
+                let px = ((f64::from(i) + 0.5) * v.s).abs();
+                let py = ((f64::from(j) + 0.5) * v.s).abs();
+                if px.max(py) <= rr && px + py <= rr * 1.4 {
+                    v.put(IVec3::new(i, j, k), Role::Leaf);
                 }
             }
-            m += 1;
         }
     }
-    // The leader: one more course on the top tier.
-    let top = v.top();
-    v.fill(dv(-v.s, -v.s, top), dv(v.s, v.s, top + v.s), Role::LeafHi);
     v.shade(
         &[Role::Leaf],
         Role::LeafHi,
@@ -636,13 +647,32 @@ fn conifer(v: &mut Vox, rng: &mut Rng, h: f64, w: f64) {
 }
 
 fn pine(v: &mut Vox, rng: &mut Rng, h: f64, w: f64) {
+    // A pine: a tall bare trunk, a few short side branches, and an irregular, flat-bottomed
+    // crown of overlapping cushions in its upper third, widest low and narrowing to the top.
     let lean = polar(rng.angle(), rng.range(0.0, 0.05) * h, 0.0);
-    trunk(v, dv(0.0, 0.0, h * 0.85) + lean, 0.22, 0.15, Role::Wood2);
-    for _ in 0..rng.int(3, 5) {
-        let z = h * rng.range(0.55, 0.9);
-        let c = lean * (z / h) + polar(rng.angle(), w * rng.range(0.05, 0.2), z);
-        v.lobe(c, w * rng.range(0.22, 0.32), h * 0.09, Role::Leaf);
+    trunk(v, dv(0.0, 0.0, h * 0.9) + lean, 0.22, 0.14, Role::Wood2);
+    let base = h * rng.range(0.55, 0.65);
+    let n = rng.int(5, 8);
+    for k in 0..n {
+        let t = f64::from(k) / f64::from(n - 1);
+        let z = base + (h * 0.92 - base) * t;
+        let reach = w * 0.32 * (1.0 - 0.6 * t) * rng.range(0.7, 1.1);
+        let at = lean * (z / h);
+        let c = at + polar(rng.angle(), reach, z);
+        v.rod(at.with_z(z - 0.3), c, 0.1, 0.08, Role::Wood);
+        v.lobe(
+            c - dv(0.0, 0.0, 0.2),
+            w * (0.3 - 0.14 * t) * rng.range(0.85, 1.1),
+            h * 0.08,
+            Role::Leaf,
+        );
     }
+    v.lobe(
+        lean * 0.92 + dv(0.0, 0.0, h * 0.86),
+        w * 0.18,
+        h * 0.08,
+        Role::Leaf,
+    );
     leaves(v, 0.2);
 }
 

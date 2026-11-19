@@ -109,3 +109,37 @@ fn nothing_grows_in_the_sea_or_the_village() {
         assert!(cover.instances(g, key_at(g, sea, level)).is_empty());
     }
 }
+
+#[test]
+fn trunks_and_rocks_have_collision_boxes_on_the_ground() {
+    let (_, g) = tessera();
+    let cover = g.cover.as_ref().unwrap();
+    let mut boxes = Vec::new();
+    for (x, y) in [
+        (600.0, 300.0),
+        (632.0, 300.0),
+        (600.0, 332.0),
+        (-500.0, 800.0),
+    ] {
+        boxes.extend(cover.boxes(g, 0, x, y, 32.0));
+    }
+    assert!(!boxes.is_empty(), "the forest has trunks");
+    for b in &boxes {
+        // Upright, standing on the ground: the bottom within a metre or so of the surface.
+        let up = b.center.normalize();
+        let axis = b.rotation * glam::DVec3::Y;
+        let bottom = b.center - axis * b.half.y;
+        let (face, p) = g.locate(up);
+        let ground = g.facet_surface(face, p);
+        let h = bottom.length() - g.radius;
+        assert!(
+            (h - ground).abs() < 1.5,
+            "box bottom {h:.2} m, ground {ground:.2} m"
+        );
+        assert!(
+            b.half.min_element() > 0.04 && b.half.max_element() < 10.0,
+            "{:?}",
+            b.half
+        );
+    }
+}

@@ -109,6 +109,18 @@ struct Variant {
     height: f64,
     radius: f64,
     colours: [[f32; 3]; 13],
+    /// Collision: the trunk's radius (m; wood within 1.5 m of the ground), and the whole
+    /// model's box (centre and half extents, model frame, z up).
+    trunk: f64,
+    bounds: (DVec3, DVec3),
+}
+
+/// A collision box of the cover (surface frame): centre, rotation (its y axis up), half extents.
+#[derive(Clone, Copy, Debug)]
+pub struct CoverBox {
+    pub center: DVec3,
+    pub rotation: DQuat,
+    pub half: DVec3,
 }
 
 /// A placed thing.
@@ -338,15 +350,39 @@ impl CoverWorld {
         };
         let (vox, accent) = generate::build(&s.generator, s.block_m, &params, vseed);
         let up = ups(&s.generator);
-        let l1 = coarsen(&vox.cells);
-        let l2 = coarsen(&l1);
-        let l3 = coarsen(&l2);
-        let meshes = [
-            mesh_cells(&vox.cells, &up, s.block_m),
-            mesh_cells(&l1, &up, s.block_m * 2.0),
-            mesh_cells(&l2, &up, s.block_m * 4.0),
-            mesh_cells(&l3, &up, s.block_m * 8.0),
-        ];
+        // Coarser levels merge voxels 2x, 4x and 8x. A tree's wood stays at most one level
+        // coarser than the full model (a trunk as thick as a 2 m voxel reads as a post), and
+        // its crown is merged without the wood inside it.
+        let tree = TREES.contains(&s.generator.as_str()) || s.generator == "dead";
+        let is_wood = |r: u16| matches!(Role::from_index(r), Role::Wood | Role::Wood2);
+        let (wood, rest): (HashMap<IVec3, u16>, HashMap<IVec3, u16>) = if tree {
+            vox.cells.iter().partition(|(_, r)| is_wood(**r))
+        } else {
+            (HashMap::new(), vox.cells.clone())
+        };
+        let mut levels = vec![rest];
+        for k in 0..3 {
+            let next = coarsen(&levels[k]);
+            levels.push(next);
+        }
+        let wood1 = coarsen(&wood);
+        let meshes: [MeshData; 4] = std::array::from_fn(|k| {
+            let size = s.block_m * f64::from(1u32 << k);
+            let mut m = mesh_cells(&levels[k], &up, size);
+            if tree {
+                let w = if k == 0 {
+                    mesh_cells(&wood, &up, s.block_m)
+                } else {
+                    mesh_cells(&wood1, &up, s.block_m * 2.0)
+                };
+                let first = m.positions.len() as u32;
+                m.positions.extend(w.positions);
+                m.normals.extend(w.normals);
+                m.colours.extend(w.colours);
+                m.indices.extend(w.indices.iter().map(|i| i + first));
+            }
+            m
+        });
         let radius = vox
             .cells
             .keys()
@@ -389,11 +425,33 @@ impl CoverWorld {
         for role in Role::ALL {
             colours[role as usize] = palette.linear(&name(role));
         }
+        let s_m = s.block_m;
+        let centre = |c: &IVec3| (c.as_dvec3() + DVec3::splat(0.5)) * s_m;
+        let trunk = vox
+            .cells
+            .iter()
+            .filter(|(c, r)| {
+                matches!(Role::from_index(**r), Role::Wood | Role::Wood2)
+                    && (0.0..1.5).contains(&centre(c).z)
+            })
+            .map(|(c, _)| centre(c).truncate().length() + s_m * 0.5)
+            .fold(0.0, f64::max)
+            .clamp(0.1, 1.5);
+        let (lo, hi) = vox.cells.keys().fold(
+            (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN)),
+            |(lo, hi), c| {
+                let p = c.as_dvec3() * s_m;
+                (lo.min(p), hi.max(p + DVec3::splat(s_m)))
+            },
+        );
+        let lo = lo.with_z(lo.z.max(0.0));
         Variant {
             meshes,
             height: vox.top(),
             radius,
             colours,
+            trunk,
+            bounds: ((lo + hi) * 0.5, (hi - lo).max(DVec3::splat(0.05)) * 0.5),
         }
     }
 
@@ -676,6 +734,78 @@ impl CoverWorld {
         out
     }
 
+    /// An instance's frame in the surface frame: its anchor (the model's origin) and axes
+    /// (e, n across, up).
+    fn frame(&self, g: &BlockGround, face: u8, inst: &Instance) -> (DVec3, DVec3, DVec3, DVec3) {
+        let sp = &self.species[inst.species as usize];
+        let var = &self.variants[inst.species as usize][inst.variant as usize];
+        let dir = g.dir_on(face, inst.at.x, inst.at.y);
+        let up = inst.up;
+        let (e0, _) = g.face_axes(face, dir);
+        let e = (e0 - up * e0.dot(up)).normalize();
+        let n = up.cross(e);
+        let rot = DQuat::from_axis_angle(up, inst.yaw);
+        let (e, n) = (rot * e, rot * n);
+        let sink = sp.sink * var.height * inst.scale;
+        (dir * (g.radius + inst.height) - up * sink, e, n, up)
+    }
+
+    /// Voxel level for species `i` in chunks of `level`: each voxel about 4 px at the chunk's
+    /// nearest distance (a level-L chunk is drawn from about 42·2^L m at 8 px per column).
+    fn voxel_level(&self, i: usize, level: u8) -> usize {
+        let want = 0.125 * f64::from(1u32 << level);
+        let ratio = want / self.species[i].block_m;
+        if ratio < 2.0 {
+            0
+        } else {
+            (ratio.log2().floor() as usize).min(3)
+        }
+    }
+
+    /// Collision boxes of the cover in the square [x0, x0 + size)² of `face` (m): trunks of
+    /// trees and cacti, and the whole of rocks, logs, stumps and mounds.
+    pub fn boxes(&self, g: &BlockGround, face: u8, x0: f64, y0: f64, size: f64) -> Vec<CoverBox> {
+        let l0 = BlockGround::lod_size(0);
+        let (a0, a1) = ((x0 / l0).floor() as i32, ((x0 + size) / l0).ceil() as i32);
+        let (b0, b1) = ((y0 / l0).floor() as i32, ((y0 + size) / l0).ceil() as i32);
+        let mut out = Vec::new();
+        for ci in a0..a1 {
+            for cj in b0..b1 {
+                for inst in self.instances(g, (0, face, ci, cj)) {
+                    if inst.at.x < x0
+                        || inst.at.y < y0
+                        || inst.at.x >= x0 + size
+                        || inst.at.y >= y0 + size
+                    {
+                        continue;
+                    }
+                    let sp = &self.species[inst.species as usize];
+                    let var = &self.variants[inst.species as usize][inst.variant as usize];
+                    let sc = inst.scale;
+                    let (anchor, e, n, up) = self.frame(g, face, &inst);
+                    let (centre, half) = match sp.collider.as_str() {
+                        "trunk" => {
+                            let h = (var.height * sc * 0.5).clamp(1.5, 8.0);
+                            let r = var.trunk * sc;
+                            (DVec3::new(0.0, 0.0, h * 0.5), DVec3::new(r, r, h * 0.5))
+                        }
+                        "box" => (
+                            var.bounds.0 * sc,
+                            var.bounds.1 * sc * DVec3::new(0.85, 0.85, 1.0),
+                        ),
+                        _ => continue,
+                    };
+                    out.push(CoverBox {
+                        center: anchor + e * centre.x + n * centre.y + up * centre.z,
+                        rotation: DQuat::from_mat3(&glam::DMat3::from_cols(e, up, -n)),
+                        half: DVec3::new(half.x, half.z, half.y),
+                    });
+                }
+            }
+        }
+        out
+    }
+
     /// The cover of chunk `key` as one mesh in the chunk's own frame (the ground chunk's), or
     /// `None` when it has nothing.
     pub fn chunk_mesh(&self, g: &BlockGround, key: LodKey) -> Option<CoverMesh> {
@@ -685,32 +815,18 @@ impl CoverWorld {
         }
         let (origin, basis) = g.chunk_frame(key);
         let inverse = basis.inverse();
-        // Voxels merged with the level: each about the size a ground cell is drawn at.
-        let lod = usize::from(key.0.min(3));
         let face = key.1;
         let mut m = CoverMesh {
             instances: instances.len(),
             ..CoverMesh::default()
         };
         for inst in &instances {
-            let sp = &self.species[inst.species as usize];
             let var = &self.variants[inst.species as usize][inst.variant as usize];
-            // Big trees one voxel level coarser beyond the nearest chunks (their voxels still
-            // cover several pixels there).
-            let big = sp.height_m[1] >= 8.0 && key.0 >= 1;
-            let mesh = &var.meshes[(lod + usize::from(big)).min(3)];
+            let mesh = &var.meshes[self.voxel_level(inst.species as usize, key.0)];
             if mesh.is_empty() {
                 continue;
             }
-            let dir = g.dir_on(face, inst.at.x, inst.at.y);
-            let up = inst.up;
-            let (e0, _) = g.face_axes(face, dir);
-            let e = (e0 - up * e0.dot(up)).normalize();
-            let n = up.cross(e);
-            let rot = DQuat::from_axis_angle(up, inst.yaw);
-            let (e, n) = (rot * e, rot * n);
-            let sink = sp.sink * var.height * inst.scale;
-            let anchor = dir * (g.radius + inst.height) - up * sink;
+            let (anchor, e, n, up) = self.frame(g, face, inst);
             let to_chunk = |v: DVec3| (inverse * (v - origin)).as_vec3();
             // Colours per role for this instance.
             let mut colours = [[0.0f32; 4]; 13];

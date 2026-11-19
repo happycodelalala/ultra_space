@@ -152,13 +152,18 @@ to savanna).
 
 ## 5. Levels, budgets and drawing
 
-| Ground level | Chunk side | Drawn | Voxels | Shadows |
+| Ground level | Chunk side | Drawn | Voxels (0.25 m species) | Shadows |
 |---|---|---|---|---|
-| 0 | 32 m | everything (≥ 0.25 m) | full | yes |
-| 1 | 64 m | ≥ 0.5 m (no grass, flowers, pebbles) | full | yes |
+| 0 | 32 m | everything | full | yes |
+| 1 | 64 m | ≥ 0.7 m (no grass, flowers, pebbles) | full | yes |
 | 2 | 128 m | ≥ 1 m (shrubs, trees, rocks, logs) | merged 2× | no |
-| 3 | 256 m | ≥ 2 m (trees, boulders, outcrops, cacti), dense stands thinned to ~½ | merged 4× | no |
-| 4 | 512 m | ≥ 4 m (trees, outcrops), dense stands thinned to ~¼ | merged 4× | no |
+| 3 | 256 m | ≥ 2 m (trees, boulders, outcrops, cacti), dense stands thinned | merged 4× | no |
+| 4 | 512 m | ≥ 4 m (trees, outcrops), dense stands thinned more | merged 8× | no |
+
+The voxel level follows size on screen: each merged voxel covers about 4 px at the nearest
+distance its chunk is drawn at (`voxel_level`), so species built from 0.5 m voxels merge one
+level later. A tree's wood is never merged more than 2× (a trunk as thick as a 2 m voxel reads
+as a post); only its crown is merged further.
 
 First budget: about 6 M triangles of cover in view at 2560 × 1552, measured in `blocks-perf`;
 thinning and the reach of the last level are the knobs (`ULTRA_SPACE_COVER_DENSITY` scales
@@ -184,7 +189,9 @@ camera are the same merged meshes (no separate grass system for now); wind sway 
    instances for the same place at every level, none in the sea or the village, densities per
    biome in range).
 3. Merged chunk meshes with tints and voxel LOD; streamed with the ground chunks in the game.
-4. Collision boxes for trunks, rocks, logs and cacti near bodies.
+4. Collision boxes for trunks, rocks, logs and cacti near bodies (built with the ground's
+   collision chunks round each body, one compound collider per chunk, in the structure group so
+   walkers bump into them).
 5. A round: village, Rook Vale, a forest, a taiga, a desert, a savanna and a tundra view, a
    coast, and `blocks-perf` alone at 2560 × 1552.
 
