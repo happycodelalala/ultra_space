@@ -123,20 +123,22 @@ them). "Gen" is the generator.
 A recipe per biome (`Cover` of the world, globe/generate.rs), each a list of species with a
 density (per hectare), a share, a clustering scale and limits; plus three recipes that apply on
 top of any biome by place: **shore** (0–3 m above the sea), **steep** (slope over ~35°) and
-**high** (above the tree line). Densities are first targets, tuned in the review rounds.
+**high** (above the tree line). Densities are per hectare before clustering, tuned in the review rounds (2026-11-18: cut to
+about a fifth after the first rounds read as carpets of trees); tree stands use a sharp
+clustering step, so about 40 % of wooded land is clearings and the stands read from the air.
 
 | Biome | Trees (per ha) | Shrubs and plants | Ground and rocks |
 |---|---|---|---|
-| Grass (temperate grassland) | oak, birch in copses (8, clustered) | shrub, berry bush along copses (20) | grass tufts (dense), meadow flowers in patches, rocks (few) |
-| Forest (temperate) | oak, beech, birch stands (300, stands and clearings) | shrubs at edges, ferns under canopy (200) | logs, stumps, mushrooms, mossy rocks; flowers in clearings |
-| Seasonal (tropical dry forest) | tropical broadleaf, palm (150) | bamboo clumps, shrubs (60) | dry grass, rocks |
-| Rainforest (temperate) | spruce, beech (350) | ferns (dense), shrubs | logs, mossy rocks, mushrooms |
-| Jungle | tropical broadleaf (300), jungle giant (rare), palm | ferns, bamboo, shrubs (dense) | logs, mossy rocks |
-| Savanna | acacia (6, spread), baobab (rare) | pad cactus at the dry edge, sagebrush | dry grass (dense), termite mounds, kopje boulders |
+| Grass (temperate grassland) | oak, birch in copses (5, clustered) | shrub, berry bush along copses (20) | grass tufts (dense), meadow flowers in patches, rocks (few) |
+| Forest (temperate) | oak, beech, birch stands (65, stands and clearings) | shrubs at edges, ferns under canopy (200) | logs, stumps, mushrooms, mossy rocks; flowers in clearings |
+| Seasonal (tropical dry forest) | tropical broadleaf, palm (30) | bamboo clumps, shrubs (60) | dry grass, rocks |
+| Rainforest (temperate) | spruce, beech (55) | ferns (dense), shrubs | logs, mossy rocks, mushrooms |
+| Jungle | tropical broadleaf (35), jungle giant (rare), palm | ferns, bamboo, shrubs (dense) | logs, mossy rocks |
+| Savanna | acacia (4, spread), baobab (rare) | pad cactus at the dry edge, sagebrush | dry grass (dense), termite mounds, kopje boulders |
 | Steppe | dead tree (rare) | sagebrush (40) | dry grass (dense), rocks |
 | Desert (hot) | — | column cactus (3), pad cactus (5), sagebrush (5) | pebbles, rocks, boulders |
 | Cold desert | — | sagebrush, dwarf shrub (sparse) | pebbles, rocks, boulders |
-| Taiga | spruce, pine, birch stands (250) | dwarf shrub, berry bush | logs, mossy rocks, mushrooms |
+| Taiga | spruce, pine, birch stands (75) | dwarf shrub, berry bush | logs, mossy rocks, mushrooms |
 | Tundra | krummholz near the tree line, dead tree (rare) | dwarf shrub (dense) | rocks, boulders (erratics), pebbles |
 | Snow, ice | — | — | rocks poking through, ice chunks |
 | Salt flat | — | — | salt crust |

@@ -618,8 +618,11 @@ impl CoverWorld {
                         ),
                         salt ^ 0xC1,
                     );
-                    let cluster = (1.0 - e.cluster.strength)
-                        + e.cluster.strength * 2.0 * (0.5 + 0.9 * n).clamp(0.0, 1.0);
+                    // Stands and real clearings: a sharp step of the noise, so at full strength
+                    // about 40 % of the land is open and the rest about twice as dense.
+                    let t = ((n + 0.15) / 0.5).clamp(0.0, 1.0);
+                    let stand = t * t * (3.0 - 2.0 * t) * 1.75;
+                    let cluster = (1.0 - e.cluster.strength) + e.cluster.strength * stand;
                     let m = gradient(
                         DVec3::new(p.x / 450.0, p.y / 450.0, f64::from(face) + 7.0),
                         salt ^ 0x5A,
