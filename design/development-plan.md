@@ -606,8 +606,10 @@ views of the village; anything off outside them is a known issue, not a new task
 simulation (5.7a), the ground streamed planet-wide (5.7b) and, after comparing blocks and facets
 in the game, the faceted density ground adopted (5.7c; terrain blocks 50 cm remain an option);
 the village's ground is the game's own layout (`content/data/village_layouts`) on the real ground;
-test rounds at 2560 × 1552. Next: confirm 5.7c in a round (no seams or flicker), then 5.8
-(digging and placing on the faceted ground), then 5.9 (review).
+test rounds at 2560 × 1552. 5.7c confirmed (q0117: no seams or flicker). 5.7d done (q0122):
+36 generated species planet-wide with collision near bodies; `blocks-perf` 83 fps with cover,
+99 without (Balanced power plan, plugged in). Next: 5.8 (digging and placing on the faceted
+ground), then 5.9 (review).
 
 - **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
   also needs a neighbour along its edge), a mesher merging flat faces and slope planes and
@@ -657,8 +659,7 @@ test rounds at 2560 × 1552. Next: confirm 5.7c in a round (no seams or flicker)
 
 Known issues (not tasks): the inspector doesn't show the region yet; where two faces of the
 ground grid meet (about 72 km from the village) the chunks of each face mesh alone (the tiles
-beneath fill any crack); no ground cover yet (trees, bushes and rocks only in the village;
-the biome overhaul later in this batch); the far tiles have no detail patterns (they fade out
+beneath fill any crack); the far tiles have no detail patterns (they fade out
 there anyway); blocks aren't made on a body of plains (the plains mode is terrain only);
 visual rounds' frame rates come from several windows sharing the GPU (only the `-perf` tests
 run alone); the player's ship is the
