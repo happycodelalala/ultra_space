@@ -634,10 +634,18 @@ impl Made {
     }
 }
 
-/// A chunk dissolving out (it goes to the cache when done).
+/// A chunk's ground and cover materials.
+type ChunkMaterials = (
+    Option<Handle<GroundMaterial>>,
+    Option<Handle<CoverMaterial>>,
+);
+
+/// A dissolve: out (the chunk goes to the cache when done) or in (its materials are made
+/// steady when done, so their shaders drop the discard again).
 struct Fading {
     key: LodKey,
     start: f64,
+    steady: Option<ChunkMaterials>,
 }
 
 /// Starts a dissolve (in or out) of a chunk's ground and cover materials at `start` (the
@@ -745,8 +753,43 @@ fn bevy_mesh(m: &MeshData, colour: impl Fn(u16) -> [f32; 4]) -> Mesh {
 /// The faceted ground's material: the standard one with procedural detail (shaders/ground.wesl).
 pub type GroundMaterial = ExtendedMaterial<StandardMaterial, GroundDetail>;
 
+/// Whether a ground or cover material is dissolving (or thinning): only then are its shaders
+/// built with the discard (shader def `FADING`); steady ones keep the GPU's early depth test.
+#[repr(C)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+pub struct FadeKey {
+    fading: bool,
+}
+
+impl From<&GroundDetail> for FadeKey {
+    fn from(m: &GroundDetail) -> Self {
+        Self {
+            fading: m.fade.y != 0.0,
+        }
+    }
+}
+
+impl From<&CoverFade> for FadeKey {
+    fn from(m: &CoverFade) -> Self {
+        Self {
+            fading: m.fade.y != 0.0 || m.fade.z > 0.0,
+        }
+    }
+}
+
+/// Adds `FADING` to a fading material's shaders.
+fn fading_def(
+    descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+    fading: bool,
+) {
+    if fading && let Some(f) = descriptor.fragment.as_mut() {
+        f.shader_defs.push("FADING".into());
+    }
+}
+
 /// The ground detail's settings.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+#[bind_group_data(FadeKey)]
 pub struct GroundDetail {
     /// x: pattern strength (0 none, 1 default); y: the radius round the camera within which the
     /// chunks are drawn and the far tiles hidden (m; 0 everywhere).
@@ -766,6 +809,7 @@ pub type CoverMaterial = ExtendedMaterial<StandardMaterial, CoverFade>;
 
 /// The cover's dissolve settings.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+#[bind_group_data(FadeKey)]
 pub struct CoverFade {
     /// x progress 0..1, y mode (+1 in, -1 out, 0 steady), z the distance things thin out
     /// towards (m; 0 none).
@@ -781,6 +825,16 @@ impl MaterialExtension for CoverFade {
     fn prepass_fragment_shader() -> ShaderRef {
         "embedded://ultra_space/shaders/cover_prepass.wesl".into()
     }
+
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialExtensionPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::mesh::MeshVertexBufferLayoutRef,
+        key: bevy::pbr::MaterialExtensionKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        fading_def(descriptor, key.bind_group_data.fading);
+        Ok(())
+    }
 }
 
 impl MaterialExtension for GroundDetail {
@@ -790,6 +844,16 @@ impl MaterialExtension for GroundDetail {
 
     fn prepass_fragment_shader() -> ShaderRef {
         GROUND_PREPASS_SHADER.into()
+    }
+
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialExtensionPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::mesh::MeshVertexBufferLayoutRef,
+        key: bevy::pbr::MaterialExtensionKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        fading_def(descriptor, key.bind_group_data.fading);
+        Ok(())
     }
 }
 
@@ -1072,7 +1136,13 @@ fn spawn_cover(
             ..default()
         },
         extension: CoverFade {
-            fade: Vec4::new(0.0, 0.0, far, FADE as f32),
+            // Thinning out only where the cover ends (the coarsest two levels).
+            fade: Vec4::new(
+                0.0,
+                0.0,
+                if key.0 + 1 >= TOP_LEVEL { far } else { 0.0 },
+                FADE as f32,
+            ),
         },
     });
     let mut e = commands.spawn((
@@ -1577,6 +1647,11 @@ fn stream_chunks(
                 clock,
                 1.0,
             );
+            draw.fading.push(Fading {
+                key,
+                start: now,
+                steady: Some((None, Some(material))),
+            });
         }
     }
     // The ground is ready out to the nearest wanted chunk not yet made whose ground no chunk
@@ -1634,6 +1709,7 @@ fn stream_chunks(
             draw.fading.push(Fading {
                 key: *key,
                 start: now,
+                steady: None,
             });
             draw.leaving.insert(*key, m);
         } else {
@@ -1691,6 +1767,13 @@ fn stream_chunks(
             clock,
             mode,
         );
+        if mode != 0.0 {
+            draw.fading.push(Fading {
+                key,
+                start: now,
+                steady: Some((m.material.clone(), cover)),
+            });
+        }
     }
     // Late chunks: wanted, in view, not shown yet (how long they waited is logged).
     let mut late = 0usize;
@@ -1768,21 +1851,39 @@ fn stream_chunks(
         .retain(|k, _| wanted.contains(k) || ahead_wanted.contains(k));
 }
 
-/// Chunks dissolved out go to the cache (the shaders run the dissolves themselves).
-fn fade_chunks(mut commands: Commands, draw: Option<ResMut<BlockDraw>>, real: Res<Time<Real>>) {
+/// Ends dissolves (the shaders run them): chunks dissolved out go to the cache, ones dissolved
+/// in become steady.
+fn fade_chunks(
+    mut commands: Commands,
+    draw: Option<ResMut<BlockDraw>>,
+    real: Res<Time<Real>>,
+    mut ground_materials: ResMut<Assets<GroundMaterial>>,
+    mut cover_materials: ResMut<Assets<CoverMaterial>>,
+) {
     let Some(mut draw) = draw else { return };
     let draw = &mut *draw;
     let now = real.elapsed_secs_f64();
-    let done: Vec<LodKey> = draw
-        .fading
-        .iter()
-        .filter(|f| now - f.start >= FADE)
-        .map(|f| f.key)
-        .collect();
-    draw.fading.retain(|f| now - f.start < FADE);
-    for key in done {
-        if let Some(m) = draw.leaving.remove(&key) {
-            cache_put(draw, &mut commands, key, m, now);
+    let (done, keep): (Vec<Fading>, Vec<Fading>) = std::mem::take(&mut draw.fading)
+        .into_iter()
+        .partition(|f| now - f.start >= FADE);
+    draw.fading = keep;
+    for f in done {
+        match f.steady {
+            Some((ground, cover)) => {
+                start_fade(
+                    &mut ground_materials,
+                    &mut cover_materials,
+                    ground.as_ref(),
+                    cover.as_ref(),
+                    0.0,
+                    0.0,
+                );
+            }
+            None => {
+                if let Some(m) = draw.leaving.remove(&f.key) {
+                    cache_put(draw, &mut commands, f.key, m, now);
+                }
+            }
         }
     }
 }

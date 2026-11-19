@@ -64,8 +64,10 @@ fn outside(p: vec3<f32>) -> bool {
 @if(PREPASS_FRAGMENT)
 @fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
-    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, progress(detail.fade)) {
-        discard;
+    @if(FADING) {
+        if !shown(in.position.xy, detail.fade, progress(detail.fade)) {
+            discard;
+        }
     }
     var out: FragmentOutput;
 @if(NORMAL_PREPASS)
@@ -75,7 +77,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 @else
 @fragment
 fn fragment(in: VertexOutput) {
-    if outside(in.world_position.xyz) || !shown(in.position.xy, detail.fade, progress(detail.fade)) {
-        discard;
+    @if(FADING) {
+        if !shown(in.position.xy, detail.fade, progress(detail.fade)) {
+            discard;
+        }
     }
 }

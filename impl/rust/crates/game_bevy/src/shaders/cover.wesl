@@ -74,8 +74,10 @@ fn cover_drawn(p: vec3<f32>, pixel: vec2<f32>, fade: vec4<f32>, r: f32) -> bool 
 
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
-    if !cover_drawn(in.world_position.xyz, in.position.xy, cover.fade, in.uv.x) {
-        discard;
+    @if(FADING) {
+        if !cover_drawn(in.world_position.xyz, in.position.xy, cover.fade, in.uv.x) {
+            discard;
+        }
     }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     var out: FragmentOutput;

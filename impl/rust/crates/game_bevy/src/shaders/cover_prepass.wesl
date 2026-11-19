@@ -78,8 +78,10 @@ fn drawn(in: VertexOutput) -> bool {
 @if(PREPASS_FRAGMENT)
 @fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
-    if !drawn(in) {
-        discard;
+    @if(FADING) {
+        if !drawn(in) {
+            discard;
+        }
     }
     var out: FragmentOutput;
 @if(NORMAL_PREPASS)
@@ -89,7 +91,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 @else
 @fragment
 fn fragment(in: VertexOutput) {
-    if !drawn(in) {
-        discard;
+    @if(FADING) {
+        if !drawn(in) {
+            discard;
+        }
     }
 }
