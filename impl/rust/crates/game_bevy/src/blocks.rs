@@ -70,14 +70,22 @@ struct ChunkPlan {
     wanted: HashSet<LodKey>,
     centres: HashMap<LodKey, DVec3>,
 }
+
 /// No collision boxes this close to the ship's landing spot (m).
 const SHIP_CLEAR: f64 = 8.0;
-/// Chunk meshes being made at once.
-const CHUNKS_IN_FLIGHT: usize = 64;
 /// Most finished chunks shown per frame, and most triangles uploaded per frame (the first
 /// chunk always goes).
 const CHUNKS_PER_FRAME: usize = 16;
 const TRIANGLES_PER_FRAME: usize = 400_000;
+/// How long a chunk and its cover take to dissolve in or out (s).
+const FADE: f64 = 0.6;
+/// Chunks kept after they go, hidden, for turning back or circling (triangles).
+const CACHE_TRIANGLES: usize = 1_500_000;
+/// How far ahead the camera's path is predicted, for ordering the work and building ahead (s).
+const LOOK_AHEAD: f64 = 1.5;
+/// Near the camera a new chunk over bare ground shows at once (the far tiles under it are
+/// hidden there, so a dissolve would show holes) (m).
+const SHOW_AT_ONCE: f64 = 60.0;
 
 pub struct BlocksPlugin;
 
@@ -85,7 +93,10 @@ impl Plugin for BlocksPlugin {
     fn build(&self, app: &mut App) {
         bevy::asset::embedded_asset!(app, "shaders/ground.wesl");
         bevy::asset::embedded_asset!(app, "shaders/ground_prepass.wesl");
+        bevy::asset::embedded_asset!(app, "shaders/cover.wesl");
+        bevy::asset::embedded_asset!(app, "shaders/cover_prepass.wesl");
         app.add_plugins(bevy::pbr::MaterialPlugin::<GroundMaterial>::default())
+            .add_plugins(bevy::pbr::MaterialPlugin::<CoverMaterial>::default())
             .init_resource::<BlockCoverage>()
             .add_systems(OnEnter(crate::universe::GameState::Running), setup_blocks)
             .add_systems(
@@ -93,6 +104,7 @@ impl Plugin for BlocksPlugin {
                 (
                     block_focus,
                     stream_chunks,
+                    fade_chunks,
                     place_root,
                     place_chunks,
                     night_glow,
@@ -594,7 +606,54 @@ pub struct BlockCoverage(pub f64);
 /// A chunk made on a worker: its mesh, pose (origin, basis; surface frame), the time it took
 /// (ms), its stages (heights, cells and colours, meshing; ms) and its ground cover (in the same
 /// frame).
-type MadeChunk = (Mesh, DVec3, DQuat, f64, [f32; 3], Option<Mesh>);
+type MadeChunk = (Mesh, DVec3, DQuat, f64, [f32; 3], Option<Option<Mesh>>);
+
+/// A chunk's ground cover, being made or made (its entity; none when bare).
+enum CoverSlot {
+    /// Not started (or the body has no cover).
+    Waiting,
+    Making(Task<Option<Mesh>>),
+    Made(Option<Entity>),
+}
+
+/// A chunk made: its ground entity (none where there is nothing), per-chunk materials (they
+/// carry its dissolve), its cover, its triangles, and whether it is shown.
+struct Made {
+    entity: Option<Entity>,
+    material: Option<Handle<GroundMaterial>>,
+    cover: CoverSlot,
+    cover_material: Option<Handle<CoverMaterial>>,
+    triangles: usize,
+    shown: bool,
+}
+
+impl Made {
+    /// Whether it can take over from the chunks it replaces (its cover made too, if any).
+    fn ready(&self, with_cover: bool) -> bool {
+        !with_cover || self.entity.is_none() || matches!(self.cover, CoverSlot::Made(_))
+    }
+}
+
+/// A dissolve in progress.
+struct Fading {
+    key: LodKey,
+    ground: Option<Handle<GroundMaterial>>,
+    cover: Option<Handle<CoverMaterial>>,
+    start: f64,
+    out: bool,
+}
+
+/// The camera's motion, smoothed (surface frame): for ordering the work by when each chunk
+/// will be seen, whatever moves the camera.
+#[derive(Default)]
+struct Motion {
+    at: Option<DVec3>,
+    forward: DVec3,
+    velocity: DVec3,
+    /// Angular velocity of the view direction (rad/s, axis).
+    turn: DVec3,
+    time: f64,
+}
 
 /// A chunk's ground cover as a Bevy mesh (vertex colours final).
 fn cover_mesh(c: sim_planet::cover::CoverMesh) -> Mesh {
@@ -605,6 +664,7 @@ fn cover_mesh(c: sim_planet::cover::CoverMesh) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, c.positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, c.normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, c.colours)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, c.seeds)
     .with_inserted_indices(Indices::U32(c.indices))
 }
 
@@ -619,17 +679,29 @@ struct StreamStats {
     worst_ms: f64,
     triangles: usize,
     stages: [f64; 3],
+    frames: usize,
+    late_frames: usize,
+    late_max: usize,
+    waits: usize,
+    wait_sum: f64,
+    wait_max: f64,
 }
 
 /// What is drawn: the root, chunks shown and being made, the materials.
 #[derive(Resource)]
 struct BlockDraw {
     root: Entity,
-    chunks: HashMap<LodKey, Option<Entity>>,
-    /// Chunks made but not shown yet: they take over from the chunks they replace all at once,
-    /// so old and new ground never overlap (they would flicker against each other).
-    hidden: HashSet<LodKey>,
+    /// Chunks wanted and made (shown, or hidden until they take over from the chunks they
+    /// replace: old and new dissolve into each other).
+    chunks: HashMap<LodKey, Made>,
+    /// Chunks gone or built ahead, hidden, kept for turning back (least recently used go).
+    cache: HashMap<LodKey, (Made, f64)>,
+    cache_triangles: usize,
+    /// Chunks being made: wanted ones, and ones built ahead along the camera's path.
     pending: HashMap<LodKey, Task<Option<MadeChunk>>>,
+    fading: Vec<Fading>,
+    /// Old chunks dissolving out (their entities go to the cache when done).
+    leaving: HashMap<LodKey, Made>,
     solid: Handle<StandardMaterial>,
     chunk_material: Handle<StandardMaterial>,
     ground_material: Handle<GroundMaterial>,
@@ -664,6 +736,32 @@ pub struct GroundDetail {
     /// xyz: the body's centre (render space).
     #[uniform(100)]
     pub centre: Vec4,
+    /// x dissolve progress 0..1, y mode (+1 fading in, -1 fading out, 0 steady).
+    #[uniform(100)]
+    pub fade: Vec4,
+}
+
+/// The ground cover's material: the standard one with vertex colours, dissolved in and out with
+/// its chunk thing by thing and thinned out far away (shaders/cover.wesl).
+pub type CoverMaterial = ExtendedMaterial<StandardMaterial, CoverFade>;
+
+/// The cover's dissolve settings.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct CoverFade {
+    /// x progress 0..1, y mode (+1 in, -1 out, 0 steady), z the distance things thin out
+    /// towards (m; 0 none).
+    #[uniform(100)]
+    pub fade: Vec4,
+}
+
+impl MaterialExtension for CoverFade {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://ultra_space/shaders/cover.wesl".into()
+    }
+
+    fn prepass_fragment_shader() -> ShaderRef {
+        "embedded://ultra_space/shaders/cover_prepass.wesl".into()
+    }
 }
 
 impl MaterialExtension for GroundDetail {
@@ -767,6 +865,7 @@ fn setup_blocks(
         extension: GroundDetail {
             strength: Vec4::new(detail, 0.0, 0.0, 0.0),
             centre: Vec4::ZERO,
+            fade: Vec4::ZERO,
         },
     });
     let solid = materials.add(StandardMaterial {
@@ -883,8 +982,11 @@ fn setup_blocks(
     commands.insert_resource(BlockDraw {
         root,
         chunks: HashMap::new(),
-        hidden: HashSet::new(),
+        cache: HashMap::new(),
+        cache_triangles: 0,
         pending: HashMap::new(),
+        fading: Vec::new(),
+        leaving: HashMap::new(),
         solid,
         chunk_material,
         ground_material,
@@ -894,7 +996,119 @@ fn setup_blocks(
     });
 }
 
-/// Chunks within reach of the camera are made on workers and shown; far ones go.
+/// The streamer's own state across frames.
+#[derive(Default)]
+struct StreamState {
+    plan: ChunkPlan,
+    /// The chunks the camera will want a moment ahead (built ahead into the cache).
+    ahead: ChunkPlan,
+    stats: StreamStats,
+    motion: Motion,
+    /// When each wanted chunk not yet shown was first wanted (s).
+    since: HashMap<LodKey, f64>,
+    last_count: usize,
+}
+
+/// The streaming worker pool: most of the cores, the generation pool and the frame keep the
+/// rest. Few jobs are handed to it at once, so the most urgent chunk is always next.
+fn streaming() -> &'static bevy::tasks::TaskPool {
+    static POOL: std::sync::OnceLock<bevy::tasks::TaskPool> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+        bevy::tasks::TaskPoolBuilder::new()
+            .num_threads(cores.saturating_sub(4).max(2))
+            .thread_name("streaming".into())
+            .build()
+    })
+}
+
+/// Whether two chunks of one face overlap (one contains the other).
+fn overlaps(a: &LodKey, b: &LodKey) -> bool {
+    if a.1 != b.1 {
+        return false;
+    }
+    let (hi, lo) = if a.0 >= b.0 { (a, b) } else { (b, a) };
+    let shift = i32::from(hi.0 - lo.0);
+    lo.2 >> shift == hi.2 && lo.3 >> shift == hi.3
+}
+
+/// A chunk's cover entity: a child of its ground in the same frame, its own material (its
+/// dissolve), casting shadows only near. `visible`: dissolving in from now on, else waiting
+/// unseen until its chunk shows.
+fn spawn_cover(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<CoverMaterial>,
+    parent: Entity,
+    key: LodKey,
+    mesh: Mesh,
+    far: f32,
+) -> (Entity, Handle<CoverMaterial>) {
+    let material = materials.add(CoverMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.8,
+            reflectance: 0.2,
+            ..default()
+        },
+        extension: CoverFade {
+            fade: Vec4::new(0.0, 1.0, far, 0.0),
+        },
+    });
+    let mut e = commands.spawn((
+        Mesh3d(meshes.add(mesh)),
+        MeshMaterial3d(material.clone()),
+        Transform::IDENTITY,
+        Visibility::Inherited,
+        ChildOf(parent),
+    ));
+    if key.0 >= 2 {
+        e.insert(bevy::light::NotShadowCaster);
+    }
+    (e.id(), material)
+}
+
+/// Puts a chunk away hidden (its cover being made is dropped), dropping the least recently
+/// used ones over the budget.
+fn cache_put(draw: &mut BlockDraw, commands: &mut Commands, key: LodKey, mut made: Made, now: f64) {
+    if let Some(e) = made.entity {
+        commands.entity(e).insert(Visibility::Hidden);
+    }
+    if matches!(made.cover, CoverSlot::Making(_)) {
+        made.cover = CoverSlot::Waiting;
+    }
+    made.shown = false;
+    draw.fading.retain(|f| f.key != key);
+    if let Some((old, _)) = draw.cache.remove(&key) {
+        draw.cache_triangles -= old.triangles;
+        if let Some(e) = old.entity {
+            commands.entity(e).despawn();
+        }
+    }
+    draw.cache_triangles += made.triangles;
+    draw.cache.insert(key, (made, now));
+    while draw.cache_triangles > CACHE_TRIANGLES {
+        let Some(oldest) = draw
+            .cache
+            .iter()
+            .min_by(|a, b| a.1.1.total_cmp(&b.1.1))
+            .map(|(k, _)| *k)
+        else {
+            break;
+        };
+        if let Some((m, _)) = draw.cache.remove(&oldest) {
+            draw.cache_triangles -= m.triangles;
+            if let Some(e) = m.entity {
+                commands.entity(e).despawn();
+            }
+        }
+    }
+}
+
+/// Chunks within reach of the camera are made on workers and shown; far ones go. The work is
+/// ordered by how soon each chunk will be seen (the camera's motion, whatever moves it), each
+/// chunk's ground before its cover; chunks a moment ahead are built into a cache, and chunks
+/// left behind are kept there for turning back. Replacements dissolve into what they replace.
 #[allow(clippy::too_many_arguments)]
 fn stream_chunks(
     mut commands: Commands,
@@ -904,13 +1118,14 @@ fn stream_chunks(
     render: Res<RenderTime>,
     camera: Res<SpaceCamera>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut last_count: Local<usize>,
+    mut ground_materials: ResMut<Assets<GroundMaterial>>,
+    mut cover_materials: ResMut<Assets<CoverMaterial>>,
     mut coverage: ResMut<BlockCoverage>,
-    mut plan: Local<ChunkPlan>,
-    mut stats: Local<StreamStats>,
+    mut state: Local<StreamState>,
     real: Res<Time<Real>>,
     projections: Query<&Projection, With<crate::space_render::MainCamera>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    views: Query<&GlobalTransform, With<crate::space_render::MainCamera>>,
 ) {
     let _slow = crate::debug_overlay::SlowSystem::new("stream_chunks");
     let (Some(world), Some(mut draw)) = (world, draw) else {
@@ -939,7 +1154,8 @@ fn stream_chunks(
     let per_radian = viewport / (2.0 * (fov * 0.5).tan());
     let pixels = block_pixels();
     let outer = level_reach(TOP_LEVEL, per_radian, pixels);
-    let plan = &mut *plan;
+    let state = &mut *state;
+    let plan = &mut state.plan;
     if plan.centres.len() > 400_000 {
         plan.centres.clear();
     }
@@ -971,63 +1187,248 @@ fn stream_chunks(
             );
         }
     }
-    let wanted = &plan.wanted;
-    let centres = &mut plan.centres;
-    let mut near = |k: &LodKey| near(centres, k);
-    // Start the nearest missing ones.
-    let mut missing: Vec<(f64, LodKey)> = wanted
-        .iter()
-        .filter(|k| !draw.chunks.contains_key(k) && !draw.pending.contains_key(k))
-        .map(|k| (near(k), *k))
-        .collect();
-    missing.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let pool = crate::workers::workers();
-    for (_, key) in missing
-        .into_iter()
-        .take(CHUNKS_IN_FLIGHT.saturating_sub(draw.pending.len()))
+    // A copy (a few hundred keys) so the plan's centres stay usable below.
+    let wanted_set = plan.wanted.clone();
+    let wanted = &wanted_set;
+    let draw = &mut *draw;
+    let now = real.elapsed_secs_f64();
+    let with_cover = ground.cover.is_some();
+    let far = (outer * 0.92) as f32;
+    // The camera's motion (surface frame), smoothed over a fraction of a second.
+    let system = &universe.0;
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let frame = system
+        .frames
+        .state_in(anchor, system.bodies[world.body].surface_frame, render.0);
+    let forward = views.iter().next().map_or(DVec3::ZERO, |t| {
+        frame.rotation.inverse() * t.forward().as_vec3().as_dvec3()
+    });
     {
-        let g = world.ground.clone();
-        let palette = world.palette.clone();
-        draw.pending.insert(
+        let m = &mut state.motion;
+        let dt = now - m.time;
+        if let Some(at) = m.at
+            && dt > 1e-4
+            && dt < 1.0
+        {
+            let k = 1.0 - (-dt / 0.3).exp();
+            let v = (cam - at) / dt;
+            // A jump (a new region, a teleport) is not motion.
+            let v = if v.length() > 20_000.0 {
+                DVec3::ZERO
+            } else {
+                v
+            };
+            m.velocity = m.velocity.lerp(v, k);
+            m.turn = m.turn.lerp(m.forward.cross(forward) / dt, k);
+        }
+        m.at = Some(cam);
+        m.forward = forward;
+        m.time = now;
+    }
+    let ahead = cam + state.motion.velocity * LOOK_AHEAD;
+    let turned = DQuat::from_scaled_axis(state.motion.turn * 0.4) * forward;
+    let aspect = windows.iter().next().map_or(1.6, |w| {
+        f64::from(w.width()) / f64::from(w.height()).max(1.0)
+    });
+    // Half the view's width, with a margin.
+    let half_view = ((fov * 0.5).tan() * aspect).atan() + 0.2;
+    let in_view = |c: DVec3, radius: f64| {
+        let to = c - cam;
+        let d = to.length();
+        if d < radius + 30.0 || forward == DVec3::ZERO {
+            return true;
+        }
+        let dir = to / d;
+        let slack = (radius / d).min(1.0).asin();
+        dir.dot(forward).acos().min(dir.dot(turned).acos()) < half_view + slack
+    };
+    // Drawn ground over a chunk (shown or still dissolving out).
+    let covered = |draw: &BlockDraw, k: &LodKey| {
+        draw.chunks
+            .iter()
+            .any(|(o, m)| m.shown && m.entity.is_some() && overlaps(o, k))
+            || draw.leaving.keys().any(|o| overlaps(o, k))
+    };
+    // How soon a chunk is needed (lower first): its distance from the camera now or from where
+    // the camera is heading, three times as far when out of view, a quarter where nothing is
+    // drawn (a hole).
+    let urgency = |draw: &BlockDraw, centres: &mut HashMap<LodKey, DVec3>, k: &LodKey| {
+        let c = *centres
+            .entry(*k)
+            .or_insert_with(|| ground.lod_centre_point(*k));
+        let r = BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2;
+        let d = (c.distance(cam) - r).min(c.distance(ahead) - r).max(0.0);
+        let view = if in_view(c, r) { 1.0 } else { 3.0 };
+        let hole = if covered(draw, k) { 1.0 } else { 0.25 };
+        d * view * hole
+    };
+    // Wanted chunks kept from before are taken back at once (from the cache, or back from
+    // dissolving out).
+    let back: Vec<LodKey> = wanted
+        .iter()
+        .filter(|k| {
+            !draw.chunks.contains_key(k)
+                && (draw.cache.contains_key(k) || draw.leaving.contains_key(k))
+        })
+        .copied()
+        .collect();
+    for key in back {
+        let made = if let Some(m) = draw.leaving.remove(&key) {
+            draw.fading.retain(|f| f.key != key);
+            if let Some(e) = m.entity {
+                commands.entity(e).insert(Visibility::Hidden);
+            }
+            m
+        } else {
+            let Some((m, _)) = draw.cache.remove(&key) else {
+                continue;
+            };
+            draw.cache_triangles -= m.triangles;
+            m
+        };
+        draw.chunks.insert(
             key,
-            pool.spawn(async move {
-                // The Bevy mesh is made here too, off the main thread.
-                let start = std::time::Instant::now();
-                g.lod_chunk(key).map(|c| {
-                    let colour = |i: u16| {
-                        let [r, g, b] = palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
-                        [r, g, b, 1.0]
-                    };
-                    let mesh = if c.ground.is_empty() {
-                        bevy_mesh(&c.mesh, colour)
-                    } else {
-                        ground_mesh(&c, colour)
-                    };
-                    let cover = g
-                        .cover
-                        .as_ref()
-                        .and_then(|cw| cw.chunk_mesh(&g, key))
-                        .map(cover_mesh);
-                    (
-                        mesh,
-                        c.origin,
-                        c.basis,
-                        start.elapsed().as_secs_f64() * 1e3,
-                        c.timings,
-                        cover,
-                    )
-                })
-            }),
+            Made {
+                shown: false,
+                ..made
+            },
         );
     }
+    // The chunks a moment ahead (when moving): built into the cache, after the wanted ones.
+    let moving = state.motion.velocity.length() > 3.0 && height < outer;
+    if moving {
+        let a = &mut state.ahead;
+        if a.camera.is_none_or(|c| c.distance(ahead) > 5.0) {
+            a.camera = Some(ahead);
+            let centres = &mut a.centres;
+            if centres.len() > 400_000 {
+                centres.clear();
+            }
+            a.wanted = ground.lod_plan(
+                ahead,
+                TOP_LEVEL,
+                |level| level_reach(level, per_radian, pixels),
+                |k| {
+                    let c = *centres
+                        .entry(k)
+                        .or_insert_with(|| ground.lod_centre_point(k));
+                    c.distance(ahead) - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
+                },
+            );
+        }
+    } else {
+        state.ahead.wanted.clear();
+        state.ahead.camera = None;
+    }
+    let centres = &mut state.plan.centres;
+    // The work to do, most urgent first: ground of wanted chunks, their cover, chunks ahead.
+    enum Job {
+        Ground(LodKey),
+        Cover(LodKey),
+        Ahead(LodKey),
+    }
+    let mut jobs: Vec<(f64, Job)> = Vec::new();
+    let mut urgent = false;
+    for k in wanted.iter() {
+        if draw.chunks.contains_key(k) || draw.pending.contains_key(k) {
+            continue;
+        }
+        let u = urgency(draw, centres, k);
+        urgent |= u < 2.0 * BlockGround::lod_size(k.0);
+        jobs.push((u, Job::Ground(*k)));
+    }
+    for (k, m) in &draw.chunks {
+        if with_cover && m.entity.is_some() && matches!(m.cover, CoverSlot::Waiting) {
+            jobs.push((urgency(draw, centres, k) * 1.2 + 10.0, Job::Cover(*k)));
+        }
+    }
+    for k in state.ahead.wanted.iter() {
+        if wanted.contains(k)
+            || draw.cache.contains_key(k)
+            || draw.pending.contains_key(k)
+            || draw.chunks.contains_key(k)
+        {
+            continue;
+        }
+        jobs.push((urgency(draw, centres, k) * 1.5 + 30.0, Job::Ahead(*k)));
+    }
+    jobs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let pool = streaming();
+    let threads = pool.thread_num();
+    let making_cover = draw
+        .chunks
+        .values()
+        .filter(|m| matches!(m.cover, CoverSlot::Making(_)))
+        .count();
+    let cap = if urgent {
+        threads + 2
+    } else {
+        (threads / 2).max(2)
+    };
+    let free = cap.saturating_sub(draw.pending.len() + making_cover);
+    for (_, job) in jobs.into_iter().take(free) {
+        let g = world.ground.clone();
+        match job {
+            Job::Cover(key) => {
+                let task = pool.spawn(async move {
+                    g.cover
+                        .as_ref()
+                        .and_then(|cw| cw.chunk_mesh(&g, key))
+                        .map(cover_mesh)
+                });
+                if let Some(m) = draw.chunks.get_mut(&key) {
+                    m.cover = CoverSlot::Making(task);
+                }
+            }
+            Job::Ground(key) | Job::Ahead(key) => {
+                let with = matches!(job, Job::Ahead(_));
+                let palette = world.palette.clone();
+                draw.pending.insert(
+                    key,
+                    pool.spawn(async move {
+                        // The Bevy mesh is made here too, off the main thread.
+                        let start = std::time::Instant::now();
+                        g.lod_chunk(key).map(|c| {
+                            let colour = |i: u16| {
+                                let [r, g, b] =
+                                    palette.linear(sim_planet::blocks::PALETTE[i as usize - 1]);
+                                [r, g, b, 1.0]
+                            };
+                            let mesh = if c.ground.is_empty() {
+                                bevy_mesh(&c.mesh, colour)
+                            } else {
+                                ground_mesh(&c, colour)
+                            };
+                            // Built ahead: the cover with it (both go to the cache).
+                            let cover = with.then(|| {
+                                g.cover
+                                    .as_ref()
+                                    .and_then(|cw| cw.chunk_mesh(&g, key))
+                                    .map(cover_mesh)
+                            });
+                            (
+                                mesh,
+                                c.origin,
+                                c.basis,
+                                start.elapsed().as_secs_f64() * 1e3,
+                                c.timings,
+                                cover,
+                            )
+                        })
+                    }),
+                );
+            }
+        }
+    }
+    // Finished ground, a few a frame (each is a mesh upload).
     let done: Vec<LodKey> = draw
         .pending
         .iter_mut()
         .filter_map(|(k, t)| t.is_finished().then_some(*k))
-        // A few a frame: each is a mesh upload.
         .take(CHUNKS_PER_FRAME)
         .collect();
     let mut uploaded = 0usize;
+    let stats = &mut state.stats;
     for key in done {
         if uploaded >= TRIANGLES_PER_FRAME {
             break; // the rest next frame
@@ -1036,79 +1437,136 @@ fn stream_chunks(
             continue;
         };
         let m = block_on(poll_once(task)).flatten();
-        match &m {
-            Some((mesh, _, _, ms, stages, cover)) => {
+        let mut made = Made {
+            entity: None,
+            material: None,
+            cover: CoverSlot::Made(None),
+            cover_material: None,
+            triangles: 0,
+            shown: false,
+        };
+        match m {
+            Some((mesh, origin, basis, ms, stages, cover)) => {
                 for (sum, t) in stats.stages.iter_mut().zip(stages) {
-                    *sum += f64::from(*t);
+                    *sum += f64::from(t);
                 }
                 stats.built += 1;
                 stats.work_ms += ms;
-                stats.worst_ms = stats.worst_ms.max(*ms);
-                let triangles = mesh.indices().map_or(0, |i| i.len() / 3)
-                    + cover
-                        .as_ref()
-                        .and_then(|c| c.indices())
-                        .map_or(0, |i| i.len() / 3);
+                stats.worst_ms = stats.worst_ms.max(ms);
+                let mut triangles = mesh.indices().map_or(0, |i| i.len() / 3);
+                let faceted = mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_some();
+                let mut e = commands.spawn((
+                    ChunkPose { origin, basis },
+                    Mesh3d(meshes.add(mesh)),
+                    Transform::default(),
+                    Visibility::Hidden,
+                ));
+                if faceted {
+                    let material = ground_materials
+                        .get(&draw.ground_material)
+                        .cloned()
+                        .map(|m| ground_materials.add(m));
+                    if let Some(h) = &material {
+                        e.insert(MeshMaterial3d(h.clone()));
+                    }
+                    made.material = material;
+                } else {
+                    e.insert(MeshMaterial3d(draw.chunk_material.clone()));
+                }
+                let id = e.id();
+                made.entity = Some(id);
+                made.cover = match cover {
+                    Some(Some(c)) => {
+                        triangles += c.indices().map_or(0, |i| i.len() / 3);
+                        let (child, material) = spawn_cover(
+                            &mut commands,
+                            &mut meshes,
+                            &mut cover_materials,
+                            id,
+                            key,
+                            c,
+                            far,
+                        );
+                        made.cover_material = Some(material);
+                        CoverSlot::Made(Some(child))
+                    }
+                    Some(None) => CoverSlot::Made(None),
+                    None if with_cover => CoverSlot::Waiting,
+                    None => CoverSlot::Made(None),
+                };
+                made.triangles = triangles;
                 stats.triangles += triangles;
                 uploaded += triangles;
             }
             None => stats.empty += 1,
         }
-        let entity = m.map(|(mesh, origin, basis, _, _, cover)| {
-            let faceted = mesh.attribute(Mesh::ATTRIBUTE_UV_1).is_some();
-            let mut e = commands.spawn((
-                ChunkPose { origin, basis },
-                Mesh3d(meshes.add(mesh)),
-                Transform::default(),
-                Visibility::Hidden,
-            ));
-            if faceted {
-                e.insert(MeshMaterial3d(draw.ground_material.clone()));
-            } else {
-                e.insert(MeshMaterial3d(draw.chunk_material.clone()));
-            }
-            let id = e.id();
-            // The chunk's ground cover: a child in the same frame, shown and hidden with it;
-            // casting shadows only near.
-            if let Some(c) = cover {
-                let mut child = commands.spawn((
-                    Mesh3d(meshes.add(c)),
-                    MeshMaterial3d(draw.solid.clone()),
-                    Transform::IDENTITY,
-                    Visibility::Inherited,
-                    ChildOf(id),
-                ));
-                if key.0 >= 2 {
-                    child.insert(bevy::light::NotShadowCaster);
-                }
-            }
-            id
-        });
-        if entity.is_some() {
-            draw.hidden.insert(key);
+        if wanted.contains(&key) {
+            draw.chunks.insert(key, made);
+        } else {
+            cache_put(draw, &mut commands, key, made, now);
         }
-        draw.chunks.insert(key, entity);
+    }
+    // Finished cover, within the same upload budget.
+    let finished: Vec<LodKey> = draw
+        .chunks
+        .iter_mut()
+        .filter_map(|(k, m)| match &mut m.cover {
+            CoverSlot::Making(t) if t.is_finished() => Some(*k),
+            _ => None,
+        })
+        .collect();
+    for key in finished {
+        if uploaded >= TRIANGLES_PER_FRAME {
+            break;
+        }
+        let Some(m) = draw.chunks.get_mut(&key) else {
+            continue;
+        };
+        let CoverSlot::Making(task) = std::mem::replace(&mut m.cover, CoverSlot::Made(None)) else {
+            continue;
+        };
+        let Some(mesh) = block_on(poll_once(task)).flatten() else {
+            continue;
+        };
+        let Some(parent) = m.entity else { continue };
+        let triangles = mesh.indices().map_or(0, |i| i.len() / 3);
+        m.triangles += triangles;
+        stats.triangles += triangles;
+        uploaded += triangles;
+        let (child, material) = spawn_cover(
+            &mut commands,
+            &mut meshes,
+            &mut cover_materials,
+            parent,
+            key,
+            mesh,
+            far,
+        );
+        m.cover = CoverSlot::Made(Some(child));
+        m.cover_material = Some(material.clone());
+        // Over a chunk already shown, the trees dissolve in one by one.
+        if m.shown {
+            draw.fading.push(Fading {
+                key,
+                ground: None,
+                cover: Some(material),
+                start: now,
+                out: false,
+            });
+        }
     }
     // The ground is ready out to the nearest wanted chunk not yet made whose ground no chunk
     // drawn covers either (chunks being remade over shown ground don't count, or the disc would
     // shrink and grow all the time as the camera moves).
-    let overlaps_any = |k: &LodKey| {
-        draw.chunks.iter().any(|(o, e)| {
-            e.is_some() && !draw.hidden.contains(o) && {
-                if o.1 != k.1 {
-                    false
-                } else {
-                    let (hi, lo) = if o.0 >= k.0 { (o, k) } else { (k, o) };
-                    let shift = i32::from(hi.0 - lo.0);
-                    lo.2 >> shift == hi.2 && lo.3 >> shift == hi.3
-                }
-            }
-        })
-    };
     let ready = wanted
         .iter()
-        .filter(|k| !draw.chunks.contains_key(k) && !overlaps_any(k))
-        .map(near)
+        .filter(|k| !draw.chunks.contains_key(k) && !covered(draw, k))
+        .map(|k| {
+            let c = *centres
+                .entry(*k)
+                .or_insert_with(|| ground.lod_centre_point(*k));
+            c.distance(cam) - BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2
+        })
         .fold(outer, f64::min)
         .max(0.0);
     coverage.0 = if height < outer && std::env::var_os("ULTRA_SPACE_DEBUG_NO_HIDE").is_none() {
@@ -1116,16 +1574,142 @@ fn stream_chunks(
     } else {
         0.0
     };
-    let now = real.elapsed_secs_f64();
+    // Chunks no longer wanted go once every wanted chunk overlapping them is ready (a parent
+    // stays until all its children are, children until their parent is), or at once when they
+    // cover nothing wanted: shown ones dissolve out, the rest go straight to the cache.
+    let gone: Vec<LodKey> = draw
+        .chunks
+        .keys()
+        .filter(|k| !wanted.contains(k))
+        .filter(|k| {
+            wanted
+                .iter()
+                .filter(|w| overlaps(k, w))
+                .all(|w| draw.chunks.get(w).is_some_and(|m| m.ready(with_cover)))
+        })
+        .copied()
+        .collect();
+    for key in &gone {
+        let Some(m) = draw.chunks.remove(key) else {
+            continue;
+        };
+        if m.shown && m.entity.is_some() {
+            draw.fading.retain(|f| f.key != *key);
+            let cover = match m.cover {
+                CoverSlot::Made(Some(_)) => m.cover_material.clone(),
+                _ => None,
+            };
+            draw.fading.push(Fading {
+                key: *key,
+                ground: m.material.clone(),
+                cover,
+                start: now,
+                out: true,
+            });
+            draw.leaving.insert(*key, m);
+        } else {
+            cache_put(draw, &mut commands, *key, m, now);
+        }
+    }
+    // Hidden chunks show once no old chunk still listed overlaps them (the old ones went above,
+    // in the same frame, once all their replacements were ready): they dissolve in over what
+    // dissolves out, or over the far tiles; near the camera over bare ground at once.
+    let old: Vec<LodKey> = draw
+        .chunks
+        .iter()
+        .filter(|(k, m)| m.entity.is_some() && m.shown && !wanted.contains(k))
+        .map(|(k, _)| *k)
+        .collect();
+    let show: Vec<LodKey> = draw
+        .chunks
+        .iter()
+        .filter(|(k, m)| !m.shown && !old.iter().any(|o| overlaps(o, k)))
+        .map(|(k, _)| *k)
+        .collect();
+    for key in show {
+        let replacing = gone.iter().any(|g| overlaps(g, &key));
+        let c = *centres
+            .entry(key)
+            .or_insert_with(|| ground.lod_centre_point(key));
+        let near = c.distance(cam) - BlockGround::lod_size(key.0) * std::f64::consts::FRAC_1_SQRT_2;
+        if let Some(waited) = state.since.remove(&key) {
+            let w = now - waited;
+            stats.waits += 1;
+            stats.wait_sum += w;
+            stats.wait_max = stats.wait_max.max(w);
+        }
+        let Some(m) = draw.chunks.get_mut(&key) else {
+            continue;
+        };
+        m.shown = true;
+        let Some(e) = m.entity else { continue };
+        commands.entity(e).insert(Visibility::Visible);
+        let cover = match m.cover {
+            CoverSlot::Made(Some(_)) => m.cover_material.clone(),
+            _ => None,
+        };
+        draw.fading.retain(|f| f.key != key);
+        if replacing || near > SHOW_AT_ONCE {
+            draw.fading.push(Fading {
+                key,
+                ground: m.material.clone(),
+                cover,
+                start: now,
+                out: false,
+            });
+        } else {
+            for h in m.material.iter() {
+                if let Some(mut g) = ground_materials.get_mut(h) {
+                    g.extension.fade = Vec4::ZERO;
+                }
+            }
+            for h in cover.iter() {
+                if let Some(mut c) = cover_materials.get_mut(h) {
+                    c.extension.fade = Vec4::new(0.0, 0.0, far, 0.0);
+                }
+            }
+        }
+    }
+    // Late chunks: wanted, in view, not shown yet (how long they waited is logged).
+    let mut late = 0usize;
+    for k in wanted.iter() {
+        if draw.chunks.get(k).is_some_and(|m| m.shown) {
+            continue;
+        }
+        state.since.entry(*k).or_insert(now);
+        let c = *centres
+            .entry(*k)
+            .or_insert_with(|| ground.lod_centre_point(*k));
+        if in_view(
+            c,
+            BlockGround::lod_size(k.0) * std::f64::consts::FRAC_1_SQRT_2,
+        ) {
+            late += 1;
+        }
+    }
+    state.since.retain(|k, _| wanted.contains(k));
+    let stats = &mut state.stats;
+    stats.frames += 1;
+    if late > 0 {
+        stats.late_frames += 1;
+    }
+    stats.late_max = stats.late_max.max(late);
     if now - stats.since >= 5.0 {
         let span = now - stats.since;
-        let shown = draw.chunks.values().filter(|c| c.is_some()).count();
+        let shown = draw
+            .chunks
+            .values()
+            .filter(|m| m.shown && m.entity.is_some())
+            .count();
         info!(
-            "blocks: {shown} chunks shown of {} wanted ({} pending), {:.0} built/s, {:.1} ms each on \
-             the workers (heights {:.1}, cells {:.1}, mesh {:.1}; worst {:.0} ms, {:.1} workers busy \
-             on average), {:.0}k triangles built/s, {} px per column",
+            "blocks: {shown} chunks shown of {} wanted ({} pending, {} in the cache), {:.0} built/s, \
+             {:.1} ms each on the workers (heights {:.1}, cells {:.1}, mesh {:.1}; worst {:.0} ms, \
+             {:.1} workers busy on average), {:.0}k triangles built/s, {} px per column; late: \
+             {:.0}% of frames with chunks in view not shown (at most {}), waits {:.2} s on \
+             average, {:.2} s at most",
             wanted.len(),
             draw.pending.len(),
+            draw.cache.len(),
             stats.built as f64 / span,
             stats.work_ms / stats.built.max(1) as f64,
             stats.stages[0] / stats.built.max(1) as f64,
@@ -1134,76 +1718,79 @@ fn stream_chunks(
             stats.worst_ms,
             stats.work_ms / 1e3 / span,
             stats.triangles as f64 / span / 1e3,
-            pixels
+            pixels,
+            100.0 * stats.late_frames as f64 / stats.frames.max(1) as f64,
+            stats.late_max,
+            stats.wait_sum / stats.waits.max(1) as f64,
+            stats.wait_max,
         );
         *stats = StreamStats {
             since: now,
             ..default()
         };
     }
-    if draw.chunks.len() != *last_count {
-        *last_count = draw.chunks.len();
+    if draw.chunks.len() != state.last_count {
+        state.last_count = draw.chunks.len();
         debug!(
-            "block chunks: {} shown, {} empty, {} being made, {} wanted, camera {:.1} m up",
-            draw.chunks.values().filter(|c| c.is_some()).count(),
-            draw.chunks.values().filter(|c| c.is_none()).count(),
+            "block chunks: {} made, {} being made, {} wanted, camera {:.1} m up",
+            draw.chunks.len(),
             draw.pending.len(),
             wanted.len(),
             height
         );
     }
-    // Chunks no longer wanted go once every wanted chunk overlapping them is shown (a parent
-    // stays until all its children are ready, children until their parent is), or at once
-    // when they cover nothing wanted.
-    let overlaps = |a: &LodKey, b: &LodKey| {
-        if a.1 != b.1 {
-            return false;
-        }
-        let (hi, lo) = if a.0 >= b.0 { (a, b) } else { (b, a) };
-        let shift = i32::from(hi.0 - lo.0);
-        lo.2 >> shift == hi.2 && lo.3 >> shift == hi.3
-    };
-    let gone: Vec<LodKey> = draw
-        .chunks
-        .keys()
-        .filter(|k| !wanted.contains(k))
-        .filter(|k| {
-            let mut covering = wanted.iter().filter(|w| overlaps(k, w)).peekable();
-            if covering.peek().is_none() {
-                return true;
+    // Chunks being made that are no longer wanted nor ahead are dropped (not yet started ones
+    // never run).
+    let ahead_wanted = &state.ahead.wanted;
+    draw.pending
+        .retain(|k, _| wanted.contains(k) || ahead_wanted.contains(k));
+}
+
+/// Advances the dissolves: each material's progress; chunks dissolved out go to the cache.
+fn fade_chunks(
+    mut commands: Commands,
+    draw: Option<ResMut<BlockDraw>>,
+    real: Res<Time<Real>>,
+    mut ground_materials: ResMut<Assets<GroundMaterial>>,
+    mut cover_materials: ResMut<Assets<CoverMaterial>>,
+) {
+    let Some(mut draw) = draw else { return };
+    let draw = &mut *draw;
+    let now = real.elapsed_secs_f64();
+    let mut finished = Vec::new();
+    for (i, f) in draw.fading.iter().enumerate() {
+        let q = ((now - f.start) / FADE).clamp(0.0, 1.0) as f32;
+        let done = q >= 1.0;
+        let mode = if done && !f.out {
+            0.0
+        } else if f.out {
+            -1.0
+        } else {
+            1.0
+        };
+        for h in f.ground.iter() {
+            if let Some(mut g) = ground_materials.get_mut(h) {
+                g.extension.fade = Vec4::new(q, mode, 0.0, 0.0);
             }
-            covering.all(|w| draw.chunks.contains_key(w))
-        })
-        .copied()
-        .collect();
-    for key in gone {
-        draw.hidden.remove(&key);
-        if let Some(Some(e)) = draw.chunks.remove(&key) {
-            commands.entity(e).despawn();
+        }
+        for h in f.cover.iter() {
+            if let Some(mut c) = cover_materials.get_mut(h) {
+                c.extension.fade.x = q;
+                c.extension.fade.y = mode;
+            }
+        }
+        if done {
+            finished.push(i);
         }
     }
-    // Hidden chunks show once no old chunk still drawn overlaps them (the old ones went above
-    // in the same frame, once all their replacements were made).
-    let old: Vec<LodKey> = draw
-        .chunks
-        .iter()
-        .filter(|(k, e)| e.is_some() && !wanted.contains(k) && !draw.hidden.contains(k))
-        .map(|(k, _)| *k)
-        .collect();
-    let show: Vec<LodKey> = draw
-        .hidden
-        .iter()
-        .filter(|k| !old.iter().any(|o| overlaps(o, k)))
-        .copied()
-        .collect();
-    for key in show {
-        draw.hidden.remove(&key);
-        if let Some(Some(e)) = draw.chunks.get(&key) {
-            commands.entity(*e).insert(Visibility::Visible);
+    for i in finished.into_iter().rev() {
+        let f = draw.fading.swap_remove(i);
+        if f.out
+            && let Some(m) = draw.leaving.remove(&f.key)
+        {
+            cache_put(draw, &mut commands, f.key, m, now);
         }
     }
-    // Chunks being made that are no longer wanted are forgotten.
-    draw.pending.retain(|k, _| wanted.contains(k));
 }
 
 /// The block surface stands round the player (on foot or in the ship; the camera when there

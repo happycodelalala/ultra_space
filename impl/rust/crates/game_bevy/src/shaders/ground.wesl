@@ -18,6 +18,8 @@ struct GroundDetail {
     strength: vec4<f32>,
     // xyz: the body's centre (render space)
     centre: vec4<f32>,
+    // x fade progress 0..1, y mode (+1 fading in, -1 fading out, 0 steady)
+    fade: vec4<f32>,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> detail: GroundDetail;
@@ -84,6 +86,32 @@ fn pattern(kind: f32, g: vec2<f32>, h: f32, fp: f32) -> f32 {
     return 1.0 + 0.06 * (noise2(g * 0.25) - 0.5) * keep(4.0, fp);
 }
 
+// A dither value in [0, 1) per pixel (interleaved gradient noise: no visible grid).
+fn dither(pixel: vec2<f32>) -> f32 {
+    return fract(52.9829189 * fract(dot(floor(pixel), vec2<f32>(0.06711056, 0.00583715))));
+}
+
+// Whether a pixel is drawn. `fade`: x progress 0..1, y mode (+1 fading in, -1 fading out,
+// 0 steady); `share` how much of the fade this pixel's thing has reached (the progress for the
+// ground; staggered per thing for the cover). Fading out uses the mirrored pattern, so an old
+// chunk and its replacements started together never both draw a pixel.
+fn shown(pixel: vec2<f32>, fade: vec4<f32>, share: f32) -> bool {
+    if fade.y == 0.0 {
+        return true;
+    }
+    let d = dither(pixel);
+    if fade.y > 0.0 {
+        return d < share;
+    }
+    return 1.0 - d > share;
+}
+
+// A thing's own progress: things with a higher random number `r` start later, so a stand of
+// trees grows in tree by tree.
+fn staggered(progress: f32, r: f32) -> f32 {
+    return clamp(progress * 1.6 - r * 0.6, 0.0, 1.0);
+}
+
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
     // The chunks and the far tiles share the ground along one circle round the camera: beyond
@@ -94,6 +122,9 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         if length(v - up * dot(v, up)) > detail.strength.y {
             discard;
         }
+    }
+    if !shown(in.position.xy, detail.fade, detail.fade.x) {
+        discard;
     }
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     let g = in.uv_b;

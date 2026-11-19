@@ -147,6 +147,9 @@ pub struct CoverMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub colours: Vec<[f32; 4]>,
+    /// Per vertex: x its thing's own random number in [0, 1) (things fade in and out one by
+    /// one), y 0.
+    pub seeds: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
     pub instances: usize,
 }
@@ -856,6 +859,11 @@ impl CoverWorld {
             for &c in &mesh.colours {
                 m.colours.push(colours[Role::from_index(c) as usize]);
             }
+            let seed = unit(mix64(
+                inst.at.x.to_bits() ^ inst.at.y.to_bits().rotate_left(17),
+            )) as f32;
+            m.seeds
+                .extend(std::iter::repeat_n([seed, 0.0], mesh.positions.len()));
             m.indices.extend(mesh.indices.iter().map(|i| i + first));
         }
         (!m.indices.is_empty()).then_some(m)

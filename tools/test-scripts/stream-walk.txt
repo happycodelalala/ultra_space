@@ -1,0 +1,15 @@
+# Streaming under stress on foot (performance round, alone): from the village start, run out
+# into the wild land, turn round fast and run back, looking about. The log's "late" line says
+# how often chunks in view weren't shown yet.
+2    shot swalk-1-start.png
+2.5  mouse 12 0 0.5          # face away from the village
+3.5  hold W 14
+3.5  hold Shift 14
+9    shot swalk-2-running.png
+12   mouse 36 0 0.6          # turn round fast
+13   shot swalk-3a-turned.png
+13.1 shot swalk-3b-turned.png
+18   mouse -20 0 0.4         # look about
+18.6 mouse 20 0 0.4
+19.5 shot swalk-4-back.png
+20   quit

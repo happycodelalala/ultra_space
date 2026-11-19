@@ -1,0 +1,21 @@
+# Streaming under stress in the ship (performance round, alone): low over a forest, fast flight,
+# hard turns and a reversal. The log's "late" line says how often chunks in view weren't shown
+# yet and how long they waited; pairs of shots 0.1 s apart show any popping.
+3    shot sfly-1-start.png
+3.5  hold Space 1.5          # a little higher
+5.5  hold W 10               # speed up low along the nose
+12   shot sfly-2a-fast.png
+12.1 shot sfly-2b-fast.png
+16   mouse 30 0 1.2          # hard turn
+17.5 shot sfly-3a-turned.png
+17.6 shot sfly-3b-turned.png
+20   mouse -30 0 2.4         # hard turn the other way, past the start heading
+23   shot sfly-4a-turned.png
+23.1 shot sfly-4b-turned.png
+25   hold X 2                # stop
+27.5 mouse 40 0 1.5          # look round on the spot, fast
+29.5 shot sfly-5-round.png
+30   hold W 6                # off again
+37   shot sfly-6a-fast.png
+37.1 shot sfly-6b-fast.png
+38   quit

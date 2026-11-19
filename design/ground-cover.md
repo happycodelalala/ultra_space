@@ -165,6 +165,23 @@ distance its chunk is drawn at (`voxel_level`), so species built from 0.5 m voxe
 level later. A tree's wood is never merged more than 2× (a trunk as thick as a 2 m voxel reads
 as a post); only its crown is merged further.
 
+**Transitions (2026-11-19):** a chunk replaced by finer or coarser ones dissolves out over
+0.6 s while its replacements dissolve in, through complementary screen-space dither patterns
+(each pixel shows exactly one of the two: no holes, no flicker), for the faceted ground and its
+cover alike, in the depth prepass and shadows too. The cover's things dissolve one by one (each
+its own random start), so a stand grows in tree by tree; far away each thing has its own
+distance where it goes, so the cover thins out instead of ending at a line.
+
+**Streaming by urgency:** whatever moves the camera (walking, running, a ship, the debug
+camera), its motion is smoothed and the work ordered by how soon each chunk will be seen: its
+distance from the camera now or 1.5 s ahead on its path, three times as far out of view (the
+view widened towards a turn), a quarter where nothing is drawn. Few jobs are handed to the
+streaming pool at once (about one per thread, more when chunks in view are missing), so the most
+urgent is always next and stale ones are dropped; each chunk's ground is made before its cover;
+the chunks 1.5 s ahead are built into a cache, and chunks left behind stay there (1.5 M
+triangles, least recently used go) for turning back. The log reports "late" chunks: how often
+chunks in view weren't shown yet and how long they waited.
+
 First budget: about 6 M triangles of cover in view at 2560 × 1552, measured in `blocks-perf`;
 thinning and the reach of the last level are the knobs (`ULTRA_SPACE_COVER_DENSITY` scales
 densities for testing; `ULTRA_SPACE_COVER=0` turns cover off). Grass and flowers near the
