@@ -1187,14 +1187,6 @@ fn aim_starlight(
     weather: Option<Res<crate::weather::Weather>>,
     mut lights: Query<StarlightParts, StarlightOnly>,
 ) {
-    // Clouds soften the sun (rain, fog).
-    let dim = weather.map_or(1.0, |w| w.sun());
-    let illuminance = STAR_LIGHT * std::f32::consts::PI / Exposure::default().exposure() * dim;
-    for (_, mut light) in &mut lights {
-        if (light.illuminance - illuminance).abs() > 1.0 {
-            light.illuminance = illuminance;
-        }
-    }
     let system = &universe.0;
     let t = render.0;
     let star = system.frames.transform_point(
@@ -1203,6 +1195,16 @@ fn aim_starlight(
         t,
         DVec3::ZERO,
     ) - camera.offset;
+    // Clouds soften the sun (rain, fog); the anchor body hides it below the horizon (the light
+    // would otherwise shine up through the planet onto the sides and undersides of things).
+    let dim =
+        weather.map_or(1.0, |w| w.sun()) * star_visible(system, camera.anchor, camera.offset, star);
+    let illuminance = STAR_LIGHT * std::f32::consts::PI / Exposure::default().exposure() * dim;
+    for (_, mut light) in &mut lights {
+        if (light.illuminance - illuminance).abs() > 1.0 {
+            light.illuminance = illuminance;
+        }
+    }
     // The light shines from the star toward the camera's neighbourhood.
     let direction = (-star).normalize_or_zero().as_vec3();
     if direction != Vec3::ZERO {
@@ -1210,6 +1212,25 @@ fn aim_starlight(
             *transform = Transform::default().looking_to(direction, Vec3::Y);
         }
     }
+}
+
+/// How much of the star the camera sees past its anchor body (0 below the horizon, 1 above,
+/// eased over about 3 degrees round the horizon's dip at the camera's height).
+fn star_visible(
+    system: &sim_core::system::StarSystem,
+    anchor: usize,
+    camera: DVec3,
+    star: DVec3,
+) -> f32 {
+    let body = &system.bodies[anchor];
+    let r = camera.length();
+    if body.kind == sim_core::system::BodyKind::Star || r <= 0.0 || star == DVec3::ZERO {
+        return 1.0;
+    }
+    let elevation = (camera / r).dot(star.normalize()).clamp(-1.0, 1.0).asin();
+    let dip = (body.radius / r).min(1.0).acos();
+    let x = ((elevation + dip + 0.015) / 0.055).clamp(0.0, 1.0);
+    (x * x * (3.0 - 2.0 * x)) as f32
 }
 
 /// Sky light at full strength (cd/m²): about a sixth of the starlight, as a clear sky.

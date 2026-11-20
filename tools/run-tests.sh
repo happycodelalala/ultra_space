@@ -95,6 +95,9 @@ SUMMARY="$DEST/${RUNS:-runs}/summary.txt"
         grep -hE "script: done|panicked|ERROR" "$dir/game.log" 2>/dev/null | cut -c 1-220 || true
         echo "hitches: $(grep -c "hitch" "$dir/game.log" 2>/dev/null || echo 0)"
         find "$dir" -maxdepth 1 -name '*.png' -printf '%f ' 2>/dev/null; echo
+        # A minimized or hidden window saves 1x1 images (q0132's cover-tundra).
+        empty=$(find "$dir" -maxdepth 1 -name '*.png' -size -1k -printf '%f ' 2>/dev/null)
+        if [ -n "$empty" ]; then echo "EMPTY screenshots (window minimized?): $empty"; fi
     done
 } > "$SUMMARY"
 cat "$SUMMARY"

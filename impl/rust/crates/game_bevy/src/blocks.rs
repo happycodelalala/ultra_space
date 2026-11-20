@@ -480,12 +480,13 @@ fn choose_globe_site(
         if !(8.0..=22.0).contains(&t) || !(0.35..=0.75).contains(&m) {
             continue;
         }
-        // Green ground all round (the village's ground eases into what grows there).
+        // Temperate green ground all round (the village's ground eases into what grows there;
+        // not the tropical dry forest, whose palms don't belong by a medieval house).
         use sim_planet::globe::Cover;
         let green = |d: DVec3| {
             matches!(
                 globe.ground_cover(d, centre, 0.0),
-                Cover::Grass | Cover::Forest | Cover::Seasonal
+                Cover::Grass | Cover::Forest
             )
         };
         if !green(dir) {
@@ -521,7 +522,23 @@ fn choose_globe_site(
             .iter()
             .filter(|(x, z)| !green((dir * r + east * *x + south * *z).normalize()))
             .count() as f64;
-        let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs() + 10.0 * margin;
+        // Woods round the village (oak, beech and birch), as in the style renders.
+        let woods = [
+            (400.0, 0.0),
+            (-400.0, 0.0),
+            (0.0, 400.0),
+            (0.0, -400.0),
+            (280.0, 280.0),
+            (-280.0, -280.0),
+        ]
+        .iter()
+        .filter(|(x, z)| {
+            globe.ground_cover((dir * r + east * *x + south * *z).normalize(), centre, 0.0)
+                == Cover::Forest
+        })
+        .count() as f64;
+        let score = hi - lo + 2.0 * (m - 0.55).abs() + 0.05 * (t - 15.0).abs() + 10.0 * margin
+            - 1.5 * woods;
         if best.is_none_or(|b| score < b.0) {
             best = Some((score, dir));
         }
