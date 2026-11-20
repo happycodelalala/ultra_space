@@ -188,6 +188,12 @@ impl GlobeWorld {
         generate::land_cover(t, p, height)
     }
 
+    /// The prevailing wind at unit direction `dir`: a tangent vector (the way the air moves)
+    /// whose length is its strength, 0 (calm) to about 1.
+    pub fn wind(&self, dir: DVec3) -> DVec3 {
+        generate::wind_at(dir.normalize(), self.seed)
+    }
+
     /// Whether a river runs at the point nearest `dir`.
     pub fn river(&self, dir: DVec3) -> bool {
         self.fields.river[self.sphere.nearest(dir.normalize())]

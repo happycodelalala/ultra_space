@@ -46,6 +46,9 @@ pub struct SpeciesData {
     pub collider: String,
     pub tilt_to_slope: bool,
     pub sink: f64,
+    /// How much it bends in the wind: 0 rigid (rocks, logs) to 1 (grass, reeds).
+    #[serde(default)]
+    pub sway: f64,
     #[serde(default)]
     pub description: String,
 }
@@ -148,8 +151,13 @@ pub struct CoverMesh {
     pub normals: Vec<[f32; 3]>,
     pub colours: Vec<[f32; 4]>,
     /// Per vertex: x its thing's own random number in [0, 1) (things fade in and out one by
-    /// one), y 0.
+    /// one), y the prevailing wind's direction in the chunk's ground plane (radians from its
+    /// x axis toward z).
     pub seeds: Vec<[f32; 2]>,
+    /// Per vertex: x where its thing lies along the wind, in gust wavelengths (0–1, so gusts
+    /// roll across neighbouring chunks unbroken), y how far it bends at a full gust (m: the
+    /// species' sway, its size and the wind's strength; 0 at the ground, most at the top).
+    pub wind: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
     pub instances: usize,
 }
@@ -819,6 +827,15 @@ impl CoverWorld {
         let (origin, basis) = g.chunk_frame(key);
         let inverse = basis.inverse();
         let face = key.1;
+        // The prevailing wind over the chunk: its direction in the chunk's ground plane and
+        // its strength (calm belts still stir a little).
+        let wind = g
+            .globe()
+            .map_or(DVec3::ZERO, |w| w.wind(origin.normalize()));
+        let wind_local = inverse * wind;
+        let wind_angle = wind_local.z.atan2(wind_local.x) as f32;
+        let wind_unit = wind.normalize_or_zero();
+        let strength = 0.35 + 0.65 * wind.length().min(1.0);
         let mut m = CoverMesh {
             instances: instances.len(),
             ..CoverMesh::default()
@@ -848,7 +865,12 @@ impl CoverWorld {
             }
             let first = m.positions.len() as u32;
             let sc = inst.scale;
+            let height = (var.height * sc).max(0.05);
+            let bend = self.species[inst.species as usize].sway * 0.18 * height.sqrt() * strength;
+            let along = (anchor.dot(wind_unit) / GUST_WAVELENGTH).rem_euclid(1.0) as f32;
             for (p, nn) in mesh.positions.iter().zip(&mesh.normals) {
+                let rise = (f64::from(p[2]) * sc / height).clamp(0.0, 1.0);
+                m.wind.push([along, (bend * rise * rise) as f32]);
                 let local = DVec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2])) * sc;
                 let world = anchor + e * local.x + n * local.y + up * local.z;
                 m.positions.push(to_chunk(world).to_array());
@@ -862,13 +884,18 @@ impl CoverWorld {
             let seed = unit(mix64(
                 inst.at.x.to_bits() ^ inst.at.y.to_bits().rotate_left(17),
             )) as f32;
-            m.seeds
-                .extend(std::iter::repeat_n([seed, 0.0], mesh.positions.len()));
+            m.seeds.extend(std::iter::repeat_n(
+                [seed, wind_angle],
+                mesh.positions.len(),
+            ));
             m.indices.extend(mesh.indices.iter().map(|i| i + first));
         }
         (!m.indices.is_empty()).then_some(m)
     }
 }
+
+/// The distance between gusts rolling across the land (m).
+pub const GUST_WAVELENGTH: f64 = 48.0;
 
 /// The cover of a body, shared.
 pub type SharedCover = Arc<CoverWorld>;

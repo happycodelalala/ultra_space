@@ -780,6 +780,7 @@ fn cover_mesh(c: sim_planet::cover::CoverMesh) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, c.normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, c.colours)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, c.seeds)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, c.wind)
     .with_inserted_indices(Indices::U32(c.indices))
 }
 
@@ -911,6 +912,14 @@ pub struct CoverFade {
 }
 
 impl MaterialExtension for CoverFade {
+    fn vertex_shader() -> ShaderRef {
+        "embedded://ultra_space/shaders/cover.wesl".into()
+    }
+
+    fn prepass_vertex_shader() -> ShaderRef {
+        "embedded://ultra_space/shaders/cover_prepass.wesl".into()
+    }
+
     fn fragment_shader() -> ShaderRef {
         "embedded://ultra_space/shaders/cover.wesl".into()
     }

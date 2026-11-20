@@ -262,6 +262,19 @@ pub(super) fn wandering_latitude(dir: DVec3, seed: u64) -> f64 {
     lat + 7.0 * noise(dir * 3.0, seed ^ 0x7E3A, 3)
 }
 
+/// The prevailing wind at unit direction `dir` (y the spin axis): a tangent vector whose length
+/// is its strength, 0 (calm) to about 1. Easterly trades toward the equator, westerlies poleward
+/// from 30° to 60°, polar easterlies; calm at the subtropical highs.
+pub(crate) fn wind_at(dir: DVec3, seed: u64) -> DVec3 {
+    let east = DVec3::Y.cross(dir).normalize_or(DVec3::X);
+    let north = dir.cross(east);
+    let lat = wandering_latitude(dir, seed);
+    let a = lat.abs();
+    let u = ((a - 30.0) * (60.0 - a) / 225.0).clamp(-1.0, 1.0);
+    let v = -0.4 * (6.0 * a).to_radians().sin();
+    east * (u + 0.05) + north * v * lat.signum()
+}
+
 /// The fields for a planet of `radius` with `plates` plates.
 pub fn generate(s: &Sphere, radius: f64, plates: usize, seed: u64) -> Fields {
     let n = s.len();
@@ -597,14 +610,7 @@ pub fn generate(s: &Sphere, radius: f64, plates: usize, seed: u64) -> Fields {
         .map(|i| {
             let p = x[i];
             let east = DVec3::Y.cross(p).normalize_or(DVec3::X);
-            let north = p.cross(east);
-            let lat = wandering_latitude(p, seed);
-            let a = lat.abs();
-            // Easterly trades toward the equator, westerlies poleward from 30° to 60°, polar
-            // easterlies; calm at the subtropical highs.
-            let u = ((a - 30.0) * (60.0 - a) / 225.0).clamp(-1.0, 1.0);
-            let v = -0.4 * (6.0 * a).to_radians().sin();
-            let wind = (east * (u + 0.05) + north * v * lat.signum()).normalize_or(east);
+            let wind = wind_at(p, seed).normalize_or(east);
             let mut w: Vec<(u32, f64)> = s
                 .neighbours(i)
                 .iter()

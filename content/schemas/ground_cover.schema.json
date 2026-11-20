@@ -31,6 +31,7 @@
           "collider": { "enum": ["none", "trunk", "box"] },
           "tilt_to_slope": { "type": "boolean" },
           "sink": { "description": "Share of the height sunk into the ground.", "type": "number", "minimum": 0, "maximum": 0.9 },
+          "sway": { "description": "How much it bends in the wind: 0 rigid (rocks, logs) to 1 (grass, reeds).", "type": "number", "minimum": 0, "maximum": 1 },
           "description": { "type": "string" }
         }
       }
