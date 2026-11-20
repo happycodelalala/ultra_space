@@ -75,13 +75,15 @@ fish) are out of scope.
 
 | # | Step | Contents | Size |
 |---|---|---|---|
-| E1 | **Fixes** | Cover lit like the ground at night; tundra captures; the village's surroundings temperate (developer to confirm) | small |
+| E1 | **Fixes** | Cover lit like the ground at night; tundra captures; the village's surroundings temperate  | small |
 | E2 | **Wind** | A planet wind field (direction and strength from the climate's wind bands, gusts travelling across the land); cover sways by height and stiffness per species (grass and leaves most, trunks least) in the vertex shader and its prepass; water ripples and cloud drift follow the same wind | small |
 | E3 | **The far landscape** | Far tiles coloured by what grows there (forest canopy, scrub, grass, bare rock), with a canopy texture that fades into the near cover; cheap distant trees out to several km where the cover ends; mountains with rock bands, cliffs and scree from slope and height; more large landforms (outcrops, ridges, terraces) in the terrain function | medium |
 | E4 | **Water** | Sea colour by depth, shore foam and breaking lines, low-poly waves moving with the wind; rivers drawn from the world's river field (beds carved in the faceted ground, flowing water surface, banks with reeds) and lakes as water surfaces at their own levels | medium–large |
 | E5 | **Ground detail** | Near-ground dressing per biome: leaf litter under trees, pebbles, mud and puddles in wet ground, worn paths, meadow patches; desert dunes, rock pillars, dry riverbeds and cracked salt flats; tundra moss and frost | medium |
 | E6 | **Weather and effects** | Weather by climate and changing over time (cloud cover, rain, snow, fog, dust storms; valley fog at dawn); effects: landing dust, engine plumes, splashes, chimney smoke, rain and snow on the ground | medium |
-| E7 | **Ambient sound** *(optional, could wait for Batch 6)* | Wind, rain, water, birdsong as ambience, footsteps, the ship's engine | medium |
+
+Ambient sound (wind, rain, water, footsteps, the ship's engine) goes with Batch 6's basic audio
+(developer, 2026-11-20). The village's surroundings become temperate forest in E1 (agreed).
 
 Then 5.8 (digging and placing) and 5.9 (review), with the planet-wide views of visual-style.md
 §3 (low flight over each biome, the coast, snow) joining the review.

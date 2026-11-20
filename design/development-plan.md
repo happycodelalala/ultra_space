@@ -599,6 +599,7 @@ views of the village; anything off outside them is a known issue, not a new task
 | 5.7b | **The streamed block zone:** the block ground planet-wide on a bent cube-sphere grid (six faces, equal angles, face 0 centred on the village), chunks made round the player anywhere, top colours from the world's cover, tiles hidden round the camera; the block surface stands within 2 km of the focus (the camera) | Blocks show and carry the player anywhere on Tessera (`blocks-far`), the village unchanged |
 | 5.7c | **The faceted ground** (developer, 2026-11-18; adopted as the default): the ground near the player a density field meshed with surface nets, flat-shaded and coloured per facet, procedural detail (grass, rock, sand, earth, snow), the village's pads, paths, pit and tunnel carved, sphere digs and fills in code; size-on-screen detail (8 px), the far tiles beneath it and beyond; blocks kept as `ULTRA_SPACE_GROUND=blocks` | The village, Rook Vale and flight views at 2560 × 1552 without seams or flicker; walking into the pit; ~100 fps alone |
 | 5.7d | **Ground cover planet-wide** (developer, 2026-11-18; [ground-cover.md](ground-cover.md)): 32 species from generators with variants, recipes per biome and for shore, steep and high ground, six layers of procedural variety, merged per ground chunk with size-on-screen levels, collision near bodies | Forest, taiga, desert, savanna, tundra, coast and village views read as their landscapes; `blocks-perf` within budget |
+| 5.7e | **The planet environment** (developer, 2026-11-20; [planet-environment.md](planet-environment.md)): E1 fixes (cover lit like the ground at night, tundra captures, the village's surroundings temperate forest), E2 wind (a planet wind field; cover sways, water and clouds follow), E3 the far landscape (far ground coloured by its cover, distant trees, rocky mountains, larger landforms), E4 water (depth colour, foam, waves; rivers and lakes drawn), E5 ground detail (litter, pebbles, puddles, paths; dunes, rock pillars, dry beds; moss and frost), E6 weather by climate over time and effects (dust, plumes, splashes, smoke); animals and sound later | Each step judged in a test round; flight shows each biome's character from altitude; `blocks-perf` within a few fps of 82 (q0131) |
 | 5.8 | **Digging and placing** (for the faceted ground): a dig tool removing (and a fill tool adding) a sphere of ground under the crosshair, timed by hardness, drops to a small inventory (stacks by material, a simple panel, saved with the player); placing block models (built things) on their own grids; edits kept per chunk and saved; the touched chunks and colliders rebuilt within a frame or two | Dig a hole and build a wall in the village; both survive save and load |
 | 5.9 | **Batch review** | The views judged against the renders by the developer, from screenshots |
 
@@ -608,8 +609,9 @@ in the game, the faceted density ground adopted (5.7c; terrain blocks 50 cm rema
 the village's ground is the game's own layout (`content/data/village_layouts`) on the real ground;
 test rounds at 2560 × 1552. 5.7c confirmed (q0117: no seams or flicker). 5.7d done (q0122):
 36 generated species planet-wide with collision near bodies; `blocks-perf` 83 fps with cover,
-99 without (Balanced power plan, plugged in). Next: 5.8 (digging and placing on the faceted
-ground), then 5.9 (review).
+99 without (Balanced power plan, plugged in). Review of the environment (q0132,
+[planet-environment.md](planet-environment.md)): still a still life; next 5.7e (E1–E6), then
+5.8 (digging and placing on the faceted ground), then 5.9 (review).
 
 - **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
   also needs a neighbour along its edge), a mesher merging flat faces and slope planes and
@@ -683,7 +685,7 @@ other settlements' kits in blocks (design track).
 new game and continue, save slots, pause, settings, controls), the player's record (money,
 standing with factions, journal), discoveries that fill the journal, contracts from settlements
 (carry, visit, survey, passengers; rule-made templates, the format the director later writes in
-Batch 10), basic audio, first-time guidance. Batch 7, the survival-builder loop, follows.
+Batch 10), basic audio (with the planet's ambient sound: wind, rain, water, footsteps, engines), first-time guidance. Batch 7, the survival-builder loop, follows.
 
 ### 7.1 When the object system is built
 
