@@ -190,7 +190,7 @@ fn blow_lines(
     let want = (MAX_LINES as f64 * strength).round() as usize;
     let alive = lines.lines.iter().filter(|l| l.alive).count();
     if near && day > 0.05 && lines.wait <= 0.0 && alive < want {
-        // In front of the camera (4–30 m, across most of the view), a little upwind so it
+        // In front of the camera (8–32 m, across most of the view), a little upwind so it
         // blows through the view.
         let look = eyes
             .iter()
@@ -199,7 +199,7 @@ fn blow_lines(
             .unwrap_or(flow);
         let look = (look - cam_dir * look.dot(cam_dir)).normalize_or(flow);
         let side = cam_dir.cross(look);
-        let d = 4.0 + 26.0 * lines.unit() * lines.unit().sqrt();
+        let d = 8.0 + 24.0 * lines.unit().sqrt();
         let across = (lines.unit() * 2.0 - 1.0) * d * 0.7;
         let start = cam + look * d + side * across - flow * (speed * 1.2);
         let lift = 0.8 + 4.5 * lines.unit() * lines.unit();
@@ -290,7 +290,8 @@ fn blow_lines(
             let along = k as f32 / (n.max(2) - 1) as f32;
             // Tail (oldest) to head: thin and clear at the tail, fullest just behind the head.
             let shape = (along * 1.5).min(1.0) * ((1.0 - along) * 6.0).min(1.0);
-            let half = HALF_WIDTH * (0.3 + 0.7 * shape);
+            // About the same width on screen near and far (a near one isn't a broad band).
+            let half = HALF_WIDTH.min(p.distance(eye) * 0.003) * (0.3 + 0.7 * shape);
             positions.push((p - w * half).to_array());
             positions.push((p + w * half).to_array());
             let a = 0.8 * fade * shape;
