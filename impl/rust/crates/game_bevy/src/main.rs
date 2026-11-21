@@ -30,6 +30,7 @@ mod vehicle_visual;
 mod walk;
 mod warmup;
 mod weather;
+mod wind_lines;
 mod workers;
 
 use bevy::log::{BoxedLayer, LogPlugin};
@@ -94,6 +95,7 @@ fn main() {
             blocks::BlocksPlugin,
             weather::WeatherPlugin,
             clouds::CloudsPlugin,
+            wind_lines::WindLinesPlugin,
         ))
         .add_systems(Startup, log_startup)
         .add_systems(Update, window_size)

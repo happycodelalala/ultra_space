@@ -17,7 +17,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy::tasks::{Task, block_on, poll_once};
-use glam::{DQuat, DVec3};
+use glam::{DQuat, DVec2, DVec3};
 use serde::Deserialize;
 use sim_blocks::{BlockModel, MeshData, Palette};
 use sim_planet::BlockGround;
@@ -227,6 +227,24 @@ pub fn blocks_dir() -> Option<PathBuf> {
     })
 }
 
+/// The generated cover kind (ground_cover data id) that stands in for a village model, if any.
+fn cover_species(name: &str) -> Option<&'static str> {
+    let kind = name.rsplit_once('_').map_or(name, |(k, _)| k);
+    Some(match kind {
+        "oak" => "oak",
+        "birch" => "birch",
+        "pine" => "pine",
+        "bush" => "shrub",
+        "flowers" => "flowers",
+        "mushrooms" => "mushrooms",
+        "pebble" => "pebbles",
+        "rock" => "rock",
+        "stump" => "stump",
+        k if k.starts_with("tuft") => "grass",
+        _ => return None,
+    })
+}
+
 /// Model names that collide, and how: a box round the whole model, or a trunk.
 fn collision_of(name: &str) -> Option<bool> {
     let kind = name.rsplit_once('_').map_or(name, |(k, _)| k);
@@ -297,7 +315,24 @@ pub fn load(
             .unwrap_or(1.0);
         let started = std::time::Instant::now();
         let seed = system.bodies[body].terrain.as_ref().map_or(0, |t| t.seed);
-        let cover = Arc::new(sim_planet::cover::CoverWorld::new(seed, density));
+        let cover = sim_planet::cover::CoverWorld::new(seed, density);
+        // The village's trees, bushes and grass become the generated kinds (they sway, shade
+        // and collide like the wild cover); its own models of them aren't drawn.
+        let placed = village
+            .placements
+            .iter()
+            .filter_map(|p| {
+                let species = cover.species_index(cover_species(&p.model)?)?;
+                Some(sim_planet::cover::Placed {
+                    species: species as u16,
+                    face: 0,
+                    at: DVec2::new(p.pos[0], p.pos[1]),
+                    yaw: p.rot.to_radians(),
+                    scale: p.scale,
+                })
+            })
+            .collect::<Vec<_>>();
+        let cover = Arc::new(cover.with_placed(placed));
         info!(
             "ground cover: {} species built in {:.0} ms",
             cover.species_count(),
@@ -317,7 +352,11 @@ pub fn load(
     // Collision boxes: buildings and props whole, trees by their trunks; none where the
     // player's ship lands (it is bigger than the block ship the layout was made for).
     let ship_at = DVec3::from_array(world.village.ship.pos);
+    let covered = ground.cover.is_some();
     for p in &world.village.placements {
+        if covered && cover_species(&p.model).is_some() {
+            continue;
+        }
         let Some(trunk) = collision_of(&p.model) else {
             continue;
         };
@@ -1118,6 +1157,9 @@ fn setup_blocks(
     for p in &world.village.placements {
         if std::env::var_os("ULTRA_SPACE_DEBUG_NO_MODELS").is_some() {
             break;
+        }
+        if world.ground.cover.is_some() && cover_species(&p.model).is_some() {
+            continue;
         }
         let Some(list) = made.get(&p.model) else {
             continue;

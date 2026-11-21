@@ -144,6 +144,17 @@ pub struct Instance {
     pub dry: f64,
 }
 
+/// A thing set by hand (a settlement's trees, bushes and grass) on face `face` at grid point
+/// `at` (m), drawn and colliding like the wild cover so it sways and casts shadows the same.
+#[derive(Clone, Copy, Debug)]
+pub struct Placed {
+    pub species: u16,
+    pub face: u8,
+    pub at: DVec2,
+    pub yaw: f64,
+    pub scale: f64,
+}
+
 /// A chunk's cover: one mesh in the chunk's own frame, colours final (linear RGBA).
 #[derive(Default)]
 pub struct CoverMesh {
@@ -185,6 +196,8 @@ pub struct CoverWorld {
     max_keep: Vec<f64>,
     seed: u64,
     density: f64,
+    /// Things set by hand, sorted by face and x.
+    placed: Vec<Placed>,
 }
 
 impl std::fmt::Debug for CoverWorld {
@@ -343,7 +356,20 @@ impl CoverWorld {
             max_keep,
             seed: mix64(seed ^ 0xC0FE_7E55),
             density,
+            placed: Vec::new(),
         }
+    }
+
+    /// The same cover with things set by hand (kept even where wild cover is cleared).
+    pub fn with_placed(mut self, mut placed: Vec<Placed>) -> Self {
+        placed.sort_by(|a, b| (a.face, a.at.x).partial_cmp(&(b.face, b.at.x)).unwrap());
+        self.placed = placed;
+        self
+    }
+
+    /// The index of the species with id `id`.
+    pub fn species_index(&self, id: &str) -> Option<usize> {
+        self.species.iter().position(|s| s.id == id)
     }
 
     fn variant(s: &SpeciesData, v: u32, seed: u64, palette: &Palette) -> Variant {
@@ -742,7 +768,43 @@ impl CoverWorld {
                 }
             }
         }
+        self.add_placed(g, key, &mut out);
         out
+    }
+
+    /// The things set by hand in chunk `key`, on the ground's top.
+    fn add_placed(&self, g: &BlockGround, key: LodKey, out: &mut Vec<Instance>) {
+        let (level, face, ci, cj) = key;
+        let size = BlockGround::lod_size(level);
+        let (x0, y0) = (f64::from(ci) * size, f64::from(cj) * size);
+        let detail = (crate::blocks::CELL * f64::from(1u32 << level)).max(0.5);
+        let start = self
+            .placed
+            .partition_point(|p| (p.face, p.at.x) < (face, x0));
+        for p in &self.placed[start..] {
+            if p.face != face || p.at.x >= x0 + size {
+                break;
+            }
+            let si = p.species as usize;
+            if p.at.y < y0 || p.at.y >= y0 + size || !self.drawn_at(si, level) {
+                continue;
+            }
+            let sp = &self.species[si];
+            let h = mix64(p.at.x.to_bits() ^ p.at.y.to_bits().rotate_left(29) ^ self.seed);
+            let jit = 2.0 * unit(mix64(h)) - 1.0;
+            out.push(Instance {
+                species: p.species,
+                variant: (h % u64::from(sp.variants.max(1))) as u16,
+                at: p.at,
+                height: g.top_height(face, p.at, detail),
+                yaw: p.yaw,
+                scale: p.scale,
+                up: g.dir_on(face, p.at.x, p.at.y),
+                hue: sp.tint.hue * 0.5 * jit,
+                value: 1.0 + sp.tint.value * 0.5 * jit,
+                dry: 0.0,
+            });
+        }
     }
 
     /// An instance's frame in the surface frame: its anchor (the model's origin) and axes
