@@ -1,0 +1,71 @@
+# Wind sway (task 5.7e E2): bursts of frames from fixed village viewpoints, for animated GIFs.
+# Start in the village (the default start).
+1.00  view 60 -70 40 0 0 0 50
+4.00  shot far-00.png
+4.15  shot far-01.png
+4.30  shot far-02.png
+4.45  shot far-03.png
+4.60  shot far-04.png
+4.75  shot far-05.png
+4.90  shot far-06.png
+5.05  shot far-07.png
+5.20  shot far-08.png
+5.35  shot far-09.png
+5.50  shot far-10.png
+5.65  shot far-11.png
+5.80  shot far-12.png
+5.95  shot far-13.png
+6.10  shot far-14.png
+6.25  shot far-15.png
+6.90  view -1.5 -14.5 1.7 4 -4 1.8 58
+9.90  shot close-00.png
+10.05  shot close-01.png
+10.20  shot close-02.png
+10.35  shot close-03.png
+10.50  shot close-04.png
+10.65  shot close-05.png
+10.80  shot close-06.png
+10.95  shot close-07.png
+11.10  shot close-08.png
+11.25  shot close-09.png
+11.40  shot close-10.png
+11.55  shot close-11.png
+11.70  shot close-12.png
+11.85  shot close-13.png
+12.00  shot close-14.png
+12.15  shot close-15.png
+12.80  view 0 -30 2.5 0 -250 12 40
+15.80  shot south-00.png
+15.95  shot south-01.png
+16.10  shot south-02.png
+16.25  shot south-03.png
+16.40  shot south-04.png
+16.55  shot south-05.png
+16.70  shot south-06.png
+16.85  shot south-07.png
+17.00  shot south-08.png
+17.15  shot south-09.png
+17.30  shot south-10.png
+17.45  shot south-11.png
+17.60  shot south-12.png
+17.75  shot south-13.png
+17.90  shot south-14.png
+18.05  shot south-15.png
+18.70  view 25 0 2.5 250 0 12 40
+21.70  shot east-00.png
+21.85  shot east-01.png
+22.00  shot east-02.png
+22.15  shot east-03.png
+22.30  shot east-04.png
+22.45  shot east-05.png
+22.60  shot east-06.png
+22.75  shot east-07.png
+22.90  shot east-08.png
+23.05  shot east-09.png
+23.20  shot east-10.png
+23.35  shot east-11.png
+23.50  shot east-12.png
+23.65  shot east-13.png
+23.80  shot east-14.png
+23.95  shot east-15.png
+24.60  quit
