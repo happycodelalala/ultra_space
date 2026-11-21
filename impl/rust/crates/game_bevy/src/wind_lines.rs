@@ -19,13 +19,13 @@ use crate::sim::RenderTime;
 use crate::universe::{GameState, InGame, Universe};
 
 /// Most wisps at once (in the strongest wind).
-const MAX_LINES: usize = 9;
+const MAX_LINES: usize = 14;
 /// Wisps show while the camera is this close to the ground (m).
 const CEILING: f64 = 120.0;
 /// How long a wisp's trail is (s of its path).
-const TRAIL_SECONDS: f64 = 0.7;
+const TRAIL_SECONDS: f64 = 1.1;
 /// Ribbon half width (m).
-const HALF_WIDTH: f32 = 0.035;
+const HALF_WIDTH: f32 = 0.09;
 
 pub struct WindLinesPlugin;
 
@@ -148,6 +148,7 @@ fn blow_lines(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut visibility: Query<&mut Visibility>,
+    eyes: Query<&GlobalTransform, With<crate::space_render::MainCamera>>,
 ) {
     let (Some(mut lines), Some(world)) = (lines, world) else {
         return;
@@ -176,21 +177,31 @@ fn blow_lines(
     let sun = (star - cam).normalize_or_zero().dot(cam_dir);
     let day = ((sun * 5.0 + 0.2).clamp(0.0, 1.0)) as f32;
     if let Some(mut m) = materials.get_mut(&lines.material) {
-        let want = Color::linear_rgba(0.85 * day, 0.88 * day, 0.92 * day, 1.0);
+        let want = Color::linear_rgba(1.9 * day, 1.95 * day, 2.0 * day, 1.0);
         if m.base_color != want {
             m.base_color = want;
         }
     }
+    // The render frame: surface frame to camera-relative.
+    let anchor = system.bodies[camera.anchor].inertial_frame;
+    let s = system.frames.state_in(anchor, body.surface_frame, render.0);
     // Start a wisp now and then, more in a strong wind.
     lines.wait -= dt;
     let want = (MAX_LINES as f64 * strength).round() as usize;
     let alive = lines.lines.iter().filter(|l| l.alive).count();
     if near && day > 0.05 && lines.wait <= 0.0 && alive < want {
-        let side = cam_dir.cross(flow).normalize_or_zero();
-        // Upwind and to the side of the camera, so it blows across the view.
-        let along = -8.0 - 22.0 * lines.unit();
-        let across = (lines.unit() * 2.0 - 1.0) * 26.0;
-        let start = cam + flow * along + side * across;
+        // In front of the camera (4–30 m, across most of the view), a little upwind so it
+        // blows through the view.
+        let look = eyes
+            .iter()
+            .next()
+            .map(|g| s.rotation.inverse() * g.forward().as_dvec3())
+            .unwrap_or(flow);
+        let look = (look - cam_dir * look.dot(cam_dir)).normalize_or(flow);
+        let side = cam_dir.cross(look);
+        let d = 4.0 + 26.0 * lines.unit() * lines.unit().sqrt();
+        let across = (lines.unit() * 2.0 - 1.0) * d * 0.7;
+        let start = cam + look * d + side * across - flow * (speed * 1.2);
         let lift = 0.8 + 4.5 * lines.unit() * lines.unit();
         let (life, phase, rate) = (
             2.5 + 2.0 * lines.unit(),
@@ -222,9 +233,6 @@ fn blow_lines(
         }
         lines.wait = 0.25 + 0.6 * lines.unit() / strength;
     }
-    // The render frame: surface frame to camera-relative.
-    let anchor = system.bodies[camera.anchor].inertial_frame;
-    let s = system.frames.state_in(anchor, body.surface_frame, render.0);
     let to_render = |p: DVec3| (s.position + s.rotation * p - camera.offset).as_vec3();
     let eye = to_render(cam);
     for l in &mut lines.lines {
@@ -285,7 +293,7 @@ fn blow_lines(
             let half = HALF_WIDTH * (0.3 + 0.7 * shape);
             positions.push((p - w * half).to_array());
             positions.push((p + w * half).to_array());
-            let a = 0.55 * fade * shape;
+            let a = 0.8 * fade * shape;
             colours.push([1.0, 1.0, 1.0, a]);
             colours.push([1.0, 1.0, 1.0, a]);
             if k + 1 < n {
