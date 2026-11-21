@@ -610,8 +610,11 @@ the village's ground is the game's own layout (`content/data/village_layouts`) o
 test rounds at 2560 × 1552. 5.7c confirmed (q0117: no seams or flicker). 5.7d done (q0122):
 36 generated species planet-wide with collision near bodies; `blocks-perf` 83 fps with cover,
 99 without (Balanced power plan, plugged in). Review of the environment (q0132,
-[planet-environment.md](planet-environment.md)): still a still life; next 5.7e (E1–E6), then
-5.8 (digging and placing on the faceted ground), then 5.9 (review).
+[planet-environment.md](planet-environment.md)): still a still life; 5.7e (E1–E6) under way:
+E1 fixes done (q0133), E2 wind done (q0137–q0142: cover sways by species, wind lines, the
+village's trees and grass generated; `blocks-perf` 78–79 fps, 95 without cover, same as before);
+next E3 (the far landscape), then E4–E6, 5.8 (digging and placing on the faceted ground), 5.9
+(review).
 
 - **5.1** `sim_blocks`: cells in power-of-two sizes, the shape set and slope rule (a single slope
   also needs a neighbour along its edge), a mesher merging flat faces and slope planes and

@@ -88,6 +88,19 @@ Ambient sound (wind, rain, water, footsteps, the ship's engine) goes with Batch 
 Then 5.8 (digging and placing) and 5.9 (review), with the planet-wide views of visual-style.md
 §3 (low flight over each biome, the coast, snow) joining the review.
 
+## Status (2026-11-20)
+
+- **E1 done** (96a5db7, q0133): no starlight through the planet at night; the village in
+  temperate grass and forest; rounds flag empty screenshots.
+- **E2 done** (bef625b, 06529d6, 85a8658, 4275609; q0137–q0142): the planet's wind
+  (`GlobeWorld::wind`), cover sway per species (`sway` in the ground cover data) in the cover's
+  vertex and prepass shaders; wind lines (`game_bevy/src/wind_lines.rs`); the village's trees,
+  bushes, grass, flowers, mushrooms and rocks drawn as generated cover (`CoverWorld::with_placed`).
+  Judged by the developer from the `wind-sway` test's GIFs (bursts of frames from fixed views).
+  No cost: `blocks-perf` 78–79 fps either way. Not yet done from the E2 row: water ripples and
+  cloud drift following the wind (with E4 and E6). Known: wind lines pass through trunks.
+- **Next: E3**, the far landscape.
+
 ## 4. Budget
 
 The frame budget holds throughout: `blocks-perf` stays within a few fps of 82 (q0131), no
